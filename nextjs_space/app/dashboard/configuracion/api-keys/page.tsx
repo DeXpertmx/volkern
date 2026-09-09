@@ -10,6 +10,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { toast } from 'sonner';
 import {
   Key,
@@ -23,11 +31,20 @@ import {
   AlertCircle,
   CheckCircle2,
   Code,
+  ExternalLink,
   Loader2,
   Calendar,
   Shield
 } from 'lucide-react';
 import { AVAILABLE_SCOPES } from '@/lib/api-keys';
+
+interface OpenApiEndpoint {
+  method: string;
+  path: string;
+  summary?: string;
+  tag?: string;
+  scopes: string[];
+}
 
 interface ApiKey {
   id: string;
@@ -57,6 +74,8 @@ export default function ApiKeysPage() {
   const [newlyCreatedKey, setNewlyCreatedKey] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showKey, setShowKey] = useState(false);
+  const [endpoints, setEndpoints] = useState<OpenApiEndpoint[] | null>(null);
+  const [endpointsLoading, setEndpointsLoading] = useState(true);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -64,11 +83,31 @@ export default function ApiKeysPage() {
     descripcion: '',
     scopes: [] as string[],
     expiraEn: ''
-  });
-
-  useEffect(() => {
+  });  useEffect(() => {
     fetchApiKeys();
+    fetchEndpoints();
   }, []);
+
+  // Carga los endpoints DERIVADOS del spec OpenAPI (fuente única de verdad que
+  // alimenta también /api/docs y /api/openapi.json). Si el spec cambia, la
+  // tabla se actualiza sola — no hay lista estática que mantener.
+  const fetchEndpoints = async () => {
+    try {
+      setEndpointsLoading(true);
+      const res = await fetch('/api/openapi/endpoints');
+      if (res.ok) {
+        const data = await res.json();
+        setEndpoints(data.endpoints || []);
+      } else {
+        setEndpoints([]);
+      }
+    } catch (err) {
+      console.error('Error al cargar endpoints:', err);
+      setEndpoints([]);
+    } finally {
+      setEndpointsLoading(false);
+    }
+  };
 
   const fetchApiKeys = async () => {
     try {
@@ -601,10 +640,41 @@ export default function ApiKeysPage() {
       {/* Documentation Card */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Code className="h-5 w-5" />
-            Documentación de Uso
-          </CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <CardTitle className="flex items-center gap-2">
+              <Code className="h-5 w-5" />
+              Documentación de Uso
+            </CardTitle>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => window.open('/api/docs', '_blank')}
+                className="flex items-center gap-2"
+              >
+                <ExternalLink className="h-4 w-4" />
+                API Docs interactiva (Swagger)
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => window.open('/api/partner', '_blank')}
+                className="flex items-center gap-2"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Partner API v1 (guía completa)
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => window.open('/openapi.json', '_blank')}
+                className="flex items-center gap-2"
+              >
+                <Code className="h-4 w-4" />
+                Descargar spec JSON
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
@@ -633,15 +703,98 @@ export default function ApiKeysPage() {
           </div>
 
           <div>
-            <h4 className="font-semibold mb-2">Endpoints Disponibles</h4>
-            <div className="space-y-1 text-sm">
-              <p>• <code className="bg-muted px-1 rounded">GET /api/leads</code> - Listar leads</p>
-              <p>• <code className="bg-muted px-1 rounded">POST /api/leads</code> - Crear lead</p>
-              <p>• <code className="bg-muted px-1 rounded">GET /api/contacts</code> - Listar contactos</p>
-              <p>• <code className="bg-muted px-1 rounded">POST /api/mensajes/enviar</code> - Enviar mensaje</p>
-              <p>• <code className="bg-muted px-1 rounded">GET /api/deals</code> - Listar deals</p>
-              <p className="text-muted-foreground mt-2">Y muchos más endpoints disponibles según tus permisos</p>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-semibold">Endpoints Disponibles</h4>
+              <p className="text-xs text-muted-foreground">
+                Tabla generada desde el spec OpenAPI ({endpoints?.length ?? '—'} endpoints con API Key)
+              </p>
             </div>
+
+            {endpointsLoading ? (
+              <div className="flex items-center justify-center py-10">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : !endpoints || endpoints.length === 0 ? (
+              <div className="text-sm text-muted-foreground py-6 text-center border rounded-lg">
+                No se pudieron cargar los endpoints. Abre la{' '}
+                <a href="/api/docs" target="_blank" rel="noopener noreferrer" className="underline text-primary">
+                  documentación interactiva
+                </a>{' '}
+                para verlos todos.
+              </div>
+            ) : (
+              <div className="border rounded-lg overflow-hidden">
+                <div className="max-h-[480px] overflow-auto">
+                  <Table>
+                    <TableHeader className="bg-muted/50 sticky top-0">
+                      <TableRow>
+                        <TableHead className="w-20 text-xs font-semibold">Método</TableHead>
+                        <TableHead className="text-xs font-semibold">Endpoint</TableHead>
+                        <TableHead className="hidden md:table-cell text-xs font-semibold">Descripción</TableHead>
+                        <TableHead className="text-xs font-semibold">Scopes requeridos</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {endpoints.map((ep) => (
+                        <TableRow key={`${ep.method}-${ep.path}`} className="hover:bg-muted/30">
+                          <TableCell>
+                            <Badge
+                              variant="outline"
+                              className={`font-mono text-[10px] px-2 py-0.5 border ${
+                                ep.method === 'GET'
+                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                  : ep.method === 'POST'
+                                  ? 'border-blue-200 bg-blue-50 text-blue-700'
+                                  : ep.method === 'DELETE'
+                                  ? 'border-red-200 bg-red-50 text-red-700'
+                                  : 'border-amber-200 bg-amber-50 text-amber-700'
+                              }`}
+                            >
+                              {ep.method}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <code className="text-xs font-mono break-all">{ep.path}</code>
+                            {ep.tag && (
+                              <span className="ml-2 hidden lg:inline text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                                {ep.tag}
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell">
+                            <span className="text-xs text-muted-foreground line-clamp-1">
+                              {ep.summary || '—'}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {ep.scopes && ep.scopes.length > 0 ? (
+                                ep.scopes.map((scope) => (
+                                  <Badge key={scope} variant="secondary" className="font-mono text-[10px]">
+                                    {scope}
+                                  </Badge>
+                                ))
+                              ) : (
+                                <span className="text-[10px] text-muted-foreground">según permisos</span>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+
+            <p className="text-xs text-muted-foreground mt-2">
+              La tabla se genera automáticamente desde la especificación OpenAPI. Para ejemplos,
+              parámetros y respuestas de cada endpoint, abre la{' '}
+              <a href="/api/docs" target="_blank" rel="noopener noreferrer" className="underline text-primary">
+                documentación interactiva (Swagger)
+              </a>
+              .
+            </p>
           </div>
         </CardContent>
       </Card>

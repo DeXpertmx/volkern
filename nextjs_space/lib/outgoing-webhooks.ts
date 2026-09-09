@@ -9,23 +9,10 @@
 import { prisma } from '@/lib/db';
 import crypto from 'crypto';
 import { AuditService } from '@/lib/audit-service';
+import type { WebhookEvent } from '@/lib/webhook-events';
 
-// Tipos de eventos soportados
-export type WebhookEvent =
-  | 'lead_creado'
-  | 'lead_actualizado'
-  | 'contacto_creado'
-  | 'contacto_actualizado'
-  | 'cita_creada'
-  | 'cita_actualizada'
-  | 'cita_cancelada'
-  | 'mensaje_recibido'
-  | 'mensaje_enviado'
-  | 'tarea_creada'
-  | 'tarea_completada'
-  | 'deal_creado'
-  | 'deal_actualizado'
-  | 'campana_enviada';
+export type { WebhookEvent } from '@/lib/webhook-events';
+export { getAvailableEvents } from '@/lib/webhook-events';
 
 // Interface para el payload del webhook
 export interface WebhookPayload {
@@ -335,86 +322,4 @@ export function verifyHmacSignature(
     Buffer.from(signature),
     Buffer.from(expectedSignature)
   );
-}
-
-/**
- * Función helper para obtener eventos disponibles
- */
-export function getAvailableEvents(): Array<{
-  value: WebhookEvent;
-  label: string;
-  description: string;
-}> {
-  return [
-    {
-      value: 'lead_creado',
-      label: 'Lead Creado',
-      description: 'Cuando se crea un nuevo lead en el CRM',
-    },
-    {
-      value: 'lead_actualizado',
-      label: 'Lead Actualizado',
-      description: 'Cuando se actualiza la información de un lead',
-    },
-    {
-      value: 'contacto_creado',
-      label: 'Contacto Creado',
-      description: 'Cuando se crea un nuevo contacto',
-    },
-    {
-      value: 'contacto_actualizado',
-      label: 'Contacto Actualizado',
-      description: 'Cuando se actualiza un contacto',
-    },
-    {
-      value: 'cita_creada',
-      label: 'Cita Creada',
-      description: 'Cuando se agenda una nueva cita',
-    },
-    {
-      value: 'cita_actualizada',
-      label: 'Cita Actualizada',
-      description: 'Cuando se modifica una cita existente',
-    },
-    {
-      value: 'cita_cancelada',
-      label: 'Cita Cancelada',
-      description: 'Cuando se cancela una cita',
-    },
-    {
-      value: 'mensaje_recibido',
-      label: 'Mensaje Recibido',
-      description: 'Cuando se recibe un mensaje de un cliente',
-    },
-    {
-      value: 'mensaje_enviado',
-      label: 'Mensaje Enviado',
-      description: 'Cuando se envía un mensaje a un cliente',
-    },
-    {
-      value: 'tarea_creada',
-      label: 'Tarea Creada',
-      description: 'Cuando se crea una nueva tarea',
-    },
-    {
-      value: 'tarea_completada',
-      label: 'Tarea Completada',
-      description: 'Cuando se marca una tarea como completada',
-    },
-    {
-      value: 'deal_creado',
-      label: 'Oportunidad Creada',
-      description: 'Cuando se crea una nueva oportunidad de venta',
-    },
-    {
-      value: 'deal_actualizado',
-      label: 'Oportunidad Actualizada',
-      description: 'Cuando se actualiza una oportunidad',
-    },
-    {
-      value: 'campana_enviada',
-      label: 'Campaña Enviada',
-      description: 'Cuando se completa el envío de una campaña',
-    },
-  ];
 }

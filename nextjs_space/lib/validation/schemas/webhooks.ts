@@ -7,9 +7,9 @@ export const IncomingWebhookCreateSchema = z.object({
   descripcion: z.string().optional(),
   accion: z.enum([
     'crear_lead',
-    'crear_contacto',
+    'actualizar_lead',
+    'crear_tarea',
     'disparar_automatizacion',
-    'enviar_email',
     'webhook_personalizado',
   ], { errorMap: () => ({ message: 'Acción no válida' }) }),
   mapeoNombre: z.string().optional(),
@@ -36,9 +36,9 @@ export const IncomingWebhookUpdateSchema = z.object({
   activo: z.boolean().optional(),
   accion: z.enum([
     'crear_lead',
-    'crear_contacto',
+    'actualizar_lead',
+    'crear_tarea',
     'disparar_automatizacion',
-    'enviar_email',
     'webhook_personalizado',
   ]).optional(),
   mapeoNombre: z.string().optional(),

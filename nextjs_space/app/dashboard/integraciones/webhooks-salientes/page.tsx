@@ -24,6 +24,7 @@ import {
   Shield,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { getAvailableEvents } from '@/lib/webhook-events';
 
 interface OutgoingWebhook {
   id: string;
@@ -75,7 +76,6 @@ export default function WebhooksSalientesPage() {
     timeoutSegundos: 30,
   });
 
-  const getAvailableEvents: any = () => [];
   const eventosDisponibles = getAvailableEvents();
 
   useEffect(() => {

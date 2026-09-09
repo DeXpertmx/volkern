@@ -114,6 +114,25 @@ describe('Zod — Webhooks', () => {
       fail(IncomingWebhookCreateSchema, { ...valid, accion: 'accion_falsa' }, 'accion');
     });
 
+    it('debe aceptar las acciones que la ruta /api/webhook/[webhookId] procesa', () => {
+      for (const accion of ['crear_lead', 'actualizar_lead', 'crear_tarea', 'disparar_automatizacion', 'webhook_personalizado']) {
+        const r = IncomingWebhookCreateSchema.safeParse({
+          ...valid,
+          accion,
+          // disparar_automatizacion requiere automationId (refine del schema)
+          automationId: accion === 'disparar_automatizacion' ? 'cuid12345678901234567890' : undefined,
+        });
+        expect(r.success, `accion '${accion}' debería ser válida`).toBe(true);
+      }
+    });
+
+    it('debe rechazar acciones que la ruta NO procesa (crear_contacto, enviar_email)', () => {
+      for (const accion of ['crear_contacto', 'enviar_email']) {
+        const r = IncomingWebhookCreateSchema.safeParse({ ...valid, accion });
+        expect(r.success, `accion '${accion}' debería ser rechazada`).toBe(false);
+      }
+    });
+
     it('debe aceptar campos opcionales de mapeo', () => {
       ok(IncomingWebhookCreateSchema, {
         ...valid,
@@ -584,6 +603,13 @@ describe('Zod — Deals', () => {
           nombre: 'Nuevo Contacto',
           email: 'nuevo@test.com',
         },
+      });
+    });
+
+    it('debe aceptar una fecha de formulario YYYY-MM-DD', () => {
+      ok(DealCreateSchema, {
+        ...valid,
+        fechaEstimadaCierre: '2026-09-04',
       });
     });
 
