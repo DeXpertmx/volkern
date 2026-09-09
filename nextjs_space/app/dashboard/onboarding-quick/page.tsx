@@ -64,6 +64,7 @@ export default function OnboardingQuickPage() {
 
   const provisionStarted = useRef(false)
   const pollingInterval = useRef<NodeJS.Timeout>()
+  const firstMessageMarked = useRef(false)
 
   // Pre-select vertical from signup query param
   useEffect(() => {
@@ -97,6 +98,12 @@ export default function OnboardingQuickPage() {
         if (res.ok) {
           const data = await res.json()
           if (data.hasFirstMessage) {
+            // El GET es lectura pura; marcar "primer mensaje visto" es una
+            // escritura que ahora vive en un POST idempotente (una sola vez).
+            if (!firstMessageMarked.current) {
+              firstMessageMarked.current = true
+              fetch('/api/onboarding/check-first-message', { method: 'POST' }).catch(() => {})
+            }
             setPolling(false)
             if (pollingInterval.current) clearInterval(pollingInterval.current)
             if (perfil === 'gestoria' || perfil === 'asesoria_contable') setStep(6)
