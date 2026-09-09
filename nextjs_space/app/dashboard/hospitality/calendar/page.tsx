@@ -160,8 +160,14 @@ export default function HospitalityCalendar() {
   }, [rangeStart, selectedProperty]);
 
   useEffect(() => {
-    loadBase();
-  }, [loadBase]);
+    const boot = async () => {
+      await loadBase();
+      await loadReservations();
+      setLoading(false);
+    };
+    boot();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     loadReservations();

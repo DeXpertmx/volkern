@@ -113,11 +113,25 @@ export default function AdminConectividad() {
 
       const data = await res.json();
       if (res.ok) {
-        toast.success('Credenciales guardadas correctamente');
         setPartnerId('');
         setUsername('');
         setPassword('');
         await loadEstado();
+        // Aviso claro de qué falta para poder conectar (los 3 campos son
+        // necesarios; sin ID de socio el proveedor rechaza la llamada).
+        if (data.configurado) {
+          toast.success('Credenciales guardadas. Ya puedes probar la conexión.');
+        } else {
+          toast.warning(
+            'Guardado, pero falta completar: ' +
+              [
+                !estado?.partnerId && !partnerId ? 'ID de socio' : null,
+                !username ? 'Usuario API' : null,
+                !password ? 'Contraseña API' : null,
+              ].filter(Boolean).join(', ') +
+              '. Los tres campos los emite el proveedor en el onboarding.'
+          );
+        }
       } else {
         toast.error(data.error || 'Error al guardar credenciales');
       }
@@ -282,14 +296,17 @@ export default function AdminConectividad() {
         <CardContent>
           <form onSubmit={handleSave} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="partnerId">ID de socio (partner id)</Label>
+              <Label htmlFor="partnerId">ID de socio (partner id) — requerido</Label>
               <Input
                 id="partnerId"
-                placeholder={estado?.partnerId ? '•••••• (dejar vacío para mantener)' : 'Identificador asignado en el onboarding'}
+                placeholder={estado?.partnerId ? '•••••• (dejar vacío para mantener)' : 'Identificador que asigna el proveedor al registrarte (no es tu email)'}
                 value={partnerId}
                 onChange={(e) => setPartnerId(e.target.value)}
                 autoComplete="off"
               />
+              <p className="text-xs text-muted-foreground">
+                Los TRES campos son obligatorios para conectar. Sin el ID de socio, el servicio rechaza las llamadas.
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="username">Usuario API</Label>
