@@ -11,13 +11,16 @@
  * [OBSOLETO para producción] Crea la cuenta Admin dedicada del tenant cliente "DeXpert Inmobiliaria"
  * (slug=dexpert), replicando las convenciones de scripts/bootstrap-admin.ts:
  *   - nombre visible : 'DeXpert Admin'
- *   - contraseña     : 'Dexpert123!' (bcrypt, 10 rondas)
+ *   - contraseña     : variable de entorno DEXPERT_ADMIN_TEMP_PASSWORD (bcrypt, 10 rondas)
  *   - rol            : Admin del tenant (permisos { all: true })
  *   - estado         : activo, emailVerified, sin 2FA
  *
  * Email distinto a admin@dexpert.volkern.app a propósito: esa dirección es
  * única en el sistema y ahora pertenece a la cuenta migrada a dimension-expert;
  * reutilizarla (o re-ejecutar bootstrap-admin.ts) desharía la migración.
+ *
+ * ⚠️ NUNCA commitear contraseñas: la nueva contraseña se lee de
+ * DEXPERT_ADMIN_TEMP_PASSWORD y el script aborta si no está definida.
  *
  * Idempotente: si la cuenta ya existe en el tenant dexpert, solo resetea su
  * password/estado a la convención. No toca datos del tenant.
@@ -29,7 +32,6 @@ const p = new PrismaClient();
 const TENANT_SLUG = 'dexpert';
 const EMAIL = 'direccion@dexpert.volkern.app';
 const NAME = 'DeXpert Admin';
-const PASSWORD = 'Dexpert123!';
 
 async function main() {
   const tenant = await p.tenant.findUnique({ where: { slug: TENANT_SLUG } });
@@ -42,6 +44,12 @@ async function main() {
   const existing = await p.user.findUnique({ where: { email: EMAIL } });
   if (existing && existing.tenantId !== tenant.id) {
     throw new Error(`El email ${EMAIL} ya existe en otro tenant (${existing.tenantId}); elige otro`);
+  }
+
+  const PASSWORD = process.env.DEXPERT_ADMIN_TEMP_PASSWORD;
+  if (!PASSWORD) {
+    console.error('❌ Define DEXPERT_ADMIN_TEMP_PASSWORD en el entorno antes de ejecutar.');
+    process.exit(1);
   }
 
   const password = await bcrypt.hash(PASSWORD, 10);
@@ -69,7 +77,7 @@ async function main() {
 
   console.log(`  ✓ Cuenta cliente creada/actualizada: ${user.email}`);
   console.log(`    tenant=${tenant.nombre} | rol=${role.nombre} | nombre="${NAME}"`);
-  console.log(`    login: http://localhost:3000/auth/login  (${EMAIL} / ${PASSWORD})`);
+  console.log(`    login: http://localhost:3000/auth/login  (${EMAIL} / contraseña de DEXPERT_ADMIN_TEMP_PASSWORD)`);
 }
 
 main()

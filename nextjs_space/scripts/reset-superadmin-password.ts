@@ -1,18 +1,20 @@
 /**
- * Reset de la contraseña del Superadmin de plataforma (admin@volkern.app)
- * a la credencial documentada del proyecto: Admin123!
+ * Reset de la contraseña del Superadmin de plataforma (admin@volkern.app).
  *
- * Idempotente: re-correrlo siempre deja la contraseña en este valor.
+ * Idempotente: re-correrlo siempre deja la contraseña en el valor de la
+ * variable de entorno SUPERADMIN_TEMP_PASSWORD.
  * NO toca tenantId/roleId del usuario (a diferencia de bootstrap-admin.ts,
  * que reasigna el usuario a un tenant "Volkern Admin HQ" nuevo).
  *
- * USO: npx tsx -r dotenv/config scripts/reset-superadmin-password.ts
+ * ⚠️ NUNCA commitear contraseñas: la nueva contraseña se lee de
+ * SUPERADMIN_TEMP_PASSWORD y el script aborta si no está definida.
+ *
+ * USO: SUPERADMIN_TEMP_PASSWORD='...' npx tsx -r dotenv/config scripts/reset-superadmin-password.ts
  */
 import { prisma } from '../lib/db';
 import bcrypt from 'bcryptjs';
 
 const SUPERADMIN_EMAIL = 'admin@volkern.app';
-const NEW_PASSWORD = 'Admin123!';
 
 async function main() {
   const existing = await prisma.user.findUnique({
@@ -29,6 +31,12 @@ async function main() {
   }
   if (existing.role?.nombre !== 'Superadmin') {
     console.error(`❌ ${SUPERADMIN_EMAIL} tiene rol "${existing.role?.nombre}" — no es Superadmin; abortando`);
+    process.exit(1);
+  }
+
+  const NEW_PASSWORD = process.env.SUPERADMIN_TEMP_PASSWORD;
+  if (!NEW_PASSWORD) {
+    console.error('❌ Define SUPERADMIN_TEMP_PASSWORD en el entorno antes de ejecutar.');
     process.exit(1);
   }
 
@@ -52,7 +60,7 @@ async function main() {
 
   console.log('✅ Password del Superadmin de plataforma reseteado');
   console.log(`   email   : ${SUPERADMIN_EMAIL}`);
-  console.log(`   password: Admin123!`);
+  console.log(`   password: (leída de SUPERADMIN_TEMP_PASSWORD)`);
   console.log(`   rol     : ${existing.role?.nombre}`);
   console.log(`   tenant  : ${existing.tenant?.subdomain ?? '(sin subdominio)'} (${existing.tenant?.accountType})`);
   console.log(`   verificación bcrypt: ${ok ? 'OK' : 'FALLÓ'}`);
