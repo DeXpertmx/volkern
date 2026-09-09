@@ -493,6 +493,12 @@ model Tenant {
   insuranceImportLogs            InsuranceImportLog[]  
   portfolioForecastLogs          PortfolioForecastLog[]            @relation("TenantForecastLogs")
   portfolioSeasonalMultipliers   PortfolioSeasonalMultiplier[]     @relation("TenantSeasonalMultipliers")
+  // ─── Hospitality ─────────────────────────────────────────────────
+  hospitalityProperties         HospitalityProperty[]             @relation("HospitalityProperties")
+  hospitalityUnits              HospitalityUnit[]                 @relation("HospitalityUnits")
+  hospitalityMappings           ConnectivityMapping[]             @relation("HospitalityMappings")
+  hospitalityReservations       HospitalityReservation[]          @relation("HospitalityReservations")
+  hospitalityWebhookEvents      HospitalityWebhookEvent[]         @relation("HospitalityWebhookEvents")
 }
 
 model AttendanceRules {
@@ -807,6 +813,7 @@ model Contact {
   polizasSeguro                  Poliza[]                          @relation("PolizaCliente")
   oportunidadesSeguro            OportunidadComercial[]            @relation("OportunidadCliente")
   siniestrosCliente              Siniestro[]                       @relation("SiniestroCliente")
+  hospitalityReservations        HospitalityReservation[]          @relation("HospitalityReservationContact")
 
   @@index([tenantId])
   @@index([email])
@@ -8019,4 +8026,150 @@ model ConnectivityProvider {
 
   @@index([estado])
   @@map("connectivity_providers")
+}
+
+// ─── Hospitality (Volkern Hospitality) ───────────────────────────────────
+// Modelos del módulo de gestión de propiedades (reservas, huéspedes, canales).
+// Regla de aislamiento: toda entidad lleva tenantId y los IDs externos de
+// proveedores NUNCA son la identidad principal (ver ConnectivityMapping).
+
+model HospitalityProperty {
+  id             String    @id @default(cuid())
+  tenantId       String
+  nombre         String
+  direccion      String?
+  ciudad         String?
+  pais           String?
+  timezone       String    @default("America/Mexico_City")
+  estado         String    @default("activa")
+  fechaCreacion  DateTime  @default(now())
+  fechaEdicion   DateTime  @updatedAt
+  tenant         Tenant    @relation("HospitalityProperties", fields: [tenantId], references: [id], onDelete: Cascade)
+  units          HospitalityUnit[]
+  mappings       ConnectivityMapping[]
+  reservations   HospitalityReservation[]
+
+  @@index([tenantId])
+  @@map("hospitality_properties")
+}
+
+model HospitalityUnit {
+  id            String                   @id @default(cuid())
+  tenantId      String
+  propertyId    String
+  nombre        String
+  codigo        String?
+  tipo          String    @default("apartamento")
+  capacidad     Int       @default(2)
+  estado        String    @default("available") // available|occupied|cleaning|dirty|maintenance|out_of_service
+  fechaCreacion DateTime  @default(now())
+  fechaEdicion  DateTime  @updatedAt
+  tenant        Tenant    @relation("HospitalityUnits", fields: [tenantId], references: [id], onDelete: Cascade)
+  property      HospitalityProperty @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  mappings      ConnectivityMapping[]
+  reservations  HospitalityReservation[]
+
+  @@index([tenantId])
+  @@index([propertyId])
+  @@unique([tenantId, codigo])
+  @@map("hospitality_units")
+}
+
+// Mapeo entre entidades Volkern y los identificadores externos del proveedor
+// de conectividad (propiedad, habitación, plan de tarifa). El código externo
+// es un ID de integración, nunca la PK interna de Volkern.
+model ConnectivityMapping {
+  id                  String    @id @default(cuid())
+  tenantId            String
+  propertyId          String?
+  unitId              String?
+  provider            String    @default("channel_connectivity")
+  externalPropertyId  String
+  externalUnitCode    String?
+  externalRatePlanCode String?
+  estado              String    @default("activo")
+  metadata            Json?
+  fechaCreacion       DateTime  @default(now())
+  fechaEdicion        DateTime  @updatedAt
+  tenant              Tenant    @relation("HospitalityMappings", fields: [tenantId], references: [id], onDelete: Cascade)
+  property            HospitalityProperty? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  unit                HospitalityUnit?     @relation(fields: [unitId], references: [id], onDelete: SetNull)
+
+  @@unique([provider, externalPropertyId, externalUnitCode])
+  @@index([tenantId])
+  @@index([propertyId])
+  @@index([unitId])
+  @@map("connectivity_mappings")
+}
+
+model HospitalityReservation {
+  id                    String    @id @default(cuid())
+  tenantId              String
+  propertyId            String
+  unitId                String?
+  contactId             String?
+  // Referencias externas: bookingId = OTA, cmBookingId = channel manager.
+  // Nunca son la identidad principal; la única clave es id + tenantId.
+  channel               String
+  externalBookingId     String
+  cmBookingId           String?
+  action                String    @default("book")
+  estado                String    @default("confirmed") // pending|confirmed|cancelled|checked_in|checked_out|no_show
+  checkIn               DateTime
+  checkOut              DateTime
+  bookedOn              DateTime?
+  segment               String?
+  specialRequests       String?
+  pah                   Boolean   @default(false)
+  amountAfterTax        Float?
+  amountBeforeTax       Float?
+  tax                   Float?
+  currency              String    @default("MXN")
+  commission            Float?
+  tcs                   Float?
+  tds                   Float?
+  occupancyAdults       Int       @default(1)
+  occupancyChildren     Int       @default(0)
+  guestData             Json?
+  payload               Json?
+  fechaCreacion         DateTime  @default(now())
+  fechaEdicion          DateTime  @updatedAt
+  tenant                Tenant    @relation("HospitalityReservations", fields: [tenantId], references: [id], onDelete: Cascade)
+  property              HospitalityProperty @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  unit                  HospitalityUnit?     @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  contact               Contact?             @relation("HospitalityReservationContact", fields: [contactId], references: [id], onDelete: SetNull)
+  webhookEvents         HospitalityWebhookEvent[]
+
+  @@unique([tenantId, channel, externalBookingId])
+  @@index([tenantId])
+  @@index([propertyId])
+  @@index([unitId])
+  @@index([estado])
+  @@index([checkIn])
+  @@index([externalBookingId])
+  @@map("hospitality_reservations")
+}
+
+// Eventos brutos del proveedor de conectividad (auditoría/diagnóstico).
+// Se registra SIEMPRE el payload recibido, incluso si falla la resolución.
+model HospitalityWebhookEvent {
+  id              String    @id @default(cuid())
+  tenantId        String?
+  reservationId   String?
+  action          String
+  channel         String?
+  hotelCode       String?
+  bookingId       String?
+  estado          String    @default("recibido") // recibido|procesado|duplicado|error|sin_mapping
+  errorMensaje    String?
+  payload         Json?
+  fechaCreacion   DateTime  @default(now())
+  tenant          Tenant?   @relation("HospitalityWebhookEvents", fields: [tenantId], references: [id], onDelete: Cascade)
+  reservation     HospitalityReservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([reservationId])
+  @@index([bookingId])
+  @@index([fechaCreacion])
+  @@map("hospitality_webhook_events")
 }
