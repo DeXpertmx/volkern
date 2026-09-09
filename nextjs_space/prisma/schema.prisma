@@ -501,6 +501,7 @@ model Tenant {
   hospitalityWebhookEvents      HospitalityWebhookEvent[]         @relation("HospitalityWebhookEvents")
   hospitalityCleaningTasks      HospitalityCleaningTask[]         @relation("HospitalityCleaningTasks")
   hospitalityMaintenanceTasks   HospitalityMaintenanceTask[]      @relation("HospitalityMaintenanceTasks")
+  hospitalitySyncLogs           HospitalitySyncLog[]              @relation("HospitalitySyncLogs")
 }
 
 model AttendanceRules {
@@ -8050,6 +8051,7 @@ model HospitalityProperty {
   units          HospitalityUnit[]
   mappings       ConnectivityMapping[]
   reservations   HospitalityReservation[]
+  syncLogs       HospitalitySyncLog[]
 
   @@index([tenantId])
   @@map("hospitality_properties")
@@ -8063,6 +8065,8 @@ model HospitalityUnit {
   codigo        String?
   tipo          String    @default("apartamento")
   capacidad     Int       @default(2)
+  tarifaBase    Float?
+  moneda        String    @default("MXN")
   estado        String    @default("available") // available|occupied|cleaning|dirty|maintenance|out_of_service
   fechaCreacion DateTime  @default(now())
   fechaEdicion  DateTime  @updatedAt
@@ -8179,7 +8183,33 @@ model HospitalityWebhookEvent {
   @@map("hospitality_webhook_events")
 }
 
-// Tarea de limpieza de una unidad alojativa (plan maestro §18.3).
+// Log de sincronización con la capa de conectividad (plan maestro §29/§30).
+// Cada push (inventario/tarifas) deja una traza: qué, cuándo, qué propiedad,
+// qué operación, respuesta externa y estado de procesamiento. Sin retries
+// ciegos: un push fallido queda registrado con su causa para revisión manual.
+model HospitalitySyncLog {
+  id               String   @id @default(cuid())
+  tenantId         String
+  propertyId       String?
+  tipo             String   // inventory|rates
+  operacion        String   // reserva_creada|reserva_modificada|reserva_cancelada|unidad_cambiada|manual
+  estado           String   @default("pendiente") // pendiente|exito|error
+  httpStatus       Int?
+  requestPayload   Json?
+  responseBody     Json?
+  errorMensaje     String?
+  duracionMs       Int?
+  fechaCreacion    DateTime @default(now())
+  tenant           Tenant                    @relation("HospitalitySyncLogs", fields: [tenantId], references: [id], onDelete: Cascade)
+  property         HospitalityProperty?      @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([propertyId])
+  @@index([tipo])
+  @@index([estado])
+  @@index([fechaCreacion])
+  @@map("hospitality_sync_logs")
+}
 // Estados: pending|in_progress|completed|blocked.
 model HospitalityCleaningTask {
   id             String   @id @default(cuid())

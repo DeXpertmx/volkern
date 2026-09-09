@@ -47,7 +47,7 @@ export async function PATCH(req: NextRequest, ctx: Params) {
     if (!existing) return NextResponse.json({ error: 'Unidad no encontrada' }, { status: 404 });
 
     const data = await req.json();
-    const { propertyId, nombre, codigo, tipo, capacidad, estado } = data || {};
+    const { propertyId, nombre, codigo, tipo, capacidad, estado, tarifaBase, moneda } = data || {};
 
     // Si se cambia de propiedad, verificar aislamiento
     if (propertyId !== undefined && propertyId !== existing.propertyId) {
@@ -77,6 +77,8 @@ export async function PATCH(req: NextRequest, ctx: Params) {
         ...(codigo !== undefined ? { codigo: codigo ? String(codigo).trim() : null } : {}),
         ...(tipo !== undefined ? { tipo } : {}),
         ...(capacidad !== undefined ? { capacidad: parseInt(capacidad) } : {}),
+        ...(tarifaBase !== undefined ? { tarifaBase: parseFloat(tarifaBase) || null } : {}),
+        ...(moneda !== undefined ? { moneda: String(moneda).toUpperCase().trim() } : {}),
         ...(estado !== undefined ? { estado } : {}),
       },
       include: { property: { select: { id: true, nombre: true } } },
@@ -90,6 +92,23 @@ export async function PATCH(req: NextRequest, ctx: Params) {
       unit.id,
       `Unidad "${unit.nombre}" actualizada`
     ).catch(() => {});
+
+    // ── Push de disponibilidad al exterior (plan §15.2) ──
+    // Un cambio de estado (a cleaning, maintenance, etc.) afecta la
+    // disponibilidad: recalcular y empujar. Nunca bloquea ni rompe el flujo.
+    if (estado !== undefined && estado !== existing.estado) {
+      try {
+        const { dispatchConnectivityPush } = await import('@/lib/hospitality/sync');
+        await dispatchConnectivityPush(
+          auth.tenant!.id,
+          unit.propertyId,
+          'unidad_cambiada',
+          { skipRates: true }
+        );
+      } catch (e) {
+        console.error('[Hospitality] Error en push de conectividad por cambio de unidad:', e);
+      }
+    }
 
     return NextResponse.json({ unit });
   } catch (error) {

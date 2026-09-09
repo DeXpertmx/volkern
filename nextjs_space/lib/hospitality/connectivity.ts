@@ -297,3 +297,188 @@ export async function testConnectivityConnection(hotelCode?: string): Promise<Te
     property,
   };
 }
+
+// ─── Push de inventario y tarifas (plan maestro §15.2, contrato) ──────────
+
+/**
+ * Payload de Inventory Push (contrato): POST /update/{pms}
+ * ```json
+ * { "hotelCode": "...", "updates": [{
+ *   "startDate": "YYYY-MM-DD", "endDate": "YYYY-MM-DD",
+ *   "rooms": [{ "roomCode": "...", "available": 3 }]
+ * }]}
+ * ```
+ */
+export interface InventoryPushUpdate {
+  startDate: string;
+  endDate: string;
+  rooms: Array<{ roomCode: string; available: number }>;
+}
+
+/**
+ * Payload de Rate Push (contrato): POST /update-rates/{pms}
+ * ```json
+ * { "hotelCode": "...", "updates": [{
+ *   "startDate": "YYYY-MM-DD", "endDate": "YYYY-MM-DD",
+ *   "rates": [{ "roomCode": "...", "rateplanCode": "...", "rate": 1749 }]
+ * }]}
+ * ```
+ */
+export interface RatePushUpdate {
+  startDate: string;
+  endDate: string;
+  rates: Array<{ roomCode: string; rateplanCode: string; rate: number }>;
+}
+
+export interface PushResult {
+  ok: boolean;
+  tipo: 'inventory' | 'rates';
+  httpStatus?: number;
+  message?: string;
+  respuestaExterna?: unknown;
+  error?: string;
+  duracionMs: number;
+}
+
+/**
+ * Llamada HTTP genérica al servicio de conectividad (Basic Auth, JSON,
+ * timeout 20s). NO hace retries ciegos: un fallo se devuelve al llamador
+ * para que quede registrado (plan §30).
+ */
+async function connectivityFetch(
+  path: string,
+  body: unknown,
+  creds: ConnectivityCredentials
+): Promise<{ res: Response; duracionMs: number }> {
+  const baseUrl = getConnectivityBaseUrl();
+  const url = `${baseUrl}${path}`;
+  const auth = Buffer.from(`${creds.username}:${creds.password}`).toString('base64');
+  const started = Date.now();
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Basic ${auth}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(20000),
+  });
+  return { res, duracionMs: Date.now() - started };
+}
+
+/**
+ * Lee el cuerpo de una respuesta (JSON preferido, texto como fallback).
+ */
+async function readBody(res: Response): Promise<unknown> {
+  try {
+    return await res.json();
+  } catch {
+    return await res.text().catch(() => null);
+  }
+}
+
+/**
+ * Inventory Push — POST /update/{pms} (upsert por rango).
+ * Verifica el campo `success` de la respuesta; expone `message` en fallos.
+ */
+export async function pushInventory(
+  hotelCode: string,
+  updates: InventoryPushUpdate[]
+): Promise<PushResult> {
+  const started = Date.now();
+  try {
+    const creds = await getConnectivityCredentials();
+    if (!creds) {
+      return { ok: false, tipo: 'inventory', error: 'Conectividad no configurada.', duracionMs: 0 };
+    }
+    const body = { hotelCode, updates };
+    const { res, duracionMs } = await connectivityFetch(
+      `/update/${encodeURIComponent(creds.partnerId)}`,
+      body,
+      creds
+    );
+    const respuestaExterna = await readBody(res);
+    const success =
+      typeof respuestaExterna === 'object' &&
+      respuestaExterna !== null &&
+      (respuestaExterna as any).success === true;
+
+    if (!res.ok || !success) {
+      const message =
+        (respuestaExterna as any)?.message || `HTTP ${res.status}`;
+      return {
+        ok: false,
+        tipo: 'inventory',
+        httpStatus: res.status,
+        message,
+        respuestaExterna,
+        error: message,
+        duracionMs,
+      };
+    }
+    return {
+      ok: true,
+      tipo: 'inventory',
+      httpStatus: res.status,
+      message: (respuestaExterna as any)?.message,
+      respuestaExterna,
+      duracionMs,
+    };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Error de red';
+    return { ok: false, tipo: 'inventory', error: msg, duracionMs: Date.now() - started };
+  }
+}
+
+/**
+ * Rate Push — POST /update-rates/{pms} (los rangos se expanden a tarifas
+ * diarias por el proveedor). Verifica `success`; expone `message` en fallos.
+ */
+export async function pushRates(
+  hotelCode: string,
+  updates: RatePushUpdate[]
+): Promise<PushResult> {
+  const started = Date.now();
+  try {
+    const creds = await getConnectivityCredentials();
+    if (!creds) {
+      return { ok: false, tipo: 'rates', error: 'Conectividad no configurada.', duracionMs: 0 };
+    }
+    const body = { hotelCode, updates };
+    const { res, duracionMs } = await connectivityFetch(
+      `/update-rates/${encodeURIComponent(creds.partnerId)}`,
+      body,
+      creds
+    );
+    const respuestaExterna = await readBody(res);
+    const success =
+      typeof respuestaExterna === 'object' &&
+      respuestaExterna !== null &&
+      (respuestaExterna as any).success === true;
+
+    if (!res.ok || !success) {
+      const message = (respuestaExterna as any)?.message || `HTTP ${res.status}`;
+      return {
+        ok: false,
+        tipo: 'rates',
+        httpStatus: res.status,
+        message,
+        respuestaExterna,
+        error: message,
+        duracionMs,
+      };
+    }
+    return {
+      ok: true,
+      tipo: 'rates',
+      httpStatus: res.status,
+      message: (respuestaExterna as any)?.message,
+      respuestaExterna,
+      duracionMs,
+    };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Error de red';
+    return { ok: false, tipo: 'rates', error: msg, duracionMs: Date.now() - started };
+  }
+}
