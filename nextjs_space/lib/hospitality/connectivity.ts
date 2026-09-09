@@ -186,3 +186,114 @@ export function buildReservationWebhookUrl(): string {
   const base = process.env.NEXTAUTH_URL || 'https://volkern.app';
   return `${base}/api/hospitality/webhook/reservations`;
 }
+
+// ─── Prueba de conexión ────────────────────────────────────────────────────
+
+/** Hotel de prueba del sandbox documentado en el contrato. */
+export const CONNECTIVITY_SANDBOX_HOTEL = 'sandbox-pms';
+
+export interface PropertyDetailsRatePlan {
+  rateplan_id: string;
+  rateplan_name?: string | null;
+  occupancy?: number | null;
+  no_of_meals?: number | null;
+  extra_adult?: number | null;
+}
+
+export interface PropertyDetailsRoom {
+  room_id: string;
+  room_name?: string | null;
+  description?: string | null;
+  count?: number | null;
+  active?: boolean | null;
+  type?: string | null;
+  min_occ?: number | null;
+  max_occ?: number | null;
+  rateplans?: PropertyDetailsRatePlan[] | null;
+}
+
+export interface PropertyDetailsResponse {
+  hotel_id: string;
+  hotel_name?: string | null;
+  property_category?: string | null;
+  currency?: string | null;
+  timezone?: string | null;
+  tax_id?: string | null;
+  address?: {
+    line?: string | null;
+    city?: string | null;
+    state?: string | null;
+    country_code?: string | null;
+  } | null;
+  rooms?: PropertyDetailsRoom[] | null;
+}
+
+export interface TestConnectionResult {
+  ok: boolean;
+  conectado?: boolean;
+  error?: string;
+  /** Cuerpo de la respuesta externa (el contrato exige mostrarlo en fallos). */
+  respuestaExterna?: unknown;
+  hotelCode?: string;
+  property?: PropertyDetailsResponse | null;
+}
+
+/**
+ * Prueba la conexión contra el servicio de conectividad llamando al endpoint
+ * de detalle de propiedad (contrato: GET /property_details/{hotelCode}?partnerId={pms}).
+ * Devuelve la configuración de la propiedad (habitaciones y planes de tarifa),
+ * que es exactamente lo que se necesita para construir el mapping.
+ */
+export async function testConnectivityConnection(hotelCode?: string): Promise<TestConnectionResult> {
+  const creds = await getConnectivityCredentials();
+  if (!creds) {
+    return { ok: false, error: 'Conectividad no configurada: guarda primero las credenciales en esta pantalla.' };
+  }
+
+  const code = (hotelCode && hotelCode.trim()) || CONNECTIVITY_SANDBOX_HOTEL;
+  const baseUrl = getConnectivityBaseUrl();
+  const url = `${baseUrl}/property_details/${encodeURIComponent(code)}?partnerId=${encodeURIComponent(creds.partnerId)}`;
+
+  const auth = Buffer.from(`${creds.username}:${creds.password}`).toString('base64');
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Basic ${auth}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      // Timeout: no colgar el panel admin esperando una respuesta externa.
+      signal: AbortSignal.timeout(15000),
+    });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Error de red';
+    return { ok: false, error: `No se pudo conectar: ${msg}` };
+  }
+
+  let body: unknown = null;
+  try {
+    body = await res.json();
+  } catch {
+    body = await res.text().catch(() => null);
+  }
+
+  if (!res.ok) {
+    return {
+      ok: false,
+      error: `La conexión respondió con estado ${res.status}`,
+      respuestaExterna: body,
+      hotelCode: code,
+    };
+  }
+
+  const property = body as PropertyDetailsResponse;
+  return {
+    ok: true,
+    conectado: true,
+    hotelCode: code,
+    property,
+  };
+}
