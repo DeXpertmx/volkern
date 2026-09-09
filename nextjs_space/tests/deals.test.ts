@@ -7,6 +7,7 @@ vi.mock('@/lib/db', () => ({
     deal: {
       findMany: vi.fn(),
       create: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
     pipeline: {
       findFirst: vi.fn().mockResolvedValue(undefined),
@@ -923,5 +924,72 @@ describe('POST /api/deals', () => {
     expect(response.status).toBe(500);
     const json = await response.json();
     expect(json.error).toBe('Error al crear deal');
+  });
+});
+
+// ─── Guardia: GET sin efectos de escritura ────────────────────────────────
+
+describe('GET /api/deals — sin efectos secundarios', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('NO debe llamar a deal.updateMany ni reasignar pipelines al filtrar por pipelineId', async () => {
+    (prisma.deal.findMany as any).mockResolvedValue([]);
+
+    await GET(mockRequest('https://volkern.app/api/deals?pipelineId=pipe-1'));
+
+    expect(prisma.deal.updateMany).not.toHaveBeenCalled();
+    expect(prisma.deal.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ pipelineId: 'pipe-1' }),
+      }),
+    );
+  });
+});
+
+// ─── Helper: assignOrphanDealsToDefaultPipeline ───────────────────────────
+
+describe('assignOrphanDealsToDefaultPipeline', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('no toca nada si el tenant no tiene pipeline activo (devuelve 0)', async () => {
+    (prisma.pipeline.findFirst as any).mockResolvedValue(undefined);
+
+    const { assignOrphanDealsToDefaultPipeline } = await import('@/lib/deals/orphan-deals');
+    const count = await assignOrphanDealsToDefaultPipeline('test-tenant-id');
+
+    expect(count).toBe(0);
+    expect(prisma.deal.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('reasigna los deals huérfanos al primer pipeline activo (devuelve el count)', async () => {
+    (prisma.pipeline.findFirst as any).mockResolvedValue({ id: 'pipe-activo-1' });
+    (prisma.deal.updateMany as any).mockResolvedValue({ count: 3 });
+
+    const { assignOrphanDealsToDefaultPipeline } = await import('@/lib/deals/orphan-deals');
+    const count = await assignOrphanDealsToDefaultPipeline('test-tenant-id');
+
+    expect(count).toBe(3);
+    expect(prisma.pipeline.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { tenantId: 'test-tenant-id', activo: true } }),
+    );
+    expect(prisma.deal.updateMany).toHaveBeenCalledWith({
+      where: { tenantId: 'test-tenant-id', pipelineId: null },
+      data: { pipelineId: 'pipe-activo-1' },
+    });
+  });
+
+  it('es idempotente: re-ejecutar con cero huérfanos no cambia nada', async () => {
+    (prisma.pipeline.findFirst as any).mockResolvedValue({ id: 'pipe-activo-1' });
+    (prisma.deal.updateMany as any).mockResolvedValue({ count: 0 });
+
+    const { assignOrphanDealsToDefaultPipeline } = await import('@/lib/deals/orphan-deals');
+    const count = await assignOrphanDealsToDefaultPipeline('test-tenant-id');
+
+    expect(count).toBe(0);
+    expect(prisma.deal.updateMany).toHaveBeenCalledTimes(1);
   });
 });

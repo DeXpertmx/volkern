@@ -136,6 +136,13 @@ export async function PATCH(
       return NextResponse.json({ error: 'Deal no encontrado' }, { status: 404 })
     }
 
+    // Cura de deals huérfanos (pipelineId NULL) al primer pipeline activo.
+    // Idempotente; se invoca solo en escrituras para no ensuciar el GET.
+    const { assignOrphanDealsToDefaultPipeline } = await import('@/lib/deals/orphan-deals');
+    await assignOrphanDealsToDefaultPipeline(user.tenantId).catch((e: any) =>
+      console.warn('⚠️ No se pudieron reasignar deals huérfanos:', e),
+    );
+
     const body = await req.json()
     const {
       titulo,
