@@ -60,6 +60,7 @@ import {
   Home,
   Percent,
   CalendarDays,
+  CalendarX2,
   Truck,
   MapPin,
   Ship,
@@ -277,6 +278,7 @@ export const HUBS: HubConfig[] = [
     items: [
       { name: 'Inicio', href: '/dashboard/hospitality', icon: Home, planModule: 'hospitality', description: 'Propiedades, unidades y resumen del módulo' },
       { name: 'Planning', href: '/dashboard/hospitality/calendar', icon: CalendarDays, planModule: 'hospitality', description: 'Calendario de ocupación, reservas y operaciones' },
+      { name: 'Reservas', href: '/dashboard/hospitality/reservas', icon: CalendarX2, planModule: 'hospitality', description: 'Lista, alta y edición de reservas' },
     ]
   },
   {
