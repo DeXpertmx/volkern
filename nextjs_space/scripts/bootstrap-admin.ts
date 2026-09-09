@@ -14,9 +14,10 @@
  *
  * USO: npx tsx scripts/bootstrap-admin.ts
  *
- * CREDENCIALES RESULTANTES (cámbialas tras el primer login):
- *   admin.volkern.app/admin → admin@volkern.app       / Admin123!
- *   dexpert.volkern.app      → admin@dexpert.volkern.app / Dexpert123!
+ * ⚠️ NUNCA commitear contraseñas: las nuevas contraseñas se leen de las
+ * variables de entorno ADMIN_TEMP_PASSWORD y DEXPERT_ADMIN_TEMP_PASSWORD.
+ * Para desarrollo se usan los valores de bootstrap-admin.env.example (no
+ * commiteados); si las variables no existen el script aborta.
  *
  * Script idempotente (usa upsert). Se puede correr múltiples veces.
  */
@@ -94,7 +95,12 @@ async function main() {
   console.log(`  ✓ DeXpert Admin role: ${adminDexpertRole.id}`)
 
   // ─── 5. Admin user (superadmin global) ───
-  const adminPassword = await bcrypt.hash('Admin123!', 10)
+  const ADMIN_TEMP_PASSWORD = process.env.ADMIN_TEMP_PASSWORD
+  if (!ADMIN_TEMP_PASSWORD) {
+    console.error('❌ Define ADMIN_TEMP_PASSWORD en el entorno antes de ejecutar.')
+    process.exit(1)
+  }
+  const adminPassword = await bcrypt.hash(ADMIN_TEMP_PASSWORD, 10)
   const adminUser = await prisma.user.upsert({
     where: { email: 'admin@volkern.app' },
     update: {
@@ -118,7 +124,12 @@ async function main() {
   console.log(`  ✓ Admin user: ${adminUser.email}`)
 
   // ─── 6. DeXpert user ───
-  const dexpertPassword = await bcrypt.hash('Dexpert123!', 10)
+  const DEXPERT_ADMIN_TEMP_PASSWORD = process.env.DEXPERT_ADMIN_TEMP_PASSWORD
+  if (!DEXPERT_ADMIN_TEMP_PASSWORD) {
+    console.error('❌ Define DEXPERT_ADMIN_TEMP_PASSWORD en el entorno antes de ejecutar.')
+    process.exit(1)
+  }
+  const dexpertPassword = await bcrypt.hash(DEXPERT_ADMIN_TEMP_PASSWORD, 10)
   const dexpertUser = await prisma.user.upsert({
     where: { email: 'admin@dexpert.volkern.app' },
     update: {
@@ -144,10 +155,10 @@ async function main() {
   console.log('\n📋 CREDENCIALES DE ACCESO INMEDIATO')
   console.log('   ┌──────────────────────────────────────────────────────────')
   console.log('   │ 🔐 admin.volkern.app/admin')
-  console.log('   │    → admin@volkern.app  /  Admin123!')
+  console.log('   │    → admin@volkern.app  /  (ADMIN_TEMP_PASSWORD)')
   console.log('   │')
   console.log('   │ 🏢 dexpert.volkern.app')
-  console.log('   │    → admin@dexpert.volkern.app  /  Dexpert123!')
+  console.log('   │    → admin@dexpert.volkern.app  /  (DEXPERT_ADMIN_TEMP_PASSWORD)')
   console.log('   └──────────────────────────────────────────────────────────')
   console.log('\n⚠️  Cambia las contraseñas tras el primer login.')
 }

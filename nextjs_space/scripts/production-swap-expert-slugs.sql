@@ -11,9 +11,22 @@
 --
 -- Idempotente: re-ejecutar es un no-op. Ejecutar con psql dentro del contenedor
 -- de la BD (cat script.sql | docker exec -i <ctr> psql -U "$POSTGRES_USER" -d "$POSTGRES_DB").
+--
+-- ⚠️ NUNCA commitear hashes de contraseñas reales. El hash bcrypt del password
+-- provisional de dximobilia se pasa con la variable psql `password_hash`:
+--
+--   psql ... -v password_hash='<hash bcrypt>' -f production-swap-expert-slugs.sql
+--
+-- Generar el hash localmente (nunca pegar contraseñas en el repo):
+--   npx tsx -e "const b=require('bcryptjs'); b.hash('<PASSWORD>',10).then(h=>console.log(h))"
 -- ============================================================================
 
 \set ON_ERROR_STOP on
+\if :{?password_hash}
+\else
+  \echo 'ERROR: define la variable psql password_hash (-v password_hash=...) antes de ejecutar.'
+  \quit 1
+\endif
 
 BEGIN;
 
@@ -60,7 +73,7 @@ DECLARE
   admin_role_id  text := 'cms92n1m50005mf83uctrp5ol';  -- rol Admin de ese tenant
   v_email        text := 'dximobilia@dimensionexpert.com';
   v_name         text := 'Admin DeXpert Inmobiliaria';
-  v_hash         text := '$2a$10$53YjagCKiPatJ67MqFd1zedW3QmQpMUo429CJOIg.ud9x2rGKfIAS'; -- bcrypt(10) password provisional
+  v_hash         text := :'password_hash'; -- bcrypt(10) password provisional (variable psql)
 BEGIN
   IF EXISTS (SELECT 1 FROM "User" WHERE email = v_email) THEN
     RAISE NOTICE 'El usuario % ya existe; se omite la creación.', v_email;

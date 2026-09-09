@@ -12,6 +12,10 @@
  *
  * Uso:  npx tsx --require dotenv/config scripts/seed-demo-real-estate.ts
  * Idempotente: puede re-ejecutarse sin duplicar datos.
+ *
+ * ⚠️ NUNCA commitear contraseñas: la contraseña compartida de los usuarios
+ * demo se lee de la variable de entorno DEMO_RE_PASSWORD y el script aborta
+ * si no está definida.
  */
 
 import { PrismaClient } from '@prisma/client';
@@ -22,7 +26,7 @@ const prisma = new PrismaClient();
 // ─── Configuración de la demo ────────────────────────────────────────────────
 
 const TENANT_SLUG = 'demo-real-estate';
-const DEMO_PASSWORD = 'DemoRE2026!';
+const DEMO_PASSWORD = process.env.DEMO_RE_PASSWORD;
 const ADMIN_EMAIL = 'admin@demorealestate.com';
 const AGENT_EMAIL = 'agente@demorealestate.com';
 
@@ -438,6 +442,10 @@ async function main() {
   }
 
   // 3. Usuarios demo
+  if (!DEMO_PASSWORD) {
+    console.error('❌ Define DEMO_RE_PASSWORD en el entorno antes de ejecutar el seed.');
+    process.exit(1);
+  }
   const hashedPassword = await bcrypt.hash(DEMO_PASSWORD, 12);
 
   // La Directora se siembra con rol Superadmin para que la cuenta admin@… pueda
@@ -517,7 +525,7 @@ async function main() {
     },
   });
 
-  console.log(`   ✓ Usuarios: ${ADMIN_EMAIL} y ${AGENT_EMAIL} (password: ${DEMO_PASSWORD})`);
+  console.log(`   ✓ Usuarios: ${ADMIN_EMAIL} y ${AGENT_EMAIL} (contraseña: la de DEMO_RE_PASSWORD)`);
 
   // 4. Catálogo inmobiliario (fields + propiedades)
   console.log('🏠 Sembrando catálogo inmobiliario...');
@@ -1108,8 +1116,8 @@ async function main() {
   console.log(`Empresa:      ${tenant.nombre}`);
   console.log(`Tenant Slug:  ${tenant.slug}`);
   console.log(`Tenant ID:    ${tenant.id}`);
-  console.log(`Admin:        ${ADMIN_EMAIL} / ${DEMO_PASSWORD}`);
-  console.log(`Agente:       ${AGENT_EMAIL} / ${DEMO_PASSWORD}`);
+  console.log(`Admin:        ${ADMIN_EMAIL} / (DEMO_RE_PASSWORD)`);
+  console.log(`Agente:       ${AGENT_EMAIL} / (DEMO_RE_PASSWORD)`);
   console.log('──────────────────────────────────────────────────────');
 }
 
