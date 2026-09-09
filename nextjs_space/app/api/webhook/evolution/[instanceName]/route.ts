@@ -8,12 +8,33 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import {
+  buildEvolutionWebhookUrl,
+  configureWebhooks,
   ensureChatwootInboxForInstance,
   extractOwnerProfileFromConnection,
   getProfileInfo,
-  isMessageKeyRecentlySent
+  isMessageKeyRecentlySent,
+  verifyEvolutionWebhookToken
 } from '@/lib/evolution-instances';
 import { isChatRateLimited } from '@/lib/telegram/chat-rate-limit';
+
+// Reconfiguración automática de webhooks legacy (sin token): cooldown por
+// instancia para no llamar a Evolution API en cada evento.
+const reconfigureCooldownMs = 5 * 60 * 1000;
+const lastReconfigureAt = new Map<string, number>();
+
+async function reconfigureWebhookWithToken(instanceName: string): Promise<void> {
+  const now = Date.now();
+  const last = lastReconfigureAt.get(instanceName) ?? 0;
+  if (now - last < reconfigureCooldownMs) return;
+  lastReconfigureAt.set(instanceName, now);
+  try {
+    await configureWebhooks(instanceName, buildEvolutionWebhookUrl(instanceName));
+    console.log(`🔐 Webhook de ${instanceName} reconfigurado con token firmado (migración automática)`);
+  } catch (err) {
+    console.warn(`⚠️ No se pudo reconfigurar el webhook de ${instanceName}:`, err);
+  }
+}
 
 // Respuesta 429 explícita: Evolution API reintenta el webhook con backoff
 // (WEBHOOK_RETRY_* configurado en el contenedor) y el mensaje no se pierde
@@ -103,6 +124,32 @@ export async function POST(
         message: 'Instancia no encontrada en BD',
         instanceName,
       });
+    }
+
+    // ── AUTENTICACIÓN DEL WEBHOOK ───────────────────────────────────────────
+    // El token firmado (HMAC del secreto compartido) viaja como query param
+    // ?token=... en la URL del webhook. Política:
+    //   · token presente y válido   → procesar normal.
+    //   · token presente e inválido → 401 (posible intento de inyección).
+    //   · sin token                 → modo transición (por defecto): la instancia
+    //     existente aún apunta a la URL vieja (configurada antes del hardening),
+    //     así que se procesa igual PERO se reconfigura su webhook con la URL
+    //     firmada para que el siguiente evento venga autenticado. Si se define
+    //     EVOLUTION_WEBHOOK_AUTH_REQUIRED=1, el modo transición se desactiva y
+    //     se exige token siempre (usar tras confirmar que toda la flota migró).
+    const token = request.nextUrl.searchParams.get('token');
+    const authRequired = process.env.EVOLUTION_WEBHOOK_AUTH_REQUIRED === '1';
+    if (token) {
+      if (!verifyEvolutionWebhookToken(instanceName, token)) {
+        console.warn(`⛔ Webhook de Evolution rechazado: token inválido para instancia ${instanceName}`);
+        return NextResponse.json({ success: false, error: 'Token de webhook inválido' }, { status: 401 });
+      }
+    } else if (authRequired) {
+      console.warn(`⛔ Webhook de Evolution rechazado: falta token para ${instanceName} (modo estricto)`);
+      return NextResponse.json({ success: false, error: 'Token de webhook requerido' }, { status: 401 });
+    } else {
+      console.warn(`⚠️ Webhook de Evolution sin token para ${instanceName} (modo transición; se reconfigurará con token)`);
+      await reconfigureWebhookWithToken(instanceName);
     }
 
 
@@ -575,7 +622,7 @@ export async function GET(
   return NextResponse.json({
     message: 'Webhook endpoint para Evolution API',
     instanceName: params.instanceName,
-    url: `${process.env.NEXTAUTH_URL || 'https://volkern.app'}/api/webhook/evolution/${params.instanceName}`,
+    url: buildEvolutionWebhookUrl(params.instanceName),
     events: [
       'QRCODE_UPDATED',
       'CONNECTION_UPDATE',
