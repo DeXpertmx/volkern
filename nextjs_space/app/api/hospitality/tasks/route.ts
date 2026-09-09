@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
+import { completeCleaningTask } from '@/lib/hospitality/operations';
 
 // POST /api/hospitality/tasks — crear tarea de limpieza o mantenimiento
 // Body: { tipo: 'cleaning'|'maintenance', unitId, prioridad?, responsable?, notas?, incidencia? (solo maintenance) }
@@ -90,6 +91,18 @@ export async function PATCH(req: NextRequest) {
       ? await prisma.hospitalityCleaningTask.findFirst({ where: { id, tenantId: auth.tenant!.id } })
       : await prisma.hospitalityMaintenanceTask.findFirst({ where: { id, tenantId: auth.tenant!.id } });
     if (!existing) return NextResponse.json({ error: 'Tarea no encontrada' }, { status: 404 });
+
+    // Cierre del ciclo §18.3 → §17: al completar una limpieza, la unidad
+    // vuelve a available (o occupied si hay reserva activa) y se empuja la
+    // disponibilidad al exterior. Idempotente si ya estaba completada.
+    if (tipo === 'cleaning' && body.estado === 'completed') {
+      const result = await completeCleaningTask(auth.tenant!.id, id, data);
+      if (!result.ok) {
+        const status = result.error?.includes('no encontrada') ? 404 : 400;
+        return NextResponse.json({ error: result.error }, { status });
+      }
+      return NextResponse.json({ task: result.task, unitEstado: result.unitEstado });
+    }
 
     const task = tipo === 'cleaning'
       ? await prisma.hospitalityCleaningTask.update({ where: { id }, data })

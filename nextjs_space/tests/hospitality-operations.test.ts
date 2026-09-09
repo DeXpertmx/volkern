@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { performCheckOperation } from '../lib/hospitality/operations';
+import { performCheckOperation, completeCleaningTask } from '../lib/hospitality/operations';
 
 // Mocks
 const mockUpdateReservation = vi.fn();
@@ -7,6 +7,7 @@ const mockFindReservation = vi.fn();
 const mockUpdateUnit = vi.fn();
 const mockFindCleaning = vi.fn();
 const mockCreateCleaning = vi.fn();
+const mockUpdateCleaning = vi.fn();
 const mockDispatch = vi.fn();
 
 vi.mock('../lib/db', () => ({
@@ -21,6 +22,7 @@ vi.mock('../lib/db', () => ({
     hospitalityCleaningTask: {
       findFirst: (...a: any[]) => mockFindCleaning(...a),
       create: (...a: any[]) => mockCreateCleaning(...a),
+      update: (...a: any[]) => mockUpdateCleaning(...a),
     },
   },
 }));
@@ -138,5 +140,107 @@ describe('performCheckOperation', () => {
     expect(result.status).toBe('checked_out');
     expect(mockUpdateUnit).not.toHaveBeenCalled();
     expect(mockCreateCleaning).not.toHaveBeenCalled();
+  });
+});
+
+describe('completeCleaningTask (cierre del ciclo §18.3 → §17)', () => {
+  const CLEANING_TASK = {
+    id: 'ct1',
+    tenantId: 't1',
+    unitId: 'u1',
+    estado: 'pending',
+    unit: { id: 'u1', propertyId: 'p1' },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockFindCleaning.mockResolvedValue(CLEANING_TASK);
+    mockUpdateCleaning.mockImplementation(({ data }) =>
+      Promise.resolve({ id: 'ct1', ...data })
+    );
+    mockUpdateUnit.mockResolvedValue({ id: 'u1', estado: 'available' });
+    mockFindReservation.mockResolvedValue(null); // sin reserva activa hoy
+    mockDispatch.mockResolvedValue({ ok: true });
+  });
+
+  it('completa la tarea y pone la unidad en available', async () => {
+    const result = await completeCleaningTask('t1', 'ct1');
+    expect(result.ok).toBe(true);
+    expect(result.unitEstado).toBe('available');
+    expect(mockUpdateCleaning).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'ct1' },
+        data: expect.objectContaining({ estado: 'completed' }),
+      })
+    );
+    expect(mockUpdateUnit).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'u1' }, data: { estado: 'available' } })
+    );
+  });
+
+  it('dispara el push de disponibilidad tras cerrar el ciclo', async () => {
+    await completeCleaningTask('t1', 'ct1');
+    expect(mockDispatch).toHaveBeenCalledWith(
+      't1',
+      'p1',
+      'unidad_cambiada',
+      expect.objectContaining({ skipRates: true })
+    );
+  });
+
+  it('unidad con reserva activa HOY → occupied (no sobrevender, §16)', async () => {
+    mockFindReservation.mockResolvedValue({ id: 'r-active' });
+    const result = await completeCleaningTask('t1', 'ct1');
+    expect(result.ok).toBe(true);
+    expect(result.unitEstado).toBe('occupied');
+    expect(mockUpdateUnit).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'u1' }, data: { estado: 'occupied' } })
+    );
+  });
+
+  it('tarea ya completada → idempotente, sin re-empujar', async () => {
+    mockFindCleaning.mockResolvedValue({ ...CLEANING_TASK, estado: 'completed' });
+    const result = await completeCleaningTask('t1', 'ct1');
+    expect(result.ok).toBe(true);
+    expect(mockUpdateCleaning).not.toHaveBeenCalled();
+    expect(mockUpdateUnit).not.toHaveBeenCalled();
+    expect(mockDispatch).not.toHaveBeenCalled();
+  });
+
+  it('aislamiento: tarea de otro tenant → no encontrada', async () => {
+    mockFindCleaning.mockResolvedValue(null);
+    const result = await completeCleaningTask('t2', 'ct1');
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe('Tarea no encontrada');
+    expect(mockUpdateCleaning).not.toHaveBeenCalled();
+    expect(mockUpdateUnit).not.toHaveBeenCalled();
+  });
+
+  it('tarea sin unidad: completa sin tocar unidad y sin push', async () => {
+    mockFindCleaning.mockResolvedValue({ id: 'ct1', tenantId: 't1', unitId: null, estado: 'pending', unit: null });
+    const result = await completeCleaningTask('t1', 'ct1');
+    expect(result.ok).toBe(true);
+    expect(result.unitEstado).toBeUndefined();
+    expect(mockUpdateUnit).not.toHaveBeenCalled();
+  });
+
+  it('los errores de push no rompen el cierre del ciclo', async () => {
+    mockDispatch.mockRejectedValue(new Error('red caída'));
+    const result = await completeCleaningTask('t1', 'ct1');
+    expect(result.ok).toBe(true);
+    expect(result.unitEstado).toBe('available');
+  });
+
+  it('aplica datos extra (notas/responsable) al completar', async () => {
+    await completeCleaningTask('t1', 'ct1', { notas: 'Listo para huéspedes', responsable: 'Ana' });
+    expect(mockUpdateCleaning).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          estado: 'completed',
+          notas: 'Listo para huéspedes',
+          responsable: 'Ana',
+        }),
+      })
+    );
   });
 });
