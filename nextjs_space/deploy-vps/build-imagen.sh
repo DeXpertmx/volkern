@@ -28,7 +28,7 @@ while IFS='=' read -r k v; do
 done < <(cat .env.production.local .env 2>/dev/null | grep -E '^NEXT_PUBLIC_[A-Z_]+=')
 
 # Dominio canónico: se lee de deploy-vps/.env.vps (fuente de verdad del despliegue)
-APP_URL=$(grep -E '^NEXT_PUBLIC_APP_URL=' deploy-vps/.env.vps 2>/dev/null | cut -d= -f2-)
+APP_URL=$(grep -E '^NEXT_PUBLIC_APP_URL=' deploy-vps/.env.vps 2>/dev/null | cut -d= -f2- || true)
 APP_URL="${APP_URL%\"}"; APP_URL="${APP_URL#\"}"   # quitar comillas literales si las trae
 VARS[NEXT_PUBLIC_APP_URL]="${APP_URL:-https://volkern.app}"
 
