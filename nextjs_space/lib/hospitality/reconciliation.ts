@@ -175,6 +175,29 @@ export async function runReconciliation(
       summary.ok = false;
       detalle.error = fetch.error || `HTTP ${fetch.httpStatus}`;
       summary.errores.push(`[${prop.nombre}] ${detalle.error}`);
+
+      // §30: el error de integración queda SIEMPRE registrado con su causa,
+      // aunque el fetch no devuelva datos.
+      try {
+        await prisma.hospitalitySyncLog.create({
+          data: {
+            tenantId: input.tenantId,
+            propertyId: prop.id,
+            tipo: 'reconciliacion',
+            operacion: 'reconciliacion',
+            estado: 'error',
+            httpStatus: fetch.httpStatus ?? null,
+            requestPayload: {
+              hotelCode,
+              rango: `${toIsoDate(today)} → ${toIsoDate(end)}`,
+              cancelarAusentes: input.cancelarAusentes ?? false,
+            },
+            errorMensaje: detalle.error,
+          },
+        });
+      } catch (e) {
+        console.error('[Hospitality] Error registrando log de reconciliación fallida:', e);
+      }
       continue;
     }
 
