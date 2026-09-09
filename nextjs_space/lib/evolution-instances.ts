@@ -1058,3 +1058,271 @@ export async function sendMessageWithUserInstance(
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// INSTANCIA DE WHATSAPP DE LA PLATAFORMA (número oficial de Volkern)
+// ─────────────────────────────────────────────────────────────────────────────
+// Es una única instancia (singleton) gestionada desde el panel admin
+// (/admin/whatsapp). Se usa como canal de salida para notificaciones de la
+// plataforma cuando el tenant NO tiene conectado su propio WhatsApp (del
+// negocio o del usuario): avisos de leads/citas/tareas, códigos de firma
+// electrónica, avisos de cuenta/plan, etc. El envío sale SIEMPRE del número
+// oficial de Volkern (NEXTAUTH_URL) y con webhook configurado para reflejar
+// estado/QR; los mensajes entrantes a este número no se sincronizan a ningún
+// tenant (es un número emisor de la plataforma).
+
+/** Nombre de la fila singleton de la instancia de plataforma. */
+export const PLATFORM_INSTANCE_ROW_ID = 'platform_whatsapp_main';
+
+/**
+ * Crea la instancia de WhatsApp de la PLATAFORMA en Evolution API, configura
+ * sus webhooks y la deja lista para escanear el QR desde el admin. Singleton:
+ * si ya existe una fila local, no se crea otra.
+ */
+export async function createPlatformInstance(): Promise<{
+  success: boolean;
+  instance?: any;
+  error?: string;
+}> {
+  const cleanInstanceName = `plataforma_${crypto.randomBytes(4).toString('hex')}`
+
+  try {
+    if (!EVOLUTION_API_KEY) {
+      return { success: false, error: 'El servicio de WhatsApp no está configurado en el servidor.' }
+    }
+
+    const existingLocal = await prisma.platformWhatsAppInstance.findUnique({
+      where: { id: PLATFORM_INSTANCE_ROW_ID },
+    }).catch(() => null)
+    if (existingLocal) {
+      return { success: false, error: 'La plataforma ya tiene un WhatsApp configurado. Desconéctalo antes de crear otro.' }
+    }
+
+    const response = await fetch(`${EVOLUTION_API_URL}/instance/create`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: EVOLUTION_API_KEY,
+      },
+      body: JSON.stringify({
+        instanceName: cleanInstanceName,
+        qrcode: true,
+        integration: 'WHATSAPP-BAILEYS',
+      }),
+      signal: AbortSignal.timeout(15000),
+    })
+
+    if (!response.ok) {
+      await response.text()
+      if (response.status === 409) {
+        return { success: false, error: `La instancia "${cleanInstanceName}" ya existe. Reintenta en un momento.` }
+      }
+      return { success: false, error: `No se pudo crear la instancia de WhatsApp (HTTP ${response.status}).` }
+    }
+
+    const created = await response.json()
+    const webhookUrl = `${process.env.NEXTAUTH_URL || 'https://volkern.app'}/api/webhook/evolution/${cleanInstanceName}`
+    await configureWebhooks(cleanInstanceName, webhookUrl)
+
+    let qrBase64 = created.base64 || created.qrcode?.base64 || created.qrCode?.base64 || ''
+    let qrCode = created.code || created.qrcode?.code || created.qrCode?.code || ''
+    let pairingCode = created.pairingCode || created.qrcode?.pairingCode
+
+    if (!qrBase64) {
+      const qrResult = await getQRCode(cleanInstanceName)
+      if (qrResult.success && qrResult.qrCode) {
+        qrBase64 = qrResult.qrCode.base64
+        qrCode = qrResult.qrCode.code
+        pairingCode = qrResult.qrCode.pairingCode
+      }
+    }
+
+    const instance = await prisma.platformWhatsAppInstance.create({
+      data: {
+        id: PLATFORM_INSTANCE_ROW_ID,
+        instanceName: cleanInstanceName,
+        status: 'connecting',
+        qrCode: qrBase64 || undefined,
+        qrCodeExpiry: qrBase64 ? new Date(Date.now() + 60000) : undefined,
+      },
+    })
+
+    console.log('✅ Instancia de WhatsApp de la plataforma creada:', cleanInstanceName)
+
+    return {
+      success: true,
+      instance: {
+        ...instance,
+        qrCode: qrBase64 || null,
+        qrCodeData: qrBase64 ? { base64: qrBase64, code: qrCode, pairingCode } : null,
+      },
+    }
+  } catch (error) {
+    console.error('❌ Error al crear WhatsApp de la plataforma:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error desconocido al crear la instancia',
+    }
+  }
+}
+
+/**
+ * Obtener la instancia de WhatsApp de la plataforma (fila singleton).
+ */
+export async function getPlatformInstance(): Promise<{ instance?: any; error?: string }> {
+  try {
+    const instance = await prisma.platformWhatsAppInstance.findUnique({
+      where: { id: PLATFORM_INSTANCE_ROW_ID },
+    }).catch(() => null)
+    if (!instance) {
+      return { error: 'La plataforma no tiene un WhatsApp configurado' }
+    }
+    return { instance }
+  } catch (error) {
+    console.error('Error al obtener WhatsApp de la plataforma:', error)
+    return {
+      error: error instanceof Error ? error.message : 'Error desconocido',
+    }
+  }
+}
+
+/**
+ * Verifica en Evolution API el estado real de la instancia de la plataforma y
+ * actualiza la fila local (estado, número, perfil; limpia el QR al conectar).
+ * Es el equivalente a checkInstanceStatus/getProfileInfo pero para la fila
+ * singleton de la plataforma (no depende de tenantId).
+ */
+export async function refreshPlatformInstanceStatus(): Promise<{
+  success: boolean;
+  status?: string;
+  instance?: any;
+  error?: string;
+}> {
+  try {
+    const { instance } = await getPlatformInstance()
+    if (!instance?.instanceName) {
+      return { success: false, error: 'La plataforma no tiene un WhatsApp configurado.' }
+    }
+    const instanceName: string = instance.instanceName
+
+    const statusRes = await fetch(`${EVOLUTION_API_URL}/instance/connectionState/${instanceName}`, {
+      method: 'GET',
+      headers: { apikey: EVOLUTION_API_KEY },
+    })
+    if (!statusRes.ok) {
+      return { success: false, error: `Error al verificar estado: ${statusRes.status}` }
+    }
+
+    const data = await statusRes.json()
+    const state = data?.instance?.state ?? data?.state
+    const status = mapEvolutionState(state)
+
+    const updateData: any = { status }
+    if (status === 'connected') {
+      updateData.fechaConexion = new Date()
+      updateData.qrCode = null
+      updateData.qrCodeExpiry = null
+    }
+
+    // Perfil/número del propietario (si la respuesta lo trae o vía fetchProfile)
+    const owner = extractOwnerProfileFromConnection(data?.instance ?? data)
+    if (owner.phoneNumber) updateData.phoneNumber = owner.phoneNumber
+    if (owner.profileName) updateData.profileName = owner.profileName
+    if (owner.profilePicUrl) updateData.profilePicUrl = owner.profilePicUrl
+
+    let finalInstance = await prisma.platformWhatsAppInstance.update({
+      where: { id: PLATFORM_INSTANCE_ROW_ID },
+      data: updateData,
+    })
+
+    if (status === 'connected' && (!finalInstance.phoneNumber || !finalInstance.profileName)) {
+      try {
+        // Consulta directa a Evolution del perfil del propietario (getProfileInfo
+        // persiste en tablas de usuario/tenant; aquí la fila es la de plataforma).
+        const profileRes = await fetch(`${EVOLUTION_API_URL}/chat/fetchProfile/${instanceName}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: EVOLUTION_API_KEY,
+          },
+          body: JSON.stringify({ number: 'me' }),
+        })
+        if (profileRes.ok) {
+          const profileJson = await profileRes.json()
+          const profileData: any = {}
+          const profilePhone = String(profileJson?.id || '').replace('@s.whatsapp.net', '').replace('@g.us', '')
+          if (profilePhone) profileData.phoneNumber = profilePhone
+          if (profileJson?.name || profileJson?.notify) profileData.profileName = profileJson.name || profileJson.notify
+          if (profileJson?.profilePicUrl) profileData.profilePicUrl = profileJson.profilePicUrl
+          if (Object.keys(profileData).length) {
+            finalInstance = await prisma.platformWhatsAppInstance.update({
+              where: { id: PLATFORM_INSTANCE_ROW_ID },
+              data: profileData,
+            })
+          }
+        }
+      } catch (err) {
+        console.warn('⚠️ No se pudo refrescar el perfil de la instancia de plataforma:', err)
+      }
+    }
+
+    return { success: true, status, instance: finalInstance }
+  } catch (error) {
+    console.error('Error al verificar estado de la instancia de plataforma:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error desconocido',
+    }
+  }
+}
+
+/**
+ * Desconectar y eliminar la instancia de WhatsApp de la plataforma.
+ * Borra la instancia en Evolution API y la fila singleton local.
+ */
+export async function deletePlatformInstance(): Promise<{
+  success: boolean;
+  error?: string;
+}> {
+  try {
+    const { instance } = await getPlatformInstance()
+    if (!instance) {
+      return { success: false, error: 'La plataforma no tiene un WhatsApp configurado' }
+    }
+
+    try {
+      await fetch(`${EVOLUTION_API_URL}/instance/delete/${instance.instanceName}`, {
+        method: 'DELETE',
+        headers: { apikey: EVOLUTION_API_KEY },
+      })
+    } catch (error) {
+      console.log('Instancia no existe en Evolution API, continuando con eliminación local')
+    }
+
+    await prisma.platformWhatsAppInstance.delete({
+      where: { id: PLATFORM_INSTANCE_ROW_ID },
+    })
+
+    console.log('✅ WhatsApp de la plataforma eliminado:', instance.instanceName)
+    return { success: true }
+  } catch (error) {
+    console.error('Error al eliminar WhatsApp de la plataforma:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error desconocido',
+    }
+  }
+}
+
+/**
+ * ¿La plataforma tiene un WhatsApp conectado y listo para enviar
+ * notificaciones? (número oficial de Volkern como fallback por defecto).
+ */
+export async function platformWhatsAppConnected(): Promise<boolean> {
+  try {
+    const { instance } = await getPlatformInstance()
+    return !!(instance && instance.status === 'connected' && instance.instanceName)
+  } catch {
+    return false
+  }
+}
+
