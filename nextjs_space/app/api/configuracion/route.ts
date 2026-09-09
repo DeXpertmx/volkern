@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { getDownloadUrl } from '@/lib/s3';
 import { AuditService } from '@/lib/audit-service';
+import { clearBrandingCache } from '@/lib/branding';
 
 // Intenta parsear un valor guardado como JSON; si no, lo devuelve crudo
 function tryParse(valor: string): any {
@@ -163,6 +164,10 @@ export const POST = withTenantAuth(async (request, auth) => {
         }
       }
     }
+
+    // El logo corporativo / nombre comercial alimentan la marca efectiva
+    // (documentos públicos, favicons, páginas de marca): invalidar la caché.
+    clearBrandingCache();
 
     return NextResponse.json({ success: true, message: 'Configuración guardada' });
   } catch (error) {

@@ -73,7 +73,11 @@ function normalizeLines(cotizacion: any): PdfLine[] {
   })
 }
 
-export function generateCotizacionHTML(cotizacion: any, tenant: any): string {
+export function generateCotizacionHTML(
+  cotizacion: any,
+  tenant: any,
+  opts: { logoUrl?: string; companyName?: string } = {}
+): string {
   const safeTenant = tenant || {}
   const currency = cotizacion.moneda || 'EUR'
   const lines = normalizeLines(cotizacion)
@@ -128,6 +132,7 @@ export function generateCotizacionHTML(cotizacion: any, tenant: any): string {
     .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 34px; border-bottom: 3px solid #2563eb; padding-bottom: 18px; }
     .company-info h1 { font-size: 24px; color: #1e40af; margin-bottom: 5px; }
     .company-info p { color: #666; font-size: 10px; }
+    .company-info img { max-height: 64px; max-width: 220px; object-fit: contain; }
     .quote-info { text-align: right; }
     .quote-number { font-size: 20px; font-weight: bold; color: #1e40af; }
     .quote-dates { margin-top: 8px; font-size: 10px; color: #666; }
@@ -173,7 +178,9 @@ export function generateCotizacionHTML(cotizacion: any, tenant: any): string {
   <div class="container">
     <div class="header">
       <div class="company-info">
-        <h1>${escapeHtml(safeTenant.nombre || 'Empresa')}</h1>
+        ${opts.logoUrl
+          ? `<img src="${escapeHtml(opts.logoUrl)}" alt="${escapeHtml(opts.companyName || safeTenant.nombre || 'Empresa')}" />`
+          : `<h1>${escapeHtml(opts.companyName || safeTenant.nombre || 'Empresa')}</h1>`}
         ${safeTenant.direccion ? `<p>${escapeHtml(safeTenant.direccion)}</p>` : ''}
         ${safeTenant.telefono ? `<p>Tel: ${escapeHtml(safeTenant.telefono)}</p>` : ''}
         ${safeTenant.email ? `<p>${escapeHtml(safeTenant.email)}</p>` : ''}

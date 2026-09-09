@@ -61,21 +61,21 @@ export function DocumentPreview({
 
     return (
         <Card className={cn("bg-white text-slate-900 shadow-2xl border-none overflow-hidden mx-auto max-w-[800px]", className)}>
-            <CardContent className="p-12 space-y-10">
+            <CardContent className="p-5 sm:p-8 lg:p-12 space-y-6 sm:space-y-8 lg:space-y-10">
                 {/* Header */}
-                <div className="flex justify-between items-start">
+                <div className="flex flex-col sm:flex-row justify-between items-start gap-6 sm:gap-4">
                     <div className="space-y-4">
                         <div className="h-16 w-16 bg-primary/10 rounded-xl flex items-center justify-center">
                             <FileText className="h-10 w-10 text-primary" />
                         </div>
                         <div>
-                            <h2 className="text-2xl font-black uppercase tracking-tighter text-primary">{emisor.razonSocial}</h2>
+                            <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tighter text-primary">{emisor.razonSocial}</h2>
                             <p className="text-xs font-mono text-muted-foreground">{emisor.idFiscal}</p>
                         </div>
                     </div>
                     <div className="text-right space-y-1">
-                        <h1 className="text-4xl font-black tracking-tighter uppercase">{title}</h1>
-                        <p className="text-xl font-mono text-muted-foreground">{number}</p>
+                        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tighter uppercase text-right sm:text-left">{title}</h1>
+                        <p className="text-base sm:text-xl font-mono text-muted-foreground">{number}</p>
                         <div className="pt-2">
                             <p className="text-[10px] font-bold uppercase text-muted-foreground">Fecha de Emisión</p>
                             <p className="font-bold">{date}</p>
@@ -86,7 +86,7 @@ export function DocumentPreview({
                 <Separator className="bg-slate-100" />
 
                 {/* Addresses */}
-                <div className="grid grid-cols-2 gap-12">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-12">
                     <div className="space-y-3">
                         <p className="text-[10px] font-bold uppercase tracking-widest text-primary">De:</p>
                         <div className="space-y-1 text-sm">
@@ -109,29 +109,29 @@ export function DocumentPreview({
 
                 {/* Items Table */}
                 <div className="space-y-4">
-                    <div className="grid grid-cols-12 gap-4 pb-2 border-b-2 border-slate-900 px-2">
-                        <div className="col-span-6 text-[10px] font-black uppercase">Descripción</div>
+                    <div className="grid grid-cols-12 gap-2 md:gap-4 pb-2 border-b-2 border-slate-900 px-2">
+                        <div className="col-span-4 sm:col-span-6 text-[10px] font-black uppercase">Descripción</div>
                         <div className="col-span-2 text-[10px] font-black uppercase text-center">Cant.</div>
-                        <div className="col-span-2 text-[10px] font-black uppercase text-right">Precio</div>
-                        <div className="col-span-2 text-[10px] font-black uppercase text-right">Total</div>
+                        <div className="col-span-3 sm:col-span-2 text-[10px] font-black uppercase text-right">Precio</div>
+                        <div className="col-span-3 sm:col-span-2 text-[10px] font-black uppercase text-right">Total</div>
                     </div>
                     <div className="space-y-1">
                         {items.map((item, i) => (
-                            <div key={i} className="grid grid-cols-12 gap-4 py-3 px-2 hover:bg-slate-50 rounded-lg transition-colors items-center text-sm border-b border-slate-50 last:border-none">
-                                <div className="col-span-6">
+                            <div key={i} className="grid grid-cols-12 gap-2 md:gap-4 py-3 px-2 hover:bg-slate-50 rounded-lg transition-colors items-center text-sm border-b border-slate-50 last:border-none">
+                                <div className="col-span-4 sm:col-span-6 min-w-0">
                                     <p className="font-bold">{item.concepto}</p>
                                     {item.descripcion && <p className="text-xs text-muted-foreground">{item.descripcion}</p>}
                                 </div>
                                 <div className="col-span-2 text-center font-mono">{item.cantidad}</div>
-                                <div className="col-span-2 text-right font-mono">{formatCurrency(item.precioUnitario)}</div>
-                                <div className="col-span-2 text-right font-bold">{formatCurrency(item.cantidad * item.precioUnitario * (1 - (item.descuento || 0) / 100))}</div>
+                                <div className="col-span-3 sm:col-span-2 text-right font-mono text-xs sm:text-sm">{formatCurrency(item.precioUnitario)}</div>
+                                <div className="col-span-3 sm:col-span-2 text-right font-bold text-xs sm:text-sm">{formatCurrency(item.cantidad * item.precioUnitario * (1 - (item.descuento || 0) / 100))}</div>
                             </div>
                         ))}
                     </div>
                 </div>
 
                 {/* Totals & Notes */}
-                <div className="grid grid-cols-2 gap-12 pt-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 pt-2 md:pt-8">
                     <div className="space-y-6">
                         {notas && (
                             <div className="space-y-2">
@@ -146,7 +146,7 @@ export function DocumentPreview({
                             </div>
                         )}
                     </div>
-                    <div className="bg-slate-900 rounded-2xl p-8 text-white space-y-4 shadow-xl">
+                    <div className="bg-slate-900 rounded-2xl p-6 md:p-8 text-white space-y-4 shadow-xl">
                         <div className="flex justify-between text-sm opacity-60">
                             <span>Subtotal</span>
                             <span className="font-mono">{formatCurrency(totals.subtotal)}</span>
@@ -157,8 +157,8 @@ export function DocumentPreview({
                         </div>
                         <Separator className="bg-white/10" />
                         <div className="flex justify-between items-center pt-2">
-                            <span className="text-xs font-black uppercase tracking-widest">Total Documento</span>
-                            <span className="text-3xl font-black tracking-tighter">{formatCurrency(totals.total)}</span>
+                        <span className="text-xs font-black uppercase tracking-widest">Total Documento</span>
+                        <span className="text-2xl lg:text-3xl font-black tracking-tighter break-words">{formatCurrency(totals.total)}</span>
                         </div>
                         <p className="text-[10px] text-right opacity-40 uppercase font-bold tracking-tighter">Moneda: {totals.currency}</p>
                     </div>

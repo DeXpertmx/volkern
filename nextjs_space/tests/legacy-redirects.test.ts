@@ -80,6 +80,11 @@ describe('resolveLegacyRedirect — rutas canónicas deben pasar (null)', () => 
     expect(resolveLegacyRedirect('/firma/abc123')).toBeNull();
   });
 
+  it('no toca la orden de venta pública /orden/{token} (bug detectado en prod)', () => {
+    expect(resolveLegacyRedirect('/orden/abc123')).toBeNull();
+    expect(resolveLegacyRedirect('/orden/e4ff1064-3684-4c75-918b-ba301e00bc89')).toBeNull();
+  });
+
   it('no toca páginas y rutas top-level de 1 segmento', () => {
     expect(resolveLegacyRedirect('/dashboard/finanzas/proveedores')).toBeNull();
     expect(resolveLegacyRedirect('/login')).toBeNull();

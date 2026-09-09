@@ -4,19 +4,22 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ArrowLeft, Clock, FileText, Download, Send, Edit, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Clock, FileText, Download, Send, Edit, CheckCircle, Mail, MessageCircle, Copy, Printer, Link2 } from 'lucide-react';
 import { DocumentPreview } from '@/components/document-preview';
 import { DocumentTimeline, TimelineEvent } from '@/components/document-timeline';
 
 interface ItemOrden {
   id: string;
-  descripcion: string;
+  concepto: string;
+  descripcion: string | null;
   cantidad: number;
   precioUnitario: number;
+  descuento: number;
   total: number;
 }
 
@@ -30,8 +33,10 @@ interface OrdenVenta {
   totalImpuestos: number;
   total: number;
   moneda: string;
-  lead?: { id: string; nombre: string; email: string; empresa: string | null };
-  contact?: { id: string; nombre: string; email: string; tipo: string };
+  notas: string | null;
+  condicionesVenta: string | null;
+  lead?: { id: string; nombre: string; email: string; telefono: string | null; empresa: string | null };
+  contact?: { id: string; nombre: string; email: string; telefono: string | null; tipo: string };
   emisor?: { id: string; razonSocial: string; idFiscal: string };
   items: ItemOrden[];
 }
@@ -59,6 +64,7 @@ export default function OrdenDetallePage() {
 
   const [orden, setOrden] = useState<OrdenVenta | null>(null);
   const [loading, setLoading] = useState(true);
+  const [nombreEmpresa, setNombreEmpresa] = useState<string>('');
 
   useEffect(() => {
     if (id) fetchOrden();
@@ -71,6 +77,15 @@ export default function OrdenDetallePage() {
       if (res.ok) {
         const data = await res.json();
         setOrden(data);
+        // Nombre comercial de Configuración → Empresa (para el documento cuando no hay emisor fiscal)
+        fetch('/api/configuracion')
+          .then(r => (r.ok ? r.json() : Promise.resolve({})))
+          .then(cfg => {
+            if (cfg && typeof cfg.business_name === 'string' && cfg.business_name.trim()) {
+              setNombreEmpresa(cfg.business_name.trim());
+            }
+          })
+          .catch(() => {});
       } else {
         toast.error('Error al cargar la orden');
         router.push('/dashboard/ventas/ordenes');
@@ -120,6 +135,109 @@ export default function OrdenDetallePage() {
       }
     } catch (error) {
       toast.error('Error de red al procesar la solicitud');
+    }
+  };
+
+  const [publicUrl, setPublicUrl] = useState<string | null>(null);
+  const [descargandoPdf, setDescargandoPdf] = useState(false);
+
+  const construirResumen = (enlace: string) => {
+    if (!orden) return '';
+    const cliente = orden.lead?.nombre || orden.contact?.nombre || 'Cliente';
+    const total = new Intl.NumberFormat('es-ES', { style: 'currency', currency: orden.moneda }).format(orden.total);
+    return [
+      `Orden de Venta ${orden.numero}`,
+      `Fecha: ${format(new Date(orden.fechaOrden), 'dd/MM/yyyy')}`,
+      `Cliente: ${cliente}`,
+      `Total: ${total}`,
+      '',
+      `Ver el comprobante aquí: ${enlace}`,
+    ].join('\n');
+  };
+
+  const asegurarEnlacePublico = async (): Promise<string | null> => {
+    if (publicUrl) return publicUrl;
+    try {
+      const res = await fetch(`/api/ordenes-venta/${id}/share-token`, { method: 'POST' });
+      if (!res.ok) {
+        toast.error('No se pudo generar el enlace público');
+        return null;
+      }
+      const data = await res.json();
+      const url = `${window.location.origin}/orden/${data.token}`;
+      setPublicUrl(url);
+      return url;
+    } catch {
+      toast.error('Error de red al generar el enlace público');
+      return null;
+    }
+  };
+
+  const handleCompartirEmail = async () => {
+    if (!orden) return;
+    const email = orden.lead?.email || orden.contact?.email;
+    if (!email) {
+      toast.error('El cliente no tiene un email registrado');
+      return;
+    }
+    const enlace = await asegurarEnlacePublico();
+    if (!enlace) return;
+    const asunto = `Orden de Venta ${orden.numero} - ${orden.emisor?.razonSocial || 'Comprobante'}`;
+    window.location.href = `mailto:${email}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(construirResumen(enlace))}`;
+  };
+
+  const handleCompartirWhatsApp = async () => {
+    if (!orden) return;
+    const telefono = (orden.lead?.telefono || orden.contact?.telefono || '').replace(/[^0-9]/g, '');
+    if (!telefono) {
+      toast.error('El cliente no tiene un teléfono registrado');
+      return;
+    }
+    const enlace = await asegurarEnlacePublico();
+    if (!enlace) return;
+    window.open(`https://wa.me/${telefono}?text=${encodeURIComponent(construirResumen(enlace))}`, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleCopiarEnlace = async () => {
+    const enlace = await asegurarEnlacePublico();
+    if (!enlace) return;
+    try {
+      await navigator.clipboard.writeText(enlace);
+      toast.success('Enlace público copiado al portapapeles');
+    } catch {
+      toast.error('No se pudo copiar el enlace');
+    }
+  };
+
+  const handleImprimir = () => {
+    window.print();
+  };
+
+  // Descarga el PDF oficial (documento real generado en el servidor, no captura)
+  const handleDescargarPDF = async () => {
+    if (!orden) return;
+    setDescargandoPdf(true);
+    try {
+      const res = await fetch(`/api/ordenes-venta/${id}/pdf`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        toast.error(err?.error || 'No se pudo generar el PDF');
+        return;
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${orden.numero}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success('PDF descargado correctamente');
+    } catch {
+      toast.error('Error al descargar el PDF');
+    } finally {
+      setDescargandoPdf(false);
     }
   };
 
@@ -193,27 +311,53 @@ export default function OrdenDetallePage() {
   if (!orden) return null;
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
       {/* Header Panel */}
-      <div className="flex items-center justify-between border-b pb-6">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b pb-6">
+        <div className="flex items-center gap-4 min-w-0">
           <Button variant="ghost" size="icon" onClick={() => router.push('/dashboard/ventas/ordenes')}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold">Orden de Venta</h1>
-              <Badge variant="outline" className="text-lg font-mono">{orden.numero}</Badge>
+          <div className="min-w-0">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-2xl sm:text-3xl font-bold">Orden de Venta</h1>
+              <Badge variant="outline" className="text-sm sm:text-lg font-mono">{orden.numero}</Badge>
             </div>
             <p className="text-muted-foreground mt-1">
               {orden.lead?.nombre || orden.contact?.nombre || 'Cliente sin nombre'} - Creado el {format(new Date(orden.fechaOrden), 'dd/MM/yyyy')}
             </p>
           </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" className="border-primary text-primary hover:bg-primary/5">
-            <Send className="h-4 w-4 mr-2" /> Compartir / Email
-          </Button>
+        <div className="flex flex-wrap gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="border-primary text-primary hover:bg-primary/5">
+                <Send className="h-4 w-4 mr-2" /> Compartir / Email
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleCompartirEmail}>
+                <Mail className="h-4 w-4 mr-2" /> Enviar por Email
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleCompartirWhatsApp}>
+                <MessageCircle className="h-4 w-4 mr-2" /> Enviar por WhatsApp
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleCopiarEnlace}>
+                <Link2 className="h-4 w-4 mr-2" /> Copiar enlace público
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void handleDescargarPDF()} disabled={descargandoPdf}>
+                {descargandoPdf ? (
+                  <span className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-primary border-t-transparent inline-block" />
+                ) : (
+                  <Download className="h-4 w-4 mr-2" />
+                )}
+                {descargandoPdf ? 'Generando PDF…' : 'Descargar PDF (documento)'}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleImprimir}>
+                <Printer className="h-4 w-4 mr-2" /> Imprimir
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {orden.estado === 'borrador' && (
             <Button
@@ -245,32 +389,34 @@ export default function OrdenDetallePage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Left Side: Document Preview Extenso */}
         <div className="md:col-span-2">
-          <Card className="glass-card shadow-sm border p-6 bg-white overflow-x-auto min-h-[800px]">
+          <Card className="glass-card shadow-sm border p-3 sm:p-6 bg-white overflow-x-auto min-h-[800px]">
             <DocumentPreview
               title="Orden de Venta"
               number={orden.numero}
               date={format(new Date(orden.fechaOrden), 'dd/MM/yyyy')}
               emisor={{
-                razonSocial: orden.emisor?.razonSocial || 'Volkern Hub',
-                idFiscal: orden.emisor?.idFiscal || 'VKL-2024-X',
+                razonSocial: orden.emisor?.razonSocial || nombreEmpresa || 'Volkern Hub',
+                idFiscal: orden.emisor?.idFiscal || '',
               }}
               cliente={{
                 nombre: orden.lead?.nombre || orden.contact?.nombre || 'Cliente',
                 idFiscal: orden.lead?.empresa || orden.contact?.email || 'N/A',
               }}
               items={orden.items.map(item => ({
-                descripcion: item.descripcion,
+                concepto: item.concepto,
+                descripcion: item.descripcion || undefined,
                 cantidad: item.cantidad,
-                precio: item.precioUnitario,
-                total: item.total
-              } as any))}
+                precioUnitario: item.precioUnitario,
+                descuento: item.descuento || 0,
+              }))}
               totals={{
                 subtotal: orden.subtotal,
                 impuesto: orden.totalImpuestos,
                 total: orden.total,
                 currency: orden.moneda,
               }}
-              notas={orden.fechaEntrega ? `Entrega estimada: ${format(new Date(orden.fechaEntrega), 'dd/MM/yyyy')}` : "Gracias por su compra."}
+              notas={orden.notas || (orden.fechaEntrega ? `Entrega estimada: ${format(new Date(orden.fechaEntrega), 'dd/MM/yyyy')}` : 'Gracias por su compra.')}
+              condiciones={orden.condicionesVenta || undefined}
             />
           </Card>
         </div>

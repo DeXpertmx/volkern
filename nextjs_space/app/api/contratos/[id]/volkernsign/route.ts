@@ -5,6 +5,8 @@ import { withTenantAuth } from '@/lib/api-key-auth';
 import { SignatureService } from '@/lib/signatures/SignatureService';
 import { generatePdf } from '@/lib/pdf-generator';
 import { sendEmail } from '@/lib/ses-email';
+import { getEffectiveBranding } from '@/lib/branding';
+import { getPublicUrl } from '@/lib/s3-public-url';
 
 // Logic based on app/api/contratos/public/[id]/pdf/route.ts
 function formatCurrency(amount: number, currency: string): string {
@@ -24,8 +26,9 @@ function formatDate(date: Date | string): string {
 /**
  * Generates the HTML specifically designed for PDF conversion with VolkernSign placeholders.
  */
-function generateContratoHTML(contrato: any, tenant: any): string {
+function generateContratoHTML(contrato: any, tenant: any, opts: { logoUrl?: string; companyName?: string } = {}): string {
   const items = contrato.items as any[];
+  const companyName = opts.companyName || tenant?.nombre || 'Empresa';
 
   return `
 <!DOCTYPE html>
@@ -40,6 +43,7 @@ function generateContratoHTML(contrato: any, tenant: any): string {
     .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; border-bottom: 3px solid #6366f1; padding-bottom: 20px; }
     .company-info h1 { font-size: 22px; color: #3D3D3D; margin-bottom: 5px; }
     .company-info p { color: #666; font-size: 10px; }
+    .company-info img { max-height: 64px; max-width: 220px; object-fit: contain; }
     .contract-info { text-align: right; }
     .contract-number { font-size: 18px; font-weight: bold; color: #6366f1; }
     .contract-dates { margin-top: 8px; font-size: 10px; color: #666; }
@@ -59,7 +63,9 @@ function generateContratoHTML(contrato: any, tenant: any): string {
   <div class="container">
     <div class="header">
       <div class="company-info">
-        <h1>${tenant?.nombre || 'Empresa'}</h1>
+        ${opts.logoUrl
+          ? `<img src="${opts.logoUrl}" alt="${companyName}" />`
+          : `<h1>${companyName}</h1>`}
         <p>${tenant?.direccion || ''}</p>
       </div>
       <div class="contract-info">
@@ -133,7 +139,15 @@ export const POST = withTenantAuth(async (request, auth, { params }) => {
     }
 
     const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
-    const htmlContent = generateContratoHTML(contrato, tenant);
+    const branding = await getEffectiveBranding(tenantId);
+    let logoUrl = branding.logoUrl || '';
+    if (logoUrl && !logoUrl.startsWith('http') && !logoUrl.startsWith('/')) {
+      logoUrl = getPublicUrl(logoUrl);
+    }
+    const htmlContent = generateContratoHTML(contrato, tenant, {
+      logoUrl,
+      companyName: branding.companyName || tenant?.nombre,
+    });
 
     // 2. Convert HTML to PDF (via Puppeteer local — reemplaza Abacus AI)
     const pdfBuffer = await generatePdf(htmlContent, {
