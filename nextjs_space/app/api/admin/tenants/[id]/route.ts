@@ -210,6 +210,20 @@ export async function DELETE(
       );
     }
 
+    let body: { confirmation?: unknown } = {};
+    try {
+      body = await req.json();
+    } catch {
+      // A confirmation body is mandatory below; malformed/empty bodies are rejected.
+    }
+
+    if (body.confirmation !== 'ELIMINAR') {
+      return NextResponse.json(
+        { error: 'Confirmación requerida: escribe ELIMINAR para borrar este tenant' },
+        { status: 400 }
+      );
+    }
+
     // Delete tenant (cascade will handle related records)
     await prisma.tenant.delete({
       where: { id: params.id }
