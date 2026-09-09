@@ -6,10 +6,14 @@ import { authenticateRequest } from '@/lib/api-key-auth';
 import { triggerPortfolioRenewalsAlert } from '@/lib/insurance/forecast-alert';
 import {
   fxConvert,
-  resumenMoneda,
   CURRENCY_CONSTANTS,
   type Currency,
 } from '@/lib/insurance/currency';
+import {
+  persistForecastLog,
+  backfillForecastLogs,
+  FORECAST_SOURCE_VERSION,
+} from '@/lib/insurance/forecast-persistence';
 
 /**
  * GET /api/insurance/portfolio/forecast
@@ -79,11 +83,6 @@ const EXPERIMENTAL_MAPE_THRESHOLD = 0.30;
 // Ancho de banda estándar: ±1 stddev de residuos. En modo experimental se
 // multiplica por este factor para reflejar la incertidumbre mayor.
 const EXPERIMENTAL_BAND_MULTIPLIER = 1.6;
-// Versionado del modelo: si en el futuro cambiamos los hiperparámetros del
-// forecast, incrementamos esto para que las filas nuevas convivan con las
-// antiguas y podamos comparar accuracy sin mezclar manzanas con naranjas.
-const SOURCE_VERSION = 'v1-linear-6m';
-
 function pad2(n: number): string {
   return n < 10 ? `0${n}` : String(n);
 }
@@ -134,26 +133,6 @@ function rSquared(points: Array<{ x: number; y: number; yHat: number }>): number
   const ssRes = points.reduce((acc, p) => acc + (p.y - p.yHat) ** 2, 0);
   if (ssTot === 0) return 1;
   return 1 - ssRes / ssTot;
-}
-
-/**
- * Acumula la prima real emitida en un mes (YYYY-MM-01) sumando las polizas
- * emitidas entre el primer y el último instante de ese mes. Helper perezoso
- * que convierte cada póliza a `targetCurrency` antes de sumar (FIX bug monedas).
- */
-async function sumaRealDelMes(tenantId: string, mes: Date, targetCurrency: Currency): Promise<number> {
-  const fin = new Date(mes.getFullYear(), mes.getMonth() + 1, 1);
-  const rows = await prisma.poliza.findMany({
-    where: {
-      tenantId,
-      fechaEmision: { gte: mes, lt: fin },
-    },
-    select: { primaAnual: true, moneda: true },
-  });
-  return rows.reduce(
-    (acc, r) => acc + fxConvert(Number(r.primaAnual ?? 0), (r.moneda as string) ?? 'USD', targetCurrency),
-    0
-  );
 }
 
 /**
@@ -362,42 +341,16 @@ export async function GET(request: NextRequest) {
     // se hace el 15 de febrero, el log dice "mesProyectado=2026-03-01".
     const mesProyectado = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
-    let currentForecastLogId: string | null = null;
-    try {
-      const persisted = await prisma.portfolioForecastLog.upsert({
-        where: {
-          tenantId_mesProyectado_sourceVersion: {
-            tenantId: auth.tenant!.id,
-            mesProyectado,
-            sourceVersion: SOURCE_VERSION,
-          },
-        },
-        create: {
-          tenantId: auth.tenant!.id,
-          mesProyectado,
-          proyectado: proyeccion,
-          slope: reg.slope,
-          intercepto: reg.intercept,
-          r2,
-          ventanaMeses: WINDOW,
-          sourceVersion: SOURCE_VERSION,
-        },
-        update: {
-          // Re-generación: actualiza el proyectado (los hiperparámetros del
-          // modelo pueden haber cambiado) pero NO el real/errorPct: si ya
-          // estaba backfilleado, no lo pisamos.
-          proyectado: proyeccion,
-          slope: reg.slope,
-          intercepto: reg.intercept,
-          r2,
-          ventanaMeses: WINDOW,
-        },
-      });
-      currentForecastLogId = persisted.id;
-    } catch (logError) {
-      // El log es audit, no debe romper la respuesta al cliente.
-      console.error('[forecast] No se pudo persistir el log:', logError);
-    }
+    const persistedLog = await persistForecastLog(auth.tenant!.id, {
+      mesProyectado,
+      proyectado: proyeccion,
+      slope: reg.slope,
+      intercepto: reg.intercept,
+      r2,
+      ventanaMeses: WINDOW,
+      sourceVersion: FORECAST_SOURCE_VERSION,
+    });
+    const currentForecastLogId = persistedLog?.id ?? null;
 
     // ─── Proactividad forecast → chatbot ─────────────────────────
     // Si la pendiente es negativa con buen ajuste, abre una conversación
@@ -411,47 +364,9 @@ export async function GET(request: NextRequest) {
     );
 
     // ─── Backfill de logs cuyo mes apuntado ya cerró ────────────────
-    // Para cada log con `mesProyectado < ahora` y `real IS NULL`, intenta
-    // calcular la prima real de ese mes y persistirla + errorPct.
-    try {
-      const ahora = new Date();
-      const pendientes = await prisma.portfolioForecastLog.findMany({
-        where: {
-          tenantId: auth.tenant!.id,
-          mesProyectado: { lt: ahora },
-          real: null,
-        },
-        select: { id: true, mesProyectado: true },
-      });
-
-      for (const p of pendientes) {
-        const real = await sumaRealDelMes(auth.tenant!.id, p.mesProyectado, tenantMoneda);
-        const proyectadoNum = 0; // placeholder, sobreescribimos abajo con el valor correcto
-        // No tenemos el `proyectado` original en el `select` — leemos con una
-        // segunda query mínima o lo hacemos en bloque. Para optimizar:
-        const fullLog = await prisma.portfolioForecastLog.findUnique({
-          where: { id: p.id },
-          select: { proyectado: true },
-        });
-        const proyectadoOriginal = Number(fullLog?.proyectado ?? 0);
-        const errorPct = proyectadoOriginal > 0
-          ? Math.abs(proyectadoOriginal - real) / proyectadoOriginal * 100
-          : (real > 0 ? 100 : 0);
-
-        await prisma.portfolioForecastLog.update({
-          where: { id: p.id },
-          data: {
-            real,
-            errorPct,
-            backfilledEn: new Date(),
-          },
-        });
-        // referencia a proyectadoNum para evitar el warning de unused
-        void proyectadoNum;
-      }
-    } catch (backfillError) {
-      console.error('[forecast] Error en backfill batch:', backfillError);
-    }
+    // Helper idempotente: backfillea `real` + `errorPct` solo en logs con
+    // mesProyectado < ahora y real NULL. Idempotente por filtro `real: null`.
+    await backfillForecastLogs(auth.tenant!.id, tenantMoneda);
 
     // Recalcular accuracy tras backfill (los logs que se acaban de cerrar
     // podrían aportar muestras nuevas).

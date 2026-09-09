@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { prisma } from '@/lib/db';
+import { recordExternalSearch } from '@/lib/leads/external-search-history';
 
 // GET /api/leads/external/search - Buscar leads en plataformas externas
 export async function GET(request: NextRequest) {
@@ -72,7 +73,8 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Guardar historial de búsqueda
+    // Guardar historial de búsqueda (helper extraído para mantener el GET
+    // como orquestador y la escritura en un único punto idempotente por evento)
     const criterios = {
       source,
       title,
@@ -84,15 +86,13 @@ export async function GET(request: NextRequest) {
       limit,
     };
 
-    await prisma.externalLeadSearch.create({
-      data: {
-        tenantId: user.tenantId,
-        userId: user.id,
-        criterios,
-        fuente: source,
-        totalResultados: results.length,
-        resultados: results,
-      },
+    await recordExternalSearch({
+      tenantId: user.tenantId,
+      userId: user.id,
+      criterios,
+      fuente: source,
+      totalResultados: results.length,
+      resultados: results,
     });
 
     return NextResponse.json({
