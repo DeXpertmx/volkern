@@ -21,6 +21,11 @@ import {
   ExternalLink,
   CheckCircle2,
   XCircle,
+  Sparkles,
+  Wrench,
+  AlertTriangle,
+  Plus,
+  Trash2,
 } from 'lucide-react';
 import {
   buildDays,
@@ -29,6 +34,8 @@ import {
   channelStyle,
   statusLabel,
   currentWeekRange,
+  buildMonthGrid,
+  occupancyByDay,
   startOfDay,
   toIsoDate,
   type CalendarReservation,
@@ -69,9 +76,13 @@ export default function HospitalityCalendar() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [units, setUnits] = useState<CalendarUnit[]>([]);
   const [reservations, setReservations] = useState<CalendarReservation[]>([]);
+  const [view, setView] = useState<'planning' | 'mes' | 'operaciones'>('planning');
   const [selectedProperty, setSelectedProperty] = useState<string>('all');
   const [rangeStart, setRangeStart] = useState<Date>(() => currentWeekRange().start);
+  const [monthCursor, setMonthCursor] = useState<Date>(() => new Date());
   const [selected, setSelected] = useState<CalendarReservation | null>(null);
+  const [ops, setOps] = useState<any>(null);
+  const [opsLoading, setOpsLoading] = useState(false);
 
   const rangeEnd = useMemo(() => new Date(rangeStart.getTime() + 6 * 24 * 60 * 60 * 1000), [rangeStart]);
 
@@ -157,6 +168,32 @@ export default function HospitalityCalendar() {
 
   const todayKey = useMemo(() => toIsoDate(new Date()), []);
 
+  const monthGrid = useMemo(() => buildMonthGrid(monthCursor), [monthCursor]);
+  const occupancy = useMemo(
+    () => occupancyByDay(reservations, monthGrid.days),
+    [reservations, monthGrid]
+  );
+  const loadOperations = useCallback(async () => {
+    setOpsLoading(true);
+    try {
+      const res = await fetch('/api/hospitality/operations');
+      if (res.ok) {
+        const data = await res.json();
+        setOps(data);
+      } else {
+        toast.error('Error al cargar operaciones');
+      }
+    } catch {
+      toast.error('Error al cargar operaciones');
+    } finally {
+      setOpsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (view === 'operaciones') loadOperations();
+  }, [view, loadOperations, reservations]);
+
   // Vista "Hoy" (mobile / quick glance): llegadas y salidas
   const todayArrivals = useMemo(() => {
     return reservations.filter((r) => r.estado !== 'cancelled' && toIsoDate(r.checkIn) === todayKey);
@@ -189,11 +226,30 @@ export default function HospitalityCalendar() {
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-2">
             <CalendarDays className="h-8 w-8 text-primary" />
-            Planificación
+            {view === 'planning' ? 'Planificación' : view === 'mes' ? 'Mes' : 'Operaciones'}
           </h1>
-          <p className="text-muted-foreground mt-1">Ocupación de unidades por fecha</p>
+          <p className="text-muted-foreground mt-1">
+            {view === 'planning'
+              ? 'Ocupación de unidades por fecha'
+              : view === 'mes'
+                ? 'Ocupación del mes por día'
+                : 'Llegadas, salidas, limpieza y mantenimiento de hoy'}
+          </p>
         </div>
         <div className="flex items-center gap-2">
+          <div className="flex items-center rounded-lg border bg-muted/40 p-0.5">
+            {(['planning', 'mes', 'operaciones'] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={`px-3 py-1.5 text-sm rounded-md font-medium transition-colors ${
+                  view === v ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {v === 'planning' ? 'Planning' : v === 'mes' ? 'Mes' : 'Operaciones'}
+              </button>
+            ))}
+          </div>
           <select
             value={selectedProperty}
             onChange={(e) => setSelectedProperty(e.target.value)}
@@ -204,16 +260,53 @@ export default function HospitalityCalendar() {
               <option key={p.id} value={p.id}>{p.nombre}</option>
             ))}
           </select>
-          <Button onClick={gotoToday} variant="outline" size="sm">Hoy</Button>
-          <Button onClick={() => gotoWeek(-1)} variant="outline" size="icon">
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <Button onClick={() => gotoWeek(1)} variant="outline" size="icon">
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+          {view === 'planning' ? (
+            <>
+              <Button onClick={gotoToday} variant="outline" size="sm">Hoy</Button>
+              <Button onClick={() => gotoWeek(-1)} variant="outline" size="icon">
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button onClick={() => gotoWeek(1)} variant="outline" size="icon">
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </>
+          ) : view === 'mes' ? (
+            <>
+              <span className="text-sm font-semibold px-2 min-w-[110px] text-center">
+                {new Intl.DateTimeFormat('es-MX', { month: 'long', year: 'numeric' }).format(monthCursor)}
+              </span>
+              <Button
+                onClick={() => { setMonthCursor(new Date()); gotoToday(); }}
+                variant="outline"
+                size="sm"
+              >
+                Hoy
+              </Button>
+              <Button
+                onClick={() => setMonthCursor((p) => new Date(p.getFullYear(), p.getMonth() - 1, 1))}
+                variant="outline"
+                size="icon"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                onClick={() => setMonthCursor((p) => new Date(p.getFullYear(), p.getMonth() + 1, 1))}
+                variant="outline"
+                size="icon"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </>
+          ) : (
+            <Button onClick={loadOperations} variant="outline" size="sm" disabled={opsLoading}>
+              {opsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Refrescar'}
+            </Button>
+          )}
         </div>
       </div>
 
+      {view === 'planning' && (
+        <>
       {/* Vista Hoy (mobile-first) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 lg:hidden">
         <Card>
@@ -394,6 +487,66 @@ export default function HospitalityCalendar() {
           ))}
         </div>
       </Card>
+        </>
+      )}
+
+      {/* Vista Mes */}
+      {view === 'mes' && (
+        <Card>
+          <CardContent className="p-3">
+            <div className="grid grid-cols-7 gap-1">
+              {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((d) => (
+                <div key={d} className="text-center text-xs font-semibold text-muted-foreground py-1">
+                  {d}
+                </div>
+              ))}
+              {monthGrid.days.map((d) => {
+                const dayRes = occupancy.get(d.key) || [];
+                const isCurrentMonth = d.date.getMonth() === monthCursor.getMonth();
+                return (
+                  <button
+                    key={d.key}
+                    onClick={() => { setView('planning'); setRangeStart(startOfDay(d.date)); }}
+                    className={`min-h-[84px] rounded-lg border p-1.5 text-left flex flex-col gap-0.5 transition-colors hover:border-primary/50 ${
+                      d.isToday ? 'border-primary bg-primary/5' : 'border-border'
+                    } ${isCurrentMonth ? '' : 'opacity-40'}`}
+                  >
+                    <p className={`text-[11px] font-semibold ${d.isToday ? 'text-primary' : 'text-muted-foreground'}`}>
+                      {d.date.getDate()}
+                    </p>
+                    <div className="flex flex-col gap-0.5 overflow-hidden">
+                      {dayRes.slice(0, 3).map((r) => (
+                        <span
+                          key={r.id}
+                          className="text-[10px] leading-tight truncate rounded px-1 py-px text-white"
+                          style={{ backgroundColor: channelStyle(r.channel).color }}
+                        >
+                          {r.guestName}
+                        </span>
+                      ))}
+                      {dayRes.length > 3 && (
+                        <span className="text-[10px] text-muted-foreground font-medium">
+                          +{dayRes.length - 3} más
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Vista Operaciones (Operations Board) */}
+      {view === 'operaciones' && (
+        <OperationsBoard
+          ops={ops}
+          loading={opsLoading}
+          onRefresh={loadOperations}
+          onSelectReservation={(r) => setSelected(r as any)}
+        />
+      )}
 
       {/* Panel lateral de detalle */}
       {selected && (
@@ -480,6 +633,448 @@ export default function HospitalityCalendar() {
               )}
             </div>
           </aside>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Operations Board (plan maestro §19) ─────────────────────────────────── */
+interface OperationsBoardProps {
+  ops: any;
+  loading: boolean;
+  onRefresh: () => void;
+  onSelectReservation: (r: any) => void;
+}
+
+const CLEANING_LABEL: Record<string, string> = {
+  pending: 'Pendiente',
+  in_progress: 'En proceso',
+  completed: 'Completada',
+  blocked: 'Bloqueada',
+};
+
+const CLEANING_DOT: Record<string, string> = {
+  pending: 'bg-amber-400',
+  in_progress: 'bg-blue-500',
+  completed: 'bg-emerald-500',
+  blocked: 'bg-red-500',
+};
+
+const MAINT_LABEL: Record<string, string> = {
+  abierta: 'Abierta',
+  en_proceso: 'En proceso',
+  resuelta: 'Resuelta',
+  cerrada: 'Cerrada',
+};
+
+const MAINT_DOT: Record<string, string> = {
+  abierta: 'bg-red-500',
+  en_proceso: 'bg-blue-500',
+  resuelta: 'bg-emerald-500',
+  cerrada: 'bg-slate-400',
+};
+
+const PRIORITY_DOT: Record<string, string> = {
+  baja: 'bg-slate-400',
+  normal: 'bg-blue-400',
+  media: 'bg-amber-400',
+  alta: 'bg-orange-500',
+  critica: 'bg-red-600',
+};
+
+function OperationsBoard({ ops, loading, onRefresh, onSelectReservation }: OperationsBoardProps) {
+  const [newTask, setNewTask] = useState<{ open: boolean; tipo: 'cleaning' | 'maintenance' }>({ open: false, tipo: 'cleaning' });
+  const [form, setForm] = useState({ unitId: '', prioridad: '', responsable: '', notas: '', incidencia: '' });
+  const [saving, setSaving] = useState(false);
+
+  if (loading && !ops) {
+    return (
+      <div className="flex items-center justify-center min-h-[40vh]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!ops) {
+    return (
+      <Card>
+        <CardContent className="p-10 text-center">
+          <p className="text-sm text-muted-foreground">No se pudieron cargar las operaciones.</p>
+          <Button onClick={onRefresh} variant="outline" size="sm" className="mt-3">Reintentar</Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const changeTask = async (tipo: 'cleaning' | 'maintenance', id: string, estado: string) => {
+    try {
+      const res = await fetch(`/api/hospitality/tasks?tipo=${tipo}&id=${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado }),
+      });
+      if (res.ok) {
+        toast.success('Estado actualizado');
+        onRefresh();
+      } else {
+        toast.error('No se pudo actualizar el estado');
+      }
+    } catch {
+      toast.error('Error al actualizar el estado');
+    }
+  };
+
+  const deleteTask = async (tipo: 'cleaning' | 'maintenance', id: string) => {
+    try {
+      const res = await fetch(`/api/hospitality/tasks?tipo=${tipo}&id=${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        toast.success('Tarea eliminada');
+        onRefresh();
+      } else {
+        toast.error('No se pudo eliminar');
+      }
+    } catch {
+      toast.error('Error al eliminar');
+    }
+  };
+
+  const createTask = async () => {
+    if (!form.unitId) {
+      toast.error('Selecciona una unidad');
+      return;
+    }
+    if (newTask.tipo === 'maintenance' && !form.incidencia.trim()) {
+      toast.error('Describe la incidencia');
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch('/api/hospitality/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tipo: newTask.tipo,
+          unitId: form.unitId,
+          prioridad: form.prioridad || undefined,
+          responsable: form.responsable || undefined,
+          notas: form.notas || undefined,
+          incidencia: newTask.tipo === 'maintenance' ? form.incidencia : undefined,
+        }),
+      });
+      if (res.ok) {
+        toast.success(newTask.tipo === 'cleaning' ? 'Tarea de limpieza creada' : 'Incidencia registrada');
+        setNewTask({ open: false, tipo: 'cleaning' });
+        setForm({ unitId: '', prioridad: '', responsable: '', notas: '', incidencia: '' });
+        onRefresh();
+      } else {
+        const d = await res.json().catch(() => ({}));
+        toast.error(d.error || 'No se pudo crear');
+      }
+    } catch {
+      toast.error('Error al crear');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const activeUnits = (ops.unidades || []).filter((u: any) => u.estadoOperativo === 'occupied').length;
+  const availableUnits = (ops.unidades || []).filter((u: any) => u.estadoOperativo === 'available').length;
+  const cleaningUnits = (ops.unidades || []).filter((u: any) =>
+    ['cleaning', 'dirty'].includes(u.estadoOperativo)
+  ).length;
+  const maintUnits = (ops.unidades || []).filter((u: any) =>
+    ['maintenance', 'out_of_service'].includes(u.estadoOperativo)
+  ).length;
+
+  return (
+    <div className="space-y-4">
+      {/* KPIs de unidades */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-2xl font-bold">{activeUnits}</p>
+            <p className="text-xs text-muted-foreground">Ocupadas</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-2xl font-bold">{availableUnits}</p>
+            <p className="text-xs text-muted-foreground">Disponibles</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-2xl font-bold">{cleaningUnits}</p>
+            <p className="text-xs text-muted-foreground">En limpieza</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-2xl font-bold">{maintUnits}</p>
+            <p className="text-xs text-muted-foreground">Mantenimiento</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Llegadas y salidas de hoy */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2 text-green-700">
+              <CheckCircle2 className="h-4 w-4" /> Llegadas hoy ({ops.llegadasHoy?.length || 0})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {ops.llegadasHoy?.length === 0 && (
+              <p className="text-xs text-muted-foreground">Sin llegadas hoy</p>
+            )}
+            {ops.llegadasHoy?.map((r: any) => (
+              <button
+                key={r.id}
+                onClick={() => onSelectReservation(r)}
+                className="w-full text-left rounded-lg border p-2 hover:bg-muted/50 transition-colors"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium truncate">{r.guestName}</p>
+                  <span
+                    className="text-[10px] font-semibold text-white rounded px-1.5 py-0.5 shrink-0"
+                    style={{ backgroundColor: channelStyle(r.channel).color }}
+                  >
+                    {channelStyle(r.channel).label}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {r.unit?.nombre || 'Sin unidad'} · {r.externalBookingId}
+                </p>
+              </button>
+            ))}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2 text-blue-700">
+              <XCircle className="h-4 w-4" /> Salidas hoy ({ops.salidasHoy?.length || 0})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {ops.salidasHoy?.length === 0 && (
+              <p className="text-xs text-muted-foreground">Sin salidas hoy</p>
+            )}
+            {ops.salidasHoy?.map((r: any) => (
+              <button
+                key={r.id}
+                onClick={() => onSelectReservation(r)}
+                className="w-full text-left rounded-lg border p-2 hover:bg-muted/50 transition-colors"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium truncate">{r.guestName}</p>
+                  <span
+                    className="text-[10px] font-semibold text-white rounded px-1.5 py-0.5 shrink-0"
+                    style={{ backgroundColor: channelStyle(r.channel).color }}
+                  >
+                    {channelStyle(r.channel).label}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {r.unit?.nombre || 'Sin unidad'} · {r.externalBookingId}
+                </p>
+              </button>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Limpieza */}
+      <Card>
+        <CardHeader className="pb-2 flex flex-row items-center justify-between">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-primary" /> Limpieza ({ops.limpieza?.length || 0})
+          </CardTitle>
+          <Button size="sm" variant="outline" onClick={() => setNewTask({ open: true, tipo: 'cleaning' })}>
+            <Plus className="h-3.5 w-3.5 mr-1" /> Nueva
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {ops.limpieza?.length === 0 && (
+            <p className="text-xs text-muted-foreground">Sin tareas de limpieza pendientes</p>
+          )}
+          {ops.limpieza?.map((t: any) => (
+            <div key={t.id} className="flex items-center justify-between gap-2 rounded-lg border p-2">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${CLEANING_DOT[t.estado] || 'bg-slate-400'}`} />
+                  <p className="text-sm font-medium truncate">{t.unit?.nombre || 'Unidad'}</p>
+                  <span className="text-[10px] text-muted-foreground shrink-0">
+                    {CLEANING_LABEL[t.estado] || t.estado}
+                  </span>
+                </div>
+                {t.notas && <p className="text-xs text-muted-foreground truncate mt-0.5">{t.notas}</p>}
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                {t.estado !== 'completed' ? (
+                  <Button size="sm" variant="outline" onClick={() => changeTask('cleaning', t.id, 'completed')}>
+                    Completar
+                  </Button>
+                ) : null}
+                <Button size="icon" variant="ghost" onClick={() => deleteTask('cleaning', t.id)}>
+                  <Trash2 className="h-4 w-4 text-muted-foreground" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      {/* Mantenimiento */}
+      <Card>
+        <CardHeader className="pb-2 flex flex-row items-center justify-between">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Wrench className="h-4 w-4 text-primary" /> Mantenimiento ({ops.mantenimiento?.length || 0})
+          </CardTitle>
+          <Button size="sm" variant="outline" onClick={() => setNewTask({ open: true, tipo: 'maintenance' })}>
+            <Plus className="h-3.5 w-3.5 mr-1" /> Nueva
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {ops.mantenimiento?.length === 0 && (
+            <p className="text-xs text-muted-foreground">Sin incidencias abiertas</p>
+          )}
+          {ops.mantenimiento?.map((t: any) => (
+            <div key={t.id} className="flex items-center justify-between gap-2 rounded-lg border p-2">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${MAINT_DOT[t.estado] || 'bg-slate-400'}`} />
+                  <p className="text-sm font-medium truncate">{t.incidencia}</p>
+                  <span className="text-[10px] text-muted-foreground shrink-0">
+                    {MAINT_LABEL[t.estado] || t.estado}
+                  </span>
+                  {t.prioridad !== 'media' && (
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${PRIORITY_DOT[t.prioridad] || ''}`} />
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground truncate mt-0.5">
+                  {t.unit?.nombre || 'Unidad'}
+                  {t.descripcion ? ` · ${t.descripcion}` : ''}
+                </p>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                {t.estado === 'abierta' ? (
+                  <Button size="sm" variant="outline" onClick={() => changeTask('maintenance', t.id, 'en_proceso')}>
+                    Iniciar
+                  </Button>
+                ) : null}
+                {t.estado === 'en_proceso' ? (
+                  <Button size="sm" variant="outline" onClick={() => changeTask('maintenance', t.id, 'resuelta')}>
+                    Resolver
+                  </Button>
+                ) : null}
+                <Button size="icon" variant="ghost" onClick={() => deleteTask('maintenance', t.id)}>
+                  <Trash2 className="h-4 w-4 text-muted-foreground" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      {/* Diálogo nueva tarea */}
+      {newTask.open && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setNewTask({ open: false, tipo: 'cleaning' })}>
+          <div
+            className="bg-white dark:bg-slate-950 rounded-xl shadow-2xl w-full max-w-md p-5 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold flex items-center gap-2">
+                {newTask.tipo === 'cleaning' ? <Sparkles className="h-4 w-4 text-primary" /> : <Wrench className="h-4 w-4 text-primary" />}
+                {newTask.tipo === 'cleaning' ? 'Nueva tarea de limpieza' : 'Nueva incidencia de mantenimiento'}
+              </h3>
+              <button onClick={() => setNewTask({ open: false, tipo: 'cleaning' })} className="p-1.5 rounded-lg hover:bg-muted">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Unidad</label>
+                <select
+                  value={form.unitId}
+                  onChange={(e) => setForm((f) => ({ ...f, unitId: e.target.value }))}
+                  className="mt-1 w-full h-9 rounded-md border bg-background px-3 text-sm"
+                >
+                  <option value="">Selecciona una unidad</option>
+                  {(ops.unidades || []).map((u: any) => (
+                    <option key={u.id} value={u.id}>{u.nombre}</option>
+                  ))}
+                </select>
+              </div>
+              {newTask.tipo === 'maintenance' && (
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Incidencia *</label>
+                  <input
+                    value={form.incidencia}
+                    onChange={(e) => setForm((f) => ({ ...f, incidencia: e.target.value }))}
+                    placeholder="Ej: Fuga en la ducha del baño principal"
+                    className="mt-1 w-full h-9 rounded-md border bg-background px-3 text-sm"
+                  />
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Prioridad</label>
+                  <select
+                    value={form.prioridad}
+                    onChange={(e) => setForm((f) => ({ ...f, prioridad: e.target.value }))}
+                    className="mt-1 w-full h-9 rounded-md border bg-background px-3 text-sm"
+                  >
+                    <option value="">Normal / Media</option>
+                    {newTask.tipo === 'cleaning' ? (
+                      <>
+                        <option value="baja">Baja</option>
+                        <option value="normal">Normal</option>
+                        <option value="alta">Alta</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="baja">Baja</option>
+                        <option value="media">Media</option>
+                        <option value="alta">Alta</option>
+                        <option value="critica">Crítica</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Responsable</label>
+                  <input
+                    value={form.responsable}
+                    onChange={(e) => setForm((f) => ({ ...f, responsable: e.target.value }))}
+                    placeholder="Nombre"
+                    className="mt-1 w-full h-9 rounded-md border bg-background px-3 text-sm"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Notas</label>
+                <textarea
+                  value={form.notas}
+                  onChange={(e) => setForm((f) => ({ ...f, notas: e.target.value }))}
+                  rows={2}
+                  placeholder={newTask.tipo === 'cleaning' ? 'Ej: Limpieza profunda tras check-out' : 'Detalles adicionales'}
+                  className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setNewTask({ open: false, tipo: 'cleaning' })}>
+                Cancelar
+              </Button>
+              <Button size="sm" onClick={createTask} disabled={saving}>
+                {saving && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
+                Crear
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>

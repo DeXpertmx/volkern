@@ -499,6 +499,8 @@ model Tenant {
   hospitalityMappings           ConnectivityMapping[]             @relation("HospitalityMappings")
   hospitalityReservations       HospitalityReservation[]          @relation("HospitalityReservations")
   hospitalityWebhookEvents      HospitalityWebhookEvent[]         @relation("HospitalityWebhookEvents")
+  hospitalityCleaningTasks      HospitalityCleaningTask[]         @relation("HospitalityCleaningTasks")
+  hospitalityMaintenanceTasks   HospitalityMaintenanceTask[]      @relation("HospitalityMaintenanceTasks")
 }
 
 model AttendanceRules {
@@ -8068,6 +8070,8 @@ model HospitalityUnit {
   property      HospitalityProperty @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   mappings      ConnectivityMapping[]
   reservations  HospitalityReservation[]
+  cleaningTasks HospitalityCleaningTask[]
+  maintenanceTasks HospitalityMaintenanceTask[]
 
   @@index([tenantId])
   @@index([propertyId])
@@ -8139,6 +8143,7 @@ model HospitalityReservation {
   unit                  HospitalityUnit?     @relation(fields: [unitId], references: [id], onDelete: SetNull)
   contact               Contact?             @relation("HospitalityReservationContact", fields: [contactId], references: [id], onDelete: SetNull)
   webhookEvents         HospitalityWebhookEvent[]
+  cleaningTasks         HospitalityCleaningTask[]
 
   @@unique([tenantId, channel, externalBookingId])
   @@index([tenantId])
@@ -8173,3 +8178,52 @@ model HospitalityWebhookEvent {
   @@index([fechaCreacion])
   @@map("hospitality_webhook_events")
 }
+
+// Tarea de limpieza de una unidad alojativa (plan maestro §18.3).
+// Estados: pending|in_progress|completed|blocked.
+model HospitalityCleaningTask {
+  id             String   @id @default(cuid())
+  tenantId       String
+  unitId         String
+  reservationId  String?
+  fecha          DateTime @default(now())
+  prioridad      String   @default("normal") // baja|normal|alta
+  responsable    String?
+  estado         String   @default("pending") // pending|in_progress|completed|blocked
+  notas          String?
+  fechaCreacion  DateTime @default(now())
+  fechaEdicion   DateTime @updatedAt
+  tenant         Tenant                    @relation("HospitalityCleaningTasks", fields: [tenantId], references: [id], onDelete: Cascade)
+  unit           HospitalityUnit           @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  reservation    HospitalityReservation?   @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([unitId])
+  @@index([estado])
+  @@map("hospitality_cleaning_tasks")
+}
+
+// Incidencia de mantenimiento de una unidad alojativa (plan maestro §18.4).
+// Estados: abierta|en_proceso|resuelta|cerrada.
+model HospitalityMaintenanceTask {
+  id             String   @id @default(cuid())
+  tenantId       String
+  unitId         String
+  incidencia     String
+  descripcion    String?
+  prioridad      String   @default("media") // baja|media|alta|critica
+  responsable    String?
+  estado         String   @default("abierta") // abierta|en_proceso|resuelta|cerrada
+  fecha          DateTime @default(now())
+  notas          String?
+  fechaCreacion  DateTime @default(now())
+  fechaEdicion   DateTime @updatedAt
+  tenant         Tenant                   @relation("HospitalityMaintenanceTasks", fields: [tenantId], references: [id], onDelete: Cascade)
+  unit           HospitalityUnit          @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([unitId])
+  @@index([estado])
+  @@map("hospitality_maintenance_tasks")
+}
+
