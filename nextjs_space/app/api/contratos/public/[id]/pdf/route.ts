@@ -4,6 +4,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { generatePdf } from '@/lib/pdf-generator';
 import { resolvePlaceholders } from '@/lib/contratos/placeholders';
+import { getEffectiveBranding } from '@/lib/branding';
+import { getPublicUrl } from '@/lib/s3-public-url';
 
 function formatCurrency(amount: number, currency: string): string {
   const symbols: Record<string, string> = { MXN: '$', USD: '$', EUR: '€' };
@@ -104,7 +106,12 @@ function hydrateTemplate(html: string, contrato: any, tenant: any): string {
   return hydrated;
 }
 
-function generateContratoHTML(contrato: any, tenant: any): string {
+function generateContratoHTML(contrato: any, tenant: any, opts: { logoUrl?: string; companyName?: string } = {}): string {
+  const companyName = opts.companyName || tenant?.nombre || 'Nuestra Empresa';
+  const logoHtml = opts.logoUrl
+    ? `<img src="${opts.logoUrl}" alt="${companyName}" style="max-height: 60px; max-width: 220px; object-fit: contain;" />`
+    : `<div style="font-weight: 800; font-size: 18px; color: #1e293b;">${companyName}</div>`;
+
   // Check if we have a customized GrapesJS template in 'clausulas'
   const isCustomTemplate = contrato.clausulas && contrato.clausulas.includes('<div') && !contrato.clausulas.includes('terms-box');
   
@@ -172,6 +179,7 @@ function generateContratoHTML(contrato: any, tenant: any): string {
       <style>
         body { font-family: 'Inter', 'Segoe UI', Arial, sans-serif; font-size: 11px; color: #333; line-height: 1.55; padding: 40px; }
         h1 { font-size: 18px; margin: 0 0 4px; }
+        .doc-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; border-bottom: 2px solid #1e293b; padding-bottom: 12px; }
         h2 { font-size: 13px; margin: 20px 0 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
         .header-meta { color: #555; font-size: 11px; margin-bottom: 20px; }
         .party-block { margin: 8px 0; }
@@ -190,6 +198,13 @@ function generateContratoHTML(contrato: any, tenant: any): string {
       </style>
     </head>
     <body>
+      <div class="doc-header">
+        <div>${logoHtml}</div>
+        <div style="text-align: right;">
+          <div style="font-weight: 800; font-size: 15px;">${contrato.numero || ''}</div>
+          <div style="font-size: 10px; color: #666;">${formatDate(contrato.fechaCreacion || new Date())}</div>
+        </div>
+      </div>
       <h1>${contrato.titulo || 'Contrato de servicios'}</h1>
       <div class="header-meta">
         Contrato <strong>${contrato.numero || ''}</strong> · ${formatDate(contrato.fechaCreacion || new Date())}
@@ -273,7 +288,15 @@ export async function GET(request: Request, { params }: { params: { id: string }
     }
 
     const tenant = await prisma.tenant.findUnique({ where: { id: contrato.tenantId } });
-    const htmlContent = generateContratoHTML(contrato, tenant);
+    const branding = await getEffectiveBranding(contrato.tenantId);
+    let logoUrl = branding.logoUrl || '';
+    if (logoUrl && !logoUrl.startsWith('http') && !logoUrl.startsWith('/')) {
+      logoUrl = getPublicUrl(logoUrl);
+    }
+    const htmlContent = generateContratoHTML(contrato, tenant, {
+      logoUrl,
+      companyName: branding.companyName || tenant?.nombre,
+    });
 
     // Generar PDF localmente con Puppeteer
     const pdfBuffer = await generatePdf(htmlContent, {

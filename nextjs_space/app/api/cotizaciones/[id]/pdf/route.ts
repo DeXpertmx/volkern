@@ -5,6 +5,8 @@ import { prisma } from '@/lib/db';
 import { generatePdf } from '@/lib/pdf-generator';
 import { authenticateRequest } from '@/lib/api-key-auth';
 import { generateCotizacionHTML } from '@/lib/cotizaciones/cotizacion-pdf';
+import { getEffectiveBranding } from '@/lib/branding';
+import { getPublicUrl } from '@/lib/s3-public-url';
 
 export async function GET(request: Request, context: { params: { id: string } }) {
   try {
@@ -33,7 +35,16 @@ export async function GET(request: Request, context: { params: { id: string } })
       where: { id: auth.tenant.id },
     });
 
-    const pdfBuffer = await generatePdf(generateCotizacionHTML(cotizacion, tenant), {
+    const branding = await getEffectiveBranding(auth.tenant.id)
+    let logoUrl = branding.logoUrl || ''
+    if (logoUrl && !logoUrl.startsWith('http') && !logoUrl.startsWith('/')) {
+      logoUrl = getPublicUrl(logoUrl)
+    }
+
+    const pdfBuffer = await generatePdf(generateCotizacionHTML(cotizacion, tenant, {
+      logoUrl,
+      companyName: branding.companyName || tenant?.nombre,
+    }), {
       format: 'A4',
       margin: { top: '20mm', right: '15mm', bottom: '20mm', left: '15mm' },
       printBackground: true,
