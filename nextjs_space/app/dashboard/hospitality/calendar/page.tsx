@@ -83,6 +83,7 @@ export default function HospitalityCalendar() {
   const [selected, setSelected] = useState<CalendarReservation | null>(null);
   const [ops, setOps] = useState<any>(null);
   const [opsLoading, setOpsLoading] = useState(false);
+  const [checking, setChecking] = useState<{ id: string; tipo: string } | null>(null);
 
   const rangeEnd = useMemo(() => new Date(rangeStart.getTime() + 6 * 24 * 60 * 60 * 1000), [rangeStart]);
 
@@ -209,6 +210,31 @@ export default function HospitalityCalendar() {
 
   const gotoToday = () => {
     setRangeStart(currentWeekRange().start);
+  };
+
+  const runCheck = async (r: CalendarReservation, tipo: 'checkin' | 'checkout') => {
+    setChecking({ id: r.id, tipo });
+    try {
+      const res = await fetch(`/api/hospitality/reservations/${r.id}/check`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operacion: tipo }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        toast.success(tipo === 'checkin' ? 'Check-in realizado' : 'Check-out realizado · limpieza programada');
+        setSelected(null);
+        loadReservations();
+        loadOperations();
+        loadBase();
+      } else {
+        toast.error(data.error || 'No se pudo realizar la operación');
+      }
+    } catch {
+      toast.error('Error al realizar la operación');
+    } finally {
+      setChecking(null);
+    }
   };
 
   if (loading) {
@@ -630,6 +656,51 @@ export default function HospitalityCalendar() {
                   </p>
                   <p className="text-sm whitespace-pre-wrap">{selected.specialRequests}</p>
                 </div>
+              )}
+
+              {/* Acciones operativas (§18) */}
+              {selected.estado === 'confirmed' && (
+                <div className="space-y-2">
+                  <Button
+                    className="w-full"
+                    disabled={checking?.id === selected.id}
+                    onClick={() => runCheck(selected, 'checkin')}
+                  >
+                    {checking?.id === selected.id && checking.tipo === 'checkin' ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                    ) : (
+                      <CheckCircle2 className="h-4 w-4 mr-1" />
+                    )}
+                    Registrar check-in
+                  </Button>
+                  <Button
+                    className="w-full"
+                    variant="outline"
+                    disabled={checking?.id === selected.id}
+                    onClick={() => runCheck(selected, 'checkout')}
+                  >
+                    {checking?.id === selected.id && checking.tipo === 'checkout' ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                    ) : (
+                      <XCircle className="h-4 w-4 mr-1" />
+                    )}
+                    Registrar check-out
+                  </Button>
+                </div>
+              )}
+              {selected.estado === 'checked_in' && (
+                <Button
+                  className="w-full"
+                  disabled={checking?.id === selected.id}
+                  onClick={() => runCheck(selected, 'checkout')}
+                >
+                  {checking?.id === selected.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                  ) : (
+                    <XCircle className="h-4 w-4 mr-1" />
+                  )}
+                  Registrar check-out · limpieza automática
+                </Button>
               )}
             </div>
           </aside>
