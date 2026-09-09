@@ -271,10 +271,12 @@ export const HUBS: HubConfig[] = [
     requiredAccountType: 'BUSINESS',
     requiredModule: 'hospitality',
     basePaths: [
-      '/dashboard/hospitality'
+      '/dashboard/hospitality',
+      '/dashboard/hospitality/calendar'
     ],
     items: [
       { name: 'Propiedades y Unidades', href: '/dashboard/hospitality', icon: Home, planModule: 'hospitality', description: 'Gestión de propiedades y unidades alojativas' },
+      { name: 'Planificación', href: '/dashboard/hospitality/calendar', icon: CalendarDays, planModule: 'hospitality', description: 'Calendario de ocupación por unidad' },
     ]
   },
   {
