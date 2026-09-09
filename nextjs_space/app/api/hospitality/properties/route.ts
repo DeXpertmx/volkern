@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
 import { logAuditAction } from '@/lib/permissions';
@@ -46,7 +47,10 @@ export async function POST(req: NextRequest) {
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
 
     const data = await req.json();
-    const { nombre, direccion, ciudad, pais, timezone, estado } = data || {};
+    const {
+      nombre, descripcion, codigo, zona, direccion, ciudad, estadoProvincia,
+      pais, cp, latitud, longitud, fotos, timezone, estado, unidades,
+    } = data || {};
 
     if (!nombre || !nombre.trim()) {
       return NextResponse.json({ error: 'El nombre es requerido' }, { status: 400 });
@@ -56,13 +60,37 @@ export async function POST(req: NextRequest) {
       data: {
         tenantId: auth.tenant!.id,
         nombre: nombre.trim(),
+        descripcion: descripcion || null,
+        codigo: codigo || null,
+        zona: zona || null,
         direccion: direccion || null,
         ciudad: ciudad || null,
+        estadoProvincia: estadoProvincia || null,
         pais: pais || null,
+        cp: cp || null,
+        latitud: latitud != null && latitud !== '' ? Number(latitud) : null,
+        longitud: longitud != null && longitud !== '' ? Number(longitud) : null,
+        fotos: Array.isArray(fotos) ? (fotos as Prisma.InputJsonValue[]) : Prisma.DbNull,
         timezone: timezone || 'America/Mexico_City',
         estado: estado || 'activa',
       },
     });
+
+    // Alta rápida de unidades iniciales (opcional, en la misma creación).
+    if (Array.isArray(unidades) && unidades.length > 0) {
+      await prisma.hospitalityUnit.createMany({
+        data: unidades.slice(0, 50).map((u: any) => ({
+          tenantId: auth.tenant!.id,
+          propertyId: property.id,
+          nombre: String(u.nombre || '').trim() || 'Unidad',
+          codigo: u.codigo || null,
+          tipo: u.tipo || 'apartamento',
+          capacidad: Number(u.capacidad) || 2,
+          tarifaBase: u.tarifaBase != null && u.tarifaBase !== '' ? Number(u.tarifaBase) : null,
+          moneda: u.moneda || 'MXN',
+        })),
+      });
+    }
 
     // Auditoría
     await logAuditAction(

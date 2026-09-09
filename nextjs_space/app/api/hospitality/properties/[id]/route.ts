@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
 import { logAuditAction } from '@/lib/permissions';
@@ -44,15 +45,26 @@ export async function PATCH(req: NextRequest, ctx: Params) {
     if (!existing) return NextResponse.json({ error: 'Propiedad no encontrada' }, { status: 404 });
 
     const data = await req.json();
-    const { nombre, direccion, ciudad, pais, timezone, estado } = data || {};
+    const {
+      nombre, descripcion, codigo, zona, direccion, ciudad, estadoProvincia,
+      pais, cp, latitud, longitud, fotos, timezone, estado,
+    } = data || {};
 
     const property = await prisma.hospitalityProperty.update({
       where: { id: existing.id },
       data: {
         ...(nombre !== undefined ? { nombre: String(nombre).trim() } : {}),
+        ...(descripcion !== undefined ? { descripcion } : {}),
+        ...(codigo !== undefined ? { codigo } : {}),
+        ...(zona !== undefined ? { zona } : {}),
         ...(direccion !== undefined ? { direccion } : {}),
         ...(ciudad !== undefined ? { ciudad } : {}),
+        ...(estadoProvincia !== undefined ? { estadoProvincia } : {}),
         ...(pais !== undefined ? { pais } : {}),
+        ...(cp !== undefined ? { cp } : {}),
+        ...(latitud !== undefined ? { latitud: latitud === null || latitud === '' ? null : Number(latitud) } : {}),
+        ...(longitud !== undefined ? { longitud: longitud === null || longitud === '' ? null : Number(longitud) } : {}),
+        ...(fotos !== undefined ? { fotos: Array.isArray(fotos) ? (fotos as Prisma.InputJsonValue[]) : Prisma.DbNull } : {}),
         ...(timezone !== undefined ? { timezone } : {}),
         ...(estado !== undefined ? { estado } : {}),
       },

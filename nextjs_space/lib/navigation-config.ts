@@ -275,8 +275,8 @@ export const HUBS: HubConfig[] = [
       '/dashboard/hospitality/calendar'
     ],
     items: [
-      { name: 'Propiedades y Unidades', href: '/dashboard/hospitality', icon: Home, planModule: 'hospitality', description: 'Gestión de propiedades y unidades alojativas' },
-      { name: 'Planificación', href: '/dashboard/hospitality/calendar', icon: CalendarDays, planModule: 'hospitality', description: 'Calendario de ocupación por unidad' },
+      { name: 'Inicio', href: '/dashboard/hospitality', icon: Home, planModule: 'hospitality', description: 'Propiedades, unidades y resumen del módulo' },
+      { name: 'Planning', href: '/dashboard/hospitality/calendar', icon: CalendarDays, planModule: 'hospitality', description: 'Calendario de ocupación, reservas y operaciones' },
     ]
   },
   {
