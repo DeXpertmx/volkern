@@ -84,6 +84,14 @@ export default function HospitalityCalendar() {
   const [ops, setOps] = useState<any>(null);
   const [opsLoading, setOpsLoading] = useState(false);
   const [checking, setChecking] = useState<{ id: string; tipo: string } | null>(null);
+  const [taskForm, setTaskForm] = useState<{
+    open: boolean;
+    tipo: 'cleaning' | 'maintenance';
+    unitId: string;
+    reservationId: string | null;
+  } | null>(null);
+  const [taskFields, setTaskFields] = useState({ incidencia: '', notas: '', prioridad: '' });
+  const [taskSaving, setTaskSaving] = useState(false);
 
   const rangeEnd = useMemo(() => new Date(rangeStart.getTime() + 6 * 24 * 60 * 60 * 1000), [rangeStart]);
 
@@ -210,6 +218,59 @@ export default function HospitalityCalendar() {
 
   const gotoToday = () => {
     setRangeStart(currentWeekRange().start);
+  };
+
+  const openTaskForm = (tipo: 'cleaning' | 'maintenance') => {
+    if (!selected) return;
+    // Unidad de la reserva; si no tiene, se elige del select.
+    const unitId = selected.unitId || '';
+    setTaskFields({ incidencia: '', notas: '', prioridad: '' });
+    setTaskForm({
+      open: true,
+      tipo,
+      unitId,
+      reservationId: selected.id,
+    });
+  };
+
+  const createTaskFromReservation = async () => {
+    if (!taskForm) return;
+    if (!taskForm.unitId) {
+      toast.error('Selecciona una unidad');
+      return;
+    }
+    if (taskForm.tipo === 'maintenance' && !taskFields.incidencia.trim()) {
+      toast.error('Describe la incidencia');
+      return;
+    }
+    setTaskSaving(true);
+    try {
+      const res = await fetch('/api/hospitality/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tipo: taskForm.tipo,
+          unitId: taskForm.unitId,
+          reservationId: taskForm.reservationId || undefined,
+          prioridad: taskFields.prioridad || undefined,
+          notas: taskFields.notas || undefined,
+          incidencia: taskForm.tipo === 'maintenance' ? taskFields.incidencia : undefined,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        toast.success(taskForm.tipo === 'cleaning' ? 'Tarea de limpieza creada' : 'Incidencia registrada');
+        setTaskForm(null);
+        setTaskFields({ incidencia: '', notas: '', prioridad: '' });
+        loadOperations();
+      } else {
+        toast.error(data.error || 'No se pudo crear la tarea');
+      }
+    } catch {
+      toast.error('Error al crear la tarea');
+    } finally {
+      setTaskSaving(false);
+    }
   };
 
   const runCheck = async (r: CalendarReservation, tipo: 'checkin' | 'checkout') => {
@@ -571,6 +632,7 @@ export default function HospitalityCalendar() {
           loading={opsLoading}
           onRefresh={loadOperations}
           onSelectReservation={(r) => setSelected(r as any)}
+          onCheck={runCheck}
         />
       )}
 
@@ -702,8 +764,119 @@ export default function HospitalityCalendar() {
                   Registrar check-out · limpieza automática
                 </Button>
               )}
+
+              {/* Tareas desde la reserva */}
+              {selected.estado !== 'cancelled' && (
+                <div className="pt-1 border-t">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                    Tareas
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openTaskForm('cleaning')}
+                    >
+                      <Sparkles className="h-3.5 w-3.5 mr-1" />
+                      Limpieza
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openTaskForm('maintenance')}
+                    >
+                      <Wrench className="h-3.5 w-3.5 mr-1" />
+                      Mantenimiento
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </aside>
+
+          {/* Formulario de tarea desde la reserva */}
+          {taskForm?.open && (
+            <div className="absolute right-0 bottom-0 w-full max-w-md bg-white dark:bg-slate-950 border-t shadow-2xl rounded-t-2xl p-4 space-y-3" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between">
+                <h4 className="font-semibold text-sm flex items-center gap-2">
+                  {taskForm.tipo === 'cleaning' ? <Sparkles className="h-4 w-4 text-primary" /> : <Wrench className="h-4 w-4 text-primary" />}
+                  {taskForm.tipo === 'cleaning' ? 'Nueva tarea de limpieza' : 'Nueva incidencia'}
+                </h4>
+                <button onClick={() => setTaskForm(null)} className="p-1.5 rounded-lg hover:bg-muted">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Unidad</label>
+                <select
+                  value={taskForm.unitId}
+                  onChange={(e) => setTaskForm((f) => (f ? { ...f, unitId: e.target.value } : f))}
+                  className="mt-1 w-full h-9 rounded-md border bg-background px-3 text-sm"
+                >
+                  <option value="">Selecciona una unidad</option>
+                  {units.map((u) => (
+                    <option key={u.id} value={u.id}>{u.nombre}</option>
+                  ))}
+                </select>
+              </div>
+              {taskForm.tipo === 'maintenance' && (
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Incidencia *</label>
+                  <input
+                    value={taskFields.incidencia}
+                    onChange={(e) => setTaskFields((f) => ({ ...f, incidencia: e.target.value }))}
+                    placeholder="Ej: Fuga en la ducha del baño principal"
+                    className="mt-1 w-full h-9 rounded-md border bg-background px-3 text-sm"
+                  />
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Prioridad</label>
+                  <select
+                    value={taskFields.prioridad}
+                    onChange={(e) => setTaskFields((f) => ({ ...f, prioridad: e.target.value }))}
+                    className="mt-1 w-full h-9 rounded-md border bg-background px-3 text-sm"
+                  >
+                    <option value="">Normal / Media</option>
+                    {taskForm.tipo === 'cleaning' ? (
+                      <>
+                        <option value="baja">Baja</option>
+                        <option value="normal">Normal</option>
+                        <option value="alta">Alta</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="baja">Baja</option>
+                        <option value="media">Media</option>
+                        <option value="alta">Alta</option>
+                        <option value="critica">Crítica</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Notas</label>
+                <textarea
+                  value={taskFields.notas}
+                  onChange={(e) => setTaskFields((f) => ({ ...f, notas: e.target.value }))}
+                  rows={2}
+                  placeholder={taskForm.tipo === 'cleaning' ? 'Ej: Limpieza profunda tras check-out' : 'Detalles adicionales'}
+                  className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" size="sm" onClick={() => setTaskForm(null)}>
+                  Cancelar
+                </Button>
+                <Button size="sm" onClick={createTaskFromReservation} disabled={taskSaving}>
+                  {taskSaving && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
+                  Crear
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -716,6 +889,7 @@ interface OperationsBoardProps {
   loading: boolean;
   onRefresh: () => void;
   onSelectReservation: (r: any) => void;
+  onCheck: (r: CalendarReservation, tipo: 'checkin' | 'checkout') => void;
 }
 
 const CLEANING_LABEL: Record<string, string> = {
@@ -754,7 +928,7 @@ const PRIORITY_DOT: Record<string, string> = {
   critica: 'bg-red-600',
 };
 
-function OperationsBoard({ ops, loading, onRefresh, onSelectReservation }: OperationsBoardProps) {
+function OperationsBoard({ ops, loading, onRefresh, onSelectReservation, onCheck }: OperationsBoardProps) {
   const [newTask, setNewTask] = useState<{ open: boolean; tipo: 'cleaning' | 'maintenance' }>({ open: false, tipo: 'cleaning' });
   const [form, setForm] = useState({ unitId: '', prioridad: '', responsable: '', notas: '', incidencia: '' });
   const [saving, setSaving] = useState(false);
@@ -901,24 +1075,26 @@ function OperationsBoard({ ops, loading, onRefresh, onSelectReservation }: Opera
               <p className="text-xs text-muted-foreground">Sin llegadas hoy</p>
             )}
             {ops.llegadasHoy?.map((r: any) => (
-              <button
-                key={r.id}
-                onClick={() => onSelectReservation(r)}
-                className="w-full text-left rounded-lg border p-2 hover:bg-muted/50 transition-colors"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-medium truncate">{r.guestName}</p>
-                  <span
-                    className="text-[10px] font-semibold text-white rounded px-1.5 py-0.5 shrink-0"
-                    style={{ backgroundColor: channelStyle(r.channel).color }}
-                  >
-                    {channelStyle(r.channel).label}
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {r.unit?.nombre || 'Sin unidad'} · {r.externalBookingId}
-                </p>
-              </button>
+              <div key={r.id} className="rounded-lg border p-2 hover:bg-muted/50 transition-colors">
+                <button onClick={() => onSelectReservation(r)} className="w-full text-left">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium truncate">{r.guestName}</p>
+                    <span
+                      className="text-[10px] font-semibold text-white rounded px-1.5 py-0.5 shrink-0"
+                      style={{ backgroundColor: channelStyle(r.channel).color }}
+                    >
+                      {channelStyle(r.channel).label}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {r.unit?.nombre || 'Sin unidad'} · {r.externalBookingId}
+                  </p>
+                </button>
+                <Button size="sm" variant="outline" className="mt-1.5 w-full" onClick={() => onCheck({ ...r, unitId: r.unit?.id || null, unitNombre: r.unit?.nombre || null }, 'checkin')}>
+                  <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                  Registrar check-in
+                </Button>
+              </div>
             ))}
           </CardContent>
         </Card>
@@ -933,24 +1109,26 @@ function OperationsBoard({ ops, loading, onRefresh, onSelectReservation }: Opera
               <p className="text-xs text-muted-foreground">Sin salidas hoy</p>
             )}
             {ops.salidasHoy?.map((r: any) => (
-              <button
-                key={r.id}
-                onClick={() => onSelectReservation(r)}
-                className="w-full text-left rounded-lg border p-2 hover:bg-muted/50 transition-colors"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-medium truncate">{r.guestName}</p>
-                  <span
-                    className="text-[10px] font-semibold text-white rounded px-1.5 py-0.5 shrink-0"
-                    style={{ backgroundColor: channelStyle(r.channel).color }}
-                  >
-                    {channelStyle(r.channel).label}
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {r.unit?.nombre || 'Sin unidad'} · {r.externalBookingId}
-                </p>
-              </button>
+              <div key={r.id} className="rounded-lg border p-2 hover:bg-muted/50 transition-colors">
+                <button onClick={() => onSelectReservation(r)} className="w-full text-left">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium truncate">{r.guestName}</p>
+                    <span
+                      className="text-[10px] font-semibold text-white rounded px-1.5 py-0.5 shrink-0"
+                      style={{ backgroundColor: channelStyle(r.channel).color }}
+                    >
+                      {channelStyle(r.channel).label}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {r.unit?.nombre || 'Sin unidad'} · {r.externalBookingId}
+                  </p>
+                </button>
+                <Button size="sm" variant="outline" className="mt-1.5 w-full" onClick={() => onCheck({ ...r, unitId: r.unit?.id || null, unitNombre: r.unit?.nombre || null }, 'checkout')}>
+                  <XCircle className="h-3.5 w-3.5 mr-1" />
+                  Registrar check-out · limpieza
+                </Button>
+              </div>
             ))}
           </CardContent>
         </Card>
