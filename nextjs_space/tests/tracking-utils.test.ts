@@ -148,10 +148,16 @@ describe('interpolateCurrentPosition', () => {
   })
 
   it('debe ser determinista para el mismo input', () => {
+    // interpolateCurrentPosition lee `new Date()` en cada llamada; sin timers
+    // falsos, dos llamadas consecutivas difieren en unos ms y el progress
+    // cambia en el 8º decimal, haciendo el test flaky (fallo intermitente en CI).
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-01-15T12:00:00.000Z'))
     const s = makeShipment()
     const r1 = interpolateCurrentPosition(s)
     const r2 = interpolateCurrentPosition(s)
     expect(r1.progress).toBe(r2.progress)
+    vi.useRealTimers()
   })
 })
 

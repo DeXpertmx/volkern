@@ -49,6 +49,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const isPipeline = pathname === '/dashboard/pipeline'
   const isMessaging = pathname?.startsWith('/dashboard/mensajes')
   const isConnect = pathname === '/dashboard/connect'
+  const isLeads = pathname === '/dashboard/leads'
   const isFullscreenRoute = pathname?.includes('/fullscreen')
 
   if (!mounted) return null
@@ -82,7 +83,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           <TrialBanner />
           <div className={cn(
             "animate-in fade-in duration-700 h-full",
-            (isPipeline || isMessaging || isConnect) ? "w-full min-h-full" : "container mx-auto p-6 max-w-7xl"
+            (isPipeline || isMessaging || isConnect) ? "w-full min-h-full" : isLeads ? "w-full min-h-full p-6" : "container mx-auto p-6 max-w-7xl"
           )}>
             {children}
           </div>
