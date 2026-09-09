@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
 
     const data = await req.json();
-    const { propertyId, nombre, codigo, tipo, capacidad, estado } = data || {};
+    const { propertyId, nombre, codigo, tipo, capacidad, estado, tarifaBase, moneda } = data || {};
 
     if (!propertyId || !nombre?.trim()) {
       return NextResponse.json(
@@ -84,6 +84,8 @@ export async function POST(req: NextRequest) {
         codigo: codigo?.trim() || null,
         tipo: tipo || 'apartamento',
         capacidad: parseInt(capacidad) || 2,
+        tarifaBase: tarifaBase !== undefined ? parseFloat(tarifaBase) || null : null,
+        moneda: moneda ? String(moneda).toUpperCase().trim() : 'MXN',
         estado: estado || 'available',
       },
       include: { property: { select: { id: true, nombre: true } } },

@@ -380,6 +380,24 @@ export async function processReservationWebhook(payload: WebhookReservationPaylo
     console.error('[Hospitality] Error registrando evento bruto:', e);
   }
 
+  // ── Push de disponibilidad/tarifas al exterior (plan §15.2) ──
+  // Tras un cambio de reserva real (no duplicado), recalcular y empujar.
+  // Nunca bloquea ni rompe el flujo: los errores quedan en HospitalitySyncLog.
+  if (result.ok && result.status !== 'duplicado') {
+    try {
+      const { dispatchConnectivityPush } = await import('@/lib/hospitality/sync');
+      const operacion =
+        action === 'book'
+          ? 'reserva_creada'
+          : action === 'modify'
+            ? 'reserva_modificada'
+            : 'reserva_cancelada';
+      await dispatchConnectivityPush(tenantId, mapping.property.id, operacion as any);
+    } catch (e) {
+      console.error('[Hospitality] Error en push de conectividad:', e);
+    }
+  }
+
   return result;
 }
 
