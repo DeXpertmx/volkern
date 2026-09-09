@@ -1,3 +1,9 @@
+// ⚠️⚠️⚠️ NO EJECUTAR CONTRA PRODUCCIÓN SIN CONFIRMACIÓN EXPRESA — CONVENCIÓN OBSOLETA (2026-09-03)
+// --------------------------------------------------------------------------------------------
+// Este reset a "DimensionExpert2024!" se aplicó en producción el 2026-09-03, pero el propietario
+// (bruno.hess@dimensionexpert.com) cambió después su contraseña a una propia. Re-ejecutarlo contra
+// el VPS la sobrescribiría y lo dejaría fuera con la convención pública. Solo uso local/dev.
+// --------------------------------------------------------------------------------------------
 
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'

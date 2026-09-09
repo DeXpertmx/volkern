@@ -1,5 +1,14 @@
+// ⚠️⚠️⚠️ NO EJECUTAR CONTRA PRODUCCIÓN EN VIVO (VPS / volkern.app) — OBSOLETO tras el swap de slugs del 2026-09-03
+// --------------------------------------------------------------------------------------------
+// Es un bootstrap SOLO para una BD recién vaciada (wipe) en desarrollo — NO para la BD de
+// producción en marcha. Además codifica el mapeo anterior al swap:
+//   · "Dimension eXpert" (bruno + admin@dexpert.volkern.app)  → slug dexpert (dexpert.volkern.app)
+//   · "DeXpert Inmobiliaria" (datos del cliente)              → slug dimension-expert (dimension-expert.volkern.app)
+// Ejecutarlo contra producción podría resetear contraseñas/nombres (p. ej. admin@dexpert → "DeXpert Admin")
+// y asumir que slug dexpert es el cliente (ya NO lo es). Estado actual: GUION_DEMO_DIMENSION_EXPERT.md.
+// --------------------------------------------------------------------------------------------
 /**
- * Bootstrap script: crea los tenants y usuarios mínimos necesarios
+ * [OBSOLETO para producción] Bootstrap script: crea los tenants y usuarios mínimos necesarios
  * para poder hacer login en producción después del wipe de BD por
  * `prisma db push --accept-data-loss`.
  *
