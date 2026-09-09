@@ -336,10 +336,14 @@ export class NotificationService {
       
       const { sendWhatsAppMessage } = await import('@/lib/whatsapp');
       
+      // allowPlatformFallback=true: si el tenant NO tiene WhatsApp propio
+      // conectado, la notificación sale del número oficial de la plataforma
+      // (configurado en /admin/whatsapp) en vez de perderse.
       const result = await sendWhatsAppMessage(
         recipient.phone,
         content.body,
-        context.tenantId
+        context.tenantId,
+        true
       );
       
       return {

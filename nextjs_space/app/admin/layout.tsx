@@ -22,7 +22,8 @@ import {
   X,
   Sparkles,
   TrendingUp,
-  BarChart3
+  BarChart3,
+  MessageCircle
 } from 'lucide-react';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -78,6 +79,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { name: 'Churn', href: '/admin/saas/churn', icon: Users },
     { name: 'Revenue', href: '/admin/saas/revenue', icon: DollarSign },
     { name: 'Marketing', href: '/admin/marketing', icon: Sparkles },
+    { name: 'WhatsApp', href: '/admin/whatsapp', icon: MessageCircle },
     { name: 'Planes', href: '/admin/planes', icon: CreditCard },
     { name: 'Billing Global', href: '/admin/billing', icon: BarChart3 },
     { name: 'Seguridad', href: '/admin/seguridad', icon: ShieldAlert },

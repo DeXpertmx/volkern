@@ -279,7 +279,9 @@ export class VolkernActionRegistry {
     const owner = (leads as any)?.asignadoUsuario
 
     if (owner?.telefono) {
-      await sendWhatsAppMessage(owner.telefono, message, tenant_id)
+      // Fallback al número oficial de la plataforma si el tenant no tiene
+      // WhatsApp propio: la alerta al propietario del lead no debe perderse.
+      await sendWhatsAppMessage(owner.telefono, message, tenant_id, true)
     }
 
     return { success: true }

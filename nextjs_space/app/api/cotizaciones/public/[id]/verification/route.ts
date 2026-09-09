@@ -148,7 +148,9 @@ export const POST = withPublicTenant(async (req, tenantId, params) => {
           html: `<p>${message}</p>`,
           tenantId,
         })
-      : await sendWhatsAppMessage(destination, message, tenantId)
+      // Fallback a número oficial de la plataforma si el tenant no tiene
+      // WhatsApp propio: el código de aceptación no debe perderse.
+      : await sendWhatsAppMessage(destination, message, tenantId, true)
 
     if (!delivery.success) {
       await prisma.cotizacionAcceptanceChallenge.delete({ where: { id: challenge.id } }).catch(() => {})
