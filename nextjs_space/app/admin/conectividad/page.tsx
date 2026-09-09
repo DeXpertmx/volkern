@@ -17,6 +17,7 @@ import {
   Server,
   DoorOpen,
   Tags,
+  RefreshCcw,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -62,6 +63,16 @@ export default function AdminConectividad() {
     respuestaExterna?: unknown;
   } | null>(null);
   const [testDialogOpen, setTestDialogOpen] = useState(false);
+  const [reconciliando, setReconciliando] = useState(false);
+  const [reconciliacionResult, setReconciliacionResult] = useState<{
+    ok: boolean;
+    message?: string;
+    totalCreadas?: number;
+    totalActualizadas?: number;
+    totalCanceladas?: number;
+    totalDivergencias?: number;
+    errores?: string[];
+  } | null>(null);
 
   useEffect(() => {
     loadEstado();
@@ -153,6 +164,30 @@ export default function AdminConectividad() {
     setCopied(true);
     toast.success('URL copiada al portapapeles');
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleReconciliar = async () => {
+    setReconciliando(true);
+    setReconciliacionResult(null);
+    try {
+      const res = await fetch('/api/admin/conectividad/reconciliar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dias: 30, cancelarAusentes: false }),
+      });
+      const data = await res.json();
+      setReconciliacionResult(data);
+      if (data.ok) {
+        toast.success('Reconciliación completada');
+      } else {
+        toast.error(data.error || 'Error en la reconciliación');
+      }
+    } catch (error) {
+      toast.error('Error al ejecutar la reconciliación');
+      setReconciliacionResult({ ok: false, message: 'Error de red al ejecutar la reconciliación' });
+    } finally {
+      setReconciliando(false);
+    }
   };
 
   if (loading) {
@@ -313,6 +348,54 @@ export default function AdminConectividad() {
               {copied ? 'Copiado' : 'Copiar'}
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Reconciliación de reservas (plan maestro §14) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <RefreshCcw className="h-5 w-5 text-primary" />
+            Reconciliación de Reservas
+          </CardTitle>
+          <CardDescription>
+            Consulta las reservas reales del proveedor de conectividad (últimos 30 días) y detecta reservas faltantes, modificaciones y cancelaciones no aplicadas. Los cambios se registran en el historial de sincronización.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Button onClick={handleReconciliar} disabled={reconciliando || !estado?.tieneCredenciales}>
+            {reconciliando ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            ) : (
+              <RefreshCcw className="h-4 w-4 mr-2" />
+            )}
+            {reconciliando ? 'Reconciliando...' : 'Ejecutar reconciliación'}
+          </Button>
+
+          {reconciliacionResult && (
+            <div className={`rounded-lg border p-4 text-sm ${reconciliacionResult.ok ? 'border-green-200 bg-green-50 dark:bg-green-950' : 'border-red-200 bg-red-50 dark:bg-red-950'}`}>
+              <p className={`font-medium ${reconciliacionResult.ok ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>
+                {reconciliacionResult.message || (reconciliacionResult.ok ? 'Reconciliación completada' : 'Error')}
+              </p>
+              {(reconciliacionResult.totalCreadas !== undefined || reconciliacionResult.totalActualizadas !== undefined) && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <Badge variant="secondary">Creadas: {reconciliacionResult.totalCreadas}</Badge>
+                  <Badge variant="secondary">Actualizadas: {reconciliacionResult.totalActualizadas}</Badge>
+                  <Badge variant="secondary">Canceladas: {reconciliacionResult.totalCanceladas}</Badge>
+                  <Badge variant={reconciliacionResult.totalDivergencias ? 'destructive' : 'outline'}>
+                    Divergencias: {reconciliacionResult.totalDivergencias}
+                  </Badge>
+                </div>
+              )}
+              {reconciliacionResult.errores && reconciliacionResult.errores.length > 0 && (
+                <ul className="mt-2 list-disc pl-5 text-xs text-muted-foreground space-y-1">
+                  {reconciliacionResult.errores.map((e, i) => (
+                    <li key={i}>{e}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
