@@ -8040,9 +8040,17 @@ model HospitalityProperty {
   id             String    @id @default(cuid())
   tenantId       String
   nombre         String
+  descripcion    String?
+  codigo         String?
+  zona           String?
   direccion      String?
   ciudad         String?
+  estadoProvincia String?
   pais           String?
+  cp             String?
+  latitud        Float?
+  longitud       Float?
+  fotos          Json?
   timezone       String    @default("America/Mexico_City")
   estado         String    @default("activa")
   fechaCreacion  DateTime  @default(now())
@@ -8067,6 +8075,9 @@ model HospitalityUnit {
   capacidad     Int       @default(2)
   tarifaBase    Float?
   moneda        String    @default("MXN")
+  descripcion   String?
+  fotos         Json?
+  amenidades    Json?
   estado        String    @default("available") // available|occupied|cleaning|dirty|maintenance|out_of_service
   fechaCreacion DateTime  @default(now())
   fechaEdicion  DateTime  @updatedAt
