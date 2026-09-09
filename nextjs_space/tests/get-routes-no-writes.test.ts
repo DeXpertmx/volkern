@@ -28,20 +28,17 @@ interface GetWriteException {
 }
 
 const GET_WRITE_EXCEPTIONS: GetWriteException[] = [
-  { file: 'app/api/admin/settings/route.ts', method: 'create', reason: 'get-or-create de PlatformSettings: crea la fila por defecto si no existe (idempotente).' },
   { file: 'app/api/admin/whatsapp-plataforma/qr/route.ts', method: 'update', reason: 'GET como acción: al refrescar el QR guarda el código y el estado connecting (panel Superadmin).' },
   { file: 'app/api/canva/authorize/route.ts', method: 'update', reason: 'Flujo OAuth: persiste el state de la autorización al iniciar el redirect.' },
   { file: 'app/api/canva/callback/route.ts', method: 'create', reason: 'Flujo OAuth callback: crea la integración de Canva al completar la autorización.' },
   { file: 'app/api/canva/callback/route.ts', method: 'update', reason: 'Flujo OAuth callback: guarda el access token devuelto por el proveedor.' },
   { file: 'app/api/canva/token/route.ts', method: 'update', reason: 'Flujo OAuth: refresca/guarda el token de Canva (GET del provider).' },
-  { file: 'app/api/chatbot/config/route.ts', method: 'create', reason: 'get-or-create de la config por defecto del chatbot (idempotente).' },
   { file: 'app/api/cron/cleanup-attendance/route.ts', method: 'deleteMany', reason: 'Trigger de cron vía GET (patrón Vercel cron): limpia registros vencidos.' },
   { file: 'app/api/cron/google-calendar-renew/route.ts', method: 'update', reason: 'Trigger de cron vía GET: renueva los canales push de Google Calendar.' },
   { file: 'app/api/integraciones/google-calendar/callback/route.ts', method: 'upsert', reason: 'Flujo OAuth callback: guarda credenciales de Google Calendar.' },
   { file: 'app/api/integrations/gocardless/callback/route.ts', method: 'upsert', reason: 'Flujo OAuth callback: guarda credenciales de GoCardless.' },
   { file: 'app/api/leads/external-search/apollo/route.ts', method: 'update', reason: 'Test de conexión: refresca conectado/ultimaSincronizacion al verificar la integración.' },
   { file: 'app/api/leads/external-search/linkedin/route.ts', method: 'update', reason: 'Test de conexión: refresca conectado/ultimaSincronizacion al verificar la integración.' },
-  { file: 'app/api/onboarding/route.ts', method: 'create', reason: 'get-or-create del progreso de onboarding (idempotente).' },
   { file: 'app/api/telegram/webhook/route.ts', method: 'update', reason: 'Webhook de Telegram (GET): actualiza el estado del bot al recibir updates.' },
 ];
 

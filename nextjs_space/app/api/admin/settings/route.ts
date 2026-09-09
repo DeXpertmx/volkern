@@ -24,13 +24,12 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 });
     }
 
-    let settings = await prisma.platformSettings.findFirst();
+    // Lectura pura: si no existen settings, devolver null (el PATCH crea la fila
+    // al primer guardado). La creación ya no ocurre dentro de una petición GET.
+    const settings = await prisma.platformSettings.findFirst();
 
-    // If no settings exist, create default
     if (!settings) {
-      settings = await prisma.platformSettings.create({
-        data: {}
-      });
+      return NextResponse.json(null);
     }
 
     // Mask sensitive data

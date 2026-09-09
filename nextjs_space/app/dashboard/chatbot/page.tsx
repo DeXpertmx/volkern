@@ -133,12 +133,32 @@ export default function ChatbotPage() {
   const loadConfig = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/chatbot/config');
-      const data = await res.json();
+      let res = await fetch('/api/chatbot/config');
+      let data = await res.json();
 
       if (data.error) {
         toast.error(data.error);
         return;
+      }
+
+      // Si el tenant aún no tiene config, crearla explícitamente vía POST
+      // (el GET ya no escribe; la creación vive en el POST/upsert).
+      if (!data.config) {
+        const createRes = await fetch('/api/chatbot/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            activo: false,
+            nombreAsistente: 'Asistente Virtual',
+          }),
+        });
+        const createData = await createRes.json();
+        if (createData.error) {
+          toast.error(createData.error);
+          return;
+        }
+        res = await fetch('/api/chatbot/config');
+        data = await res.json();
       }
 
       setConfig(data.config);

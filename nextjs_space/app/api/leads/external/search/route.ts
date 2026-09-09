@@ -5,8 +5,46 @@ import { getServerSession } from 'next-auth';
 import { prisma } from '@/lib/db';
 import { recordExternalSearch } from '@/lib/leads/external-search-history';
 
-// GET /api/leads/external/search - Buscar leads en plataformas externas
+// GET /api/leads/external/search - Historial de búsquedas externas (lectura pura)
+// La búsqueda en sí es POST; el GET solo lee el historial registrado.
 export async function GET(request: NextRequest) {
+  try {
+    const session = await getServerSession();
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { id: true, tenantId: true },
+    });
+
+    if (!user?.tenantId) {
+      return NextResponse.json({ error: 'Usuario sin tenant' }, { status: 403 });
+    }
+
+    const source = request.nextUrl.searchParams.get('source') || undefined;
+    const history = await prisma.externalLeadSearch.findMany({
+      where: {
+        tenantId: user.tenantId,
+        ...(source ? { fuente: source } : {}),
+      },
+      orderBy: { fechaCreacion: 'desc' },
+      take: 20,
+    });
+
+    return NextResponse.json({ success: true, history });
+  } catch (error: any) {
+    console.error('Error obteniendo historial de búsquedas externas:', error);
+    return NextResponse.json(
+      { error: error.message || 'Error al obtener historial' },
+      { status: 500 }
+    );
+  }
+}
+
+// POST /api/leads/external/search - Buscar leads en plataformas externas
+export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession();
     if (!session?.user?.email) {
@@ -23,16 +61,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Usuario sin tenant' }, { status: 403 });
     }
 
-    // Obtener parámetros de búsqueda
-    const searchParams = request.nextUrl.searchParams;
-    const source = searchParams.get('source') || 'hunter';
-    const title = searchParams.get('title') || '';
-    const company = searchParams.get('company') || '';
-    const industry = searchParams.get('industry') || '';
-    const location = searchParams.get('location') || '';
-    const companySize = searchParams.get('companySize') || '';
-    const keywords = searchParams.get('keywords') || '';
-    const limit = parseInt(searchParams.get('limit') || '20');
+    // Obtener criterios de búsqueda del body
+    const body = await request.json();
+    const source = body.source || 'hunter';
+    const title = body.title || '';
+    const company = body.company || '';
+    const industry = body.industry || '';
+    const location = body.location || '';
+    const companySize = body.companySize || '';
+    const keywords = body.keywords || '';
+    const limit = parseInt(body.limit || '20');
 
     // Obtener integración de Hunter.io
     const integration = await prisma.integration.findFirst({
@@ -73,8 +111,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Guardar historial de búsqueda (helper extraído para mantener el GET
-    // como orquestador y la escritura en un único punto idempotente por evento)
+    // Guardar historial de búsqueda (escritura en POST, no en lecturas)
     const criterios = {
       source,
       title,
