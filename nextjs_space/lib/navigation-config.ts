@@ -10,6 +10,7 @@ import {
   MessageCircle,
   Award,
   Send,
+  MessageSquareText,
   BarChart3,
   FileText,
   Receipt,
@@ -277,7 +278,8 @@ export const HUBS: HubConfig[] = [
       '/dashboard/hospitality/reservas',
       '/dashboard/hospitality/huespedes',
       '/dashboard/hospitality/dashboard',
-      '/dashboard/hospitality/tarifas'
+      '/dashboard/hospitality/tarifas',
+      '/dashboard/hospitality/comunicaciones'
     ],
     items: [
       { name: 'Inicio', href: '/dashboard/hospitality', icon: Home, planModule: 'hospitality', description: 'Propiedades, unidades y resumen del módulo' },
@@ -286,6 +288,7 @@ export const HUBS: HubConfig[] = [
       { name: 'Reservas', href: '/dashboard/hospitality/reservas', icon: CalendarX2, planModule: 'hospitality', description: 'Lista, alta y edición de reservas' },
       { name: 'Tarifas', href: '/dashboard/hospitality/tarifas', icon: Tag, planModule: 'hospitality', description: 'Planes de tarifa por unidad y restricciones de venta' },
       { name: 'Huéspedes', href: '/dashboard/hospitality/huespedes', icon: Users, planModule: 'hospitality', description: 'Historial de estancias por huésped vinculado al CRM' },
+      { name: 'Comunicaciones', href: '/dashboard/hospitality/comunicaciones', icon: MessageSquareText, planModule: 'hospitality', description: 'Plantillas automáticas por evento (confirmación, check-in, reseña...)' },
     ]
   },
   {

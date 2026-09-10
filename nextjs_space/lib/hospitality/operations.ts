@@ -30,6 +30,7 @@
 
 import { prisma } from '@/lib/db';
 import { dispatchConnectivityPush } from './sync';
+import { dispararComunicacionReserva } from '@/lib/hospitality/comunicaciones';
 
 export type CheckOperation = 'checkin' | 'checkout';
 
@@ -103,6 +104,10 @@ export async function performCheckOperation(
       console.error('[Hospitality] Error en push tras check-in:', e);
     }
 
+    // Comunicación automática §21: instrucciones de check-in (no bloqueante).
+    dispararComunicacionReserva({ tenantId, reservationId: reservation.id, evento: 'check_in' })
+      .catch((e: unknown) => console.error('[Hospitality] Error en comunicación de check-in:', e));
+
     return { ok: true, status: updated.estado, reservationId: updated.id };
   }
 
@@ -157,6 +162,10 @@ export async function performCheckOperation(
   } catch (e) {
     console.error('[Hospitality] Error en push tras check-out:', e);
   }
+
+  // Comunicación automática §21: agradecimiento post-salida (no bloqueante).
+  dispararComunicacionReserva({ tenantId, reservationId: reservation.id, evento: 'post_salida' })
+    .catch((e: unknown) => console.error('[Hospitality] Error en comunicación de post-salida:', e));
 
   return {
     ok: true,
