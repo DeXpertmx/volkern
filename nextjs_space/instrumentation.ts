@@ -55,6 +55,19 @@ export async function register() {
       console.error('[Instrumentation] Error inicializando Hospitality Event Bridge:', error);
     }
 
+    // Worker de acciones del Automation Engine (BullMQ, cola
+    // `marketing_workflows`). Sin este worker las reglas se evalúan y las
+    // acciones se ENCOLAN, pero nunca se ejecutan: no se crean tareas ni
+    // limpiezas y no se envían mensajes. Solo arranca si Redis está
+    // disponible (setupWorkflowWorker lo comprueba por dentro).
+    try {
+      const { setupWorkflowWorker } = await import('@/lib/marketing/automation/workflow-worker');
+      await setupWorkflowWorker();
+      console.log('[Instrumentation] Workflow worker inicializado (acciones de automatización activas)');
+    } catch (error) {
+      console.error('[Instrumentation] Error inicializando workflow worker:', error);
+    }
+
     // Tareas programadas (node-cron). initCronJobs registra SOLO los jobs
     // seguros para producción: Morning Briefing, métricas SaaS, límites de
     // planes, renovación de webhooks de Google Calendar, analytics cleanup,
