@@ -88,6 +88,66 @@ async function executeAction(action: any, tenantId: string, payload: any) {
       console.log(`[Action] Notifying Gemma for optimization advice`);
       break;
 
+    // ─── Hospitality (plan maestro §22) ───────────────────────────
+    case 'CREATE_HOSPITALITY_TASK':
+      console.log(`[Action] Creating hospitality task for reservation ${payload.reservationId}`);
+      await (prisma as any).task.create({
+        data: {
+          tenantId,
+          contactId: payload.contactId || null,
+          tipo: action.taskType || 'PREPARACION',
+          titulo: action.title || `Preparar estancia ${payload.externalBookingId || ''}`.trim(),
+          descripcion: action.description || 'Tarea creada por automatización de Hospitality',
+          fechaVencimiento: action.dueInHours
+            ? new Date(Date.now() + action.dueInHours * 60 * 60 * 1000)
+            : new Date(Date.now() + 24 * 60 * 60 * 1000),
+        },
+      });
+      break;
+
+    case 'CREATE_HOSPITALITY_CLEANING':
+      console.log(`[Action] Creating cleaning task for unit ${payload.unitId}`);
+      if (payload.unitId) {
+        await (prisma as any).hospitalityCleaningTask.create({
+          data: {
+            tenantId,
+            unitId: payload.unitId,
+            reservationId: payload.reservationId || null,
+            prioridad: action.priority || 'normal',
+            notas: action.notes || 'Limpieza creada por automatización de Hospitality',
+          },
+        });
+      } else {
+        throw new Error('unitId requerido para CREATE_HOSPITALITY_CLEANING');
+      }
+      break;
+
+    case 'SEND_GUEST_MESSAGE':
+      console.log(`[Action] Sending guest message for reservation ${payload.reservationId}`);
+      if (payload.reservationId) {
+        const { dispararComunicacionReserva } = await import('../../hospitality/comunicaciones');
+        await dispararComunicacionReserva({
+          tenantId,
+          reservationId: payload.reservationId,
+          evento: action.evento || 'confirmacion',
+        });
+      } else {
+        throw new Error('reservationId requerido para SEND_GUEST_MESSAGE');
+      }
+      break;
+
+    case 'SET_UNIT_STATUS':
+      console.log(`[Action] Setting unit ${payload.unitId} status to ${action.status}`);
+      if (payload.unitId) {
+        await (prisma as any).hospitalityUnit.update({
+          where: { id: payload.unitId },
+          data: { estado: action.status || 'available' },
+        });
+      } else {
+        throw new Error('unitId requerido para SET_UNIT_STATUS');
+      }
+      break;
+
     default:
       console.warn(`[WorkflowWorker] Unknown action type: ${action.type}`);
   }

@@ -143,6 +143,14 @@ export function initCronJobs() {
 
   // 15. Tareas vencidas — aviso por Telegram al asignado
   initTaskOverdueCron();
+
+  // 16. Hospitality: reservas con check-in en las próximas 24h (§22)
+  cron.schedule('0 * * * *', runCronJob('hospitality-checkin-due', 'Hospitality Check-in Due (24h)', '0 * * * *', async () => {
+    const { runHospitalityCheckinDueScan } = await import('./hospitality-checkin-due');
+    await runHospitalityCheckinDueScan();
+  }));
+
+  console.log('✅ [Scheduler] Hospitality check-in due programado (cada hora)');
 }
 
 /**

@@ -45,6 +45,17 @@ export const EVENTS = {
   BOOKING_CONFIRMED: 'booking_confirmed',
   BOOKING_CANCELLED: 'booking_cancelled',
   BOOKING_COMPLETED: 'booking_completed',
+
+  // Hospitality (plan maestro §22)
+  HOSPITALITY_RESERVATION_CREATED: 'hospitality_reservation_created',
+  HOSPITALITY_RESERVATION_MODIFIED: 'hospitality_reservation_modified',
+  HOSPITALITY_RESERVATION_CANCELLED: 'hospitality_reservation_cancelled',
+  HOSPITALITY_RESERVATION_CHECKED_IN: 'hospitality_reservation_checked_in',
+  HOSPITALITY_RESERVATION_CHECKED_OUT: 'hospitality_reservation_checked_out',
+  HOSPITALITY_CHECKIN_DUE: 'hospitality_checkin_due',
+  HOSPITALITY_CLEANING_COMPLETED: 'hospitality_cleaning_completed',
+  HOSPITALITY_MAINTENANCE_CREATED: 'hospitality_maintenance_created',
+  HOSPITALITY_MAINTENANCE_COMPLETED: 'hospitality_maintenance_completed',
   
   // Deals
   DEAL_CREATED: 'deal_created',
@@ -657,6 +668,31 @@ export interface TaskCompletedEvent2 extends BaseEventPayload {
   tiempoReal?: number;
 }
 
+// ============== HOSPITALITY (plan maestro §22) ==============
+
+export interface HospitalityReservationEvent extends BaseEventPayload {
+  reservationId: string;
+  tenantId: string;
+  propertyId?: string;
+  unitId?: string;
+  contactId?: string;
+  channel?: string;
+  externalBookingId?: string;
+  estado?: string;
+  checkIn?: string;
+  checkOut?: string;
+  guestData?: Record<string, unknown>;
+}
+
+export interface HospitalityCleaningEvent extends BaseEventPayload {
+  taskId?: string;
+  tenantId: string;
+  propertyId?: string;
+  unitId?: string;
+  reservationId?: string;
+  unitNombre?: string;
+}
+
 // ============== MAPA DE EVENTOS ==============
 
 export type EventPayloadMap = {
@@ -675,6 +711,18 @@ export type EventPayloadMap = {
   [EVENTS.BOOKING_CREATED]: BookingCreatedEvent;
   [EVENTS.BOOKING_CONFIRMED]: BookingConfirmedEvent;
   [EVENTS.BOOKING_CANCELLED]: BookingCreatedEvent;
+
+  // Hospitality (plan maestro §22)
+  [EVENTS.HOSPITALITY_RESERVATION_CREATED]: HospitalityReservationEvent;
+  [EVENTS.HOSPITALITY_RESERVATION_MODIFIED]: HospitalityReservationEvent;
+  [EVENTS.HOSPITALITY_RESERVATION_CANCELLED]: HospitalityReservationEvent;
+  [EVENTS.HOSPITALITY_RESERVATION_CHECKED_IN]: HospitalityReservationEvent;
+  [EVENTS.HOSPITALITY_RESERVATION_CHECKED_OUT]: HospitalityReservationEvent;
+  [EVENTS.HOSPITALITY_CHECKIN_DUE]: HospitalityReservationEvent;
+  [EVENTS.HOSPITALITY_CLEANING_COMPLETED]: HospitalityCleaningEvent;
+  [EVENTS.HOSPITALITY_MAINTENANCE_CREATED]: BaseEventPayload;
+  [EVENTS.HOSPITALITY_MAINTENANCE_COMPLETED]: BaseEventPayload;
+
   [EVENTS.DEAL_CREATED]: DealCreatedEvent;
   [EVENTS.DEAL_UPDATED]: DealUpdatedEvent;
   [EVENTS.DEAL_STAGE_CHANGED]: DealStageChangedEvent;
