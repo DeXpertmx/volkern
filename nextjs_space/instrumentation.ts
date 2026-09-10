@@ -42,11 +42,25 @@ export async function register() {
       console.error('[Instrumentation] Error inicializando accounting listeners:', error);
     }
 
+    // Registrar los listeners EventBus → AutomationRuleEngine de Hospitality
+    // (plan maestro §22): reservation.created, checked_in, cleaning.completed,
+    // etc. El event bus es en memoria: si estos listeners no se registran en
+    // el mismo proceso que atiende los requests, los eventos se emiten pero
+    // ninguna regla de automatización de Hospitality se dispara.
+    try {
+      const { setupHospitalityEventBridge } = await import('@/lib/hospitality/automation-bridge');
+      setupHospitalityEventBridge();
+      console.log('[Instrumentation] Hospitality Event Bridge inicializado (EventBus → AutomationRuleEngine activo)');
+    } catch (error) {
+      console.error('[Instrumentation] Error inicializando Hospitality Event Bridge:', error);
+    }
+
     // Tareas programadas (node-cron). initCronJobs registra SOLO los jobs
     // seguros para producción: Morning Briefing, métricas SaaS, límites de
     // planes, renovación de webhooks de Google Calendar, analytics cleanup,
-    // IMAP polling, ADS (schedule/AB/watchdog/sync) y el cron del trigger
-    // `lead_sin_respuesta` (cada 30 min, leads inactivos 24h).
+    // IMAP polling, ADS (schedule/AB/watchdog/sync), el cron del trigger
+    // `lead_sin_respuesta` (cada 30 min, leads inactivos 24h) y el de
+    // Hospitality check-in due (cada hora).
     //
     // ⚠️ Quedan EXCLUIDOS a propósito: la recuperación proactiva de facturas
     // (creaba facturas mock con Math.random()) — eliminada —, el "Ritual

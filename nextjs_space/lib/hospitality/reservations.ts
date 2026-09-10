@@ -1,6 +1,11 @@
 import { prisma } from '@/lib/db';
 import { Prisma, type HospitalityReservation } from '@prisma/client';
 import { dispararComunicacionReserva } from '@/lib/hospitality/comunicaciones';
+import {
+  emitReservationCreated,
+  emitReservationModified,
+  emitReservationCancelled,
+} from '@/lib/hospitality/events';
 
 /**
  * Reservation Engine — procesa los eventos del webhook de reservas de la capa
@@ -250,6 +255,21 @@ export async function processBook(tenantId: string, propertyId: string, unitId: 
   dispararComunicacionReserva({ tenantId, reservationId: reservation.id, evento: 'confirmacion' })
     .catch((e: unknown) => console.error('[Hospitality] Error en comunicación de confirmación:', e));
 
+  // Evento §22: reservation.created → reglas de automatización.
+  emitReservationCreated({
+    tenantId,
+    reservationId: reservation.id,
+    propertyId,
+    unitId,
+    contactId,
+    channel: payload.channel,
+    externalBookingId: payload.bookingId,
+    estado: reservation.estado,
+    checkIn: reservation.checkIn,
+    checkOut: reservation.checkOut,
+    guestData: reservation.guestData,
+  });
+
   return { ok: true, status: 'creada', reservationId: reservation.id };
 }
 
@@ -275,7 +295,7 @@ export async function processModify(tenantId: string, propertyId: string, unitId
 
   const contactId = await upsertGuest(tenantId, payload);
 
-  await prisma.hospitalityReservation.update({
+  const updated = await prisma.hospitalityReservation.update({
     where: { id: existing.id },
     data: {
       ...buildReservationData(tenantId, propertyId, unitId, contactId, payload),
@@ -283,6 +303,21 @@ export async function processModify(tenantId: string, propertyId: string, unitId
       // si ya se operó. Solo se aplica si está en pending/confirmed.
       estado: ['pending', 'confirmed'].includes(existing.estado) ? 'confirmed' : existing.estado,
     },
+  });
+
+  // Evento §22: reservation.modified → reglas de automatización.
+  emitReservationModified({
+    tenantId,
+    reservationId: existing.id,
+    propertyId,
+    unitId,
+    contactId,
+    channel: payload.channel,
+    externalBookingId: payload.bookingId,
+    estado: updated.estado,
+    checkIn: updated.checkIn,
+    checkOut: updated.checkOut,
+    guestData: updated.guestData,
   });
 
   return { ok: true, status: 'actualizada', reservationId: existing.id };
@@ -307,13 +342,28 @@ export async function processCancel(tenantId: string, payload: WebhookReservatio
     return { ok: false, status: 'no_encontrada', error: 'Reserva no encontrada para cancelar' };
   }
 
-  await prisma.hospitalityReservation.update({
+  const updated = await prisma.hospitalityReservation.update({
     where: { id: existing.id },
     data: {
       estado: 'cancelled',
       action: 'cancel',
       payload: payload as Prisma.InputJsonValue,
     },
+  });
+
+  // Evento §22: reservation.cancelled → reglas de automatización.
+  emitReservationCancelled({
+    tenantId,
+    reservationId: existing.id,
+    propertyId: existing.propertyId,
+    unitId: existing.unitId,
+    contactId: existing.contactId,
+    channel: existing.channel,
+    externalBookingId: existing.externalBookingId,
+    estado: updated.estado,
+    checkIn: existing.checkIn,
+    checkOut: existing.checkOut,
+    guestData: existing.guestData,
   });
 
   return { ok: true, status: 'cancelada', reservationId: existing.id };

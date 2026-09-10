@@ -31,6 +31,11 @@
 import { prisma } from '@/lib/db';
 import { dispatchConnectivityPush } from './sync';
 import { dispararComunicacionReserva } from '@/lib/hospitality/comunicaciones';
+import {
+  emitReservationCheckedIn,
+  emitReservationCheckedOut,
+  emitCleaningCompleted,
+} from '@/lib/hospitality/events';
 
 export type CheckOperation = 'checkin' | 'checkout';
 
@@ -108,6 +113,21 @@ export async function performCheckOperation(
     dispararComunicacionReserva({ tenantId, reservationId: reservation.id, evento: 'check_in' })
       .catch((e: unknown) => console.error('[Hospitality] Error en comunicación de check-in:', e));
 
+    // Evento §22: reservation.checked_in → reglas de automatización.
+    emitReservationCheckedIn({
+      tenantId,
+      reservationId: reservation.id,
+      propertyId: reservation.propertyId,
+      unitId: reservation.unitId,
+      contactId: reservation.contactId,
+      channel: reservation.channel,
+      externalBookingId: reservation.externalBookingId,
+      estado: updated.estado,
+      checkIn: reservation.checkIn,
+      checkOut: reservation.checkOut,
+      guestData: reservation.guestData,
+    });
+
     return { ok: true, status: updated.estado, reservationId: updated.id };
   }
 
@@ -166,6 +186,21 @@ export async function performCheckOperation(
   // Comunicación automática §21: agradecimiento post-salida (no bloqueante).
   dispararComunicacionReserva({ tenantId, reservationId: reservation.id, evento: 'post_salida' })
     .catch((e: unknown) => console.error('[Hospitality] Error en comunicación de post-salida:', e));
+
+  // Evento §22: reservation.checked_out → reglas de automatización.
+  emitReservationCheckedOut({
+    tenantId,
+    reservationId: reservation.id,
+    propertyId: reservation.propertyId,
+    unitId: reservation.unitId,
+    contactId: reservation.contactId,
+    channel: reservation.channel,
+    externalBookingId: reservation.externalBookingId,
+    estado: updated.estado,
+    checkIn: reservation.checkIn,
+    checkOut: reservation.checkOut,
+    guestData: reservation.guestData,
+  });
 
   return {
     ok: true,
@@ -261,6 +296,15 @@ export async function completeCleaningTask(
   } catch (e) {
     console.error('[Hospitality] Error en push tras limpiar unidad:', e);
   }
+
+  // Evento §22: cleaning.completed → reglas de automatización.
+  emitCleaningCompleted({
+    tenantId,
+    taskId: task.id,
+    propertyId: task.unit?.propertyId ?? null,
+    unitId: task.unit?.id ?? null,
+    reservationId: task.reservationId,
+  });
 
   return { ok: true, task: updated, unitEstado };
 }
