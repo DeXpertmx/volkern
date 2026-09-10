@@ -30,6 +30,16 @@ export class AutomationRuleEngine {
     const { prisma } = await import('../../db');
     const { tenantId } = payload;
 
+    // Auto-inicialización perezosa: sin cola las acciones se perderían en
+    // silencio (y el log diría `success`). Mejor intentar montarla aquí.
+    if (!this.workflowQueue) {
+      try {
+        await this.initialize();
+      } catch (error) {
+        console.error('[RuleEngine] No se pudo inicializar la cola de workflows:', error);
+      }
+    }
+
     // 1. Buscar reglas activas para este trigger y tenant
     const rules = await prisma.automationRule.findMany({
       where: {
@@ -108,8 +118,12 @@ export class AutomationRuleEngine {
    */
   private static async executeActions(rule: any, payload: any) {
     if (!this.workflowQueue) {
-      console.debug('[RuleEngine] Queue no disponible, omitiendo acciones async.');
-      return;
+      // No se puede omitir en silencio: significaría perder la acción y
+      // registrar `success` de forma engañosa. Se propaga para que quede
+      // registrado como `failed` con la causa real.
+      throw new Error(
+        'Cola de automatizaciones no disponible (Redis no configurado o AutomationRuleEngine.initialize() no ejecutado)'
+      );
     }
 
     const actions = rule.actions as any[];

@@ -61,11 +61,13 @@ export async function register() {
     // limpiezas y no se envían mensajes. Solo arranca si Redis está
     // disponible (setupWorkflowWorker lo comprueba por dentro).
     try {
+      const { AutomationRuleEngine } = await import('@/lib/marketing/automation/rule-engine');
+      await AutomationRuleEngine.initialize();
       const { setupWorkflowWorker } = await import('@/lib/marketing/automation/workflow-worker');
       await setupWorkflowWorker();
-      console.log('[Instrumentation] Workflow worker inicializado (acciones de automatización activas)');
+      console.log('[Instrumentation] Cola + workflow worker inicializados (automatizaciones activas)');
     } catch (error) {
-      console.error('[Instrumentation] Error inicializando workflow worker:', error);
+      console.error('[Instrumentation] Error inicializando automatizaciones (cola/worker):', error);
     }
 
     // Tareas programadas (node-cron). initCronJobs registra SOLO los jobs
