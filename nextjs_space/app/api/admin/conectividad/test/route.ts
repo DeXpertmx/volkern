@@ -52,7 +52,10 @@ export async function POST(request: NextRequest) {
       }).catch(() => {});
     }
 
-    return NextResponse.json(result, { status: result.ok ? 200 : 502 });
+    // IMPORTANTE: siempre HTTP 200 con `ok` en el body. Si devolvemos 5xx,
+    // el proxy (Cloudflare/Caddy) reemplaza el body por "error code: 502" y
+    // el panel admin pierde la causa real. El contrato del panel usa `ok`.
+    return NextResponse.json(result, { status: 200 });
   } catch (error) {
     console.error('Error probando conectividad:', error);
     return NextResponse.json({ error: 'Error al probar conexión' }, { status: 500 });
