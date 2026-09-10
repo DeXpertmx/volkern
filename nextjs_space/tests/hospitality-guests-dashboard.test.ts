@@ -98,6 +98,18 @@ describe('GET /api/hospitality/guests', () => {
     expect(d.guests[0].contactId).toBeNull();
   });
 
+  it('lee el campo nombre del guestData (formato del webhook: { nombre, email })', async () => {
+    prisma.hospitalityReservation.findMany.mockResolvedValue([
+      makeReservation({ id: 'r1', guestData: { nombre: 'María García', email: 'maria.garcia@example.com', telefono: '+52' } }),
+    ]);
+    const res = await GETGuests(buildReq());
+    const d = await res.json();
+    expect(d.guests).toHaveLength(1);
+    expect(d.guests[0].nombre).toBe('María García');
+    expect(d.guests[0].email).toBe('maria.garcia@example.com');
+    expect(d.guests[0].telefono).toBe('+52');
+  });
+
   it('huésped sin datos → una entrada por reserva, sin romper', async () => {
     prisma.hospitalityReservation.findMany.mockResolvedValue([
       makeReservation({ id: 'r1', guestData: null }),

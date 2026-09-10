@@ -42,9 +42,13 @@ export async function GET(req: NextRequest) {
 
     for (const r of reservations) {
       const gd: any = r.guestData || {};
-      const gdNombre = [gd.firstName, gd.lastName].filter(Boolean).join(' ').trim() || gd.name || '';
+      const gdNombre =
+        [gd.firstName, gd.lastName].filter(Boolean).join(' ').trim()
+        || gd.nombre
+        || gd.name
+        || '';
       const gdEmail = (gd.email || '').trim().toLowerCase();
-      const gdPhone = (gd.phone || '').trim();
+      const gdPhone = (gd.phone || gd.telefono || '').trim();
 
       const nombre = r.contact?.nombre || gdNombre || null;
       const email = r.contact?.email?.toLowerCase() || gdEmail || null;
