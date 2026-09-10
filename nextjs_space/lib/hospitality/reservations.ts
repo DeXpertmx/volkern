@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db';
 import { Prisma, type HospitalityReservation } from '@prisma/client';
+import { dispararComunicacionReserva } from '@/lib/hospitality/comunicaciones';
 
 /**
  * Reservation Engine — procesa los eventos del webhook de reservas de la capa
@@ -244,6 +245,10 @@ export async function processBook(tenantId: string, propertyId: string, unitId: 
       estado: 'confirmed',
     },
   });
+
+  // Comunicación automática §21: confirmación de reserva (no bloqueante).
+  dispararComunicacionReserva({ tenantId, reservationId: reservation.id, evento: 'confirmacion' })
+    .catch((e: unknown) => console.error('[Hospitality] Error en comunicación de confirmación:', e));
 
   return { ok: true, status: 'creada', reservationId: reservation.id };
 }
