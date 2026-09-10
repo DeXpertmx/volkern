@@ -97,4 +97,29 @@ describe('POST /api/hospitality/guests/link', () => {
     expect(res.status).toBe(400);
     expect(prisma.hospitalityReservation.updateMany).not.toHaveBeenCalled();
   });
+
+  it('vincula por reservationIds exactos (sin depender del matching)', async () => {
+    const res = await POST(buildReq({
+      guestKey: 'name:pedro ruiz',
+      contactId: 'c1',
+      reservationIds: ['r-a', 'r-b'],
+    }));
+    expect(res.status).toBe(200);
+    const d = await res.json();
+    expect(d.ok).toBe(true);
+    expect(d.vinculadas).toBe(2);
+    const where = prisma.hospitalityReservation.updateMany.mock.calls[0][0].where;
+    expect(where.id).toEqual({ in: ['r-a', 'r-b'] });
+    expect(where.tenantId).toBe('t1');
+    const data = prisma.hospitalityReservation.updateMany.mock.calls[0][0].data;
+    expect(data.contactId).toBe('c1');
+    expect(data.guestData.nombre).toBe('María García');
+  });
+
+  it('valida que al menos guestKey o reservationIds estén presentes', async () => {
+    const res = await POST(buildReq({ contactId: 'c1' }));
+    expect(res.status).toBe(400);
+    const res2 = await POST(buildReq({ reservationIds: [], contactId: 'c1' }));
+    expect(res2.status).toBe(400);
+  });
 });
