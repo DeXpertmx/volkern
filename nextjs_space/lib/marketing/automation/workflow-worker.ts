@@ -8,12 +8,20 @@ import { prisma } from '../../db';
  * Ejecuta las acciones individuales de una regla de automatización.
  * Solo se inicializa si Redis está disponible.
  */
+// Evita crear varios workers en el mismo proceso (hot reload, doble import).
+let workflowWorkerStarted = false;
+
 export const setupWorkflowWorker = async () => {
+  if (workflowWorkerStarted) return;
+
   const redis = await initRedis();
   if (!redis) {
     console.debug('[WorkflowWorker] Redis no disponible, worker omitido.');
     return;
   }
+
+  workflowWorkerStarted = true;
+  console.log('[WorkflowWorker] Worker escuchando la cola marketing_workflows');
 
   const worker = new Worker('marketing_workflows', async (job: Job) => {
     const { ruleId, tenantId, actions, payload } = job.data;
