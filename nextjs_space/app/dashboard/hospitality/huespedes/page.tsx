@@ -178,7 +178,7 @@ export default function HospitalityHuespedesPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           nombre: linkTarget.nombre,
-          email: linkTarget.email || undefined,
+          email: linkTarget.email || '',
           telefono: linkTarget.telefono || undefined,
           tipo: 'person',
           tags: 'huesped',
@@ -190,7 +190,7 @@ export default function HospitalityHuespedesPage() {
       } else {
         const d = await res.json().catch(() => ({}));
         // Email duplicado: localizar el contacto existente para vincularlo.
-        if (linkTarget.email) {
+        if (linkTarget.email && linkTarget.email.trim()) {
           const busqueda = await fetch(`/api/contacts?search=${encodeURIComponent(linkTarget.email)}&tipo=person`);
           if (busqueda.ok) {
             const lista = await busqueda.json();

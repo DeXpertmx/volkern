@@ -6,7 +6,9 @@ import { CommonSchemas } from '../common';
  */
 export const ContactCreateSchema = z.object({
   nombre: CommonSchemas.nombre,
-  email: CommonSchemas.email,
+  // Email vacío permitido: hay contactos legítimos sin email (p.ej. huéspedes
+  // de OTAs que llegan solo con nombre). El modelo guarda cadena vacía.
+  email: CommonSchemas.email.or(z.literal('')),
   telefono: CommonSchemas.telefono,
   tipo: z.enum(['person', 'company']).default('person'),
   companyId: CommonSchemas.id.optional().nullable(),

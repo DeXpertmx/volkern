@@ -312,6 +312,30 @@ describe('POST /api/contacts', () => {
     expect(data.details).toBeDefined();
   });
 
+  it('debe permitir email vacío (huéspedes de OTA sin email)', async () => {
+    (prisma.contact.findFirst as any).mockResolvedValue(null);
+    (prisma.contact.create as any).mockResolvedValue({
+      id: 'contact-sin-email',
+      nombre: 'Pedro Ruiz',
+      email: '',
+      tipo: 'person',
+    });
+
+    const response = await POST(
+      mockRequest('https://volkern.app/api/contacts', {
+        nombre: 'Pedro Ruiz',
+        email: '',
+        tipo: 'person',
+        tags: 'huesped',
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(prisma.contact.create).toHaveBeenCalled();
+    // Sin email no se debe consultar duplicado por email
+    expect(prisma.contact.findFirst).not.toHaveBeenCalled();
+  });
+
   it('debe devolver 400 si linkedin no es URL válida', async () => {
     const response = await POST(
       mockRequest('https://volkern.app/api/contacts', {
