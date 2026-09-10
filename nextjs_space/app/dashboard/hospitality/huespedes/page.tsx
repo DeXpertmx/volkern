@@ -2,12 +2,14 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
-import { Users, Search, Loader2, Mail, Phone, Moon, DollarSign, ExternalLink, CalendarDays, UserRound } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Users, Search, Loader2, Mail, Phone, Moon, DollarSign, ExternalLink, CalendarDays, UserRound, Link2, UserPlus } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { channelStyle, statusLabel } from '@/lib/hospitality/calendar';
 
 interface Estancia {
@@ -38,6 +40,13 @@ interface Guest {
   reservas: Estancia[];
 }
 
+interface ContactoCRM {
+  id: string;
+  nombre: string;
+  email: string;
+  telefono: string;
+}
+
 function fmtFecha(iso: string): string {
   return new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(iso));
 }
@@ -61,11 +70,19 @@ const AVATAR_COLORS = [
 ];
 
 export default function HospitalityHuespedesPage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [guests, setGuests] = useState<Guest[]>([]);
   const [q, setQ] = useState('');
   const [order, setOrder] = useState<'ultima' | 'nombre'>('ultima');
   const [selected, setSelected] = useState<Guest | null>(null);
+
+  // Diálogo de vinculación manual
+  const [linkTarget, setLinkTarget] = useState<Guest | null>(null);
+  const [linkSearch, setLinkSearch] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [contactos, setContactos] = useState<ContactoCRM[]>([]);
+  const [linkingId, setLinkingId] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
     try {
@@ -91,6 +108,57 @@ export default function HospitalityHuespedesPage() {
     const t = setTimeout(cargar, 250); // debounce para la búsqueda
     return () => clearTimeout(t);
   }, [cargar]);
+
+  // Búsqueda de contactos del CRM para el diálogo de vinculación
+  useEffect(() => {
+    if (!linkTarget) return;
+    const t = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const params = new URLSearchParams();
+        if (linkSearch.trim()) params.set('search', linkSearch.trim());
+        params.set('tipo', 'person');
+        const res = await fetch(`/api/contacts?${params.toString()}`);
+        if (res.ok) {
+          const d = await res.json();
+          setContactos(Array.isArray(d) ? d : []);
+        } else {
+          setContactos([]);
+        }
+      } catch {
+        setContactos([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [linkTarget, linkSearch]);
+
+  const vincular = async (contacto: ContactoCRM) => {
+    if (!linkTarget) return;
+    setLinkingId(contacto.id);
+    try {
+      const res = await fetch('/api/hospitality/guests/link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ guestKey: linkTarget.id, contactId: contacto.id }),
+      });
+      const d = await res.json();
+      if (res.ok) {
+        toast.success(`Huésped vinculado a ${contacto.nombre}`);
+        setLinkTarget(null);
+        setLinkSearch('');
+        setContactos([]);
+        await cargar();
+      } else {
+        toast.error(d.error || 'Error al vincular');
+      }
+    } catch {
+      toast.error('Error al vincular el huésped');
+    } finally {
+      setLinkingId(null);
+    }
+  };
 
   const totales = useMemo(
     () => ({
@@ -175,9 +243,13 @@ export default function HospitalityHuespedesPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-semibold truncate">{g.nombre}</p>
-                      {g.contactId && (
+                      {g.contactId ? (
                         <Badge className="bg-indigo-100 text-indigo-700 border-0 text-[10px]">
                           <UserRound className="h-3 w-3 mr-1" /> En CRM
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-amber-100 text-amber-700 border-0 text-[10px]">
+                          Sin vincular
                         </Badge>
                       )}
                     </div>
@@ -216,14 +288,36 @@ export default function HospitalityHuespedesPage() {
                   </div>
                 </div>
 
-                <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1">
+                <div className="mt-3 flex items-center justify-between gap-2 text-xs">
+                  <span className="flex items-center gap-1 text-muted-foreground">
                     <CalendarDays className="h-3 w-3" />
                     {g.ultimaEstancia ? `Última: ${fmtFecha(g.ultimaEstancia)}` : 'Sin estancias'}
                   </span>
-                  <span className="flex items-center gap-1 text-primary">
-                    Ver historial <ExternalLink className="h-3 w-3" />
-                  </span>
+                  {g.contactId ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2 text-[11px]"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/dashboard/contactos/${g.contactId}`);
+                      }}
+                    >
+                      <UserRound className="h-3 w-3 mr-1" /> Ver en Contactos
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2 text-[11px] text-primary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setLinkTarget(g);
+                      }}
+                    >
+                      <Link2 className="h-3 w-3 mr-1" /> Vincular
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -252,6 +346,21 @@ export default function HospitalityHuespedesPage() {
                   {selected.totalGasto > 0 && <> · {selected.totalGasto.toLocaleString('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 })}</>}
                 </SheetDescription>
               </SheetHeader>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                {selected.contactId ? (
+                  <Button
+                    size="sm"
+                    onClick={() => router.push(`/dashboard/contactos/${selected.contactId}`)}
+                  >
+                    <UserRound className="h-4 w-4 mr-1.5" /> Ver en Contactos
+                  </Button>
+                ) : (
+                  <Button size="sm" onClick={() => { setLinkTarget(selected); setSelected(null); }}>
+                    <Link2 className="h-4 w-4 mr-1.5" /> Vincular a contacto del CRM
+                  </Button>
+                )}
+              </div>
 
               <div className="mt-4 space-y-3">
                 {selected.reservas.map((r) => {
@@ -314,6 +423,79 @@ export default function HospitalityHuespedesPage() {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Diálogo de vinculación manual a contacto del CRM */}
+      <Dialog open={!!linkTarget} onOpenChange={(open) => { if (!open) { setLinkTarget(null); setLinkSearch(''); setContactos([]); } }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5 text-primary" />
+              Vincular huésped a contacto
+            </DialogTitle>
+            <DialogDescription>
+              {linkTarget && (
+                <>
+                  Vinculando <strong>{linkTarget.nombre}</strong>
+                  {linkTarget.email && <> ({linkTarget.email})</>} a un contacto existente del CRM. Sus estancias quedarán asociadas al contacto.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                autoFocus
+                placeholder="Buscar contacto del CRM por nombre o email..."
+                value={linkSearch}
+                onChange={(e) => setLinkSearch(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+
+            <div className="max-h-72 overflow-y-auto space-y-2">
+              {searching ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
+              ) : contactos.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  {linkSearch ? 'Ningún contacto coincide con la búsqueda' : 'Escribe para buscar contactos del CRM'}
+                </p>
+              ) : (
+                contactos.map((c) => (
+                  <Card key={c.id} className="hover:shadow-md transition-shadow">
+                    <CardContent className="p-3 flex items-center gap-3">
+                      <div className="h-9 w-9 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-semibold shrink-0">
+                        {iniciales(c.nombre)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate">{c.nombre}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {[c.email, c.telefono].filter(Boolean).join(' · ') || 'Sin datos de contacto'}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        disabled={linkingId === c.id}
+                        onClick={() => vincular(c)}
+                      >
+                        {linkingId === c.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Link2 className="h-4 w-4 mr-1" />
+                        )}
+                        {linkingId === c.id ? '' : 'Vincular'}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
