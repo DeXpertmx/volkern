@@ -91,12 +91,15 @@ export const POST = withTenantAuth(async (request, auth) => {
 
     const { nombre, email, telefono, tipo, companyId, cargo, ubicacion, direccion, ciudad, codigoPostal, pais, linkedin, notas, tags } = data;
 
-    // Verificar si el email ya existe en la DB del tenant
-    const existingContact = await prisma.contact.findFirst({
-      where: {
-        email
-      }
-    });
+    // Verificar si el email ya existe en la DB del tenant (solo si hay email:
+    // los contactos sin email no se consideran duplicados entre sí).
+    const existingContact = email
+      ? await prisma.contact.findFirst({
+          where: {
+            email
+          }
+        })
+      : null;
 
     if (existingContact) {
       return NextResponse.json(
