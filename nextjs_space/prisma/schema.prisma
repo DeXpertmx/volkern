@@ -496,6 +496,7 @@ model Tenant {
   // ─── Hospitality ─────────────────────────────────────────────────
   hospitalityProperties         HospitalityProperty[]             @relation("HospitalityProperties")
   hospitalityUnits              HospitalityUnit[]                 @relation("HospitalityUnits")
+  hospitalityRatePlans          HospitalityRatePlan[]             @relation("HospitalityRatePlans")
   hospitalityMappings           ConnectivityMapping[]             @relation("HospitalityMappings")
   hospitalityReservations       HospitalityReservation[]          @relation("HospitalityReservations")
   hospitalityWebhookEvents      HospitalityWebhookEvent[]         @relation("HospitalityWebhookEvents")
@@ -8057,6 +8058,7 @@ model HospitalityProperty {
   fechaEdicion   DateTime  @updatedAt
   tenant         Tenant    @relation("HospitalityProperties", fields: [tenantId], references: [id], onDelete: Cascade)
   units          HospitalityUnit[]
+  ratePlans      HospitalityRatePlan[]
   mappings       ConnectivityMapping[]
   reservations   HospitalityReservation[]
   syncLogs       HospitalitySyncLog[]
@@ -8084,6 +8086,7 @@ model HospitalityUnit {
   tenant        Tenant    @relation("HospitalityUnits", fields: [tenantId], references: [id], onDelete: Cascade)
   property      HospitalityProperty @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   mappings      ConnectivityMapping[]
+  ratePlans     HospitalityRatePlan[]
   reservations  HospitalityReservation[]
   cleaningTasks HospitalityCleaningTask[]
   maintenanceTasks HospitalityMaintenanceTask[]
@@ -8092,6 +8095,38 @@ model HospitalityUnit {
   @@index([propertyId])
   @@unique([tenantId, codigo])
   @@map("hospitality_units")
+}
+
+// Plan de tarifa por unidad (plan maestro §6, §15): tarifa por noche y
+// restricciones de venta. `codigo` es el identificador del rate plan en la
+// capa de conectividad (rateplanCode) cuando existe mapping; nunca es la PK
+// interna de Volkern.
+model HospitalityRatePlan {
+  id            String    @id @default(cuid())
+  tenantId      String
+  propertyId    String
+  unitId        String
+  nombre        String
+  codigo        String? // rateplanCode externo si aplica (solo mapping)
+  tarifa        Float // precio por noche
+  moneda        String    @default("MXN")
+  minNoches     Int       @default(1)
+  maxNoches     Int? // null = sin máximo
+  // Días de la semana permitidos para check-in / check-out (0=domingo ... 6=sábado).
+  // null o [] = sin restricción de día.
+  checkInDias   Json?
+  checkOutDias  Json?
+  activo        Boolean   @default(true)
+  fechaCreacion DateTime  @default(now())
+  fechaEdicion  DateTime  @updatedAt
+  tenant        Tenant    @relation("HospitalityRatePlans", fields: [tenantId], references: [id], onDelete: Cascade)
+  property      HospitalityProperty @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  unit          HospitalityUnit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([propertyId])
+  @@index([unitId])
+  @@map("hospitality_rate_plans")
 }
 
 // Mapeo entre entidades Volkern y los identificadores externos del proveedor
