@@ -136,13 +136,18 @@ export async function dispatchConnectivityPush(
     const hotelCode = propMapping?.externalPropertyId;
     if (!hotelCode) continue; // sin mapping externo: nada que empujar
 
-    // Unidades de ESTA propiedad con sus mappings (roomCode + rateplan).
+    // Unidades de ESTA propiedad con sus mappings (roomCode + rateplan)
+    // y sus planes de tarifa activos (se empujan como rateplanCode).
     const unitRows = await prisma.hospitalityUnit.findMany({
       where: { tenantId, propertyId: prop.id },
       include: {
         mappings: {
           where: { provider: 'channel_connectivity', estado: 'activo' },
           select: { unitId: true, externalUnitCode: true, externalRatePlanCode: true },
+        },
+        ratePlans: {
+          where: { activo: true },
+          select: { id: true, codigo: true, tarifa: true },
         },
       },
     });
@@ -153,6 +158,12 @@ export async function dispatchConnectivityPush(
       roomCode: u.mappings?.[0]?.externalUnitCode ?? null,
       estado: u.estado,
       tarifaBase: u.tarifaBase,
+      ratePlans: (u.ratePlans || [])
+        .filter((rp: any) => rp.activo)
+        .map((rp: any) => ({
+          codigo: rp.codigo || rp.id,
+          tarifa: rp.tarifa,
+        })),
     }));
 
     const byDay = availabilityByRoomCode(availabilityUnits, today, horizon, reservations);
@@ -291,50 +302,60 @@ function isNextDay(prev: string, next: string): boolean {
 
 /**
  * Construye los updates de tarifas: un bloque por (roomCode, rateplanCode)
- * con tarifa base de la unidad (la primera que tenga tarifaBase definida).
- * Sin tarifa base no se empujan tarifas (no inventar precios).
+ * con los rate plans ACTIVOS de la unidad. Si la unidad no tiene planes
+ * configurados, cae a su tarifaBase (compatibilidad con datos existentes).
+ * Sin tarifa ni plan no se empujan tarifas (no inventar precios).
  */
 export function buildRateUpdates(
-  units: Array<{ id: string; roomCode: string | null; tarifaBase: number | null }>,
+  units: Array<{
+    id: string;
+    roomCode: string | null;
+    tarifaBase: number | null;
+    ratePlans?: Array<{ codigo: string; tarifa: number }>;
+  }>,
   start: Date,
   end: Date
 ) {
-  const byRoom = new Map<string, { roomCode: string; rate: number; rateplanCode: string | null }>();
+  const rates: Array<{ roomCode: string; rateplanCode: string; rate: number }> = [];
+
   for (const u of units) {
-    if (!u.roomCode || u.tarifaBase == null) continue;
-    if (!byRoom.has(u.roomCode)) {
-      byRoom.set(u.roomCode, { roomCode: u.roomCode, rate: u.tarifaBase, rateplanCode: null });
+    if (!u.roomCode) continue;
+
+    // 1) Rate plans activos de la unidad (cada plan = un rateplanCode).
+    const plans = (u.ratePlans || []).filter((p) => p.tarifa != null && p.tarifa > 0);
+    if (plans.length > 0) {
+      for (const p of plans) {
+        rates.push({
+          roomCode: u.roomCode,
+          rateplanCode: p.codigo || u.roomCode,
+          rate: p.tarifa,
+        });
+      }
+      continue;
     }
+
+    // 2) Fallback: tarifa base de la unidad (un solo rateplan).
+    if (u.tarifaBase == null) continue;
+    rates.push({
+      roomCode: u.roomCode,
+      rateplanCode: u.roomCode,
+      rate: u.tarifaBase,
+    });
   }
 
-  if (byRoom.size === 0) return [];
-
-  const updates: Array<{
-    startDate: string;
-    endDate: string;
-    rates: Array<{ roomCode: string; rateplanCode: string; rate: number }>;
-  }> = [];
+  if (rates.length === 0) return [];
 
   const cursor = new Date(start);
   cursor.setHours(0, 0, 0, 0);
   const last = new Date(end);
   last.setHours(0, 0, 0, 0);
 
-  const rates: Array<{ roomCode: string; rateplanCode: string; rate: number }> = [];
-  for (const [, info] of byRoom) {
-    rates.push({
-      roomCode: info.roomCode,
-      rateplanCode: info.rateplanCode || info.roomCode,
-      rate: info.rate,
-    });
-  }
-
   const startIso = toIsoLocal(cursor);
   const endIso = toIsoLocal(new Date(last.getTime() - 86_400_000)); // inclusivo
   if (startIso <= endIso) {
-    updates.push({ startDate: startIso, endDate: endIso, rates });
+    return [{ startDate: startIso, endDate: endIso, rates }];
   }
-  return updates;
+  return [];
 }
 
 function toIsoLocal(d: Date): string {
