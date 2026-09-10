@@ -15,8 +15,10 @@ import { authenticateRequest } from '@/lib/api-key-auth';
  *   name:<nombre>        → reservas cuyo guestData nombre coincide
  *   anon:<reservationId> → una reserva concreta sin datos de huésped
  *
- * Body: { guestKey: string, contactId: string }
+ * Body: { guestKey: string, contactId: string, reservationIds?: string[] }
  * El contacto debe pertenecer al mismo tenant (aislamiento multi-tenant).
+ * reservationIds (opcional) permite vincular de forma exacta las reservas
+ * del huésped sin depender del matching por nombre/email en guestData.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -27,10 +29,13 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     const guestKey = typeof body?.guestKey === 'string' ? body.guestKey : '';
     const contactId = typeof body?.contactId === 'string' ? body.contactId : '';
+    const reservationIds = Array.isArray(body?.reservationIds)
+      ? body.reservationIds.filter((x: unknown): x is string => typeof x === 'string')
+      : [];
 
-    if (!guestKey || !contactId) {
+    if ((!guestKey && reservationIds.length === 0) || !contactId) {
       return NextResponse.json(
-        { error: 'guestKey y contactId son obligatorios' },
+        { error: 'guestKey o reservationIds y contactId son obligatorios' },
         { status: 400 }
       );
     }
@@ -47,8 +52,33 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const guestData = {
+      nombre: contact.nombre || null,
+      firstName: contact.nombre || null,
+      name: contact.nombre || null,
+      email: contact.email || null,
+      phone: contact.telefono || null,
+      telefono: contact.telefono || null,
+    };
+
+    // Si llegan reservationIds explícitos, son la fuente de verdad exacta:
+    // se actualizan esas reservas del tenant directamente (sin matching).
+    if (reservationIds.length > 0) {
+      const result = await prisma.hospitalityReservation.updateMany({
+        where: { id: { in: reservationIds }, tenantId, contactId: null },
+        data: { contactId, guestData },
+      });
+      return NextResponse.json({
+        ok: true,
+        vinculadas: result.count,
+        contactId,
+        contact: { id: contact.id, nombre: contact.nombre },
+      });
+    }
+
     // ── Interpretar la guestKey para localizar las reservas del huésped ──
     let where: any = { tenantId };
+    // (El flujo de reservationIds ya retornó arriba; aquí sigue la guestKey.)
 
     if (guestKey.startsWith('contact:')) {
       return NextResponse.json(
@@ -98,15 +128,6 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Vincular: asignar contactId y copiar datos del contacto al guestData ──
-    const guestData = {
-      nombre: contact.nombre || null,
-      firstName: contact.nombre || null,
-      name: contact.nombre || null,
-      email: contact.email || null,
-      phone: contact.telefono || null,
-      telefono: contact.telefono || null,
-    };
-
     const result = await prisma.hospitalityReservation.updateMany({
       where,
       data: { contactId, guestData },

@@ -148,7 +148,13 @@ export default function HospitalityHuespedesPage() {
       const res = await fetch('/api/hospitality/guests/link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ guestKey: linkTarget.id, contactId: contacto.id }),
+        body: JSON.stringify({
+          guestKey: linkTarget.id,
+          contactId: contacto.id,
+          // IDs exactos de las reservas del huésped: evita fallos de matching
+          // por nombre/email en guestData (p.ej. firstName+lastName separados).
+          reservationIds: linkTarget.reservas.map((r) => r.id),
+        }),
       });
       const d = await res.json();
       if (res.ok) {
