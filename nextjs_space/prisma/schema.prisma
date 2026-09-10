@@ -503,6 +503,7 @@ model Tenant {
   hospitalityCleaningTasks      HospitalityCleaningTask[]         @relation("HospitalityCleaningTasks")
   hospitalityMaintenanceTasks   HospitalityMaintenanceTask[]      @relation("HospitalityMaintenanceTasks")
   hospitalitySyncLogs           HospitalitySyncLog[]              @relation("HospitalitySyncLogs")
+  hospitalityCommunicationTemplates HospitalityCommunicationTemplate[] @relation("HospitalityCommunicationTemplates")
 }
 
 model AttendanceRules {
@@ -8301,5 +8302,28 @@ model HospitalityMaintenanceTask {
   @@index([unitId])
   @@index([estado])
   @@map("hospitality_maintenance_tasks")
+}
+
+// Plantilla de comunicación automática para Hospitality (plan maestro §21).
+// Un tenant define una plantilla por evento y canal; al dispararse el evento,
+// se reemplazan las variables con los datos de la reserva/huésped y se envía
+// por la integración existente (WhatsApp Evolution o email SMTP/Resend).
+model HospitalityCommunicationTemplate {
+  id            String   @id @default(cuid())
+  tenantId      String
+  evento        String   // confirmacion|pre_llegada|check_in|post_salida|resena
+  canal         String   @default("whatsapp") // whatsapp|email
+  asunto        String?  // Solo para email
+  contenido     String   // Texto con variables {{nombre}}, {{checkIn}}, ...
+  activo        Boolean  @default(true)
+  fechaCreacion DateTime @default(now())
+  fechaEdicion  DateTime @updatedAt
+  tenant        Tenant   @relation("HospitalityCommunicationTemplates", fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([evento])
+  @@index([canal])
+  @@index([activo])
+  @@map("hospitality_communication_templates")
 }
 

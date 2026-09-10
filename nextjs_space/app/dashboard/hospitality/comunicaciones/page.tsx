@@ -1,0 +1,509 @@
+'use client';
+
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import { toast } from 'sonner';
+import {
+  MessageSquareText,
+  Plus,
+  Pencil,
+  Trash2,
+  Loader2,
+  Send,
+  Power,
+  PowerOff,
+  Mail,
+  Phone,
+} from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+
+interface Plantilla {
+  id: string;
+  tenantId: string;
+  evento: string;
+  canal: string;
+  asunto?: string | null;
+  contenido: string;
+  activo: boolean;
+  fechaCreacion: string;
+}
+
+const EVENTOS = [
+  { id: 'confirmacion', label: 'Confirmación', desc: 'Al recibir una reserva nueva o confirmada', icon: '✅' },
+  { id: 'pre_llegada', label: 'Pre-llegada', desc: 'Información útil antes de la llegada', icon: '📅' },
+  { id: 'check_in', label: 'Check-in', desc: 'Instrucciones de acceso el día del check-in', icon: '🔑' },
+  { id: 'post_salida', label: 'Post-salida', desc: 'Agradecimiento después de la salida', icon: '👋' },
+  { id: 'resena', label: 'Solicitud de reseña', desc: 'Pedir reseña según las reglas configuradas', icon: '⭐' },
+];
+
+const VARIABLES = [
+  { v: '{{nombre}}', d: 'Nombre del huésped' },
+  { v: '{{email}}', d: 'Email del huésped' },
+  { v: '{{telefono}}', d: 'Teléfono del huésped' },
+  { v: '{{unidad}}', d: 'Nombre de la unidad' },
+  { v: '{{propiedad}}', d: 'Nombre de la propiedad' },
+  { v: '{{canal}}', d: 'Canal (Airbnb, Booking...)' },
+  { v: '{{referencia}}', d: 'Referencia de la reserva' },
+  { v: '{{checkIn}}', d: 'Fecha de check-in' },
+  { v: '{{checkOut}}', d: 'Fecha de check-out' },
+  { v: '{{noches}}', d: 'Número de noches' },
+  { v: '{{importe}}', d: 'Importe total' },
+  { v: '{{estado}}', d: 'Estado de la reserva' },
+];
+
+const EMPTY_FORM = {
+  evento: 'confirmacion',
+  canal: 'whatsapp',
+  asunto: '',
+  contenido: '',
+  activo: true,
+};
+
+const PLANTILLAS_SUGERIDAS: Record<string, string> = {
+  confirmacion:
+    '¡Hola {{nombre}}! 🎉 Tu reserva en {{propiedad}} ({{unidad}}) está confirmada.\n\n📅 Check-in: {{checkIn}}\n📅 Check-out: {{checkOut}}\n🌙 {{noches}} noches\n💰 Total: {{importe}}\n\nReferencia: {{referencia}}\n\n¡Te esperamos!',
+  pre_llegada:
+    'Hola {{nombre}}, faltan pocos días para tu llegada a {{propiedad}} el {{checkIn}}. 🧳\n\nSi necesitas ayuda con tu llegada, escríbenos por aquí. ¡Nos vemos pronto!',
+  check_in:
+    '¡Hola {{nombre}}! Hoy es tu check-in en {{propiedad}} ({{unidad}}). 🔑\n\nTu reserva {{referencia}} está lista. Si necesitas instrucciones de acceso, responde este mensaje.',
+  post_salida:
+    'Hola {{nombre}}, esperamos que hayas disfrutado tu estancia en {{propiedad}}. 🙌\n\n¡Gracias por hospedarte con nosotros!',
+  resena:
+    '¡Hola {{nombre}}! ¿Cómo estuvo tu estancia en {{propiedad}}? ⭐\n\nNos encantaría saber tu opinión para seguir mejorando. ¡Gracias!',
+};
+
+export default function HospitalityComunicacionesPage() {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [plantillas, setPlantillas] = useState<Plantilla[]>([]);
+
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<Plantilla | null>(null);
+  const [form, setForm] = useState<typeof EMPTY_FORM>({ ...EMPTY_FORM });
+
+  const [deleteTarget, setDeleteTarget] = useState<Plantilla | null>(null);
+  const [testTarget, setTestTarget] = useState<Plantilla | null>(null);
+  const [testDest, setTestDest] = useState('');
+  const [testSending, setTestSending] = useState(false);
+  const [testResult, setTestResult] = useState<string | null>(null);
+
+  const loadAll = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await fetch('/api/hospitality/comunicaciones');
+      if (res.ok) {
+        const d = await res.json();
+        setPlantillas(d.plantillas || []);
+      }
+    } catch {
+      toast.error('Error al cargar las plantillas de comunicación');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadAll(); }, [loadAll]);
+
+  const byEvento = useMemo(() => {
+    const map: Record<string, Plantilla[]> = {};
+    for (const e of EVENTOS) map[e.id] = [];
+    for (const p of plantillas) {
+      if (map[p.evento]) map[p.evento].push(p);
+    }
+    return map;
+  }, [plantillas]);
+
+  const stats = useMemo(() => {
+    const activas = plantillas.filter((p) => p.activo);
+    return {
+      total: plantillas.length,
+      activas: activas.length,
+      whatsapp: plantillas.filter((p) => p.canal === 'whatsapp').length,
+      email: plantillas.filter((p) => p.canal === 'email').length,
+    };
+  }, [plantillas]);
+
+  const openNew = (evento: string) => {
+    setEditing(null);
+    setForm({ ...EMPTY_FORM, evento, contenido: PLANTILLAS_SUGERIDAS[evento] || '' });
+    setDialogOpen(true);
+  };
+
+  const openEdit = (p: Plantilla) => {
+    setEditing(p);
+    setForm({
+      evento: p.evento,
+      canal: p.canal,
+      asunto: p.asunto || '',
+      contenido: p.contenido,
+      activo: p.activo,
+    });
+    setDialogOpen(true);
+  };
+
+  const save = async () => {
+    if (!form.contenido.trim()) {
+      toast.error('El contenido es obligatorio');
+      return;
+    }
+    if (form.canal === 'email' && !form.asunto.trim()) {
+      toast.error('El asunto es obligatorio para plantillas de email');
+      return;
+    }
+    setSaving(true);
+    try {
+      const url = editing ? `/api/hospitality/comunicaciones/${editing.id}` : '/api/hospitality/comunicaciones';
+      const res = await fetch(url, {
+        method: editing ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      const d = await res.json();
+      if (!res.ok) {
+        toast.error(d.error || 'Error al guardar la plantilla');
+        return;
+      }
+      toast.success(editing ? 'Plantilla actualizada' : 'Plantilla creada');
+      setDialogOpen(false);
+      loadAll();
+    } catch {
+      toast.error('Error al guardar la plantilla');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleActivo = async (p: Plantilla) => {
+    try {
+      const res = await fetch(`/api/hospitality/comunicaciones/${p.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ activo: !p.activo }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        toast.error(d.error || 'Error al cambiar el estado');
+        return;
+      }
+      toast.success(p.activo ? 'Plantilla desactivada' : 'Plantilla activada');
+      loadAll();
+    } catch {
+      toast.error('Error al cambiar el estado');
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      const res = await fetch(`/api/hospitality/comunicaciones/${deleteTarget.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const d = await res.json();
+        toast.error(d.error || 'Error al eliminar');
+        return;
+      }
+      toast.success('Plantilla eliminada');
+      setDeleteTarget(null);
+      loadAll();
+    } catch {
+      toast.error('Error al eliminar la plantilla');
+    }
+  };
+
+  const sendTest = async () => {
+    if (!testTarget) return;
+    if (!testDest.trim()) {
+      toast.error('Escribe el email o teléfono de prueba');
+      return;
+    }
+    setTestSending(true);
+    setTestResult(null);
+    try {
+      const res = await fetch(`/api/hospitality/comunicaciones/${testTarget.id}/enviar-prueba`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ destinatario: testDest.trim() }),
+      });
+      const d = await res.json();
+      if (!res.ok) {
+        setTestResult(`❌ ${d.error || 'Error al enviar'}`);
+        return;
+      }
+      if (d.ok) {
+        setTestResult('✅ Enviado correctamente');
+        toast.success('Mensaje de prueba enviado');
+      } else {
+        setTestResult(`❌ ${d.resultado?.error || 'Error al enviar'}`);
+      }
+    } catch {
+      setTestResult('❌ Error de conexión al enviar');
+    } finally {
+      setTestSending(false);
+    }
+  };
+
+  const canalBadge = (canal: string) =>
+    canal === 'email' ? (
+      <Badge variant="outline" className="gap-1"><Mail className="h-3 w-3" /> Email</Badge>
+    ) : (
+      <Badge variant="outline" className="gap-1"><Phone className="h-3 w-3" /> WhatsApp</Badge>
+    );
+
+  return (
+    <div className="space-y-6 p-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Comunicaciones</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Plantillas automáticas por evento, enviadas por WhatsApp o email con las integraciones de Volkern.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-2xl font-bold">{stats.total}</p>
+            <p className="text-xs text-muted-foreground">Plantillas</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-2xl font-bold">{stats.activas}</p>
+            <p className="text-xs text-muted-foreground">Activas</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-2xl font-bold">{stats.whatsapp}</p>
+            <p className="text-xs text-muted-foreground">WhatsApp</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-2xl font-bold">{stats.email}</p>
+            <p className="text-xs text-muted-foreground">Email</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {EVENTOS.map((ev) => (
+            <Card key={ev.id}>
+              <CardHeader className="pb-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">{ev.icon}</span>
+                    <div>
+                      <CardTitle className="text-base">{ev.label}</CardTitle>
+                      <p className="text-xs text-muted-foreground mt-0.5">{ev.desc}</p>
+                    </div>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => openNew(ev.id)}>
+                    <Plus className="h-4 w-4 mr-1" /> Nueva
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {byEvento[ev.id].length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-2">
+                    Sin plantillas para este evento todavía.
+                  </p>
+                ) : (
+                  byEvento[ev.id].map((p) => (
+                    <div key={p.id} className="rounded-lg border p-3 space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          {canalBadge(p.canal)}
+                          <Badge variant={p.activo ? 'default' : 'secondary'}>
+                            {p.activo ? 'Activa' : 'Inactiva'}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button size="icon" variant="ghost" className="h-7 w-7" title="Enviar prueba" onClick={() => { setTestTarget(p); setTestDest(''); setTestResult(null); }}>
+                            <Send className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="h-7 w-7" title="Editar" onClick={() => openEdit(p)}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="h-7 w-7" title={p.activo ? 'Desactivar' : 'Activar'} onClick={() => toggleActivo(p)}>
+                            {p.activo ? <Power className="h-3.5 w-3.5" /> : <PowerOff className="h-3.5 w-3.5" />}
+                          </Button>
+                          <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" title="Eliminar" onClick={() => setDeleteTarget(p)}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground line-clamp-2 whitespace-pre-line">
+                        {p.contenido}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Dialog crear/editar */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{editing ? 'Editar plantilla' : 'Nueva plantilla'}</DialogTitle>
+            <DialogDescription>
+              Configura el mensaje automático para este evento. Las variables se reemplazan al enviar.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Evento</Label>
+                <Select value={form.evento} onValueChange={(v) => setForm((f) => ({ ...f, evento: v }))} disabled={!!editing}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {EVENTOS.map((e) => (
+                      <SelectItem key={e.id} value={e.id}>{e.icon} {e.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Canal</Label>
+                <Select value={form.canal} onValueChange={(v) => setForm((f) => ({ ...f, canal: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                    <SelectItem value="email">Email</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {form.canal === 'email' && (
+              <div className="space-y-1">
+                <Label>Asunto <span className="text-destructive">*</span></Label>
+                <Input
+                  value={form.asunto}
+                  onChange={(e) => setForm((f) => ({ ...f, asunto: e.target.value }))}
+                  placeholder="Ej: Confirmación de tu reserva en {{propiedad}}"
+                />
+              </div>
+            )}
+
+            <div className="space-y-1">
+              <Label>Contenido <span className="text-destructive">*</span></Label>
+              <Textarea
+                value={form.contenido}
+                onChange={(e) => setForm((f) => ({ ...f, contenido: e.target.value }))}
+                rows={8}
+                placeholder="Escribe el mensaje usando variables como {{nombre}}, {{checkIn}}..."
+              />
+            </div>
+
+            <div className="rounded-lg border p-3">
+              <p className="text-xs font-medium mb-2">Variables disponibles</p>
+              <div className="flex flex-wrap gap-1.5">
+                {VARIABLES.map((x) => (
+                  <span
+                    key={x.v}
+                    className="cursor-pointer rounded bg-muted px-2 py-1 text-xs font-mono hover:bg-muted-foreground/20"
+                    title={x.d}
+                    onClick={() => setForm((f) => ({ ...f, contenido: f.contenido + x.v }))}
+                  >
+                    {x.v}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={save} disabled={saving}>
+              {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {editing ? 'Guardar cambios' : 'Crear plantilla'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog eliminar */}
+      <Dialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>¿Eliminar plantilla?</DialogTitle>
+            <DialogDescription>
+              Esta acción eliminará la plantilla de {deleteTarget ? EVENTOS.find((e) => e.id === deleteTarget.evento)?.label : ''} (
+              {deleteTarget?.canal}). No se podrá recuperar.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancelar</Button>
+            <Button variant="destructive" onClick={confirmDelete}>Eliminar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog enviar prueba */}
+      <Dialog open={!!testTarget} onOpenChange={(o) => !o && setTestTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Enviar prueba</DialogTitle>
+            <DialogDescription>
+              Enviar la plantilla a un destinatario de prueba con un contexto de ejemplo.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <MessageSquareText className="h-4 w-4" />
+              {testTarget ? EVENTOS.find((e) => e.id === testTarget.evento)?.label : ''} · {testTarget?.canal}
+            </div>
+            <div className="space-y-1">
+              <Label>Email o teléfono de prueba</Label>
+              <Input
+                value={testDest}
+                onChange={(e) => setTestDest(e.target.value)}
+                placeholder={testTarget?.canal === 'email' ? 'destino@email.com' : '+52 999 000 0000'}
+              />
+            </div>
+            {testResult && (
+              <p className={`text-sm ${testResult.startsWith('✅') ? 'text-emerald-600' : 'text-destructive'}`}>
+                {testResult}
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTestTarget(null)}>Cerrar</Button>
+            <Button onClick={sendTest} disabled={testSending}>
+              {testSending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Enviar prueba
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
