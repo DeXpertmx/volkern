@@ -279,7 +279,8 @@ export const HUBS: HubConfig[] = [
       '/dashboard/hospitality/huespedes',
       '/dashboard/hospitality/dashboard',
       '/dashboard/hospitality/tarifas',
-      '/dashboard/hospitality/comunicaciones'
+      '/dashboard/hospitality/comunicaciones',
+      '/dashboard/hospitality/automatizaciones'
     ],
     items: [
       { name: 'Inicio', href: '/dashboard/hospitality', icon: Home, planModule: 'hospitality', description: 'Propiedades, unidades y resumen del módulo' },
@@ -289,6 +290,7 @@ export const HUBS: HubConfig[] = [
       { name: 'Tarifas', href: '/dashboard/hospitality/tarifas', icon: Tag, planModule: 'hospitality', description: 'Planes de tarifa por unidad y restricciones de venta' },
       { name: 'Huéspedes', href: '/dashboard/hospitality/huespedes', icon: Users, planModule: 'hospitality', description: 'Historial de estancias por huésped vinculado al CRM' },
       { name: 'Comunicaciones', href: '/dashboard/hospitality/comunicaciones', icon: MessageSquareText, planModule: 'hospitality', description: 'Plantillas automáticas por evento (confirmación, check-in, reseña...)' },
+      { name: 'Automatizaciones', href: '/dashboard/hospitality/automatizaciones', icon: Zap, planModule: 'hospitality', description: 'Reglas sobre el Automation Engine: eventos → tareas, limpiezas y mensajes' },
     ]
   },
   {
