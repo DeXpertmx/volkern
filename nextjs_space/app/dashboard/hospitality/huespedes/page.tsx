@@ -83,6 +83,7 @@ export default function HospitalityHuespedesPage() {
   const [searching, setSearching] = useState(false);
   const [contactos, setContactos] = useState<ContactoCRM[]>([]);
   const [linkingId, setLinkingId] = useState<string | null>(null);
+  const [creatingContact, setCreatingContact] = useState(false);
 
   const cargar = useCallback(async () => {
     try {
@@ -134,6 +135,12 @@ export default function HospitalityHuespedesPage() {
     return () => clearTimeout(t);
   }, [linkTarget, linkSearch]);
 
+  const cerrarDialogo = () => {
+    setLinkTarget(null);
+    setLinkSearch('');
+    setContactos([]);
+  };
+
   const vincular = async (contacto: ContactoCRM) => {
     if (!linkTarget) return;
     setLinkingId(contacto.id);
@@ -146,9 +153,7 @@ export default function HospitalityHuespedesPage() {
       const d = await res.json();
       if (res.ok) {
         toast.success(`Huésped vinculado a ${contacto.nombre}`);
-        setLinkTarget(null);
-        setLinkSearch('');
-        setContactos([]);
+        cerrarDialogo();
         await cargar();
       } else {
         toast.error(d.error || 'Error al vincular');
@@ -157,6 +162,58 @@ export default function HospitalityHuespedesPage() {
       toast.error('Error al vincular el huésped');
     } finally {
       setLinkingId(null);
+    }
+  };
+
+  // Crea un contacto nuevo en el CRM con los datos del huésped y lo vincula.
+  // Si el email ya existe, reutiliza ese contacto en lugar de duplicarlo.
+  const crearContactoNuevo = async () => {
+    if (!linkTarget) return;
+    setCreatingContact(true);
+    try {
+      // 1) Crear el contacto (o reutilizar si el email ya existe)
+      let contacto: ContactoCRM | null = null;
+      const res = await fetch('/api/contacts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nombre: linkTarget.nombre,
+          email: linkTarget.email || undefined,
+          telefono: linkTarget.telefono || undefined,
+          tipo: 'person',
+          tags: 'huesped',
+        }),
+      });
+      if (res.ok) {
+        const d = await res.json();
+        contacto = { id: d.id, nombre: d.nombre, email: d.email, telefono: d.telefono };
+      } else {
+        const d = await res.json().catch(() => ({}));
+        // Email duplicado: localizar el contacto existente para vincularlo.
+        if (linkTarget.email) {
+          const busqueda = await fetch(`/api/contacts?search=${encodeURIComponent(linkTarget.email)}&tipo=person`);
+          if (busqueda.ok) {
+            const lista = await busqueda.json();
+            const match = Array.isArray(lista)
+              ? lista.find((c: any) => (c.email || '').toLowerCase() === linkTarget.email!.toLowerCase())
+              : null;
+            if (match) {
+              contacto = { id: match.id, nombre: match.nombre, email: match.email, telefono: match.telefono };
+            }
+          }
+        }
+        if (!contacto) {
+          toast.error(d.error || 'Error al crear el contacto');
+          return;
+        }
+      }
+
+      // 2) Vincular el huésped al contacto (nuevo o existente)
+      await vincular(contacto);
+    } catch {
+      toast.error('Error al crear el contacto');
+    } finally {
+      setCreatingContact(false);
     }
   };
 
@@ -443,15 +500,31 @@ export default function HospitalityHuespedesPage() {
           </DialogHeader>
 
           <div className="space-y-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                autoFocus
-                placeholder="Buscar contacto del CRM por nombre o email..."
-                value={linkSearch}
-                onChange={(e) => setLinkSearch(e.target.value)}
-                className="pl-10"
-              />
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  autoFocus
+                  placeholder="Buscar contacto del CRM por nombre o email..."
+                  value={linkSearch}
+                  onChange={(e) => setLinkSearch(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={creatingContact}
+                onClick={crearContactoNuevo}
+                title="Crea un contacto en el CRM con los datos del huésped y lo vincula"
+              >
+                {creatingContact ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <UserPlus className="h-4 w-4 mr-1" />
+                )}
+                {creatingContact ? '' : 'Crear contacto nuevo'}
+              </Button>
             </div>
 
             <div className="max-h-72 overflow-y-auto space-y-2">
