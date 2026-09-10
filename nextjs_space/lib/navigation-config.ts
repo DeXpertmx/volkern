@@ -273,12 +273,17 @@ export const HUBS: HubConfig[] = [
     requiredModule: 'hospitality',
     basePaths: [
       '/dashboard/hospitality',
-      '/dashboard/hospitality/calendar'
+      '/dashboard/hospitality/calendar',
+      '/dashboard/hospitality/reservas',
+      '/dashboard/hospitality/huespedes',
+      '/dashboard/hospitality/dashboard'
     ],
     items: [
       { name: 'Inicio', href: '/dashboard/hospitality', icon: Home, planModule: 'hospitality', description: 'Propiedades, unidades y resumen del módulo' },
+      { name: 'Dashboard', href: '/dashboard/hospitality/dashboard', icon: LayoutDashboard, planModule: 'hospitality', description: 'Ocupación, ADR, ingresos y mix de canales' },
       { name: 'Planning', href: '/dashboard/hospitality/calendar', icon: CalendarDays, planModule: 'hospitality', description: 'Calendario de ocupación, reservas y operaciones' },
       { name: 'Reservas', href: '/dashboard/hospitality/reservas', icon: CalendarX2, planModule: 'hospitality', description: 'Lista, alta y edición de reservas' },
+      { name: 'Huéspedes', href: '/dashboard/hospitality/huespedes', icon: Users, planModule: 'hospitality', description: 'Historial de estancias por huésped vinculado al CRM' },
     ]
   },
   {
