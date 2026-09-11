@@ -35,13 +35,22 @@ describe('markFirstMessageSeen', () => {
     expect(args.create.primerMensaje).toBe(true);
   });
 
-  it('es idempotente: la segunda llamada usa exactamente el mismo update', async () => {
+  it('es idempotente: la segunda llamada repite el mismo update', async () => {
     await markFirstMessageSeen('tenant-1');
     await markFirstMessageSeen('tenant-1');
 
     expect(upsert).toHaveBeenCalledTimes(2);
     const [a, b] = upsert.mock.calls.map((c: any[]) => c[0].update);
-    expect(a).toEqual(b);
+
+    // La fecha se refresca en cada llamada (así lo documenta el helper), así
+    // que comparar el Date completo haría el test dependiente del reloj: dos
+    // llamadas seguidas pueden caer en milisegundos distintos. La idempotencia
+    // que importa es la del resto del payload.
+    const { fechaPrimerMensaje: _fechaA, ...restoA } = a;
+    const { fechaPrimerMensaje: _fechaB, ...restoB } = b;
+    expect(restoA).toEqual(restoB);
     expect(a.primerMensaje).toBe(true);
+    expect(a.fechaPrimerMensaje).toBeInstanceOf(Date);
+    expect(b.fechaPrimerMensaje).toBeInstanceOf(Date);
   });
 });

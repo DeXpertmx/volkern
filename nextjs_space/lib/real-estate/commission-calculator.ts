@@ -75,7 +75,7 @@ export function calculateCommission(input: CommissionInput): CommissionResult {
       // % sobre el precio de venta total
       const pct = rule.porcentaje || 3; // default 3%
       montoComision = valorOperacion * (pct / 100);
-      desglose.push(`${pct}% sobre ${valorOperacion.toLocaleString()} = ${montoComision.toLocaleString()}`);
+      desglose.push(`${pct}% sobre ${valorOperacion.toLocaleString('es-ES')} = ${montoComision.toLocaleString('es-ES')}`);
       break;
     }
 
@@ -83,13 +83,13 @@ export function calculateCommission(input: CommissionInput): CommissionResult {
       // % sobre la comisión total (útil para splits internos)
       const pct = rule.porcentaje || 100;
       montoComision = valorOperacion * (pct / 100);
-      desglose.push(`${pct}% del valor de operación = ${montoComision.toLocaleString()}`);
+      desglose.push(`${pct}% del valor de operación = ${montoComision.toLocaleString('es-ES')}`);
       break;
     }
 
     case 'monto_fijo': {
       montoComision = rule.montoFijo || 0;
-      desglose.push(`Tarifa fija: ${montoComision.toLocaleString()}`);
+      desglose.push(`Tarifa fija: ${montoComision.toLocaleString('es-ES')}`);
       break;
     }
 
@@ -107,7 +107,7 @@ export function calculateCommission(input: CommissionInput): CommissionResult {
         if (valorOperacion >= tier.desde && valorOperacion <= tier.hasta) {
           montoComision = valorOperacion * (tier.porcentaje / 100);
           desglose.push(
-            `Tramo ${tier.desde.toLocaleString()}–${tier.hasta.toLocaleString()}: ${tier.porcentaje}% = ${montoComision.toLocaleString()}`
+            `Tramo ${tier.desde.toLocaleString('es-ES')}–${tier.hasta.toLocaleString('es-ES')}: ${tier.porcentaje}% = ${montoComision.toLocaleString('es-ES')}`
           );
           break;
         }
@@ -119,7 +119,7 @@ export function calculateCommission(input: CommissionInput): CommissionResult {
         if (valorOperacion > lastTier.hasta) {
           montoComision = valorOperacion * (lastTier.porcentaje / 100);
           desglose.push(
-            `Excede último tramo: ${lastTier.porcentaje}% = ${montoComision.toLocaleString()}`
+            `Excede último tramo: ${lastTier.porcentaje}% = ${montoComision.toLocaleString('es-ES')}`
           );
         }
       }
@@ -128,7 +128,7 @@ export function calculateCommission(input: CommissionInput): CommissionResult {
 
     case 'suscripcion_mensual': {
       montoComision = rule.cuotaMensual || 0;
-      desglose.push(`Suscripción mensual: ${montoComision.toLocaleString()}/mes`);
+      desglose.push(`Suscripción mensual: ${montoComision.toLocaleString('es-ES')}/mes`);
       // La suscripción no tiene split — el monto completo va a la franquicia
       return {
         montoCalculado: montoComision,
@@ -150,8 +150,8 @@ export function calculateCommission(input: CommissionInput): CommissionResult {
 
   if (rule.splitAgente !== undefined || rule.splitAgencia !== undefined) {
     desglose.push(
-      `Split: ${splitAgente.toLocaleString()} agente (${rule.splitAgente || 0}%) + ` +
-      `${splitAgencia.toLocaleString()} agencia (${rule.splitAgencia || 0}%)`
+      `Split: ${splitAgente.toLocaleString('es-ES')} agente (${rule.splitAgente || 0}%) + ` +
+      `${splitAgencia.toLocaleString('es-ES')} agencia (${rule.splitAgencia || 0}%)`
     );
   }
 
