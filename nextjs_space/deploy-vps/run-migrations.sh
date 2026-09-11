@@ -30,9 +30,11 @@ fi
 
 # 2. Obtener el DATABASE_URL del servicio en producción
 echo "→ Obteniendo DATABASE_URL del servicio volkern-erp_app..."
+# `|| true`: con `set -o pipefail`, un grep sin coincidencias haría fallar la
+# asignación y abortaría el script antes de poder dar el error claro de abajo.
 DATABASE_URL=$(docker service inspect volkern-erp_app \
   --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' \
-  | grep '^DATABASE_URL=' | cut -d= -f2-)
+  | grep '^DATABASE_URL=' | cut -d= -f2- || true)
 if [ -z "$DATABASE_URL" ]; then
   echo "✗ No se pudo obtener DATABASE_URL del servicio." >&2
   exit 1
@@ -63,7 +65,7 @@ for i in $(seq 1 40); do
   fi
   if [ "$RUNNING" -eq 0 ] && [ "$COMPLETE" -eq 0 ]; then
     echo "   ⚠️  Job no está corriendo ni completado; estado:"
-    docker service ps "$JOB_NAME" --format '{{.CurrentState}}' | head -3
+    docker service ps "$JOB_NAME" --format '{{.CurrentState}}' 2>/dev/null | head -3 || true
     break
   fi
   sleep 3
@@ -73,10 +75,29 @@ done
 echo "→ Log del job:"
 docker service logs "$JOB_NAME" 2>&1 | tail -20 || true
 
-# 7. Verificar el código de salida del task
-EXIT_CODE=$(docker service ps "$JOB_NAME" --format '{{.Status.Err}} {{.Error}}' 2>/dev/null | head -1)
-if echo "$EXIT_CODE" | grep -qiE 'task: non-zero exit'; then
-  echo "✗ migrate deploy falló (exit != 0). Revisa el log del job." >&2
+# 7. Verificar el resultado real del job.
+#
+# OJO: NO usar el campo `.Status.Err`. Docker >= 26 lo eliminó de
+# `docker service ps` y la consulta falla con «can't evaluate field Status
+# in type *task.taskContext». Como el stderr iba a /dev/null y el script usa
+# `set -euo pipefail`, la comprobación abortaba el script EN SILENCIO justo
+# después de aplicar las migraciones y ANTES del `service update`: las
+# migraciones quedaban aplicadas pero el servicio seguía con la imagen
+# vieja, y nadie se enteraba. Se lee el estado real de la tarea.
+#
+# `|| true` en la sustitución: `head -1` cierra el pipe antes de tiempo y con
+# `pipefail` un SIGPIPE haría fallar la asignación.
+JOB_STATE=$(docker service ps "$JOB_NAME" --format '{{.CurrentState}} {{.Error}}' 2>/dev/null | head -1 || true)
+echo "→ Estado del job: ${JOB_STATE:-desconocido}"
+
+if echo "$JOB_STATE" | grep -qiE 'Failed|Rejected|Shutdown|Error'; then
+  echo "✗ migrate deploy falló. Revisa el log del job." >&2
+  docker service rm "$JOB_NAME" >/dev/null 2>&1 || true
+  exit 1
+fi
+
+if ! echo "$JOB_STATE" | grep -qiE 'Complete'; then
+  echo "✗ El job de migraciones no llegó a Complete. Estado: $JOB_STATE" >&2
   docker service rm "$JOB_NAME" >/dev/null 2>&1 || true
   exit 1
 fi
