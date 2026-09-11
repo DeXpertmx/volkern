@@ -40,8 +40,20 @@
 ## Base URL
 
 ```
-https://live.aiosell.com
+https://live.aiosell.com/api/v2/cm
 ```
+
+> **Atención:** el prefijo `/api/v2/cm` es obligatorio. El host a secas
+> (`https://live.aiosell.com`) responde **404 de nginx** en todos los
+> endpoints, no un error de la API. `CONNECTIVITY_BASE_URL` puede traer solo
+> el host: `getConnectivityBaseUrl()` añade el prefijo si falta.
+>
+> El **hotel de sandbox** es `sandbox-pms` y el **partner de sandbox** es
+> `sample-pms`. Los códigos que deben usarse como `hotelCode`, `roomCode` y
+> `rateplanCode` son los que devuelve primero `property_details` (para el
+> sandbox: rooms `executive` y `suite`, con rateplans `*-s-ep`, `*-d-ep`,
+> `*-s-cp`, `*-d-cp`). Un partner deshabilitado responde
+> `400 {"success":false,"message":"Partner is disabled!"}`.
 
 ## Endpoints (PMS → proveedor)
 
