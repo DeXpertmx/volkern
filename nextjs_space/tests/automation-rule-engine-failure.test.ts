@@ -7,28 +7,39 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * omitía las acciones en silencio y `processEvent` registraba el log como
  * `success`: el motor parecía funcionar y las tareas/mensajes nunca salían.
  *
- * Este test fija el comportamiento correcto: sin cola disponible, la regla
- * debe quedar registrada como `failed` con la causa, no como success.
+ * Ahora el motor registra la ejecución como `queued` (nunca como éxito) y
+ * pasa el id del log al job para que el worker escriba el resultado real.
+ * Sin cola disponible la ejecución queda `failed` con su causa.
  */
 
 const mockFindMany = vi.hoisted(() => vi.fn());
 const mockLogCreate = vi.hoisted(() => vi.fn());
+const mockLogUpdate = vi.hoisted(() => vi.fn());
 const mockInitRedis = vi.hoisted(() => vi.fn());
+const mockQueueAdd = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/db', () => ({
   prisma: {
     automationRule: { findMany: mockFindMany },
-    automationLog: { create: mockLogCreate },
+    automationLog: { create: mockLogCreate, update: mockLogUpdate },
   },
 }));
 vi.mock('../lib/db', () => ({
   prisma: {
     automationRule: { findMany: mockFindMany },
-    automationLog: { create: mockLogCreate },
+    automationLog: { create: mockLogCreate, update: mockLogUpdate },
   },
 }));
 vi.mock('../lib/core/redis', () => ({
   initRedis: mockInitRedis,
+}));
+vi.mock('bullmq', () => ({
+  Queue: class {
+    on() {}
+    add(...args: any[]) {
+      return mockQueueAdd(...args);
+    }
+  },
 }));
 
 import { AutomationRuleEngine } from '../lib/marketing/automation/rule-engine';
@@ -43,10 +54,12 @@ const REGLA = {
   isActive: true,
 };
 
-describe('AutomationRuleEngine sin cola disponible', () => {
+describe('AutomationRuleEngine — resultado real de la ejecución', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockLogCreate.mockResolvedValue({});
+    mockLogCreate.mockResolvedValue({ id: 'log1' });
+    mockLogUpdate.mockResolvedValue({});
+    mockQueueAdd.mockResolvedValue({ id: 'job1' });
   });
 
   it('registra failed (no success) cuando Redis no está disponible', async () => {
@@ -58,10 +71,39 @@ describe('AutomationRuleEngine sin cola disponible', () => {
       reservationId: 'hres_1',
     });
 
+    // El log se crea como encolado y luego se corrige a failed con la causa.
     expect(mockLogCreate).toHaveBeenCalledTimes(1);
-    const log = mockLogCreate.mock.calls[0][0].data;
-    expect(log.status).toBe('failed');
-    expect(String(log.error)).toMatch(/cola/i);
+    const creado = mockLogCreate.mock.calls[0][0].data;
+    expect(creado.status).toBe('queued');
+    expect(creado.entityId).toBe('hres_1');
+
+    expect(mockLogUpdate).toHaveBeenCalledTimes(1);
+    const actualizado = mockLogUpdate.mock.calls[0][0];
+    expect(actualizado.where).toEqual({ id: 'log1' });
+    expect(actualizado.data.status).toBe('failed');
+    expect(String(actualizado.data.error)).toMatch(/cola/i);
+  });
+
+  it('no registra éxito prematuro: encola y deja el resultado al worker', async () => {
+    mockInitRedis.mockResolvedValue({});
+    mockFindMany.mockResolvedValue([REGLA]);
+
+    await AutomationRuleEngine.processEvent('hospitality_reservation_created', {
+      tenantId: 't1',
+      reservationId: 'hres_2',
+    });
+
+    const creado = mockLogCreate.mock.calls[0][0].data;
+    expect(creado.status).toBe('queued');
+
+    // El job viaja con el id del log para que el worker lo cierre.
+    expect(mockQueueAdd).toHaveBeenCalledTimes(1);
+    const [, jobData] = mockQueueAdd.mock.calls[0];
+    expect(jobData.logId).toBe('log1');
+    expect(jobData.actions).toEqual(REGLA.actions);
+
+    // Nada se marca como exitoso ni fallido al encolar.
+    expect(mockLogUpdate).not.toHaveBeenCalled();
   });
 
   it('no registra log si no hay reglas que coincidan', async () => {
@@ -71,5 +113,6 @@ describe('AutomationRuleEngine sin cola disponible', () => {
     await AutomationRuleEngine.processEvent('hospitality_reservation_created', { tenantId: 't1' });
 
     expect(mockLogCreate).not.toHaveBeenCalled();
+    expect(mockLogUpdate).not.toHaveBeenCalled();
   });
 });

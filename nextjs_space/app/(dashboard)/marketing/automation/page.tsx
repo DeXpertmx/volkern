@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Play, History, Settings2, Trash2, Zap, MoreHorizontal, CheckCircle2, XCircle, Clock } from "lucide-react";
+import { Plus, Play, History, Settings2, Trash2, Zap, MoreHorizontal, CheckCircle2, XCircle, Clock, AlertTriangle } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
@@ -159,22 +159,49 @@ export default function AutomationRulesPage() {
               <CardDescription>Últimas 50 ejecuciones automáticas</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {logs.map((log) => (
+              {logs.map((log) => {
+                // El estado real lo escribe el worker: `queued`/`running` están
+                // en curso (no son un fallo) y `partial` completó solo parte.
+                const enCurso = log.status === 'queued' || log.status === 'running';
+                const acciones = Array.isArray(log.result?.actions) ? log.result.actions : [];
+                const fallidas = acciones.filter((a: any) => a.status === 'failed');
+                const omitidas = acciones.filter((a: any) => a.status === 'skipped');
+                return (
                 <div key={log.id} className="flex items-start space-x-3 p-3 rounded-lg border bg-white/50 text-sm">
                   {log.status === 'success' ? (
                     <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
+                  ) : enCurso ? (
+                    <Clock className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                  ) : log.status === 'partial' ? (
+                    <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
                   ) : (
                     <XCircle className="w-4 h-4 text-rose-500 mt-0.5 shrink-0" />
                   )}
                   <div className="flex-grow">
                     <p className="font-bold leading-none mb-1">{log.rule.name}</p>
                     <p className="text-xs text-muted-foreground truncate w-40">Entidad: {log.entityId}</p>
+                    {log.result?.message && (
+                      <p className="text-xs text-muted-foreground">{log.result.message}</p>
+                    )}
+                    {fallidas.map((a: any, i: number) => (
+                      <p key={`${a.type}-${i}`} className="text-xs text-rose-600">{a.type}: {a.error}</p>
+                    ))}
+                    {omitidas.length > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        {omitidas.length} acción(es) no repetida(s) para este ámbito
+                      </p>
+                    )}
+                    {log.error && !fallidas.length && (
+                      <p className="text-xs text-rose-600">{log.error}</p>
+                    )}
                     <p className="text-[10px] text-muted-foreground mt-1 uppercase font-bold tracking-tighter">
                       {new Date(log.executedAt).toLocaleString()}
+                      {typeof log.result?.durationMs === 'number' ? ` · ${log.result.durationMs} ms` : ''}
                     </p>
                   </div>
                 </div>
-              ))}
+                );
+              })}
               {logs.length === 0 && (
                 <div className="text-center py-10 text-muted-foreground text-sm italic">
                   Esperando eventos...
