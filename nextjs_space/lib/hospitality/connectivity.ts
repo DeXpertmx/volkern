@@ -18,9 +18,21 @@ export const CONNECTIVITY_PROVIDER_KEY = 'channel_connectivity';
 export const CONNECTIVITY_PROVIDER_NOMBRE = 'Conectividad de Canales';
 
 /**
+ * Prefijo de ruta del contrato de la API de conectividad (v2 / channel manager).
+ * Es una ruta del contrato, no un nombre de proveedor, por eso puede vivir en
+ * el código: así ningún llamador necesita conocerla.
+ */
+export const CONNECTIVITY_API_PREFIX = '/api/v2/cm';
+
+/**
  * URL del servicio de conectividad (solo uso interno del adapter).
  * Se lee de variable de entorno para que el nombre del proveedor nunca
  * aparezca en el código fuente ni en la UI.
+ *
+ * La variable puede traer solo el host o la URL completa del contrato; si
+ * falta el prefijo de la API se añade aquí. Sin este prefijo todos los
+ * endpoints responden 404 desde el borde (nginx), que fue el fallo real que
+ * dejó la conectividad inoperante.
  */
 export function getConnectivityBaseUrl(): string {
   const url = process.env.CONNECTIVITY_BASE_URL;
@@ -29,7 +41,13 @@ export function getConnectivityBaseUrl(): string {
       '[Conectividad] CONNECTIVITY_BASE_URL no configurada: sin ella no se puede llamar al servicio de conectividad.'
     );
   }
-  return url;
+  const base = url.trim().replace(/\/+$/, '');
+  if (!base) {
+    throw new Error(
+      '[Conectividad] CONNECTIVITY_BASE_URL está vacía: sin ella no se puede llamar al servicio de conectividad.'
+    );
+  }
+  return base.endsWith(CONNECTIVITY_API_PREFIX) ? base : `${base}${CONNECTIVITY_API_PREFIX}`;
 }
 
 export type ConnectivityEstado =
