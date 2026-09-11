@@ -11,7 +11,8 @@ import { dispatchConnectivityPush } from '@/lib/hospitality/sync';
  *
  * Body opcional: { propertyId?: string, diasHorizonte?: number }
  * Si no llega propertyId, empuja todas las propiedades del tenant.
- * Los resultados quedan auditados en HospitalitySyncLog (tipo inventory/rates).
+ * Los resultados quedan auditados en HospitalitySyncLog (tipo inventory,
+ * rates, inventory_restrictions o rates_restrictions).
  */
 export async function POST(req: NextRequest) {
   try {
@@ -47,6 +48,8 @@ export async function POST(req: NextRequest) {
       errores: result.errores,
       inventory: result.inventory,
       rates: result.rates,
+      inventoryRestrictions: result.inventoryRestrictions,
+      rateRestrictions: result.rateRestrictions,
     });
   } catch (error) {
     console.error('Error en sincronización manual:', error);

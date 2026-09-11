@@ -8270,7 +8270,7 @@ model HospitalitySyncLog {
   id               String   @id @default(cuid())
   tenantId         String
   propertyId       String?
-  tipo             String   // inventory|rates
+  tipo             String   // inventory|rates|inventory_restrictions|rates_restrictions|reconciliacion
   operacion        String   // reserva_creada|reserva_modificada|reserva_cancelada|unidad_cambiada|manual
   estado           String   @default("pendiente") // pendiente|exito|error
   httpStatus       Int?
