@@ -205,6 +205,13 @@ export default function HospitalityCalendar() {
     }
   }, []);
 
+  // Vista inicial por query (?vista=mes|operaciones) para poder enlazar
+  // directamente a Operaciones desde el menú lateral.
+  useEffect(() => {
+    const v = new URLSearchParams(window.location.search).get('vista');
+    if (v === 'planning' || v === 'mes' || v === 'operaciones') setView(v);
+  }, []);
+
   useEffect(() => {
     if (view === 'operaciones') loadOperations();
   }, [view, loadOperations, reservations]);

@@ -13,6 +13,8 @@ const mockAuth = vi.hoisted(() => vi.fn());
 const prisma = vi.hoisted(() => ({
   hospitalityReservation: { findMany: vi.fn() },
   hospitalityUnit: { findMany: vi.fn() },
+  // El dashboard resuelve el nombre de la propiedad para los drill-downs (§23).
+  hospitalityProperty: { findMany: vi.fn() },
   hospitalityCleaningTask: { groupBy: vi.fn() },
   hospitalityMaintenanceTask: { groupBy: vi.fn() },
 }));
@@ -140,6 +142,7 @@ describe('GET /api/hospitality/dashboard', () => {
       { id: 'u1', estado: 'available', propertyId: 'p1' },
       { id: 'u2', estado: 'occupied', propertyId: 'p1' },
     ]);
+    prisma.hospitalityProperty.findMany.mockResolvedValue([{ id: 'p1', nombre: 'Casa Mar' }]);
     prisma.hospitalityCleaningTask.groupBy.mockResolvedValue([{ estado: 'pending', _count: { _all: 2 } }]);
     prisma.hospitalityMaintenanceTask.groupBy.mockResolvedValue([{ estado: 'abierta', _count: { _all: 1 } }]);
   });
