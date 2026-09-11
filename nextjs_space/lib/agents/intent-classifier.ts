@@ -420,7 +420,7 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     // mensajes de búsqueda/listado ("busca el lead…", "lista los contactos…")
     // nunca entrarían en la ruta determinista. También acepta frases de filtro
     // sin verbo: "leads en estado X", "contactos tipo empresa".
-    const ACTION_VERB = /\b(?:agrega|crea|registra|nuev[oa]|añade|alta|abre|busca|encuentra|consulta|localiza|lista|listame|mu[eé]strame|muestra|ver|ens[eé][ñn]ame|dame|convierte|convertir|pasa|transforma|mueve|actualiza|cambia|modifica|pon|ponle|anota|anotar|tuve|registro|agenda|agendar|programa|programar|reserva|reservar|aparta|apartar|cancela|cancelar|anula|anular|reagenda|reagendar|confirmar|analiza|analizar|revisa|revisar|completa|completar|termina|terminar|finaliza|finalizar|marca|marcar|cierra|cerrar|presenta|presentar|present[ée]|sugiere|sugerir|sugiero|sugiera|sugieran|respondo|responder[íi]a|contesto|contestar|pospone|posponer|reprograma|reprogramar|edita|editar|saca|sacar)\b/i
+    const ACTION_VERB = /\b(?:agrega|crea|registra|nuev[oa]|añade|alta|abre|busca|encuentra|consulta|localiza|lista|listame|mu[eé]strame|muestra|ver|ens[eé][ñn]ame|dame|convierte|convertir|pasa|transforma|mueve|actualiza|cambia|modifica|pon|ponle|anota|anotar|tuve|registro|agenda|agendar|programa|programar|reserva|reservar|aparta|apartar|cancela|cancelar|anula|anular|reagenda|reagendar|confirmar|analiza|analizar|revisa|revisar|completa|completar|termina|terminar|finaliza|finalizar|marca|marcar|cierra|cerrar|presenta|presentar|present[ée]|sugiere|sugerir|sugiero|sugiera|sugieran|respondo|responder[íi]a|contesto|contestar|pospone|posponer|reprograma|reprogramar|edita|editar|saca|sacar|elimina|eliminar|borra|borrar|env[ií]a(?:le|r)?|enviar|m[aá]nda(?:r|le)?|predice|predecir|simula|simular)\b/i
     const FILTER_ONLY = /\b(?:contactos?|leads?)\b.*\b(?:en\s+estado|por\s+estado|tipo|que\s+contengan|tags?)\b/i
     // Entidades del pipeline sin verbo: "cómo va mi pipeline", "qué deals tengo",
     // "cómo va la venta con X" (bloque 23: detalles_negocio por email)
@@ -433,7 +433,10 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     // entrenamiento). "iva/retenciones/modelo NNN" (décimo octavo: impuestos y
     // declaraciones desde Telegram) — si no matchean ningún intent determinista
     // el clasificador cae al LLM igualmente.
-    const FINANZA_TRIGGER = /\b(?:gastos?|egresos?|gast[ée]|burn\s*rate|salud\s+financiera|flujo\s+de\s+caja|proyecci[oó]n|pron[oó]stic(?:o|a|os)?|forecast|impuestos?|fiscal|provisi[oó]n|rentabilidad|ebitda|margen|financieramente|iva\b|retenciones?|modelo\s*\d{3}|modelos?\s+por\s+(?:presentar|declarar)|declaraci[oó]n\b|balance\b|comprobaci[oó]n\b|sumas\s+y\s+saldos|cuenta\s+de\s+resultados|resultado\s+del\s+ejercicio|gan[eé]|ganancias)\b/i
+    // "gasté"/"gané" van FUERA del grupo anclado: el \b final no casa tras una
+    // vocal acentuada (no es carácter de palabra), así que dentro del grupo esas
+    // dos alternativas nunca se cumplían.
+    const FINANZA_TRIGGER = /\b(?:gastos?|egresos?|burn\s*rate|salud\s+financiera|flujo\s+de\s+caja|proyecci[oó]n|pron[oó]stic(?:o|a|os)?|forecast|impuestos?|fiscal|provisi[oó]n|rentabilidad|ebitda|margen|financieramente|iva\b|retenciones?|modelo\s*\d{3}|modelos?\s+por\s+(?:presentar|declarar)|declaraci[oó]n\b|balance\b|comprobaci[oó]n\b|sumas\s+y\s+saldos|cuenta\s+de\s+resultados|resultado\s+del\s+ejercicio|ganancias)\b|\bgast[eé](?![a-záéíóúñü])|\bgan[eé](?![a-záéíóúñü])/i
     // Entidades de tareas/notas sin verbo: "qué tareas tengo", "ver notas de X",
     // "pospone el recordatorio de X" (bloque 24: snooze_task)
     const TAREA_TRIGGER = /\b(?:tareas?|pendientes?|notas?|to[- ]?do|recordatorios?)\b/i
@@ -451,7 +454,7 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     const FACTURA_TRIGGER = /\b(?:facturas?|factur[aá]ci[oó]n|facturar|estado\s+fiscal|integridad\s+fiscal)\b/i
     // Entidades de ERP industrial sin verbo: producción, calidad, mermas,
     // proyectos y watchdog (décimo sexto entrenamiento)
-    const ERP_TRIGGER = /\b(?:producci[oó]n|manufactura|fabricar|fabricaci[oó]n|calidad|mermas?|desperdicios?|scrap|inspecci[oó]n|qc\b|proyectos?|watchdog|reorden|reponer|desviaci[oó]n|rentabilidad\s+del\s+proyecto)\b/i
+    const ERP_TRIGGER = /\b(?:produc(?:ci[oó]n|ir|e)|manufactura|fabricar|fabricaci[oó]n|calidad|mermas?|desperdicios?|scrap|inspecci[oó]n|qc\b|proyectos?|watchdog|reorden|reponer|desviaci[oó]n|rentabilidad\s+del\s+proyecto)\b/i
     // Entidades de proactividad, auditoría y campo sin verbo (décimo séptimo
     // entrenamiento): "leads fantasmas", "ruta de éxito", "integridad",
     // "fugas de materiales", "técnicos en campo"
@@ -1138,7 +1141,9 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     // 0z-f. SIMULAR ESCENARIO ("simula añadir 500 unidades a la línea A",
     // "qué pasaría si agrego 1000 unidades") ═══
     const SIMULAR_SIGNAL = /\b(?:simula|simulan|simular|simulado|escenario|qu[eé]\s+pasaria\s+si|qu[eé]\s+impacto|impacto\s+de)\b/i
-    if (SIMULAR_SIGNAL.test(message) && /\bunidades?\b/i.test(message)) {
+    // Sin unidades pero con contexto de producción el intent es el mismo: el
+    // skill pide las unidades (needsMoreInfo) en vez de caer al LLM.
+    if (SIMULAR_SIGNAL.test(message) && (/\bunidades?\b/i.test(message) || /\b(?:producci[oó]n|planta|l[ií]nea)\b/i.test(message))) {
       const unidadesMatch = message.match(/(\d+)\s*unidades?/i)
       if (unidadesMatch) extracted.unidades = Number(unidadesMatch[1])
       const lineaMatch = message.match(/\bl[ií]nea\s+([A-Za-z0-9]+)/i)
@@ -1225,7 +1230,9 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     // ═══ 0z-5. TRANSFERIR/DEVOLVER ACTIVO (bloque 22): "transfiere el
     // portátil de María a Juan", "devuelve el activo del técnico", "traspasa
     // la tablet de Pedro a Lucía" ═══
-    const TRANSFERIR_VERB = /\b(?:transfiere|transferir|traspasa|traspasar|devuelve|devolver|entrega|entregar|reasigna|reasignar|mueve\s+el\s+activo)\b/i
+    // "mueve el portátil de María a Juan" también es una transferencia: el
+    // ACTIVO_EMPLEADO_SIGNAL ya impide que "mueve la tarea…" entre aquí.
+    const TRANSFERIR_VERB = /\b(?:transfiere|transferir|traspasa|traspasar|devuelve|devolver|entrega|entregar|reasigna|reasignar|mueve|mover)\b/i
     const ACTIVO_EMPLEADO_SIGNAL = /\b(?:activo|port[aá]til|portatil|laptop|tablet|herramienta|m[oó]vil|movil|impresora|monitor|equipo\s+de\s+trabajo)\b/i
     if (TRANSFERIR_VERB.test(message) && ACTIVO_EMPLEADO_SIGNAL.test(message)) {
       // Activo: lo que sigue a "el activo/el portátil/la tablet" ("transfiere
@@ -1590,6 +1597,25 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       return { intent: 'cancelar_cita', confidence: 0.85, extractedParams: extracted }
     }
 
+    // ═══ 9b. REAGENDAR CITA ("reagenda la cita de Juan al viernes a las 4pm",
+    // "mueve mi reunión con Ana al martes") — mismo guard de cita que cancelar
+    // pero con verbos de cambio de fecha. Va ANTES del guard de agendar para
+    // que "reagenda" no se lea como "agenda". ═══
+    const REAGENDAR_VERB = /\b(?:reagenda|reagendar|reprograma|reprogramar|cambia|cambiar|mueve|mover|pospone|posponer|aplaza|aplazar|adelanta|adelantar)\b/i
+    const CANCELAR_VERB = /\b(?:cancela|cancelar|anula|anular|elimina|eliminar)\b/i
+    if (REAGENDAR_VERB.test(message) && /\b(?:cita|reuni[oó]n|reuniones|videollamada)\b/i.test(message) && !CANCELAR_VERB.test(message)) {
+      const msgForNombre = this.stripFechaPhrases(message)
+      const nombre =
+        this.extractNombreAfter(msgForNombre, /\bcon\b/i) ||
+        this.extractNombreAfter(msgForNombre, /(?:cita|reuni[oó]n)\s+(?:de|del)\s+/i)
+      if (nombre) extracted.nombre = nombre
+      const fecha = this.extractFechaDe(message)
+      if (fecha) extracted.fecha = fecha
+      const hora = this.extractHoraDe(message)
+      if (hora) extracted.hora = hora
+      return { intent: 'reagendar_cita', confidence: 0.85, extractedParams: extracted }
+    }
+
     // ═══ 10. MIS CITAS ("qué citas tengo", "muéstrame mis citas",
     // "citas de mañana/esta semana") ═══
     const hasCitas = /\b(?:citas?|reuni[oó]n|reuniones)\b/i.test(message)
@@ -1917,7 +1943,13 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     if (/\b(?:balance|balanza)\b/i.test(message) && !/\bcomprobaci[oó]n\b/i.test(message)) {
       return { intent: 'balance_general', confidence: 0.85, extractedParams: extracted }
     }
-    if (/\b(?:cuenta\s+de\s+resultados|p[oó]g|pyg|resultado\s+del\s+ejercicio|cu[aá]nto\s+(?:he\s+|me\s+)?gan[eé](?:mos)?|ganancias)\b/i.test(message)) {
+    // OJO con el ancla final: `gan[eé]` termina en vocal acentuada y en
+    // JavaScript `\b` NO casa entre vocal acentuada y espacio (la vocal no es
+    // carácter de palabra), así que "cuánto gané este mes" nunca entraba y se
+    // iba al LLM. Se separa del resto para no arrastrar el \b.
+    const CUENTA_RESULTADOS = /\b(?:cuenta\s+de\s+resultados|p[oó]g|pyg|resultado\s+del\s+ejercicio|ganancias)\b/i
+    const GANANCIA_QUERY = /\bcu[aá]nto\s+(?:he\s+|me\s+)?gan[eé](?:mos)?/i
+    if (CUENTA_RESULTADOS.test(message) || GANANCIA_QUERY.test(message)) {
       return { intent: 'cuenta_resultados', confidence: 0.85, extractedParams: extracted }
     }
 
@@ -2143,7 +2175,7 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     // ═══ 22. AJUSTAR STOCK ("entrada de 50 unidades del producto X",
     // "ajusta el stock del producto Y, salida de 10", "transfiere 20
     // unidades del producto Z al almacén 2") ═══
-    const AJUSTAR_STOCK_VERB = /\b(?:ajusta|ajustar|entrada|ingreso|salida|egreso|transfiere|transferir|mueve|mover|agrega\s+stock|quita\s+stock|dar\s+de\s+alta|dar\s+de\s+baja)\b/i
+    const AJUSTAR_STOCK_VERB = /\b(?:ajusta|ajustar|entrada|ingreso|salida|egreso|transfiere|transferir|mueve|mover|agrega\s+stock|quita\s+stock|dar\s+de\s+alta|dar\s+de\s+baja|saca|sacar|retira|retirar)\b/i
     const UNIDADES_SIGNAL = /\b(?:unidades?|uds?|piezas?|pzs?|kg|lt|litros?)\b/i
     if (INVENTARIO_ENTITY.test(message) && AJUSTAR_STOCK_VERB.test(message) && (UNIDADES_SIGNAL.test(message) || /\b\d+\b/.test(message))) {
       const producto = this.extractProductoDe(message)
@@ -2221,6 +2253,32 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       const categoria = this.extractCategoriaDe(message)
       if (categoria) extracted.categoria = categoria
       return { intent: 'buscar_catalogo', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 27. ENVIAR MENSAJE ("envía un email a maria@empresa.com", "mándale un
+    // whatsapp a Juan") — se evalúa AL FINAL para que ningún intent más
+    // específico (cotización, factura, tarea) pierda el turno: si una rama
+    // anterior ya reconoció el mensaje, esta no se alcanza. Exige verbo de
+    // envío y un canal explícito (o un email en el texto), de modo que
+    // "envía un briefing de ventas" o "agrega pendiente: enviar documento"
+    // sigan su camino normal. ═══
+    // "mándale"/"mándame" llevan tilde en la raíz del imperativo.
+    const ENVIAR_MENSAJE_VERB = /\b(?:env[ií]a(?:le|r)?|enviar|m[aá]nda(?:r|le|me)?|remite|remitir)\b/i
+    const CANAL_MENSAJE = /\b(?:email|correo|mail|whatsapp|wsp|mensaje|sms|telegram)\b/i
+    if (ENVIAR_MENSAJE_VERB.test(message) && (CANAL_MENSAJE.test(message) || !!email)) {
+      if (/\b(?:whatsapp|wsp|sms)\b/i.test(message)) extracted.canal = 'whatsapp'
+      else if (/\b(?:email|correo|mail)\b/i.test(message)) extracted.canal = 'email'
+      // Destinatario con forma de nombre propio (sensible a mayúsculas): no
+      // captura "agradecer" ni el propio email en minúsculas.
+      const destinatario = message.match(/\b(?:a|para)\s+([A-ZÁÉÍÓÚÑÜ][a-záéíóúñü]+(?:\s+[A-ZÁÉÍÓÚÑÜ][a-záéíóúñü]+)?)/)
+      if (destinatario) extracted.nombre = destinatario[1]
+      // "mándale un whatsapp a Juan" → el destinatario va tras el canal,
+      // no inmediatamente detrás del verbo.
+      if (!extracted.nombre) {
+        const trasCanal = message.match(/(?:whatsapp|wsp|sms|mensaje|correo|email|mail)\s+(?:a|para)\s+([A-ZÁÉÍÓÚÑÜ][a-záéíóúñü]+(?:\s+[A-ZÁÉÍÓÚÑÜ][a-záéíóúñü]+)?)/i)
+        if (trasCanal) extracted.nombre = trasCanal[1]
+      }
+      return { intent: 'enviar_mensaje', confidence: 0.85, extractedParams: extracted }
     }
 
     return null
