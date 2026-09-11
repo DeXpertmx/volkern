@@ -104,7 +104,8 @@ describe('buildContextoPlantilla', () => {
 describe('dispararComunicacionPorEvento', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockSendWhatsApp.mockResolvedValue({ ok: true });
+    // sendWhatsAppMessage devuelve { success, messageId } (no lanza).
+    mockSendWhatsApp.mockResolvedValue({ success: true, messageId: 'mid-1' });
   });
 
   it('no envía si no hay plantillas activas para el evento', async () => {
@@ -134,7 +135,26 @@ describe('dispararComunicacionPorEvento', () => {
     });
     expect(res).toHaveLength(1);
     expect(res[0].ok).toBe(true);
-    expect(mockSendWhatsApp).toHaveBeenCalledWith('+52 998 555 0102', 'Hola Ana Torres', 't1', false);
+    // El cuarto argumento habilita el respaldo con el número oficial de la
+    // plataforma cuando el tenant no tiene WhatsApp propio conectado.
+    expect(mockSendWhatsApp).toHaveBeenCalledWith('+52 998 555 0102', 'Hola Ana Torres', 't1', true);
+  });
+
+  it('reporta fallo real cuando WhatsApp no acepta el envío (no miente con éxito)', async () => {
+    // sendWhatsAppMessage no lanza: devuelve { success: false, error }.
+    mockSendWhatsApp.mockResolvedValue({ success: false, error: 'Error 403: instancia no conectada' });
+    prisma.hospitalityCommunicationTemplate.findMany.mockResolvedValue([
+      { id: 'ct9', tenantId: 't1', evento: 'confirmacion', canal: 'whatsapp', asunto: null, contenido: 'Hola {{nombre}}', activo: true },
+    ]);
+
+    const res = await dispararComunicacionPorEvento({
+      tenantId: 't1',
+      evento: 'confirmacion',
+      reserva: { id: 'r9', guestData: { nombre: 'Ana', telefono: '+52 1' } },
+    });
+
+    expect(res[0].ok).toBe(false);
+    expect(res[0].error).toContain('instancia no conectada');
   });
 
   it('no intenta enviar si el huésped no tiene destinatario para el canal', async () => {
