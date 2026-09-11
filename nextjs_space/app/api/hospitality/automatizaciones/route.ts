@@ -74,7 +74,7 @@ export async function GET(req: NextRequest) {
         logs: {
           orderBy: { executedAt: 'desc' },
           take: 5,
-          select: { id: true, entityId: true, status: true, error: true, executedAt: true },
+          select: { id: true, entityId: true, status: true, error: true, result: true, executedAt: true },
         },
         _count: { select: { logs: true } },
       },
