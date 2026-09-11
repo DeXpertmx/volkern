@@ -3,6 +3,8 @@ import {
   unitOccupiedOnDay,
   unitAvailability,
   availabilityByRoomCode,
+  unitBlockedOnDay,
+  unitUnavailableOnDay,
 } from '../lib/hospitality/availability';
 import {
   buildInventoryUpdates,
@@ -35,6 +37,45 @@ describe('unitOccupiedOnDay (regla §8: checkout no ocupa su día)', () => {
 
   it('ignora canceladas', () => {
     expect(unitOccupiedOnDay('u1', day('2026-09-12'), [{ ...SPAN, estado: 'cancelled' }])).toBe(false);
+  });
+  it('aplica bloqueos manuales con intervalo inicio inclusivo y fin exclusivo', () => {
+    const block = {
+      unitId: 'u1',
+      fechaInicio: day('2026-09-10'),
+      fechaFin: day('2026-09-12'),
+      estado: 'activo',
+    };
+
+    expect(unitBlockedOnDay('u1', day('2026-09-10'), [block])).toBe(true);
+    expect(unitBlockedOnDay('u1', day('2026-09-11'), [block])).toBe(true);
+    expect(unitBlockedOnDay('u1', day('2026-09-12'), [block])).toBe(false);
+    expect(unitUnavailableOnDay('u1', day('2026-09-11'), [], [block])).toBe(true);
+  });
+
+  it('ignora bloqueos cancelados o de otra unidad', () => {
+    const block = {
+      unitId: 'u1',
+      fechaInicio: day('2026-09-10'),
+      fechaFin: day('2026-09-12'),
+      estado: 'cancelado',
+    };
+    expect(unitBlockedOnDay('u1', day('2026-09-11'), [block])).toBe(false);
+    expect(unitBlockedOnDay('u2', day('2026-09-11'), [{ ...block, estado: 'activo' }])).toBe(false);
+  });
+
+  it('resta disponibilidad agregada por roomCode cuando una unidad está bloqueada', () => {
+    const units = [
+      { id: 'u1', propertyId: 'p1', roomCode: 'suite', estado: 'available' },
+      { id: 'u2', propertyId: 'p1', roomCode: 'suite', estado: 'available' },
+    ];
+    const blocks = [{
+      unitId: 'u1',
+      fechaInicio: day('2026-09-10'),
+      fechaFin: day('2026-09-11'),
+      estado: 'activo',
+    }];
+    const out = availabilityByRoomCode(units, day('2026-09-10'), day('2026-09-11'), [], blocks);
+    expect(out[0].rooms).toEqual([{ roomCode: 'suite', available: 1 }]);
   });
 });
 

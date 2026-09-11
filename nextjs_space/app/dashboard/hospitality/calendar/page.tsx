@@ -5,6 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import {
+  colorTipoBloqueo,
+  etiquetaTipoBloqueo,
+  normalizarTipoBloqueo,
+  PRESENTACION_BLOQUEO,
+  TIPOS_BLOQUEO,
+  type TipoBloqueo,
+} from '@/lib/hospitality/block-types';
+import {
   Building2,
   ChevronLeft,
   ChevronRight,
@@ -26,6 +34,7 @@ import {
   AlertTriangle,
   Plus,
   Trash2,
+  Ban,
 } from 'lucide-react';
 import {
   buildDays,
@@ -46,6 +55,17 @@ import {
 interface Property {
   id: string;
   nombre: string;
+}
+
+interface ManualBlock {
+  id: string;
+  unitId: string;
+  fechaInicio: string;
+  fechaFin: string;
+  tipo: string;
+  motivo: string | null;
+  estado: string;
+  unit?: { id: string; nombre: string; codigo: string | null; propertyId: string };
 }
 
 interface RawReservation {
@@ -76,6 +96,7 @@ export default function HospitalityCalendar() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [units, setUnits] = useState<CalendarUnit[]>([]);
   const [reservations, setReservations] = useState<CalendarReservation[]>([]);
+  const [blocks, setBlocks] = useState<ManualBlock[]>([]);
   const [view, setView] = useState<'planning' | 'mes' | 'operaciones'>('planning');
   const [selectedProperty, setSelectedProperty] = useState<string>('all');
   const [rangeStart, setRangeStart] = useState<Date>(() => currentWeekRange().start);
@@ -92,6 +113,16 @@ export default function HospitalityCalendar() {
   } | null>(null);
   const [taskFields, setTaskFields] = useState({ incidencia: '', notas: '', prioridad: '' });
   const [taskSaving, setTaskSaving] = useState(false);
+  const [blockForm, setBlockForm] = useState<{
+    open: boolean;
+    unitId: string;
+    unitNombre: string;
+    fechaInicio: string;
+    fechaFin: string;
+    tipo: TipoBloqueo;
+    motivo: string;
+  } | null>(null);
+  const [blockSaving, setBlockSaving] = useState(false);
 
   const rangeEnd = useMemo(() => new Date(rangeStart.getTime() + 6 * 24 * 60 * 60 * 1000), [rangeStart]);
 
@@ -119,11 +150,30 @@ export default function HospitalityCalendar() {
     }
   }, []);
 
+  const loadBlocks = useCallback(async () => {
+    try {
+      const params = new URLSearchParams({
+        from: toIsoDate(rangeStart),
+        to: toIsoDate(new Date(rangeStart.getTime() + 8 * 24 * 60 * 60 * 1000)),
+      });
+      if (selectedProperty !== 'all') params.set('propertyId', selectedProperty);
+      const res = await fetch(`/api/hospitality/blocks?${params.toString()}`);
+      if (!res.ok) {
+        toast.error('Error al cargar bloqueos');
+        return;
+      }
+      const data = await res.json();
+      setBlocks(data.blocks || []);
+    } catch {
+      toast.error('Error al cargar bloqueos');
+    }
+  }, [rangeStart, selectedProperty]);
+
   const loadReservations = useCallback(async () => {
     try {
       const params = new URLSearchParams({
         from: toIsoDate(rangeStart),
-        to: toIsoDate(new Date(rangeStart.getTime() + 8 * 24 * 60 * 60 * 1000)), // margen para estancias largas
+        to: toIsoDate(new Date(rangeStart.getTime() + 8 * 24 * 60 * 60 * 1000)),
       });
       if (selectedProperty !== 'all') params.set('propertyId', selectedProperty);
 
@@ -163,6 +213,7 @@ export default function HospitalityCalendar() {
     const boot = async () => {
       await loadBase();
       await loadReservations();
+      await loadBlocks();
       setLoading(false);
     };
     boot();
@@ -172,6 +223,10 @@ export default function HospitalityCalendar() {
   useEffect(() => {
     loadReservations();
   }, [loadReservations]);
+
+  useEffect(() => {
+    loadBlocks();
+  }, [loadBlocks]);
 
   const days: CalendarDay[] = useMemo(() => buildDays(rangeStart, rangeEnd), [rangeStart, rangeEnd]);
   const layout = useMemo(() => layoutReservations(reservations, days), [reservations, days]);
@@ -246,6 +301,67 @@ export default function HospitalityCalendar() {
     });
   };
 
+  const openBlockForm = (unit: CalendarUnit) => {
+    const inicio = toIsoDate(rangeStart);
+    const fin = toIsoDate(new Date(rangeStart.getTime() + 2 * 24 * 60 * 60 * 1000));
+    setBlockForm({
+      open: true,
+      unitId: unit.id,
+      unitNombre: unit.nombre,
+      fechaInicio: inicio,
+      fechaFin: fin,
+      tipo: normalizarTipoBloqueo('propietario'),
+      motivo: '',
+    });
+  };
+
+  const createBlock = async () => {
+    if (!blockForm) return;
+    if (!blockForm.fechaInicio || !blockForm.fechaFin) {
+      toast.error('Indica las fechas del bloqueo');
+      return;
+    }
+    if (blockForm.fechaFin <= blockForm.fechaInicio) {
+      toast.error('La fecha fin debe ser posterior a la fecha inicio');
+      return;
+    }
+    setBlockSaving(true);
+    try {
+      const res = await fetch('/api/hospitality/blocks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          unitId: blockForm.unitId,
+          fechaInicio: blockForm.fechaInicio,
+          fechaFin: blockForm.fechaFin,
+          tipo: blockForm.tipo,
+          motivo: blockForm.motivo || undefined,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'No se pudo crear el bloqueo');
+      toast.success('Bloqueo creado y disponibilidad sincronizada');
+      setBlockForm(null);
+      await loadBlocks();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Error al crear bloqueo');
+    } finally {
+      setBlockSaving(false);
+    }
+  };
+
+  const deleteBlock = async (block: ManualBlock) => {
+    if (!window.confirm(`¿Eliminar el bloqueo de ${block.unit?.nombre || 'la unidad'}?`)) return;
+    try {
+      const res = await fetch(`/api/hospitality/blocks/${block.id}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'No se pudo eliminar el bloqueo');
+      toast.success('Bloqueo eliminado y disponibilidad sincronizada');
+      await loadBlocks();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Error al eliminar bloqueo');
+    }
+  };
   const createTaskFromReservation = async () => {
     if (!taskForm) return;
     if (!taskForm.unitId) {
@@ -488,7 +604,7 @@ export default function HospitalityCalendar() {
               </div>
             ) : (
               visibleUnits.map((unit) => {
-                const blocks = layout.get(unit.id) || [];
+                const layoutBlocks = layout.get(unit.id) || [];
                 return (
                   <div
                     key={unit.id}
@@ -507,7 +623,17 @@ export default function HospitalityCalendar() {
                             <p className="text-[11px] text-muted-foreground truncate">{unit.codigo}</p>
                           )}
                         </div>
-                        <span className="text-xs text-muted-foreground shrink-0">{blocks.length} res.</span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className="text-xs text-muted-foreground">{layoutBlocks.length} res.</span>
+                          <button
+                            type="button"
+                            title="Bloquear fechas de esta unidad"
+                            onClick={() => openBlockForm(unit)}
+                            className="rounded p-1 text-muted-foreground hover:bg-amber-100 hover:text-amber-700"
+                          >
+                            <Ban className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
                       {days.map((d) => (
                         <div
@@ -528,7 +654,7 @@ export default function HospitalityCalendar() {
                         gridTemplateColumns: `repeat(${days.length}, minmax(110px, 1fr))`,
                       }}
                     >
-                      {blocks.map((block, i) => {
+                      {layoutBlocks.map((block, i) => {
                         const style = channelStyle(block.reservation.channel);
                         const isCancelled = block.reservation.estado === 'cancelled';
                         return (
@@ -553,6 +679,42 @@ export default function HospitalityCalendar() {
                               <span className="truncate">{block.reservation.guestName}</span>
                               <span className="opacity-80 shrink-0">· {block.totalNights} n</span>
                               {block.continuesRight && <span className="text-[10px]">›</span>}
+                            </div>
+                          </button>
+                        );
+                      })}
+                      {blocks.filter((b) => b.unitId === unit.id && b.estado === 'activo').map((block) => {
+                        // El bloqueo usa [fechaInicio, fechaFin): el checkout no se bloquea.
+                        const first = days.findIndex((d) => d.key >= block.fechaInicio);
+                        const end = days.findIndex((d) => d.key >= block.fechaFin);
+                        const startCol = first < 0 ? days.length : first;
+                        const endCol = end < 0 ? days.length : end;
+                        if (endCol <= 0 || startCol >= days.length || endCol <= startCol) return null;
+                        return (
+                          <button
+                            key={`block-${block.id}`}
+                            type="button"
+                            onClick={() => deleteBlock(block)}
+                            className="z-20 rounded-md border px-2 py-1 text-left text-[11px] shadow-sm hover:brightness-95"
+                            style={{
+                              gridColumn: `${startCol + 1} / span ${Math.max(1, endCol - startCol)}`,
+                              gridRow: 1,
+                              marginLeft: 2,
+                              marginRight: 2,
+                              marginTop: 5,
+                              marginBottom: 5,
+                              borderColor: colorTipoBloqueo(block.tipo),
+                              backgroundColor: `${colorTipoBloqueo(block.tipo)}1f`,
+                              color: colorTipoBloqueo(block.tipo),
+                            }}
+                            title={`Bloqueo: ${etiquetaTipoBloqueo(block.tipo)} · pulsa para eliminar`}
+                          >
+                            <div className="flex items-center gap-1 truncate font-medium">
+                              <Ban className="h-3 w-3 shrink-0" />
+                              <span className="truncate">
+                                {etiquetaTipoBloqueo(block.tipo)}
+                                {block.motivo ? ` · ${block.motivo}` : ''}
+                              </span>
                             </div>
                           </button>
                         );
@@ -890,6 +1052,91 @@ export default function HospitalityCalendar() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {blockForm?.open && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="block-dialog-title"
+          onClick={() => setBlockForm(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-xl bg-white p-5 shadow-2xl dark:bg-slate-950"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h2 id="block-dialog-title" className="flex items-center gap-2 text-lg font-semibold">
+                  <Ban className="h-5 w-5 text-amber-600" /> Bloquear unidad
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">{blockForm.unitNombre}</p>
+              </div>
+              <button type="button" onClick={() => setBlockForm(null)} className="rounded-lg p-1.5 hover:bg-muted" aria-label="Cerrar">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="text-sm">
+                <span className="font-medium">Desde</span>
+                <input
+                  type="date"
+                  value={blockForm.fechaInicio}
+                  onChange={(event) => setBlockForm((form) => form ? { ...form, fechaInicio: event.target.value } : form)}
+                  className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm"
+                />
+              </label>
+              <label className="text-sm">
+                <span className="font-medium">Hasta (sin incluir)</span>
+                <input
+                  type="date"
+                  value={blockForm.fechaFin}
+                  onChange={(event) => setBlockForm((form) => form ? { ...form, fechaFin: event.target.value } : form)}
+                  className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm"
+                />
+              </label>
+            </div>
+            <label className="mt-3 block text-sm">
+              <span className="font-medium">Tipo de bloqueo</span>
+              <select
+                value={blockForm.tipo}
+                onChange={(event) =>
+                  setBlockForm((form) =>
+                    form ? { ...form, tipo: event.target.value as TipoBloqueo } : form
+                  )
+                }
+                className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm"
+              >
+                {TIPOS_BLOQUEO.map((tipo) => (
+                  <option key={tipo} value={tipo}>
+                    {PRESENTACION_BLOQUEO[tipo].etiqueta}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="mt-3 block text-sm">
+              <span className="font-medium">Motivo (opcional)</span>
+              <input
+                value={blockForm.motivo}
+                onChange={(event) => setBlockForm((form) => form ? { ...form, motivo: event.target.value } : form)}
+                placeholder="Mantenimiento, uso del propietario..."
+                maxLength={500}
+                className="mt-1 h-9 w-full rounded-md border bg-background px-3 text-sm"
+              />
+            </label>
+            <p className="mt-3 text-xs text-muted-foreground">
+              El intervalo no estará disponible para reservas y se enviará al canal conectado.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setBlockForm(null)}>Cancelar</Button>
+              <Button type="button" onClick={createBlock} disabled={blockSaving}>
+                {blockSaving && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+                Crear bloqueo
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>
