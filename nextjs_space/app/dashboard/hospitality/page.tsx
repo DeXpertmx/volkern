@@ -112,6 +112,12 @@ export default function HospitalityPage() {
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
 
+  // Pestaña inicial por query (?tab=unidades) para poder enlazar desde el menú.
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('tab');
+    if (t === 'propiedades' || t === 'unidades') setTab(t);
+  }, []);
+
   const [properties, setProperties] = useState<Property[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
 
@@ -346,7 +352,7 @@ export default function HospitalityPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div id="propiedades" className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-2">
