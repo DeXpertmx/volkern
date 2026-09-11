@@ -163,6 +163,16 @@ export function initCronJobs() {
 
   console.log('✅ [Scheduler] Hospitality reconciliación programada (diaria 04:15)');
 
+  // 16c. Hospitality: solicitud de reseña post-salida (§21).
+  //     24h después del check-out, con ventana de recuperación de 72h; guard
+  //     por reserva para no pedir dos veces la misma reseña.
+  cron.schedule('30 10 * * *', runCronJob('hospitality-review-request', 'Hospitality Solicitud de Reseña', '30 10 * * *', async () => {
+    const { runHospitalityReviewRequestScan } = await import('./hospitality-review-request');
+    await runHospitalityReviewRequestScan(24, 72);
+  }));
+
+  console.log('✅ [Scheduler] Hospitality solicitud de reseña programada (diaria 10:30)');
+
   // 17. Automatizaciones: cerrar ejecuciones colgadas.
   // El motor crea el log en `queued` y el worker lo cierra con el resultado
   // real. Si el worker está caído, el log quedaría eternamente "en curso":
