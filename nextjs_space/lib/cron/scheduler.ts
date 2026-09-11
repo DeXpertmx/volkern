@@ -152,6 +152,17 @@ export function initCronJobs() {
 
   console.log('✅ [Scheduler] Hospitality check-in due programado (cada hora)');
 
+  // 16b. Hospitality: reconciliación diaria de reservas contra conectividad (§14).
+  // Los webhooks no son la única fuente de verdad: detecta reservas faltantes,
+  // modificaciones y cancelaciones no aplicadas. Conservador: nunca cancela
+  // reservas internas ausentes, solo las registra como divergencia.
+  cron.schedule('15 4 * * *', runCronJob('hospitality-reconcile', 'Hospitality Reconciliación (diaria)', '15 4 * * *', async () => {
+    const { runHospitalityReconcileScan } = await import('./hospitality-reconcile');
+    await runHospitalityReconcileScan();
+  }));
+
+  console.log('✅ [Scheduler] Hospitality reconciliación programada (diaria 04:15)');
+
   // 17. Automatizaciones: cerrar ejecuciones colgadas.
   // El motor crea el log en `queued` y el worker lo cierra con el resultado
   // real. Si el worker está caído, el log quedaría eternamente "en curso":
