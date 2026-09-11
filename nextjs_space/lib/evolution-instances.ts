@@ -564,7 +564,12 @@ export async function ensureChatwootInboxForInstance(
   if (!chatwootUrl || !chatwootToken) {
     return { success: false, error: 'El centro de comunicaciones no está configurado en el servidor.' }
   }
-  if (!EVOLUTION_API_KEY) {
+  // Se leen en tiempo de llamada (como las de Chatwoot): en un proceso de
+  // larga vida la config puede cambiar sin reinicio, y así la función no
+  // depende del entorno en el que se importó el módulo.
+  const evolutionApiKey = process.env.EVOLUTION_API_KEY || EVOLUTION_API_KEY
+  const evolutionApiUrl = process.env.EVOLUTION_API_URL || EVOLUTION_API_URL
+  if (!evolutionApiKey) {
     return { success: false, error: 'El servicio de WhatsApp no está configurado en el servidor.' }
   }
 
@@ -634,7 +639,7 @@ export async function ensureChatwootInboxForInstance(
           provider: 'evolution',
           instanceName,
           phoneNumber: tenantPhone || tenantConfig.phoneNumber || '',
-          apiUrl: EVOLUTION_API_URL,
+          apiUrl: evolutionApiUrl,
           webhookUrl: buildEvolutionWebhookUrl(instanceName),
         }
         await prisma.channel.update({

@@ -67,7 +67,17 @@ describe('circuit breaker de la cadena LLM', () => {
 
   describe('isDeepSeekEnabled (interruptor DEEPSEEK_DISABLED)', () => {
     const original = process.env.DEEPSEEK_DISABLED;
+    const originalKey = process.env.DEEPSEEK_API_KEY;
+
+    // La función solo puede estar habilitada si hay clave: en CI no existe
+    // .env, así que se fija aquí una para aislar el interruptor que se prueba.
+    beforeEach(() => {
+      process.env.DEEPSEEK_API_KEY = 'test-deepseek-key';
+    });
+
     afterEach(() => {
+      if (originalKey === undefined) delete process.env.DEEPSEEK_API_KEY;
+      else process.env.DEEPSEEK_API_KEY = originalKey;
       if (original === undefined) delete process.env.DEEPSEEK_DISABLED;
       else process.env.DEEPSEEK_DISABLED = original;
     });
@@ -75,6 +85,12 @@ describe('circuit breaker de la cadena LLM', () => {
     it('está habilitado por defecto (sin la variable)', () => {
       delete process.env.DEEPSEEK_DISABLED;
       expect(isDeepSeekEnabled()).toBe(true);
+    });
+
+    it('sin clave queda deshabilitado aunque el interruptor no esté puesto', () => {
+      delete process.env.DEEPSEEK_DISABLED;
+      delete process.env.DEEPSEEK_API_KEY;
+      expect(isDeepSeekEnabled()).toBe(false);
     });
 
     it('se desactiva con DEEPSEEK_DISABLED=1', () => {
