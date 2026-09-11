@@ -503,6 +503,9 @@ model Tenant {
   hospitalityCleaningTasks      HospitalityCleaningTask[]         @relation("HospitalityCleaningTasks")
   hospitalityMaintenanceTasks   HospitalityMaintenanceTask[]      @relation("HospitalityMaintenanceTasks")
   hospitalityUnitBlocks          HospitalityUnitBlock[]            @relation("HospitalityUnitBlocks")
+  hospitalityReservationItems   HospitalityReservationItem[]     @relation("HospitalityReservationItems")
+  hospitalityPayments           HospitalityPayment[]             @relation("HospitalityPayments")
+  hospitalityPaymentAccounts    HospitalityPaymentAccount[]      @relation("HospitalityPaymentAccounts")
   hospitalitySyncLogs           HospitalitySyncLog[]              @relation("HospitalitySyncLogs")
   hospitalityCommunicationTemplates HospitalityCommunicationTemplate[] @relation("HospitalityCommunicationTemplates")
   automationActionExecutions    AutomationActionExecution[]        @relation("AutomationActionExecutions")
@@ -8096,6 +8099,8 @@ model HospitalityProperty {
   mappings       ConnectivityMapping[]
   reservations   HospitalityReservation[]
   syncLogs       HospitalitySyncLog[]
+  reservationItems HospitalityReservationItem[]
+  payments       HospitalityPayment[]
 
   @@index([tenantId])
   @@map("hospitality_properties")
@@ -8125,6 +8130,8 @@ model HospitalityUnit {
   cleaningTasks HospitalityCleaningTask[]
   maintenanceTasks HospitalityMaintenanceTask[]
   manualBlocks HospitalityUnitBlock[]
+  reservationItems HospitalityReservationItem[]
+  payments       HospitalityPayment[]
 
   @@index([tenantId])
   @@index([propertyId])
@@ -8229,6 +8236,8 @@ model HospitalityReservation {
   contact               Contact?             @relation("HospitalityReservationContact", fields: [contactId], references: [id], onDelete: SetNull)
   webhookEvents         HospitalityWebhookEvent[]
   cleaningTasks         HospitalityCleaningTask[]
+  items                 HospitalityReservationItem[]
+  payments              HospitalityPayment[]
 
   @@unique([tenantId, channel, externalBookingId])
   @@index([tenantId])
@@ -8363,6 +8372,89 @@ model HospitalityUnitBlock {
   @@index([fechaInicio, fechaFin])
   @@index([estado])
   @@map("hospitality_unit_blocks")
+}
+
+// ─── Finanzas de la reserva (FASE 3: Booking Engine + Payments) ──────────────
+// El desglose vive en las líneas; la reserva conserva el total externo recibido
+// de la OTA para poder conciliar sin perder el dato de origen.
+
+// Línea de desglose de una reserva: alojamiento, limpieza, extras u otro.
+// El ingreso bruto es la suma de las líneas activas de la reserva.
+model HospitalityReservationItem {
+  id              String   @id @default(cuid())
+  tenantId        String
+  reservationId   String
+  propertyId      String
+  unitId          String?
+  tipo            String   @default("alojamiento") // alojamiento|limpieza|extra|otro
+  concepto        String
+  cantidad        Float    @default(1)
+  importeUnitario Float
+  importeTotal    Float
+  moneda          String   @default("MXN")
+  fechaCreacion   DateTime @default(now())
+  fechaEdicion    DateTime @updatedAt
+  tenant          Tenant                 @relation("HospitalityReservationItems", fields: [tenantId], references: [id], onDelete: Cascade)
+  reservation     HospitalityReservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  property        HospitalityProperty    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  unit            HospitalityUnit?       @relation(fields: [unitId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([reservationId])
+  @@index([propertyId])
+  @@index([tipo])
+  @@map("hospitality_reservation_items")
+}
+
+// Pago (o intento de pago) de una reserva. Los pagos parciales son filas
+// independientes: el estado de cobro se deriva de la suma, nunca se adivina.
+model HospitalityPayment {
+  id                    String    @id @default(cuid())
+  tenantId              String
+  reservationId         String
+  propertyId            String
+  unitId                String?
+  importe               Float
+  moneda                String    @default("MXN")
+  metodo                String    @default("manual") // stripe|transferencia|efectivo|manual|otro
+  estado                String    @default("pagado") // pendiente|pagado|parcial|reembolsado|fallido
+  referenciaExterna     String?
+  stripePaymentIntentId String?
+  fechaPago             DateTime?
+  notas                 String?
+  fechaCreacion         DateTime  @default(now())
+  fechaEdicion          DateTime  @updatedAt
+  tenant                Tenant                 @relation("HospitalityPayments", fields: [tenantId], references: [id], onDelete: Cascade)
+  reservation           HospitalityReservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  property              HospitalityProperty    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  unit                  HospitalityUnit?       @relation(fields: [unitId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([reservationId])
+  @@index([propertyId])
+  @@index([estado])
+  @@map("hospitality_payments")
+}
+
+// Cuenta de cobro del tenant (Stripe Connect). El dinero de una reserva directa
+// pertenece al tenant, no a Volkern: nunca se cobra contra una cuenta única.
+model HospitalityPaymentAccount {
+  id              String   @id @default(cuid())
+  tenantId        String
+  provider        String   @default("stripe")
+  stripeAccountId String?
+  estado          String   @default("sin_conectar") // sin_conectar|pendiente|activo|restringido
+  chargesEnabled  Boolean  @default(false)
+  payoutsEnabled  Boolean  @default(false)
+  moneda          String   @default("MXN")
+  pais            String?
+  fechaCreacion   DateTime @default(now())
+  fechaEdicion    DateTime @updatedAt
+  tenant          Tenant   @relation("HospitalityPaymentAccounts", fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, provider])
+  @@index([tenantId])
+  @@map("hospitality_payment_accounts")
 }
 
 // Plantilla de comunicación automática para Hospitality (plan maestro §21).
