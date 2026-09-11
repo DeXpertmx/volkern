@@ -172,6 +172,7 @@ export async function dispatchConnectivityPush(
             id: true,
             codigo: true,
             tarifa: true,
+            activo: true,
             minNoches: true,
             maxNoches: true,
             checkInDias: true,
