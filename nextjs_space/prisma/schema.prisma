@@ -504,6 +504,7 @@ model Tenant {
   hospitalityMaintenanceTasks   HospitalityMaintenanceTask[]      @relation("HospitalityMaintenanceTasks")
   hospitalitySyncLogs           HospitalitySyncLog[]              @relation("HospitalitySyncLogs")
   hospitalityCommunicationTemplates HospitalityCommunicationTemplate[] @relation("HospitalityCommunicationTemplates")
+  automationActionExecutions    AutomationActionExecution[]        @relation("AutomationActionExecutions")
 }
 
 model AttendanceRules {
@@ -4165,6 +4166,37 @@ model AutomationLog {
   @@index([ruleId])
   @@index([tenantId])
   @@map("marketing_automation_logs")
+}
+
+// Registro de idempotencia de acciones de automatización ya ejecutadas.
+//
+// Un mismo evento puede llegar más de una vez (webhook reenviado, regla
+// re-evaluada, job reintentado). Sin este registro la acción se volvía a
+// ejecutar y se duplicaban tareas, limpiezas o mensajes al huésped.
+//
+// La clave es única por tenant y se compone de acción + ámbito (reserva,
+// tarea o unidad) + variante de la acción.
+model AutomationActionExecution {
+  id         String   @id @default(cuid())
+  tenantId   String
+  key        String
+  actionType String
+  scopeType  String?
+  scopeId    String?
+  entityId   String?
+  // Job de la cola que reclamó la acción: permite que un reintento del
+  // mismo job recupere su reclamación (si el worker murió a mitad) sin
+  // dejar el trabajo sin hacer.
+  jobId      String?
+  estado     String   @default("done") // claimed (reclamada, en ejecución) | done
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  tenant     Tenant   @relation("AutomationActionExecutions", fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
+  @@index([estado])
+  @@map("automation_action_executions")
 }
 
 model AutomationRuleVersion {
