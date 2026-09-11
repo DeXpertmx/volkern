@@ -389,6 +389,44 @@ export default function HospitalityOnboardingPage() {
   const rateplansDe = (roomCode: string) =>
     roomsDisponibles.find((r) => r.roomCode === roomCode)?.rateplans || [];
 
+  // Formulario del paso 1. Se usa tanto cuando ya hay una propiedad
+  // seleccionada como cuando todavía no existe ninguna: el wizard debe poder
+  // crear la PRIMERA propiedad o no sirve para empezar de cero.
+  const formularioPropiedad = (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <div className="sm:col-span-2">
+        <Label>Nombre de la propiedad *</Label>
+        <Input
+          value={nuevaPropiedad.nombre}
+          onChange={(e) => setNuevaPropiedad({ ...nuevaPropiedad, nombre: e.target.value })}
+          placeholder="Apartamentos Costa Azul"
+        />
+      </div>
+      <div>
+        <Label>Ciudad</Label>
+        <Input
+          value={nuevaPropiedad.ciudad}
+          onChange={(e) => setNuevaPropiedad({ ...nuevaPropiedad, ciudad: e.target.value })}
+          placeholder="Cancún"
+        />
+      </div>
+      <div>
+        <Label>País</Label>
+        <Input
+          value={nuevaPropiedad.pais}
+          onChange={(e) => setNuevaPropiedad({ ...nuevaPropiedad, pais: e.target.value })}
+          placeholder="México"
+        />
+      </div>
+      <div className="sm:col-span-2">
+        <Button onClick={crearPropiedad} disabled={busy !== null}>
+          {busy === 'propiedad' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+          Crear propiedad y continuar
+        </Button>
+      </div>
+    </div>
+  );
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24 text-slate-500">
@@ -449,12 +487,24 @@ export default function HospitalityOnboardingPage() {
         </CardContent>
       </Card>
 
-      {propiedades.length === 0 && (
-        <Alert>
-          <AlertDescription>
-            Todavía no hay propiedades. Empieza creando la primera en el paso 1.
-          </AlertDescription>
-        </Alert>
+      {/* Sin propiedad seleccionada todavía: el paso 1 es la puerta de entrada. */}
+      {!snapshot && (
+        <PasoCard
+          paso={{
+            clave: 'propiedad',
+            orden: 1,
+            titulo: 'Crear la propiedad',
+            descripcion: 'Datos de la propiedad que se va a distribuir en los canales.',
+            estado: 'pendiente',
+            detalle:
+              propiedades.length === 0
+                ? 'Todavía no hay propiedades: crea la primera para empezar.'
+                : 'Elige una propiedad arriba o crea una nueva.',
+          }}
+          icon={<Building2 className="h-4 w-4" />}
+        >
+          {formularioPropiedad}
+        </PasoCard>
       )}
 
       {snapshot && (
@@ -462,44 +512,19 @@ export default function HospitalityOnboardingPage() {
           {/* ── Paso 1 ── */}
           <PasoCard paso={paso('propiedad')} icon={<Building2 className="h-4 w-4" />}>
             {paso('propiedad')?.estado === 'completado' ? (
-              <p className="text-sm text-slate-600">
-                <strong>{snapshot.propiedad.nombre}</strong>
-                {snapshot.propiedad.ciudad ? ` · ${snapshot.propiedad.ciudad}` : ''}
-                {snapshot.propiedad.pais ? `, ${snapshot.propiedad.pais}` : ''}
-              </p>
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="sm:col-span-2">
-                  <Label>Nombre de la propiedad *</Label>
-                  <Input
-                    value={nuevaPropiedad.nombre}
-                    onChange={(e) => setNuevaPropiedad({ ...nuevaPropiedad, nombre: e.target.value })}
-                    placeholder="Apartamentos Costa Azul"
-                  />
-                </div>
-                <div>
-                  <Label>Ciudad</Label>
-                  <Input
-                    value={nuevaPropiedad.ciudad}
-                    onChange={(e) => setNuevaPropiedad({ ...nuevaPropiedad, ciudad: e.target.value })}
-                    placeholder="Cancún"
-                  />
-                </div>
-                <div>
-                  <Label>País</Label>
-                  <Input
-                    value={nuevaPropiedad.pais}
-                    onChange={(e) => setNuevaPropiedad({ ...nuevaPropiedad, pais: e.target.value })}
-                    placeholder="México"
-                  />
-                </div>
-                <div className="sm:col-span-2">
-                  <Button onClick={crearPropiedad} disabled={busy !== null}>
-                    {busy === 'propiedad' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-                    Crear propiedad y continuar
-                  </Button>
-                </div>
+              <div className="space-y-3">
+                <p className="text-sm text-slate-600">
+                  <strong>{snapshot.propiedad.nombre}</strong>
+                  {snapshot.propiedad.ciudad ? ` · ${snapshot.propiedad.ciudad}` : ''}
+                  {snapshot.propiedad.pais ? `, ${snapshot.propiedad.pais}` : ''}
+                </p>
+                <p className="text-xs text-slate-500">
+                  ¿Necesitas dar de alta otra propiedad? Usa el formulario de abajo.
+                </p>
+                {formularioPropiedad}
               </div>
+            ) : (
+              formularioPropiedad
             )}
           </PasoCard>
 
