@@ -35,7 +35,9 @@ export type SyncOperacion =
   | 'reserva_modificada'
   | 'reserva_cancelada'
   | 'unidad_cambiada'
-  | 'manual';
+  | 'manual'
+  /** Pruebas del onboarding guiado de propiedad (§31). */
+  | 'onboarding';
 
 export interface SyncResult {
   ok: boolean;
@@ -92,12 +94,14 @@ async function recordSyncLog(input: {
  * @param operacion Motivo del push (para auditoría).
  * @param opts.diasHorizonte Cuántos días hacia adelante empujar (default 90).
  * @param opts.skipRates Si solo interesa disponibilidad (p.ej. reserva creada).
+ * @param opts.skipInventory Si solo interesan tarifas y restricciones de tarifa
+ *   (prueba de tarifas del onboarding §31).
  */
 export async function dispatchConnectivityPush(
   tenantId: string,
   propertyId: string | null,
   operacion: SyncOperacion,
-  opts?: { diasHorizonte?: number; skipRates?: boolean }
+  opts?: { diasHorizonte?: number; skipRates?: boolean; skipInventory?: boolean }
 ): Promise<SyncResult> {
   const dias = opts?.diasHorizonte ?? 90;
 
@@ -204,7 +208,7 @@ export async function dispatchConnectivityPush(
 
     // ── Inventory Push: agrupar días consecutivos por roomCode con el mismo
     //    conteo para minimizar bloques (UPSERT por rango).
-    const invUpdates = buildInventoryUpdates(byDay);
+    const invUpdates = opts?.skipInventory ? [] : buildInventoryUpdates(byDay);
     if (invUpdates.length > 0) {
       const result = await pushInventory(hotelCode, invUpdates);
       pushCount += 1;
@@ -229,7 +233,9 @@ export async function dispatchConnectivityPush(
 
     // ── Inventory Restrictions Push (§5): stopSell por tipo de habitación y
     //    restricción de estancia más permisiva entre los planes activos.
-    const invRestrictionUpdates = buildInventoryRestrictions(availabilityUnits, byDay);
+    const invRestrictionUpdates = opts?.skipInventory
+      ? []
+      : buildInventoryRestrictions(availabilityUnits, byDay);
     if (invRestrictionUpdates.length > 0) {
       const result = await pushInventoryRestrictions(hotelCode, invRestrictionUpdates);
       pushCount += 1;

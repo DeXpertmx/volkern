@@ -133,6 +133,10 @@ export async function GET(_req: NextRequest) {
       };
       if (log.tipo === 'reconciliacion') {
         if (!ultimoFetchPorPropiedad.has(pid)) ultimoFetchPorPropiedad.set(pid, base);
+      } else if (log.tipo === 'reservacion_prueba') {
+        // Prueba del onboarding (§31): no es un push a canales, no debe
+        // aparecer como "último push" en la observabilidad.
+        continue;
       } else if (!ultimoPushPorPropiedad.has(pid)) {
         ultimoPushPorPropiedad.set(pid, base);
       }
