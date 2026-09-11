@@ -141,8 +141,23 @@ export async function enviarComunicacion(params: {
       return { ok: true, canal, destinatario }
     }
 
-    // whatsapp (default)
-    await sendWhatsAppMessage(destinatario, contenido, tenantId, false)
+    // WhatsApp. Los mensajes al huésped son transaccionales y no deben
+    // perderse: si el tenant NO ha conectado su propio WhatsApp, se envían
+    // desde el número oficial de la plataforma (misma política que ya usan
+    // las notificaciones). Cuando el tenant conecte el suyo, ese tiene
+    // prioridad dentro de sendWhatsAppMessage y el respaldo no se usa.
+    //
+    // OJO: sendWhatsAppMessage NO lanza: devuelve { success: false, error }.
+    // Ignorar ese resultado reportaba como enviado un mensaje que nunca salió.
+    const res: any = await sendWhatsAppMessage(destinatario, contenido, tenantId, true)
+    if (!res?.success) {
+      return {
+        ok: false,
+        error: res?.error || 'Error enviando WhatsApp (respuesta sin éxito)',
+        canal,
+        destinatario,
+      }
+    }
     return { ok: true, canal: 'whatsapp', destinatario }
   } catch (err: any) {
     console.error('[Hospitality Comunicaciones] Error enviando:', err?.message || err)
