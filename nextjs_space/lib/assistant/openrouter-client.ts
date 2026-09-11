@@ -10,8 +10,12 @@ const DEEPSEEK_BASE_URL = 'https://api.deepseek.com/v1';
  * Se evalúa en tiempo de llamada para poder cambiarlo sin rebuild.
  */
 export function isDeepSeekEnabled(): boolean {
+  // Ambos se leen en tiempo de llamada (igual que el interruptor): así el
+  // resultado no depende del entorno en el que se importó el módulo y se puede
+  // probar sin tocar el proceso real.
+  const apiKey = process.env.DEEPSEEK_API_KEY;
   const disabled = process.env.DEEPSEEK_DISABLED === '1' || process.env.DEEPSEEK_DISABLED === 'true';
-  return !!DEEPSEEK_API_KEY && !disabled;
+  return !!apiKey && !disabled;
 }
 
 // ─── Circuit breaker de la cadena de fallback ────────────────────────────────
