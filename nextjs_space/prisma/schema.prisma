@@ -502,6 +502,7 @@ model Tenant {
   hospitalityWebhookEvents      HospitalityWebhookEvent[]         @relation("HospitalityWebhookEvents")
   hospitalityCleaningTasks      HospitalityCleaningTask[]         @relation("HospitalityCleaningTasks")
   hospitalityMaintenanceTasks   HospitalityMaintenanceTask[]      @relation("HospitalityMaintenanceTasks")
+  hospitalityUnitBlocks          HospitalityUnitBlock[]            @relation("HospitalityUnitBlocks")
   hospitalitySyncLogs           HospitalitySyncLog[]              @relation("HospitalitySyncLogs")
   hospitalityCommunicationTemplates HospitalityCommunicationTemplate[] @relation("HospitalityCommunicationTemplates")
   automationActionExecutions    AutomationActionExecution[]        @relation("AutomationActionExecutions")
@@ -8123,6 +8124,7 @@ model HospitalityUnit {
   reservations  HospitalityReservation[]
   cleaningTasks HospitalityCleaningTask[]
   maintenanceTasks HospitalityMaintenanceTask[]
+  manualBlocks HospitalityUnitBlock[]
 
   @@index([tenantId])
   @@index([propertyId])
@@ -8334,6 +8336,33 @@ model HospitalityMaintenanceTask {
   @@index([unitId])
   @@index([estado])
   @@map("hospitality_maintenance_tasks")
+}
+
+// Bloqueo manual de fechas de una unidad alojativa (§17).
+// Intervalo [fechaInicio, fechaFin): la fecha fin NO bloquea, igual que las
+// reservas, para no tener dos reglas distintas en el inventario.
+// No todo lo que ocupa una unidad es una reserva: el `tipo` distingue uso del
+// propietario, mantenimiento y cierre administrativo. Las reservas (OTA, manual
+// o Booking Engine) NO son bloqueos: son del Reservation Engine.
+model HospitalityUnitBlock {
+  id            String   @id @default(cuid())
+  tenantId      String
+  unitId        String
+  fechaInicio   DateTime
+  fechaFin      DateTime
+  tipo          String   @default("propietario") // propietario|mantenimiento|administrativo
+  motivo        String?
+  estado        String   @default("activo") // activo|cancelado
+  fechaCreacion DateTime @default(now())
+  fechaEdicion  DateTime @updatedAt
+  tenant        Tenant         @relation("HospitalityUnitBlocks", fields: [tenantId], references: [id], onDelete: Cascade)
+  unit          HospitalityUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([unitId])
+  @@index([fechaInicio, fechaFin])
+  @@index([estado])
+  @@map("hospitality_unit_blocks")
 }
 
 // Plantilla de comunicación automática para Hospitality (plan maestro §21).

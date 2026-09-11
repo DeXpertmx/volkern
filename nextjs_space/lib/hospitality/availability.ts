@@ -30,6 +30,13 @@ export interface ActiveReservationSpan {
   estado: string;
 }
 
+export interface ActiveUnitBlockSpan {
+  unitId: string;
+  fechaInicio: Date;
+  fechaFin: Date;
+  estado: string;
+}
+
 /**
  * ¿Una unidad está ocupada en una fecha concreta?
  * Una reserva activa cubre [checkIn, checkOut) — el día de checkout no cuenta.
@@ -51,11 +58,40 @@ export function unitOccupiedOnDay(
  * Disponibilidad diaria de una unidad dentro de un rango [start, end).
  * Devuelve por cada fecha: 1 = libre, 0 = ocupada.
  */
+export function unitBlockedOnDay(
+  unitId: string,
+  day: Date,
+  blocks: ActiveUnitBlockSpan[]
+): boolean {
+  const d = startOfDay(day).getTime();
+  return blocks.some((b) => {
+    if (b.estado !== 'activo' || b.unitId !== unitId) return false;
+    return startOfDay(b.fechaInicio).getTime() <= d && startOfDay(b.fechaFin).getTime() > d;
+  });
+}
+
+/**
+ * Devuelve si la unidad no puede venderse en el día por reserva o bloqueo.
+ */
+export function unitUnavailableOnDay(
+  unitId: string,
+  day: Date,
+  reservations: ActiveReservationSpan[],
+  blocks: ActiveUnitBlockSpan[] = []
+): boolean {
+  return unitOccupiedOnDay(unitId, day, reservations) || unitBlockedOnDay(unitId, day, blocks);
+}
+
+/**
+ * Disponibilidad diaria de una unidad dentro de un rango [start, end).
+ * Devuelve por cada fecha: 1 = libre, 0 = ocupada/bloqueada.
+ */
 export function unitAvailability(
   unit: AvailabilityUnit,
   start: Date,
   end: Date,
-  reservations: ActiveReservationSpan[]
+  reservations: ActiveReservationSpan[],
+  blocks: ActiveUnitBlockSpan[] = []
 ): Array<{ fecha: string; disponible: boolean }> {
   const out: Array<{ fecha: string; disponible: boolean }> = [];
   const cursor = startOfDay(start);
@@ -63,7 +99,7 @@ export function unitAvailability(
   while (cursor.getTime() < last.getTime()) {
     out.push({
       fecha: toIsoDate(cursor),
-      disponible: !unitOccupiedOnDay(unit.id, cursor, reservations),
+      disponible: !unitUnavailableOnDay(unit.id, cursor, reservations, blocks),
     });
     cursor.setDate(cursor.getDate() + 1);
   }
@@ -79,7 +115,8 @@ export function availabilityByRoomCode(
   units: AvailabilityUnit[],
   start: Date,
   end: Date,
-  reservations: ActiveReservationSpan[]
+  reservations: ActiveReservationSpan[],
+  blocks: ActiveUnitBlockSpan[] = []
 ): Array<{ fecha: string; rooms: Array<{ roomCode: string; available: number }> }> {
   const cursor = startOfDay(start);
   const last = startOfDay(end);
@@ -91,9 +128,9 @@ export function availabilityByRoomCode(
       if (!unit.roomCode) continue; // sin mapping externo: no participa
       // Estados que sacan la unidad del inventario vendible
       if (['maintenance', 'out_of_service'].includes(unit.estado)) continue;
-      const occupied = unitOccupiedOnDay(unit.id, cursor, reservations);
+      const unavailable = unitUnavailableOnDay(unit.id, cursor, reservations, blocks);
       const current = rooms.get(unit.roomCode) ?? 0;
-      rooms.set(unit.roomCode, current + (occupied ? 0 : 1));
+      rooms.set(unit.roomCode, current + (unavailable ? 0 : 1));
     }
     out.push({
       fecha: toIsoDate(cursor),
@@ -121,7 +158,7 @@ export async function loadAvailabilityContext(
   const whereUnits: any = { tenantId };
   if (propertyId) whereUnits.propertyId = propertyId;
 
-  const [units, reservations] = await Promise.all([
+  const [units, reservations, blocks] = await Promise.all([
     prisma.hospitalityUnit.findMany({
       where: whereUnits,
       include: {
@@ -139,7 +176,16 @@ export async function loadAvailabilityContext(
         checkIn: { lt: end },
         checkOut: { gt: start },
       },
-      select: { unitId: true, checkIn: true, checkOut: true, estado: true },
+    }),
+    prisma.hospitalityUnitBlock.findMany({
+      where: {
+        tenantId,
+        ...(propertyId ? { unit: { propertyId } } : {}),
+        estado: 'activo',
+        fechaInicio: { lt: end },
+        fechaFin: { gt: start },
+      },
+      select: { unitId: true, fechaInicio: true, fechaFin: true, estado: true },
     }),
   ]);
 
@@ -153,5 +199,6 @@ export async function loadAvailabilityContext(
   return {
     units: availabilityUnits,
     reservations: reservations as ActiveReservationSpan[],
+    blocks: blocks as ActiveUnitBlockSpan[],
   };
 }
