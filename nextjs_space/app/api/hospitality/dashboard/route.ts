@@ -4,6 +4,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
 import { startOfDay, nightsBetween } from '@/lib/hospitality/calendar';
+import {
+  perPropertyOccupancy,
+  perChannelRevenueTrend,
+  type AnalyticsReservationInput,
+} from '@/lib/hospitality/analytics';
 
 /**
  * GET /api/hospitality/dashboard — KPIs operativos del módulo (plan §23).
@@ -30,11 +35,16 @@ export async function GET(req: NextRequest) {
 
     const tenantId = auth.tenant!.id;
 
-    // ── Unidades y reservas del período ──
-    const [units, reservations] = await Promise.all([
+    // ── Unidades, propiedades y reservas del período ──
+    const [units, properties, reservations] = await Promise.all([
       prisma.hospitalityUnit.findMany({
         where: { tenantId },
         select: { id: true, estado: true, propertyId: true },
+      }),
+      prisma.hospitalityProperty.findMany({
+        where: { tenantId },
+        select: { id: true, nombre: true },
+        orderBy: { nombre: 'asc' },
       }),
       prisma.hospitalityReservation.findMany({
         where: {
@@ -44,6 +54,7 @@ export async function GET(req: NextRequest) {
         },
         select: {
           id: true,
+          propertyId: true,
           unitId: true,
           channel: true,
           estado: true,
@@ -139,6 +150,31 @@ export async function GET(req: NextRequest) {
     const mantenimientoPorEstado: Record<string, number> = {};
     for (const t of maintenanceTasks) mantenimientoPorEstado[t.estado] = t._count._all;
 
+    // ── Drill-downs (plan §23): ocupación por propiedad e ingresos por canal ──
+    // La ventana de la consulta (checkIn < fin, checkOut > inicio) cubre todo
+    // lo que puede aportar noches a los últimos `dias` días.
+    const reservasAnalytics: AnalyticsReservationInput[] = reservations.map((r) => ({
+      id: r.id,
+      propertyId: r.propertyId,
+      unitId: r.unitId,
+      channel: r.channel,
+      estado: r.estado,
+      checkIn: r.checkIn,
+      checkOut: r.checkOut,
+      amountAfterTax: r.amountAfterTax,
+      currency: r.currency,
+    }));
+    const ocupacionPropiedades = perPropertyOccupancy({
+      properties: properties.map((p) => ({ id: p.id, nombre: p.nombre })),
+      units: units.map((u) => ({ id: u.id, propertyId: u.propertyId })),
+      reservations: reservasAnalytics,
+      dias,
+    });
+    const ingresosPorCanal = perChannelRevenueTrend({
+      reservations: reservasAnalytics,
+      dias,
+    });
+
     return NextResponse.json({
       kpis: {
         totalUnidades,
@@ -155,6 +191,8 @@ export async function GET(req: NextRequest) {
       },
       mixCanales,
       proximos7,
+      ocupacionPropiedades,
+      ingresosPorCanal,
       operaciones: {
         limpieza: limpiezaPorEstado,
         mantenimiento: mantenimientoPorEstado,
