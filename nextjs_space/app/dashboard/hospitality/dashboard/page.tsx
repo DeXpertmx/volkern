@@ -15,6 +15,8 @@ import {
   Sparkles,
   Wrench,
   Moon,
+  Building2,
+  LineChart as LineChartIcon,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -29,6 +31,11 @@ import {
   PieChart as RePieChart,
   Pie,
   Cell,
+  LineChart,
+  Line,
+  AreaChart,
+  Area,
+  Legend,
 } from 'recharts';
 import { channelStyle, statusLabel } from '@/lib/hospitality/calendar';
 
@@ -61,10 +68,26 @@ interface DiaOcupacion {
   ocupacion: number;
 }
 
+interface OcupacionPropiedad {
+  propertyId: string;
+  nombre: string;
+  totalUnidades: number;
+  ocupacionMedia: number;
+  puntos: Array<{ fecha: string; ocupadas: number; total: number; ocupacion: number }>;
+}
+
+interface IngresoCanalSerie {
+  canal: string;
+  total: number;
+  puntos: Array<{ fecha: string; ingresos: number }>;
+}
+
 interface DashboardData {
   kpis: Kpis;
   mixCanales: CanalMix[];
   proximos7: DiaOcupacion[];
+  ocupacionPropiedades: OcupacionPropiedad[];
+  ingresosPorCanal: IngresoCanalSerie[];
   operaciones: {
     limpieza: Record<string, number>;
     mantenimiento: Record<string, number>;
@@ -126,9 +149,49 @@ export default function HospitalityDashboardPage() {
     );
   }
 
-  const { kpis, mixCanales, proximos7, operaciones } = data;
+  const { kpis, mixCanales, proximos7, ocupacionPropiedades, ingresosPorCanal, operaciones } = data;
   const limpiezaPendiente = (operaciones.limpieza.pending || 0) + (operaciones.limpieza.in_progress || 0);
   const mantenimientoAbierto = (operaciones.mantenimiento.abierta || 0) + (operaciones.mantenimiento.en_proceso || 0);
+
+  // ── Drill-down: ocupación por propiedad (filas por fecha, una serie por propiedad) ──
+  // Claves posicionales (s0, s1...): constantes por fila para recharts y sin
+  // depender del nombre/propertyId (evita colisiones y puntos en la ruta).
+  const ocupPropData = (ocupacionPropiedades[0]?.puntos || []).map((p, i) => {
+    const row: Record<string, number | string> = {
+      fecha: p.fecha.slice(8), // "DD" para el eje
+      fechaCompleta: p.fecha,
+    };
+    ocupacionPropiedades.forEach((s, si) => {
+      row[`s${si}`] = Math.round((s.puntos[i]?.ocupacion || 0) * 100);
+    });
+    return row;
+  });
+  const ocupPropSeries = ocupacionPropiedades.map((s, si) => ({
+    key: `s${si}`,
+    nombre: s.nombre,
+    media: s.ocupacionMedia,
+    total: s.totalUnidades,
+  }));
+
+  // ── Drill-down: tendencia de ingresos por canal (área apilada) ──
+  const ingresoCanalData = (ingresosPorCanal[0]?.puntos || []).map((p, i) => {
+    const row: Record<string, number | string> = {
+      fecha: p.fecha.slice(8),
+      fechaCompleta: p.fecha,
+    };
+    ingresosPorCanal.forEach((s, ci) => {
+      row[`c${ci}`] = Math.round(s.puntos[i]?.ingresos || 0);
+    });
+    return row;
+  });
+  const ingresoCanalSeries = ingresosPorCanal.map((s, ci) => ({
+    key: `c${ci}`,
+    canal: s.canal,
+    label: channelStyle(s.canal).label,
+    total: s.total,
+    color: PIE_COLORS[ci % PIE_COLORS.length],
+  }));
+  const ingresoCanalTotal = ingresoCanalSeries.reduce((a, s) => a + s.total, 0);
 
   const kpiCards = [
     {
@@ -292,6 +355,111 @@ export default function HospitalityDashboardPage() {
                   </BarChart>
                 </ResponsiveContainer>
               </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Drill-downs (30 días) */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Building2 className="h-4 w-4 text-indigo-600" /> Ocupación por propiedad · 30 días
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {ocupPropData.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-8 text-center">
+                Crea propiedades con unidades para ver su ocupación diaria
+              </p>
+            ) : (
+              <>
+                <div className="h-52">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={ocupPropData} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="fecha" tick={{ fontSize: 10 }} interval={4} />
+                      <YAxis tick={{ fontSize: 10 }} domain={[0, 100]} unit="%" width={40} />
+                      <Tooltip
+                        labelFormatter={(_, payload: any) => payload?.[0]?.payload?.fechaCompleta || ''}
+                        formatter={(value: any, name: any) => [`${value}%`, String(name)]}
+                      />
+                      <Legend wrapperStyle={{ fontSize: 11 }} />
+                      {ocupPropSeries.map((s, i) => (
+                        <Line
+                          key={s.key}
+                          type="monotone"
+                          dataKey={s.key}
+                          name={s.nombre}
+                          stroke={PIE_COLORS[i % PIE_COLORS.length]}
+                          strokeWidth={2}
+                          dot={false}
+                        />
+                      ))}
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {ocupPropSeries.map((s) => (
+                    <Badge key={s.key} className="bg-indigo-50 text-indigo-700 border-0 text-xs">
+                      {s.nombre}: {Math.round(s.media * 100)}% medio · {s.total} ud.
+                    </Badge>
+                  ))}
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <LineChartIcon className="h-4 w-4 text-emerald-600" /> Ingresos por canal · 30 días
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {ingresoCanalData.length === 0 || ingresoCanalTotal === 0 ? (
+              <p className="text-sm text-muted-foreground py-8 text-center">
+                Sin ingresos en el período para mostrar la tendencia por canal
+              </p>
+            ) : (
+              <>
+                <div className="h-52">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={ingresoCanalData} margin={{ top: 4, right: 8, bottom: 0, left: -8 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="fecha" tick={{ fontSize: 10 }} interval={4} />
+                      <YAxis tick={{ fontSize: 10 }} width={48} tickFormatter={(v: number) => (v >= 1000 ? `${Math.round(v / 1000)}k` : String(v))} />
+                      <Tooltip
+                        labelFormatter={(_, payload: any) => payload?.[0]?.payload?.fechaCompleta || ''}
+                        formatter={(value: any, name: any) => [money(Number(value)), String(name)]}
+                      />
+                      <Legend wrapperStyle={{ fontSize: 11 }} />
+                      {ingresoCanalSeries.map((s) => (
+                        <Area
+                          key={s.key}
+                          type="monotone"
+                          dataKey={s.key}
+                          name={s.label}
+                          stackId="1"
+                          stroke={s.color}
+                          fill={s.color}
+                          fillOpacity={0.35}
+                          strokeWidth={2}
+                        />
+                      ))}
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {ingresoCanalSeries.map((s) => (
+                    <Badge key={s.key} className="bg-emerald-50 text-emerald-700 border-0 text-xs">
+                      {s.label}: {money(s.total)}
+                    </Badge>
+                  ))}
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
