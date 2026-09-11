@@ -124,7 +124,7 @@ export async function dispatchConnectivityPush(
   const horizon = new Date(today);
   horizon.setDate(today.getDate() + dias);
 
-  const { reservations } = await loadAvailabilityContext(
+  const { reservations, blocks } = await loadAvailabilityContext(
     prisma,
     tenantId,
     propertyId,
@@ -204,7 +204,7 @@ export async function dispatchConnectivityPush(
         })),
     }));
 
-    const byDay = availabilityByRoomCode(availabilityUnits, today, horizon, reservations);
+    const byDay = availabilityByRoomCode(availabilityUnits, today, horizon, reservations, blocks);
 
     // ── Inventory Push: agrupar días consecutivos por roomCode con el mismo
     //    conteo para minimizar bloques (UPSERT por rango).

@@ -109,6 +109,7 @@ const GLOBAL_MODELS = [
   'connectivityMapping',
   'hospitalityReservation',
   'hospitalityWebhookEvent',
+  'hospitalityUnitBlock',
   'connectivityProvider'
 ];
 

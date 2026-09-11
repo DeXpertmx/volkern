@@ -8,6 +8,7 @@ const __prisma = vi.hoisted(() => ({
   hospitalityProperty: { findMany: vi.fn() },
   hospitalityUnit: { findMany: vi.fn() },
   hospitalityReservation: { findMany: vi.fn() },
+  hospitalityUnitBlock: { findMany: vi.fn() },
   connectivityMapping: { findFirst: vi.fn() },
   hospitalitySyncLog: { create: vi.fn() },
 }));
@@ -93,6 +94,7 @@ beforeEach(() => {
   });
   __prisma.hospitalityProperty.findMany.mockResolvedValue([{ id: 'p1' }]);
   __prisma.hospitalityReservation.findMany.mockResolvedValue([]);
+  __prisma.hospitalityUnitBlock.findMany.mockResolvedValue([]);
   __prisma.connectivityMapping.findFirst.mockResolvedValue({ externalPropertyId: 'HOTEL1' });
   mockUnidades([unidadConPlan()]);
   __prisma.hospitalitySyncLog.create.mockResolvedValue({});
