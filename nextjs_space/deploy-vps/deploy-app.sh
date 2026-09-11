@@ -145,7 +145,9 @@ docker service update --force --image "$IMAGE" "$SERVICE"
 echo "→ [4/5] Esperando convergencia (máx. 180s) ..."
 CONVERGED=0
 for i in $(seq 1 60); do
-  STATE=$(docker service ps "$SERVICE" --format '{{.CurrentState}} {{.Image}}' 2>/dev/null | head -1)
+  # `|| true`: `head -1` cierra el pipe y, con `set -o pipefail`, el SIGPIPE
+  # abortaría el bucle en lugar de esperar la convergencia.
+  STATE=$(docker service ps "$SERVICE" --format '{{.CurrentState}} {{.Image}}' 2>/dev/null | head -1 || true)
   # La primera tarea listada es la más reciente; converge cuando está
   # Running (o Complete para jobs; aquí es un servicio, así que Running).
   if echo "$STATE" | grep -qE '^Running'; then
