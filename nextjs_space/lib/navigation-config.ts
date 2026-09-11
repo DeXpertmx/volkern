@@ -70,7 +70,8 @@ import {
   Scale,
   Mail,
   ShieldAlert,
-  History
+  History,
+  Rocket
 } from 'lucide-react'
 import type { PermissionModule } from '@/lib/permissions'
 
@@ -280,10 +281,12 @@ export const HUBS: HubConfig[] = [
       '/dashboard/hospitality/dashboard',
       '/dashboard/hospitality/tarifas',
       '/dashboard/hospitality/comunicaciones',
-      '/dashboard/hospitality/automatizaciones'
+      '/dashboard/hospitality/automatizaciones',
+      '/dashboard/hospitality/onboarding'
     ],
     items: [
       { name: 'Inicio', href: '/dashboard/hospitality', icon: Home, planModule: 'hospitality', description: 'Propiedades, unidades y resumen del módulo' },
+      { name: 'Puesta en marcha', href: '/dashboard/hospitality/onboarding', icon: Rocket, planModule: 'hospitality', description: 'Onboarding guiado: propiedad, unidades, mapping y pruebas antes de conectar' },
       { name: 'Dashboard', href: '/dashboard/hospitality/dashboard', icon: LayoutDashboard, planModule: 'hospitality', description: 'Ocupación, ADR, ingresos y mix de canales' },
       { name: 'Planning', href: '/dashboard/hospitality/calendar', icon: CalendarDays, planModule: 'hospitality', description: 'Calendario de ocupación, reservas y operaciones' },
       { name: 'Operaciones', href: '/dashboard/hospitality/calendar?vista=operaciones', icon: ListTodo, planModule: 'hospitality', description: 'Llegadas y salidas de hoy, limpieza y mantenimiento' },
