@@ -330,9 +330,61 @@ export interface RatePushUpdate {
   rates: Array<{ roomCode: string; rateplanCode: string; rate: number }>;
 }
 
+/**
+ * Campos de restricción de venta (contrato). El objeto es el MISMO para
+ * restricciones de inventario (nivel habitación) y de tarifas (nivel
+ * room+rateplan). Los campos opcionales se envían como `null`, nunca
+ * omitidos (regla dura del contrato).
+ */
+export interface RestrictionFields {
+  stopSell: boolean;
+  exactStayArrival: number | null;
+  maximumStayArrival: number | null;
+  minimumAdvanceReservation: number | null;
+  minimumStay: number;
+  closeOnArrival: boolean;
+  minimumStayArrival: number | null;
+  maximumStay: number | null;
+  maximumAdvanceReservation: number | null;
+  closeOnDeparture: boolean;
+}
+
+/**
+ * Payload de Inventory Restrictions Push (contrato): POST /update/{pms}
+ * (el mismo endpoint que el inventario: las restricciones viajan por los
+ * endpoints existentes).
+ * ```json
+ * { "hotelCode": "...", "updates": [{
+ *   "startDate": "YYYY-MM-DD", "endDate": "YYYY-MM-DD",
+ *   "rooms": [{ "roomCode": "SUITE", "available": 3, "restrictions": { ... } }]
+ * }]}
+ * ```
+ */
+export interface InventoryRestrictionsPushUpdate {
+  startDate: string;
+  endDate: string;
+  rooms: Array<{ roomCode: string; available: number; restrictions: RestrictionFields }>;
+}
+
+/**
+ * Payload de Rate Restrictions Push (contrato): POST /update-rates/{pms}
+ * ```json
+ * { "hotelCode": "...", "updates": [{
+ *   "startDate": "YYYY-MM-DD", "endDate": "YYYY-MM-DD",
+ *   "rates": [{ "roomCode": "EXECUTIVE", "rateplanCode": "EXECUTIVE-S-101",
+ *               "restrictions": { ... } }]
+ * }]}
+ * ```
+ */
+export interface RateRestrictionsPushUpdate {
+  startDate: string;
+  endDate: string;
+  rates: Array<{ roomCode: string; rateplanCode: string; restrictions: RestrictionFields }>;
+}
+
 export interface PushResult {
   ok: boolean;
-  tipo: 'inventory' | 'rates';
+  tipo: 'inventory' | 'rates' | 'inventory_restrictions' | 'rates_restrictions';
   httpStatus?: number;
   message?: string;
   respuestaExterna?: unknown;
@@ -562,4 +614,84 @@ export async function pushRates(
     const msg = e instanceof Error ? e.message : 'Error de red';
     return { ok: false, tipo: 'rates', error: msg, duracionMs: Date.now() - started };
   }
+}
+
+/**
+ * POST genérico a la capa de conectividad para restricciones. Verifica el
+ * campo `success` de la respuesta y expone `message` en fallos. NO hace
+ * retries ciegos: el fallo vuelve al llamador para quedar registrado (§30).
+ */
+async function postConnectivityUpdate(
+  endpoint: '/update' | '/update-rates',
+  hotelCode: string,
+  updates: unknown[],
+  tipo: PushResult['tipo']
+): Promise<PushResult> {
+  const started = Date.now();
+  try {
+    const creds = await getConnectivityCredentials();
+    if (!creds) {
+      return { ok: false, tipo, error: 'Conectividad no configurada.', duracionMs: 0 };
+    }
+    const { res, duracionMs } = await connectivityFetch(
+      `${endpoint}/${encodeURIComponent(creds.partnerId)}`,
+      { hotelCode, updates },
+      creds
+    );
+    const respuestaExterna = await readBody(res);
+    const success =
+      typeof respuestaExterna === 'object' &&
+      respuestaExterna !== null &&
+      (respuestaExterna as any).success === true;
+
+    if (!res.ok || !success) {
+      const message = (respuestaExterna as any)?.message || `HTTP ${res.status}`;
+      return {
+        ok: false,
+        tipo,
+        httpStatus: res.status,
+        message,
+        respuestaExterna,
+        error: message,
+        duracionMs,
+      };
+    }
+    return {
+      ok: true,
+      tipo,
+      httpStatus: res.status,
+      message: (respuestaExterna as any)?.message,
+      respuestaExterna,
+      duracionMs,
+    };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Error de red';
+    return { ok: false, tipo, error: msg, duracionMs: Date.now() - started };
+  }
+}
+
+/**
+ * Inventory Restrictions Push — POST /update/{pms} (plan maestro §5).
+ * Restricciones a nivel de tipo de habitación: `stopSell` cuando el tipo
+ * entero está fuera de servicio y la restricción de estancia más permisiva
+ * entre los planes activos. Incluye `available` porque el contrato lo exige
+ * en este payload.
+ */
+export async function pushInventoryRestrictions(
+  hotelCode: string,
+  updates: InventoryRestrictionsPushUpdate[]
+): Promise<PushResult> {
+  return postConnectivityUpdate('/update', hotelCode, updates, 'inventory_restrictions');
+}
+
+/**
+ * Rate Restrictions Push — POST /update-rates/{pms} (plan maestro §5).
+ * Restricciones por (roomCode, rateplanCode): estancia mínima/máxima y
+ * cierre de llegada/salida por día de la semana.
+ */
+export async function pushRateRestrictions(
+  hotelCode: string,
+  updates: RateRestrictionsPushUpdate[]
+): Promise<PushResult> {
+  return postConnectivityUpdate('/update-rates', hotelCode, updates, 'rates_restrictions');
 }
