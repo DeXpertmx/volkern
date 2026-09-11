@@ -151,6 +151,17 @@ export function initCronJobs() {
   }));
 
   console.log('✅ [Scheduler] Hospitality check-in due programado (cada hora)');
+
+  // 17. Automatizaciones: cerrar ejecuciones colgadas.
+  // El motor crea el log en `queued` y el worker lo cierra con el resultado
+  // real. Si el worker está caído, el log quedaría eternamente "en curso":
+  // este job lo cierra como `failed` con la causa.
+  cron.schedule('*/10 * * * *', runCronJob('automation-sweep', 'Cierre de ejecuciones colgadas (automatizaciones)', '*/10 * * * *', async () => {
+    const { runAutomationSweep } = await import('./automation-sweep');
+    await runAutomationSweep();
+  }));
+
+  console.log('✅ [Scheduler] Cierre de ejecuciones colgadas programado (cada 10 min)');
 }
 
 /**

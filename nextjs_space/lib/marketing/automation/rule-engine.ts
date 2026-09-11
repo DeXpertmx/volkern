@@ -55,23 +55,47 @@ export class AutomationRuleEngine {
       try {
         // 2. Evaluar condiciones
         const matches = await this.evaluateConditions(rule.conditions, payload);
-        
+
         if (matches) {
-          console.log(`[RuleEngine] Rule "${rule.name}" triggered for entity ${payload.leadId || payload.contactId}`);
-          
-          // 3. Ejecutar acciones (encolar si Redis disponible, o ejecutar inline si no)
-          await this.executeActions(rule, payload);
-          
-          // 4. Registrar éxito
-          await prisma.automationLog.create({
+          const actions: any[] = Array.isArray(rule.actions) ? rule.actions : [];
+
+          console.log(`[RuleEngine] Rule "${rule.name}" triggered for entity ${this.resolveEntityId(payload)}`);
+
+          // 3. Registrar la ejecución como ENCOLADA (no como éxito): hasta que
+          //    el worker no ejecute las acciones no se conoce el resultado.
+          //    El worker actualizará ESTE mismo log con el desenlace real.
+          const log = await prisma.automationLog.create({
             data: {
               ruleId: rule.id,
               tenantId,
-              entityId: payload.leadId || payload.contactId || payload.dealId,
-              status: 'success',
-              result: { message: 'Workflow triggered' }
-            }
+              entityId: this.resolveEntityId(payload),
+              status: 'queued',
+              result: {
+                message: 'Acciones encoladas, pendientes de ejecución',
+                actions: actions.map((a) => a?.type).filter(Boolean),
+                queuedAt: new Date().toISOString(),
+              },
+            },
           });
+
+          // 4. Encolar pasándole el id del log para que el worker escriba el
+          //    resultado real de cada acción sobre él.
+          try {
+            await this.executeActions(rule, payload, log.id);
+          } catch (queueError: any) {
+            // Sin cola la acción se perdería: queda registrada como fallida
+            // con su causa en lugar de quedar como éxito fantasma.
+            console.error(`[RuleEngine] No se pudieron encolar las acciones de la regla ${rule.id}:`, queueError);
+            try {
+              await prisma.automationLog.update({
+                where: { id: log.id },
+                data: {
+                  status: 'failed',
+                  error: queueError?.message || String(queueError),
+                },
+              });
+            } catch { /* el fallo del log no debe crashear */ }
+          }
         }
       } catch (error: any) {
         console.error(`[RuleEngine] Error in rule ${rule.id}:`, error);
@@ -81,7 +105,7 @@ export class AutomationRuleEngine {
             data: {
               ruleId: rule.id,
               tenantId,
-              entityId: payload.leadId || payload.contactId,
+              entityId: this.resolveEntityId(payload),
               status: 'failed',
               error: error.message
             }
@@ -89,6 +113,22 @@ export class AutomationRuleEngine {
         } catch { /* log failure no debe crashear */ }
       }
     }
+  }
+
+  /**
+   * Identificador de la entidad afectada por el evento, sea del CRM
+   * (lead/contacto/deal) o de Hospitality (reserva/unidad/tarea).
+   */
+  private static resolveEntityId(payload: any): string | null {
+    return (
+      payload?.leadId ||
+      payload?.contactId ||
+      payload?.dealId ||
+      payload?.reservationId ||
+      payload?.taskId ||
+      payload?.unitId ||
+      null
+    );
   }
 
   /**
@@ -114,25 +154,27 @@ export class AutomationRuleEngine {
 
   /**
    * Encola las acciones de la regla para su procesamiento asíncrono.
-   * Si Redis no está disponible, las acciones se omiten silenciosamente.
+   * Si Redis no está disponible, las acciones NO se omiten en silencio:
+   * se lanza para que queden registradas como `failed` con la causa real.
+   *
+   * `logId` viaja en el job para que el worker escriba el resultado real de
+   * cada acción sobre el mismo AutomationLog.
    */
-  private static async executeActions(rule: any, payload: any) {
+  private static async executeActions(rule: any, payload: any, logId?: string) {
     if (!this.workflowQueue) {
-      // No se puede omitir en silencio: significaría perder la acción y
-      // registrar `success` de forma engañosa. Se propaga para que quede
-      // registrado como `failed` con la causa real.
       throw new Error(
         'Cola de automatizaciones no disponible (Redis no configurado o AutomationRuleEngine.initialize() no ejecutado)'
       );
     }
 
     const actions = rule.actions as any[];
-    
+
     await this.workflowQueue.add(`rule:${rule.id}`, {
       ruleId: rule.id,
       tenantId: rule.tenantId,
       actions,
-      payload
+      payload,
+      logId,
     }, {
       removeOnComplete: true,
       attempts: 3,
