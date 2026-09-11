@@ -4,7 +4,12 @@ import {
   unitAvailability,
   availabilityByRoomCode,
 } from '../lib/hospitality/availability';
-import { buildInventoryUpdates, buildRateUpdates } from '../lib/hospitality/sync';
+import {
+  buildInventoryUpdates,
+  buildRateUpdates,
+  buildInventoryRestrictions,
+  buildRateRestrictions,
+} from '../lib/hospitality/sync';
 
 const day = (iso: string) => new Date(iso + 'T00:00:00');
 
@@ -147,5 +152,152 @@ describe('buildRateUpdates (contrato: /update-rates)', () => {
     ];
     const updates = buildRateUpdates(units, day('2026-09-10'), day('2026-09-11'));
     expect(updates[0].rates).toEqual([{ roomCode: 'executive', rateplanCode: 'executive', rate: 200 }]);
+  });
+});
+
+// ─── Restricciones de venta (§5): forma exacta del contrato ───────────────
+
+describe('buildInventoryRestrictions (Inventory Restrictions POST)', () => {
+  it('payload con la forma exacta del contrato (todos los campos, opcionales en null)', () => {
+    const units = [
+      { roomCode: 'SUITE', estado: 'available', ratePlans: [{ minNoches: 2, maxNoches: 7 }] },
+    ];
+    const byDay = [
+      { fecha: '2026-09-10', rooms: [{ roomCode: 'SUITE', available: 3 }] },
+      { fecha: '2026-09-11', rooms: [{ roomCode: 'SUITE', available: 3 }] },
+    ];
+
+    expect(buildInventoryRestrictions(units, byDay)).toEqual([
+      {
+        startDate: '2026-09-10',
+        endDate: '2026-09-11',
+        rooms: [
+          {
+            roomCode: 'SUITE',
+            available: 3,
+            restrictions: {
+              stopSell: false,
+              exactStayArrival: null,
+              maximumStayArrival: null,
+              minimumAdvanceReservation: null,
+              minimumStay: 2,
+              closeOnArrival: false,
+              minimumStayArrival: null,
+              maximumStay: 7,
+              maximumAdvanceReservation: null,
+              closeOnDeparture: false,
+            },
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('marca stopSell cuando TODAS las unidades del tipo están fuera de servicio', () => {
+    const units = [{ roomCode: 'SUITE', estado: 'maintenance', ratePlans: [] }];
+    const byDay = [{ fecha: '2026-09-10', rooms: [] }];
+
+    const rooms = buildInventoryRestrictions(units, byDay)[0].rooms;
+    expect(rooms).toEqual([
+      { roomCode: 'SUITE', available: 0, restrictions: expect.objectContaining({ stopSell: true }) },
+    ]);
+  });
+
+  it('no cierra el tipo si al menos una unidad sigue vendible', () => {
+    const units = [
+      { roomCode: 'SUITE', estado: 'maintenance', ratePlans: [] },
+      { roomCode: 'SUITE', estado: 'available', ratePlans: [] },
+    ];
+    const byDay = [{ fecha: '2026-09-10', rooms: [{ roomCode: 'SUITE', available: 1 }] }];
+
+    const rooms = buildInventoryRestrictions(units, byDay)[0].rooms;
+    expect(rooms[0].restrictions.stopSell).toBe(false);
+    expect(rooms[0].available).toBe(1);
+  });
+
+  it('toma la estancia mínima más permisiva entre los planes activos', () => {
+    const units = [
+      { roomCode: 'SUITE', estado: 'available', ratePlans: [{ minNoches: 3 }, { minNoches: 1 }] },
+    ];
+    const byDay = [{ fecha: '2026-09-10', rooms: [{ roomCode: 'SUITE', available: 1 }] }];
+
+    const rooms = buildInventoryRestrictions(units, byDay)[0].rooms;
+    expect(rooms[0].restrictions.minimumStay).toBe(1);
+    expect(rooms[0].restrictions.maximumStay).toBeNull();
+  });
+
+  it('devuelve array vacío sin días o sin unidades con mapping', () => {
+    expect(buildInventoryRestrictions([], [])).toEqual([]);
+    expect(
+      buildInventoryRestrictions(
+        [{ roomCode: null, estado: 'available', ratePlans: [] }],
+        [{ fecha: '2026-09-10', rooms: [] }]
+      )
+    ).toEqual([]);
+  });
+});
+
+describe('buildRateRestrictions (Rate Restrictions POST)', () => {
+  it('payload con la forma exacta del contrato', () => {
+    const units = [
+      {
+        roomCode: 'EXECUTIVE',
+        ratePlans: [
+          { codigo: 'EXECUTIVE-S-101', minNoches: 1, maxNoches: null, checkInDias: null, checkOutDias: null },
+        ],
+      },
+    ];
+
+    const updates = buildRateRestrictions(units, day('2026-02-22'), day('2026-02-25'));
+    expect(updates).toEqual([
+      {
+        startDate: '2026-02-22',
+        endDate: '2026-02-24',
+        rates: [
+          {
+            roomCode: 'EXECUTIVE',
+            rateplanCode: 'EXECUTIVE-S-101',
+            restrictions: {
+              stopSell: false,
+              exactStayArrival: null,
+              maximumStayArrival: null,
+              minimumAdvanceReservation: null,
+              minimumStay: 1,
+              closeOnArrival: false,
+              minimumStayArrival: null,
+              maximumStay: null,
+              maximumAdvanceReservation: null,
+              closeOnDeparture: false,
+            },
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('expresa los días de check-in permitidos como closeOnArrival y segmenta el rango', () => {
+    const units = [
+      {
+        roomCode: 'SUITE',
+        ratePlans: [
+          { codigo: 'SUITE-FLEX', minNoches: 2, maxNoches: 5, checkInDias: [5], checkOutDias: [] },
+        ],
+      },
+    ];
+    // 2026-09-10 = jueves, 09-11 = viernes, 09-12 = sábado
+    const updates = buildRateRestrictions(units, day('2026-09-10'), day('2026-09-13'));
+    expect(
+      updates.map((u) => [u.startDate, u.endDate, u.rates[0].restrictions.closeOnArrival])
+    ).toEqual([
+      ['2026-09-10', '2026-09-10', true],
+      ['2026-09-11', '2026-09-11', false],
+      ['2026-09-12', '2026-09-12', true],
+    ]);
+    expect(updates[0].rates[0].restrictions).toMatchObject({ minimumStay: 2, maximumStay: 5 });
+  });
+
+  it('sin planes de tarifa no empuja restricciones (no inventar)', () => {
+    const units = [{ roomCode: 'SUITE', ratePlans: [] }];
+    expect(buildRateRestrictions(units, day('2026-09-10'), day('2026-09-11'))).toEqual([]);
   });
 });
