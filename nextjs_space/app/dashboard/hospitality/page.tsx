@@ -20,7 +20,9 @@ import {
   Search,
   ImageIcon,
   X,
+  Rocket,
 } from 'lucide-react';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -86,6 +88,8 @@ const ESTADO_UNIDAD_LABEL: Record<string, string> = {
 const ESTADO_PROPIEDAD_LABEL: Record<string, string> = {
   activa: 'Activa',
   inactiva: 'Inactiva',
+  conectada: 'Conectada',
+  borrador: 'En configuración',
 };
 
 const ZONAS_HUSO = [
@@ -427,7 +431,7 @@ export default function HospitalityPage() {
                         <ImageIcon className="h-10 w-10 text-muted-foreground/40" />
                       </div>
                     )}
-                    <Badge variant={p.estado === 'activa' ? 'default' : 'secondary'} className="absolute top-2 right-2">
+                    <Badge variant={p.estado === 'inactiva' ? 'secondary' : 'default'} className="absolute top-2 right-2">
                       {ESTADO_PROPIEDAD_LABEL[p.estado] || p.estado}
                     </Badge>
                   </div>
@@ -462,9 +466,14 @@ export default function HospitalityPage() {
                         {p._count?.reservations ?? 0} reservas
                       </span>
                     </div>
-                    <div className="flex gap-2 pt-2 border-t">
+                    <div className="flex flex-wrap gap-2 pt-2 border-t">
                       <Button variant="outline" size="sm" onClick={() => openEditProperty(p)}>
                         <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
+                      </Button>
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href={`/dashboard/hospitality/onboarding?propertyId=${p.id}`}>
+                          <Rocket className="h-3.5 w-3.5 mr-1" /> Puesta en marcha
+                        </Link>
                       </Button>
                       <Button
                         variant="outline"
