@@ -24,6 +24,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { formatDistanceToNow } from 'date-fns';
+import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
 
 interface EstadoConectividad {
@@ -36,6 +46,45 @@ interface EstadoConectividad {
   ultimaSincronizacion: string | null;
   ultimoEvento: string | null;
   contadorErrores: number;
+}
+
+/** Estado de sincronización por propiedad (plan maestro §29). */
+interface EventoSync {
+  fecha: string;
+  tipo: string;
+  estado: string;
+  detalle?: string | null;
+}
+
+interface EstadoPropiedad {
+  propertyId: string;
+  property: string;
+  tenant: string;
+  hotelCode: string | null;
+  mappingEstado: string;
+  ultimoWebhook: {
+    fecha: string;
+    action: string;
+    channel: string | null;
+    estado: string;
+    error: string | null;
+  } | null;
+  ultimoPush: EventoSync | null;
+  ultimoFetch: EventoSync | null;
+  ultimoError: EventoSync | null;
+  contadorErrores: number;
+  webhooksTotales: number;
+  webhooksFallidos: number;
+}
+
+/** "hace 2 min" a partir de una fecha ISO; "—" si no hay dato. */
+function hace(fecha?: string | null): string {
+  if (!fecha) return '—';
+  try {
+    return formatDistanceToNow(new Date(fecha), { addSuffix: true, locale: es });
+  } catch {
+    return '—';
+  }
 }
 
 const ESTADO_LABEL: Record<string, { text: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
@@ -63,6 +112,8 @@ export default function AdminConectividad() {
     respuestaExterna?: unknown;
   } | null>(null);
   const [testDialogOpen, setTestDialogOpen] = useState(false);
+  const [propiedades, setPropiedades] = useState<EstadoPropiedad[]>([]);
+  const [loadingPropiedades, setLoadingPropiedades] = useState(true);
   const [reconciliando, setReconciliando] = useState(false);
   const [reconciliacionResult, setReconciliacionResult] = useState<{
     ok: boolean;
@@ -76,7 +127,22 @@ export default function AdminConectividad() {
 
   useEffect(() => {
     loadEstado();
+    loadPropiedades();
   }, []);
+
+  const loadPropiedades = async () => {
+    try {
+      setLoadingPropiedades(true);
+      const res = await fetch('/api/admin/conectividad/propiedades');
+      if (!res.ok) return;
+      const data = await res.json();
+      setPropiedades(data.propiedades || []);
+    } catch {
+      // La tabla es informativa: un fallo aquí no debe romper la pantalla.
+    } finally {
+      setLoadingPropiedades(false);
+    }
+  };
 
   const loadEstado = async () => {
     try {
@@ -411,6 +477,129 @@ export default function AdminConectividad() {
                   ))}
                 </ul>
               )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Estado de sincronización por propiedad (plan maestro §29) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Server className="h-5 w-5 text-primary" />
+            Estado por Propiedad
+          </CardTitle>
+          <CardDescription>
+            Último webhook recibido, último push de inventario/tarifas, última reconciliación y errores de cada
+            propiedad. Permite ver qué propiedad concreta está fallando, en lugar de un estado global.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex justify-end mb-3">
+            <Button variant="outline" size="sm" onClick={loadPropiedades} disabled={loadingPropiedades}>
+              {loadingPropiedades ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+              Actualizar
+            </Button>
+          </div>
+
+          {loadingPropiedades && propiedades.length === 0 ? (
+            <div className="flex items-center justify-center py-8 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin mr-2" />
+              Cargando estado por propiedad...
+            </div>
+          ) : propiedades.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">
+              Aún no hay propiedades de Hospitality con conectividad configurada.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Propiedad</TableHead>
+                    <TableHead>Código externo</TableHead>
+                    <TableHead>Último webhook</TableHead>
+                    <TableHead>Último push</TableHead>
+                    <TableHead>Última reconciliación</TableHead>
+                    <TableHead>Errores</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {propiedades.map((p) => (
+                    <TableRow key={p.propertyId}>
+                      <TableCell>
+                        <div className="font-medium">{p.property}</div>
+                        <div className="text-xs text-muted-foreground">{p.tenant}</div>
+                      </TableCell>
+                      <TableCell>
+                        <code className="text-xs">{p.hotelCode || '—'}</code>
+                        <Badge
+                          variant={p.mappingEstado === 'activo' ? 'default' : 'secondary'}
+                          className="ml-2 align-middle"
+                        >
+                          {p.mappingEstado === 'activo' ? 'Mapeada' : p.mappingEstado.replace('_', ' ')}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {p.ultimoWebhook ? (
+                          <>
+                            <div>{hace(p.ultimoWebhook.fecha)}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {p.ultimoWebhook.action}
+                              {p.ultimoWebhook.channel ? ` · ${p.ultimoWebhook.channel}` : ''}
+                            </div>
+                          </>
+                        ) : (
+                          <span className="text-muted-foreground">Sin webhooks</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {p.ultimoPush ? (
+                          <>
+                            <div>{hace(p.ultimoPush.fecha)}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {p.ultimoPush.tipo}
+                              {p.ultimoPush.detalle ? ` · ${p.ultimoPush.detalle}` : ''}
+                            </div>
+                          </>
+                        ) : (
+                          <span className="text-muted-foreground">Sin push</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {p.ultimoFetch ? (
+                          <>
+                            <div>{hace(p.ultimoFetch.fecha)}</div>
+                            <Badge variant={p.ultimoFetch.estado === 'error' ? 'destructive' : 'secondary'}>
+                              {p.ultimoFetch.estado}
+                            </Badge>
+                          </>
+                        ) : (
+                          <span className="text-muted-foreground">Nunca</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {(p.contadorErrores > 0 || p.webhooksFallidos > 0) ? (
+                          <>
+                            <Badge variant="destructive">{p.contadorErrores + p.webhooksFallidos}</Badge>
+                            {p.ultimoError && (
+                              <div className="text-xs text-muted-foreground mt-1 max-w-[220px] truncate" title={p.ultimoError.detalle || undefined}>
+                                {hace(p.ultimoError.fecha)} · {p.ultimoError.detalle || p.ultimoError.tipo}
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <Badge variant="outline">0</Badge>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           )}
         </CardContent>
