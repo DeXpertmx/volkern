@@ -18,6 +18,9 @@ import { encrypt } from '@/lib/core/crypto';
 import {
   testConnectivityConnection,
   getConnectivityBaseUrl,
+  pushInventory,
+  pushRates,
+  CONNECTIVITY_API_PREFIX,
   CONNECTIVITY_SANDBOX_HOTEL,
 } from '@/lib/hospitality/connectivity';
 
@@ -133,5 +136,55 @@ describe('Hospitality — prueba de conexión (property details)', () => {
 
     expect(result.ok).toBe(false);
     expect(result.error).toContain('ECONNREFUSED');
+  });
+});
+
+describe('Hospitality — URL base de conectividad', () => {
+  it('añade el prefijo del contrato cuando la variable solo trae el host', () => {
+    process.env.CONNECTIVITY_BASE_URL = 'https://connect.example.internal';
+    expect(getConnectivityBaseUrl()).toBe(
+      `https://connect.example.internal${CONNECTIVITY_API_PREFIX}`
+    );
+  });
+
+  it('no duplica el prefijo si la variable ya lo incluye', () => {
+    process.env.CONNECTIVITY_BASE_URL = `https://connect.example.internal${CONNECTIVITY_API_PREFIX}`;
+    expect(getConnectivityBaseUrl()).toBe(
+      `https://connect.example.internal${CONNECTIVITY_API_PREFIX}`
+    );
+  });
+
+  it('tolera espacios y barra final sobrantes', () => {
+    process.env.CONNECTIVITY_BASE_URL = '  https://connect.example.internal/  ';
+    expect(getConnectivityBaseUrl()).toBe(
+      `https://connect.example.internal${CONNECTIVITY_API_PREFIX}`
+    );
+  });
+
+  it('todas las llamadas del contrato salen con el prefijo de la API', async () => {
+    process.env.CONNECTIVITY_BASE_URL = 'https://connect.example.internal';
+    hoisted.findUnique.mockResolvedValue({ ...creds, baseUrl: 'https://connect.example.internal' });
+    hoisted.globalFetch.mockResolvedValue(
+      new Response(JSON.stringify({ success: true, message: 'Updated' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+
+    await testConnectivityConnection();
+    await pushInventory('sandbox-pms', [
+      { startDate: '2026-01-01', endDate: '2026-01-02', rooms: [{ roomCode: 'suite', available: 1 }] },
+    ]);
+    await pushRates('sandbox-pms', [
+      { startDate: '2026-01-01', endDate: '2026-01-02', rates: [{ roomCode: 'suite', rateplanCode: 'suite-d-ep', rate: 100 }] },
+    ]);
+
+    const urls = hoisted.globalFetch.mock.calls.map((c) => String(c[0]));
+    expect(urls).toHaveLength(3);
+    for (const url of urls) {
+      expect(url).toContain(CONNECTIVITY_API_PREFIX);
+    }
+    expect(urls[1]).toContain(`/update/`);
+    expect(urls[2]).toContain('/update-rates/');
   });
 });
