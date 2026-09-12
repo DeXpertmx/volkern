@@ -160,6 +160,14 @@ describe('skills — proyecciones', () => {
     expect(result.data.revenue).toBe(10000);
   });
 
+  it('un periodo sin movimientos no se declara CRÍTICO', async () => {
+    mocks.invoiceAggregate.mockResolvedValue({ _sum: { monto: 0 } } as any);
+    mocks.expenseAggregate.mockResolvedValue({ _sum: { amount: 0 } } as any);
+    const result = await (skills as any).analyze_global_profitability({ tenantId: TENANT, months: 1 });
+    expect(result.content).toContain('SIN DATOS');
+    expect(result.content).not.toContain('CRÍTICO');
+  });
+
   it('project_financial_forecast pesa el pipeline activo por la probabilidad de su etapa', async () => {
     const result = await (skills as any).project_financial_forecast({ tenantId: TENANT });
     // 6.000 al 50 % → 3.000 ponderados; gasto medio 2.000 / 3 = 666,67 al mes
