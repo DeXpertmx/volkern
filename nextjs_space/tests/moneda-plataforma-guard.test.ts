@@ -457,11 +457,12 @@ describe('la deuda de dinero con símbolo no puede crecer', () => {
     if (ACTUALIZAR) return;
     // Techo del día en que se inventarió: no es un objetivo. Solo puede bajar, y
     // cada bajada exige regenerar el archivo, así que se ve en el diff. Nació en
-    // 77 archivos / 292 importes y bajó a 75 / 290 al migrar los dos únicos que
+    // 77 archivos / 292 importes, bajó a 75 / 290 al migrar los dos únicos que
     // había en zonas limpias (el ejemplo del envío de prueba de Hospitality y el
-    // filtro de precio del grid inmobiliario).
-    expect(Object.keys(baselineSimbolos).length).toBeLessThanOrEqual(75);
+    // filtro de precio del grid inmobiliario) y a 67 / 258 al darle a la sección
+    // de Finanzas la divisa del tenant: sus pantallas escribían euros a mano.
+    expect(Object.keys(baselineSimbolos).length).toBeLessThanOrEqual(67);
     expect(totalDeSimbolos(baselineSimbolos)).toBeGreaterThan(0);
-    expect(totalDeSimbolos(baselineSimbolos)).toBeLessThanOrEqual(290);
+    expect(totalDeSimbolos(baselineSimbolos)).toBeLessThanOrEqual(258);
   });
 });

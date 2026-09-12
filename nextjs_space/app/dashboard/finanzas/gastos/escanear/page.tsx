@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { formatearImporte, monedaEscritura, MONEDAS_SOPORTADAS } from '@/lib/moneda'
+import { formatearImporte, monedaEscritura, simboloMoneda, MONEDAS_SOPORTADAS } from '@/lib/moneda'
 import { useMonedaTenant } from '@/lib/use-moneda-tenant'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -2017,8 +2017,10 @@ export default function EscanearGastoPage() {
                           <tr key={i} className="border-b border-muted-foreground/20">
                             <td className="py-1 pr-2">{l.descripcion}</td>
                             <td className="text-right px-2">{l.cantidad}</td>
-                            <td className="text-right px-2">{l.precio ? `${l.precio} €` : '-'}</td>
-                            <td className="text-right pl-2">{l.importe ? `${l.importe} €` : '-'}</td>
+                            {/* El importe llega como texto del OCR: se conserva tal cual y solo
+                                se le pone el símbolo de la divisa del gasto. */}
+                            <td className="text-right px-2">{l.precio ? `${l.precio} ${simboloMoneda(monedaFormulario)}` : '-'}</td>
+                            <td className="text-right pl-2">{l.importe ? `${l.importe} ${simboloMoneda(monedaFormulario)}` : '-'}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -2290,7 +2292,7 @@ export default function EscanearGastoPage() {
                             <div className="grid grid-cols-[1fr_90px_110px_auto] gap-2 items-center">
                               <Input type="number" step="0.01" placeholder="Base imponible" value={row.base} onChange={e => updateIvaRow(row.id, 'base', e.target.value)} className="h-9 rounded-lg" />
                               <Input type="number" step="0.01" placeholder="IVA %" value={row.rate} onChange={e => updateIvaRow(row.id, 'rate', e.target.value)} className="h-9 rounded-lg" />
-                              <span className="text-xs font-bold text-slate-600 text-right">€{computePercentageAmount(row.base, row.rate) || '0.00'}</span>
+                              <span className="text-xs font-bold text-slate-600 text-right">{formatearImporte(Number(computePercentageAmount(row.base, row.rate)) || 0, monedaFormulario)}</span>
                               <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => removeIvaRow(row.id)} aria-label="Quitar tramo">×</Button>
                             </div>
                             {/* Aprendizaje: propuesta de región al corregir un tramo a mano */}
@@ -2299,8 +2301,8 @@ export default function EscanearGastoPage() {
                           </div>
                         ))}
                         <div className="flex justify-between text-xs font-black pt-2 border-t">
-                          <span>Base total: <span className="text-foreground">€{ivaTotals.base.toFixed(2)}</span></span>
-                          <span>IVA total: <span className="text-foreground">€{ivaTotals.vat.toFixed(2)}</span></span>
+                          <span>Base total: <span className="text-foreground">{formatearImporte(ivaTotals.base, monedaFormulario)}</span></span>
+                          <span>IVA total: <span className="text-foreground">{formatearImporte(ivaTotals.vat, monedaFormulario)}</span></span>
                         </div>
                         <p className="text-[10px] text-muted-foreground">«Repartir» distribuye el total a partes iguales entre los tramos vacíos (el último absorbe el redondeo). «Resto en último» deja los intermedios vacíos y solo rellena el último con lo que falte para cuadrar el total. Los totales se sincronizan con el desglose superior (Base Imponible / Cuota IVA).</p>
                       </div>
@@ -2313,9 +2315,9 @@ export default function EscanearGastoPage() {
                       <div className="space-y-1">
                         <p className="text-xs font-black uppercase tracking-tight">Los totales no cuadran</p>
                         <p className="text-xs font-medium">
-                          Base + IVA + recargo − IRPF = <span className="font-bold">€{totalsMismatch.expected.toFixed(2)}</span>, pero el total de la factura es{' '}
-                          <span className="font-bold">€{parseFloat(form.totalFactura).toFixed(2)}</span> (diferencia{' '}
-                          <span className="font-bold">€{totalsMismatch.difference.toFixed(2)}</span>). Revisa los importes antes de guardar.
+                          Base + IVA + recargo − IRPF = <span className="font-bold">{formatearImporte(totalsMismatch.expected, monedaFormulario)}</span>, pero el total de la factura es{' '}
+                          <span className="font-bold">{formatearImporte(parseFloat(form.totalFactura), monedaFormulario)}</span> (diferencia{' '}
+                          <span className="font-bold">{formatearImporte(totalsMismatch.difference, monedaFormulario)}</span>). Revisa los importes antes de guardar.
                         </p>
                       </div>
                     </div>
