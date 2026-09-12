@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { PuckRenderer } from '@/components/cms/PuckRenderer';
+import { formatearImporte } from '@/lib/moneda';
 import type { Data } from "@measured/puck";
 
 interface PageClientProps {
@@ -38,7 +39,7 @@ export default function PageClient({ page }: PageClientProps) {
           let value = '';
           if (fieldKey === 'nombre') value = item.nombre;
           else if (fieldKey === 'descripcion') value = item.descripcion || '';
-          else if (fieldKey === 'precio') value = new Intl.NumberFormat('es-ES').format(item.precioBase) + ' ' + item.moneda;
+          else if (fieldKey === 'precio') value = formatearImporte(item.precioBase, item.moneda, 0);
           else if (fieldKey === 'sku') value = item.sku || '';
           else {
             const custom = item.customFieldValues || {};

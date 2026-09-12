@@ -2,6 +2,7 @@
 
 import { useRef, useEffect, useState } from 'react';
 import { useInView } from 'framer-motion';
+import { formatearNumero } from '@/lib/moneda';
 
 export default function CountUp({
   target,
@@ -37,7 +38,7 @@ export default function CountUp({
   return (
     <span ref={ref} className="tabular-nums">
       {prefix}
-      {count.toLocaleString('es-ES')}
+      {formatearNumero(count)}
       {suffix}
     </span>
   );

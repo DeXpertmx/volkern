@@ -18,6 +18,19 @@ import {
 
 /* ─── Data ────────────────────────────────────────────────────────────────── */
 
+/**
+ * Precios publicados de las tarifas del vertical de seguros, en la divisa con la
+ * que Volkern factura sus planes.
+ *
+ * Estaban escritos a mano en la portada, en las tarjetas de uso y en la tabla de
+ * tarifas —siete veces en el mismo archivo—, así que un cambio de precio había
+ * que acordarse de hacerlo en todos los sitios. Ahora hay una sola declaración y
+ * todo lo que el visitante lee sale de aquí.
+ */
+const PRECIO_AGENTES = 99;
+const PRECIO_CORREDURIAS = 199;
+const PRECIO_AGENCIAS = 499;
+
 const PAIN_POINTS = [
   { icon: Calendar, text: 'Renovaciones que pasan desapercibidas' },
   { icon: Users, text: 'Clientes sin seguimiento en meses' },
@@ -67,9 +80,9 @@ const BENEFITS = [
 ];
 
 const USE_CASES = [
-  { icon: Users, title: 'Agentes independientes', desc: 'Gestiona tu cartera personal sin depender de nadie. IA que te avisa qué hacer cada día. Desde €99/mes.' },
-  { icon: Building2, title: 'Corredurías con equipos', desc: 'Múltiples usuarios, roles, pipelines separados por agente. Visibilidad completa del equipo. Desde €199/mes.' },
-  { icon: Shield, title: 'Agencias de seguros', desc: 'Equipos comerciales con roles, reporting avanzado y soporte prioritario. Desde €499/mes. Personalización de marca y portal cliente: próximamente.', roadmap: true },
+  { icon: Users, title: 'Agentes independientes', desc: `Gestiona tu cartera personal sin depender de nadie. IA que te avisa qué hacer cada día. Desde ${formatearImporte(PRECIO_AGENTES, MONEDA_PLATAFORMA, 0)}/mes.` },
+  { icon: Building2, title: 'Corredurías con equipos', desc: `Múltiples usuarios, roles, pipelines separados por agente. Visibilidad completa del equipo. Desde ${formatearImporte(PRECIO_CORREDURIAS, MONEDA_PLATAFORMA, 0)}/mes.` },
+  { icon: Shield, title: 'Agencias de seguros', desc: `Equipos comerciales con roles, reporting avanzado y soporte prioritario. Desde ${formatearImporte(PRECIO_AGENCIAS, MONEDA_PLATAFORMA, 0)}/mes. Personalización de marca y portal cliente: próximamente.`, roadmap: true },
 ];
 
 const TESTIMONIALS = [
@@ -81,7 +94,7 @@ const TESTIMONIALS = [
 const PRICING_TIERS = [
   {
   name: 'Starter',
-  price: 99,
+  price: PRECIO_AGENTES,
   color: 'sky',
   borderClass: 'border-sky-500/30',
   bgClass: 'bg-sky-500/10',
@@ -101,7 +114,7 @@ const PRICING_TIERS = [
   },
   {
   name: 'Professional',
-  price: 199,
+  price: PRECIO_CORREDURIAS,
   color: 'purple',
   borderClass: 'border-sky-500/50',
   bgClass: 'bg-sky-500/10',
@@ -122,7 +135,7 @@ const PRICING_TIERS = [
   },
   {
   name: 'Agency',
-  price: 499,
+  price: PRECIO_AGENCIAS,
   color: 'emerald',
   borderClass: 'border-emerald-500/30',
   bgClass: 'bg-emerald-500/10',
@@ -204,7 +217,7 @@ export default function InsuranceLanding() {
               Detecta renovaciones, prioriza tu cartera cada mañana y predice el comportamiento por ramo.
             </p>
             <p className="text-lg text-slate-500 max-w-2xl mx-auto mb-10">
-              Desde <span className="text-white font-bold">€99/mes</span>. 14 días gratis. Sin tarjeta.
+              Desde <span className="text-white font-bold">{formatearImporte(PRECIO_AGENTES, MONEDA_PLATAFORMA, 0)}/mes</span>. 14 días gratis. Sin tarjeta.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link href="/signup?vertical=insurance">
@@ -383,7 +396,7 @@ export default function InsuranceLanding() {
                   <h3 className="text-xl font-bold text-white mb-1">{tier.name}</h3>
                   <p className="text-slate-400 text-sm mb-4">{tier.description}</p>
                   <div className="mb-6">
-                    <span className="text-4xl font-bold text-white">€{tier.price}</span>
+                    <span className="text-4xl font-bold text-white">{formatearImporte(tier.price, MONEDA_PLATAFORMA, 0)}</span>
                     <span className="text-slate-500">/mes</span>
                   </div>
                   <ul className="space-y-3 mb-8 flex-1">
@@ -432,7 +445,7 @@ export default function InsuranceLanding() {
             <div className="flex items-center justify-center gap-4 mt-6">
               <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4">
                 <p className="text-slate-400 text-sm">Con Volkern</p>
-                <p className="text-emerald-400 text-2xl font-bold">desde €99/mes</p>
+                <p className="text-emerald-400 text-2xl font-bold">desde {formatearImporte(PRECIO_AGENTES, MONEDA_PLATAFORMA, 0)}/mes</p>
               </div>
               <ArrowRight className="w-6 h-6 text-slate-600" />
               <div className="bg-slate-900/50 border border-emerald-500/20 rounded-xl p-4">
@@ -545,7 +558,7 @@ export default function InsuranceLanding() {
               <p className="text-lg text-slate-400 mb-4 max-w-xl mx-auto">
                 <span className="text-white font-bold">14 días gratis</span>. Sin tarjeta. Sin compromiso.
               </p>
-              <p className="text-slate-500 text-sm mb-10">Luego desde €99/mes. Incluye CRM de seguros, IA, renovaciones y más.</p>
+              <p className="text-slate-500 text-sm mb-10">Luego desde {formatearImporte(PRECIO_AGENTES, MONEDA_PLATAFORMA, 0)}/mes. Incluye CRM de seguros, IA, renovaciones y más.</p>
               <Link href="/signup?vertical=insurance">
                 <Button size="lg" className="bg-sky-600 hover:bg-sky-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-sky-600/30 group">
                   Empezar prueba gratis

@@ -3,7 +3,8 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { getVerticalPlanPrice } from '@/lib/vertical-plans';
+import { VERTICAL_PLANS, getVerticalPlanPrice } from '@/lib/vertical-plans';
+import { MONEDA_PLATAFORMA, formatearImporte } from '@/lib/moneda';
 import { Button } from '@/components/ui/button';
 import {
   ArrowRight, Zap, Home, GraduationCap, Calculator,
@@ -12,6 +13,19 @@ import {
   Users,
 } from 'lucide-react';
 import { PublicLayout } from '@/components/public/PublicLayout';
+
+/**
+ * Precio de entrada, derivado del catálogo publicado.
+ *
+ * El «Desde 19 €/mes» del encabezado era un literal: si el catálogo cambiaba, la
+ * portada seguía anunciando el precio viejo. Ahora es el mínimo real de
+ * `lib/vertical-plans.ts`, la fuente que usa el cobro.
+ */
+const PRECIO_DESDE = formatearImporte(
+  Math.min(...VERTICAL_PLANS.map((v) => v.price)),
+  MONEDA_PLATAFORMA,
+  0
+);
 
 /* ─── Vertical definitions ─────────────────────────────────────────────── */
 
@@ -136,7 +150,7 @@ export default function PricingPage() {
             <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease: 'easeOut' }}>
               <span className="inline-flex items-center gap-2 py-1.5 px-4 rounded-full bg-emerald-500/10 text-emerald-400 text-sm font-medium mb-6 border border-emerald-500/20">
                 <Zap className="w-4 h-4" />
-                Desde €19/mes · 14 días gratis
+                Desde {PRECIO_DESDE}/mes · 14 días gratis
               </span>
               <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 leading-tight tracking-tight">
                 Precios claros.{' '}
@@ -190,7 +204,7 @@ export default function PricingPage() {
                         <div className="flex items-baseline gap-1">
                           {/* El precio no se escribe aquí: sale de la fuente única
                               (lib/vertical-plans.ts), la misma que usa el cobro. */}
-                          <span className="text-3xl font-black text-white">€{getVerticalPlanPrice(v.id) ?? 0}</span>
+                          <span className="text-3xl font-black text-white">{formatearImporte(getVerticalPlanPrice(v.id) ?? 0, MONEDA_PLATAFORMA, 0)}</span>
                           <span className="text-sm text-slate-500">/mes</span>
                         </div>
                         <p className="text-[10px] text-slate-600 mt-0.5">14 días gratis · Sin permanencia</p>

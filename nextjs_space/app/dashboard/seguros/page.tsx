@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api-client';
+import { formatearImporte } from '@/lib/moneda';
 import { formatCurrencyExact } from '@/components/insurance/portfolio-format';
 import {
   Shield,
@@ -27,6 +28,8 @@ interface InsuranceStats {
   totalAseguradoras: number;
   totalProductos: number;
   primaTotal: number;
+  /** Divisa de reporte del tenant: el agregado de primas se escribe en ella. */
+  tenantMoneda?: string;
   renovaciones30d: number;
   renovaciones60d: number;
   oportunidadesDetectadas: number;
@@ -127,9 +130,7 @@ export default function SegurosDashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {stats?.primaTotal
-                ? `${(stats.primaTotal / 1000).toFixed(1)}K €`
-                : '0 €'}
+              {formatearImporte(stats?.primaTotal, stats?.tenantMoneda || '', 0)}
             </div>
             <p className="text-xs text-muted-foreground">
               Valor total de la cartera

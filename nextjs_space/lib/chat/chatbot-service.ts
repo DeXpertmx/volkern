@@ -295,7 +295,10 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
     }
 
     const [tenant, services] = await Promise.all([
-      prisma.tenant.findUnique({ where: { id: tenantId }, select: { id: true, nombre: true, plan: true } }),
+      prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { id: true, nombre: true, plan: true, moneda: true },
+      }),
       prisma.servicio.findMany({ where: { tenantId, activo: true } }),
     ])
 
@@ -797,6 +800,10 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
           userId: input.userId || conv.id,
           tenantId,
           sessionId: conv.id,
+          // El tenant ya está cargado en esta petición: el motor escribe el
+          // dinero de la respuesta en su divisa sin repetir la consulta.
+          moneda: tenant?.moneda,
+
           // Canales como WhatsApp pasan el leadId de la conversación: se
           // inyecta al skill para que la entidad creada (tarea, nota…) quede
           // ligada al lead del chat.

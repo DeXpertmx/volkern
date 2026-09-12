@@ -10,6 +10,20 @@ import {
   Star, Quote, Store, Briefcase, Wrench,
 } from 'lucide-react';
 
+import { MONEDA_PLATAFORMA, formatearImporte } from '@/lib/moneda';
+import { getVerticalPlanPrice } from '@/lib/vertical-plans';
+
+/**
+ * Precio mensual publicado de la vertical, en la divisa de la plataforma.
+ *
+ * Sale de `lib/vertical-plans.ts`, la misma fuente que usa el cobro: la portada
+ * no puede anunciar un precio distinto del que se factura. Antes era un literal
+ * `€NN/mes` repetido en cuatro sitios de la página.
+ */
+const PRECIO_MES = getVerticalPlanPrice('facturacion') ?? 0;
+const PRECIO_MES_TEXTO = formatearImporte(PRECIO_MES, MONEDA_PLATAFORMA, 0);
+const CON_VOLKERN = `${PRECIO_MES_TEXTO}/mes`;
+
 const PAIN_POINTS = [
   { icon: Clock, text: 'Horas perdidas haciendo facturas' },
   { icon: AlertTriangle, text: 'Errores que cuestan dinero' },
@@ -61,7 +75,7 @@ const USE_CASES = [
 
 const TESTIMONIALS = [
   { quote: 'De pasar 3 horas al mes facturando a hacerlo en 10 minutos. Volkern Factura cambió mi rutina por completo.', name: 'María López', role: 'Diseñadora freelance', avatar: 'ML' },
-  { quote: 'Antes usaba 3 herramientas. Ahora cliente, factura y cobro están en el mismo sitio. Por €19 al mes es un regalo.', name: 'Carlos Ruiz', role: 'Tienda de informática', avatar: 'CR' },
+  { quote: `Antes usaba 3 herramientas. Ahora cliente, factura y cobro están en el mismo sitio. Por ${PRECIO_MES_TEXTO} al mes es un regalo.`, name: 'Carlos Ruiz', role: 'Tienda de informática', avatar: 'CR' },
   { quote: 'Mis clientes reciben la factura al instante y yo sé quién ha pagado y quién no. Sin perseguir a nadie.', name: 'Ana García', role: 'Consultora fiscal', avatar: 'AG' },
 ];
 
@@ -120,7 +134,7 @@ export default function FacturacionLanding() {
               Crea facturas profesionales, controla cobros y ten tus impuestos listos.
             </p>
             <p className="text-lg text-slate-500 max-w-2xl mx-auto mb-10">
-              Desde <span className="text-white font-bold">€19/mes</span>. Sin complicaciones. Sin Excels. Sin perder horas.
+              Desde <span className="text-white font-bold">{CON_VOLKERN}</span>. Sin complicaciones. Sin Excels. Sin perder horas.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link href="/signup?vertical=facturacion">
@@ -322,14 +336,14 @@ export default function FacturacionLanding() {
                 <motion.div key={tool.name} initial={{ opacity: 0, x: -10 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.3, delay: i * 0.05 }}
                   className="grid grid-cols-3 gap-4 px-6 py-4 border-b border-slate-800/50 last:border-b-0 hover:bg-slate-800/30 transition-colors">
                   <span className="text-slate-300 font-medium">{tool.name}</span>
-                  <span className="text-red-400 text-right font-mono font-semibold">{tool.price === 0 ? 'Gratis' : `€${tool.price}`}</span>
+                  <span className="text-red-400 text-right font-mono font-semibold">{tool.price === 0 ? 'Gratis' : formatearImporte(tool.price, MONEDA_PLATAFORMA, 0)}</span>
                   <span className="text-green-400 text-right font-mono font-semibold flex items-center justify-end gap-2"><Check className="w-4 h-4" /> Incluido</span>
                 </motion.div>
               ))}
               <div className="grid grid-cols-3 gap-4 px-6 py-5 bg-slate-800/50 border-t-2 border-green-500/30">
                 <span className="text-white font-bold text-lg">Total</span>
-                <span className="text-red-400 text-right font-bold text-lg font-mono">€{TOTAL_COMPETITOR}+</span>
-                <span className="text-green-400 text-right font-bold text-lg font-mono">€19/mes</span>
+                <span className="text-red-400 text-right font-bold text-lg font-mono">{formatearImporte(TOTAL_COMPETITOR, MONEDA_PLATAFORMA, 0)}+</span>
+                <span className="text-green-400 text-right font-bold text-lg font-mono">{CON_VOLKERN}</span>
               </div>
             </div>
             <p className="text-center text-slate-500 text-sm mt-4">14 días de prueba gratis. Sin compromiso. Cancela cuando quieras.</p>
@@ -409,7 +423,7 @@ export default function FacturacionLanding() {
               <p className="text-lg text-slate-400 mb-4 max-w-xl mx-auto">
                 Empieza hoy con <span className="text-white font-bold">14 días gratis</span>. Sin tarjeta. Sin compromiso.
               </p>
-              <p className="text-slate-500 text-sm mb-10">Luego €19/mes. Cancela cuando quieras.</p>
+              <p className="text-slate-500 text-sm mb-10">Luego {CON_VOLKERN}. Cancela cuando quieras.</p>
               <Link href="/signup?vertical=facturacion">
                 <Button size="lg" className="bg-green-600 hover:bg-green-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-green-600/30 group">
                   Probar 14 días gratis

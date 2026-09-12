@@ -136,6 +136,38 @@ export function nombreMoneda(codigo: string | null | undefined): string {
 export const PATRON_CODIGOS_MONEDA = MONEDAS_SOPORTADAS.join('|');
 
 /**
+ * Símbolos con los que se puede escribir un importe dentro de un texto.
+ *
+ * No responde por una divisa concreta —eso es `simboloMoneda`— sino que sirve
+ * para reconocer que ahí hay dinero: lo usa quien lee un importe escrito por
+ * otra persona, no quien lo redacta.
+ */
+export const PATRON_SIMBOLOS_MONEDA = '[€£¥$]';
+
+/**
+ * Nombres de divisa en español, tal y como aparecen en un mensaje.
+ *
+ * El nombre de una divisa es el mismo conocimiento que su código, y por eso vive
+ * aquí: el clasificador de intenciones tenía su propia lista de «euros», «pesos»
+ * y «dólares» repetida en siete expresiones regulares, y una divisa nueva del
+ * catálogo no se reconocía en ninguna.
+ */
+export const PATRON_NOMBRES_MONEDA = 'euros?|pesos|d[oó]lares?';
+
+/**
+ * Cómo se menciona una divisa en un texto libre: su símbolo, su nombre en
+ * español o su código ISO.
+ *
+ * Sirve para **reconocer** dinero en lo que alguien escribió, no para escribirlo
+ * —para eso está `formatearImporte`—, y acepta las tres formas porque «5.000 €»,
+ * «5000 euros» y «30000 MXN» son el mismo dato dicho de tres maneras.
+ *
+ * No lleva grupo a propósito, para poder insertarse dentro de una expresión
+ * mayor sin alterar sus índices de captura.
+ */
+export const PATRON_MENCION_MONEDA = `(?:${PATRON_SIMBOLOS_MONEDA}|${PATRON_NOMBRES_MONEDA}|${PATRON_CODIGOS_MONEDA})`;
+
+/**
  * Divisa que escribe ese símbolo, o `null` si es ambiguo o desconocido.
  *
  * El símbolo no identifica una divisa por sí solo —`$` es el dólar, el peso
@@ -321,6 +353,23 @@ export function primeraMoneda(...valores: Array<string | null | undefined>): str
  */
 export function monedaEscritura(...valores: Array<string | null | undefined>): string {
   return primeraMoneda(...valores) || MONEDA_MINIMA_ESQUEMA;
+}
+
+/**
+ * Número con la convención de la plataforma, sin símbolo de divisa.
+ *
+ * Existe para los contadores y las magnitudes que **no son dinero** —número de
+ * usuarios, leads, metros cuadrados, descargas— y que aun así necesitan separador
+ * de millares. Vive aquí, junto a la tabla de convenciones, para que un contador
+ * no tenga que escribir un locale a mano: era el último sitio del portal donde un
+ * `toLocaleString('es-ES')` no venía de datos.
+ */
+export function formatearNumero(valor: number | null | undefined, decimales = 0): string {
+  if (valor === null || valor === undefined || !Number.isFinite(valor)) return '—';
+  return valor.toLocaleString(CONVENCION_POR_DEFECTO, {
+    minimumFractionDigits: decimales,
+    maximumFractionDigits: decimales,
+  });
 }
 
 /**

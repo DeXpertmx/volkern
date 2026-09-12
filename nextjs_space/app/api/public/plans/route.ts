@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { PLANS, PLAN_FEATURES } from '@/lib/plans'
+import { MONEDA_PLATAFORMA } from '@/lib/moneda'
 import { calcularPrecio } from '@/lib/pricing-engine'
 
 export const dynamic = 'force-dynamic'
@@ -15,7 +16,7 @@ export async function GET() {
       name: 'Scale',
       price: scalePrice.precio,
       priceYearly: Math.round(scalePrice.precio * 0.8 * 12),
-      currency: 'EUR',
+      currency: MONEDA_PLATAFORMA,
       features: PLAN_FEATURES[PLANS.SCALE],
       popular: false,
     },
@@ -24,7 +25,7 @@ export async function GET() {
       name: 'Compliance Pro',
       price: compliancePrice.precio,
       priceYearly: Math.round(compliancePrice.precio * 0.8 * 12),
-      currency: 'EUR',
+      currency: MONEDA_PLATAFORMA,
       features: PLAN_FEATURES[PLANS.COMPLIANCE],
       popular: true,
     },

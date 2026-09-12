@@ -18,6 +18,7 @@ import {
   Briefcase,
 } from 'lucide-react';
 import { verticalLinks } from '@/lib/navigation';
+import { MONEDA_PLATAFORMA, formatearImporte } from '@/lib/moneda';
 import SetupBasico from '@/components/public/SetupBasico';
 import './landing-new.css';
 
@@ -94,6 +95,19 @@ const PRICING = {
     monthlyEquivalentSuffix: '/ mes',
   },
 } as const;
+
+/**
+ * Importes de la campaña, escritos con el módulo único de dinero.
+ *
+ * La página repetía los mismos ocho números a mano treinta veces —el setup de
+ * 299 a 149/199, la suscripción de 49 a 39, el anual de 588 a 470— entre el
+ * bloque de setup, las tarjetas comparadas, el resumen del final y el aviso de
+ * caducidad. Ahora todos se derivan de `PRICING`, que ya era la única
+ * declaración de la promoción: cambiar un precio de campaña es cambiar una línea.
+ */
+const importe = (n: number) => formatearImporte(n, MONEDA_PLATAFORMA, 0);
+/** Usuarios adicionales de la promoción, en la misma divisa. */
+const PRECIO_USUARIO_EXTRA = 10;
 
 /* ───────────────────────────────────────────────────────────────────────────
  *  Componente principal
@@ -330,7 +344,7 @@ export default function NetingLanding() {
                   <h3 className="text-white text-2xl sm:text-3xl font-black leading-tight">
                     Hasta{' '}
                     <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 to-emerald-300">
-                      €150
+                      {importe(PRICING.annual.setupOriginal - PRICING.annual.setupPromo)}
                     </span>{' '}
                     menos en tu activación
                   </h3>
@@ -350,19 +364,19 @@ export default function NetingLanding() {
                     </p>
                     <div className="flex items-center justify-center gap-3 sm:gap-4 mb-4">
                       <span className="text-slate-400 line-through font-bold text-2xl sm:text-3xl tabular-nums">
-                        €299
+                        {importe(PRICING.annual.setupOriginal)}
                       </span>
                       <ArrowRight
                         className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-400"
                         aria-hidden="true"
                       />
                       <span className="font-black text-white text-5xl sm:text-7xl leading-none tabular-nums">
-                        €149
+                        {importe(PRICING.annual.setupPromo)}
                       </span>
                     </div>
                     <div className="text-center">
                       <span className="inline-block bg-emerald-500 text-emerald-950 text-sm font-black uppercase tracking-wider px-4 py-1.5 rounded-full shadow-md">
-                        Ahorras €150
+                        Ahorras {importe(PRICING.annual.setupOriginal - PRICING.annual.setupPromo)}
                       </span>
                     </div>
                   </div>
@@ -374,19 +388,19 @@ export default function NetingLanding() {
                     </p>
                     <div className="flex items-center justify-center gap-3 sm:gap-4 mb-4">
                       <span className="text-slate-400 line-through font-bold text-2xl sm:text-3xl tabular-nums">
-                        €299
+                        {importe(PRICING.monthly.setupOriginal)}
                       </span>
                       <ArrowRight
                         className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-400"
                         aria-hidden="true"
                       />
                       <span className="font-black text-white text-5xl sm:text-7xl leading-none tabular-nums">
-                        €199
+                        {importe(PRICING.monthly.setupPromo)}
                       </span>
                     </div>
                     <div className="text-center">
                       <span className="inline-block bg-emerald-500/30 text-emerald-200 text-sm font-black uppercase tracking-wider px-4 py-1.5 rounded-full border border-emerald-500/50">
-                        Ahorras €100
+                        Ahorras {importe(PRICING.monthly.setupOriginal - PRICING.monthly.setupPromo)}
                       </span>
                     </div>
                   </div>
@@ -411,14 +425,14 @@ export default function NetingLanding() {
               <div className="flex items-center justify-center gap-4 sm:gap-8 flex-wrap">
                 <div className="flex items-center gap-3">
                   <span className="text-slate-400 line-through font-bold text-xl sm:text-2xl tabular-nums">
-                    €49/mes
+                    {importe(PRICING.monthly.original)}/mes
                   </span>
                   <ArrowRight
                     className="w-4 h-4 text-emerald-400"
                     aria-hidden="true"
                   />
                   <span className="text-emerald-400 font-black text-2xl sm:text-3xl tabular-nums">
-                    €39/mes
+                    {importe(PRICING.monthly.promo)}/mes
                   </span>
                 </div>
                 <div
@@ -427,14 +441,14 @@ export default function NetingLanding() {
                 />
                 <div className="flex items-center gap-3">
                   <span className="text-slate-400 line-through font-bold text-xl sm:text-2xl tabular-nums">
-                    €588/año
+                    {importe(PRICING.annual.original)}/año
                   </span>
                   <ArrowRight
                     className="w-4 h-4 text-emerald-400"
                     aria-hidden="true"
                   />
                   <span className="text-emerald-400 font-black text-2xl sm:text-3xl tabular-nums">
-                    €470/año
+                    {importe(PRICING.annual.promo)}/año
                   </span>
                 </div>
               </div>
@@ -554,7 +568,7 @@ export default function NetingLanding() {
                 Para garantizar resultados desde el día 1, todos los clientes de la
                 promo Neting reciben el Setup Asistido con tarifa especial.
                 <span className="block mt-1 font-bold text-emerald-300">
-                  €299 → €199 (mensual) · €299 → €149 (anual)
+                  {importe(PRICING.monthly.setupOriginal)} → {importe(PRICING.monthly.setupPromo)} (mensual) · {importe(PRICING.annual.setupOriginal)} → {importe(PRICING.annual.setupPromo)} (anual)
                 </span>
               </p>
             </div>
@@ -645,17 +659,17 @@ export default function NetingLanding() {
                     {/* Precio grande + tachado */}
                     <div className="vl-price-display">
                       <span className="vl-price-value">
-                        €{planData.promo}
+                        {importe(planData.promo)}
                       </span>
                       <span className="vl-price-suffix">
-                        <span className="line-through text-slate-400 font-bold">Antes €{planData.original}</span>
+                        <span className="line-through text-slate-400 font-bold">Antes {importe(planData.original)}</span>
                         {' '}{planData.monthlyEquivalentSuffix}
                       </span>
                     </div>
 
                     {/* Ahorro */}
                     <p className="vl-price-footnote text-emerald-400 font-medium">
-                      Ahorras €{planData.original - planData.promo} con la promo Neting
+                      Ahorras {importe(planData.original - planData.promo)} con la promo Neting
                     </p>
 
                     {/* Setup + extras */}
@@ -666,9 +680,9 @@ export default function NetingLanding() {
                         </p>
                         <p className="vl-summary-value text-emerald-300 flex items-center gap-2">
                           <span className="line-through text-slate-400 text-sm">
-                            €{planData.setupOriginal}
+                            {importe(planData.setupOriginal)}
                           </span>
-                          <span className="font-black">€{planData.setupPromo}</span>
+                          <span className="font-black">{importe(planData.setupPromo)}</span>
                         </p>
                       </div>
                       <div className="vl-summary-item">
@@ -688,7 +702,7 @@ export default function NetingLanding() {
 
                     {/* Usuarios adicionales footnote */}
                     <p className="text-[10px] text-slate-500 text-center mt-4">
-                      Usuarios adicionales desde €10/mes c/u
+                      Usuarios adicionales desde {importe(PRECIO_USUARIO_EXTRA)}/mes c/u
                     </p>
                   </div>
                 </div>
@@ -758,8 +772,8 @@ export default function NetingLanding() {
                     {/* Subtítulo dinámico según selección */}
                     <p className="text-xs text-slate-400 text-center">
                       {isAnnual
-                        ? 'Setup por €149 · €470/año (ahorras €118)'
-                        : 'Setup por €199 · €39/mes (ahorras €10/mes)'}
+                        ? `Setup por ${importe(PRICING.annual.setupPromo)} · ${importe(PRICING.annual.promo)}/año (ahorras ${importe(PRICING.annual.original - PRICING.annual.promo)})`
+                        : `Setup por ${importe(PRICING.monthly.setupPromo)} · ${importe(PRICING.monthly.promo)}/mes (ahorras ${importe(PRICING.monthly.original - PRICING.monthly.promo)}/mes)`}
                     </p>
                   </div>
 
@@ -798,11 +812,11 @@ export default function NetingLanding() {
                     <p className="vl-assurance-text">
                       Activa tu plan ahora con{' '}
                       <span className="vl-assurance-price">
-                        {isAnnual ? '€149' : '€199'}
+                        {importe(isAnnual ? PRICING.annual.setupPromo : PRICING.monthly.setupPromo)}
                       </span>{' '}
                       de setup y{' '}
                       <span className="vl-assurance-price">
-                        €{planData.promo}{planData.suffix}
+                        {importe(planData.promo)}{planData.suffix}
                       </span>{' '}
                       de suscripción.
                     </p>
@@ -901,7 +915,7 @@ export default function NetingLanding() {
                       Cuando termine
                     </p>
                     <p className="text-white font-bold text-sm">
-                      El setup vuelve a <span className="line-through text-slate-400">€299</span>{' '}
+                      El setup vuelve a <span className="line-through text-slate-400">{importe(PRICING.monthly.setupOriginal)}</span>{' '}
                       completo
                     </p>
                   </div>
@@ -980,11 +994,11 @@ export default function NetingLanding() {
               {/* Mensual */}
               <div className="vl-ring-soft rounded-xl p-4 bg-slate-950/60 border border-white/10 text-center">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Mensual</p>
-                <p className="text-2xl font-black text-white tabular-nums">€49</p>
+                <p className="text-2xl font-black text-white tabular-nums">{importe(PRICING.monthly.original)}</p>
                 <p className="text-xs text-slate-500">/mes</p>
                 <div className="mt-2 pt-2 border-t border-white/5">
                   <p className="text-[10px] text-slate-500">Setup</p>
-                  <p className="text-sm font-bold text-slate-300">€299</p>
+                  <p className="text-sm font-bold text-slate-300">{importe(PRICING.monthly.setupOriginal)}</p>
                 </div>
               </div>
               {/* Anual */}
@@ -993,11 +1007,11 @@ export default function NetingLanding() {
                   -20% fact anual
                 </span>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 mt-1">Anual</p>
-                <p className="text-2xl font-black text-white tabular-nums">€588</p>
-                <p className="text-xs text-slate-500">/año (€49/mes)</p>
+                <p className="text-2xl font-black text-white tabular-nums">{importe(PRICING.annual.original)}</p>
+                <p className="text-xs text-slate-500">/año ({importe(PRICING.monthly.original)}/mes)</p>
                 <div className="mt-2 pt-2 border-t border-white/5">
                   <p className="text-[10px] text-slate-500">Setup</p>
-                  <p className="text-sm font-bold text-slate-300">€299</p>
+                  <p className="text-sm font-bold text-slate-300">{importe(PRICING.monthly.setupOriginal)}</p>
                 </div>
               </div>
             </div>
@@ -1010,14 +1024,14 @@ export default function NetingLanding() {
               <div className="grid grid-cols-2 gap-3 text-xs">
                 <div>
                   <span className="text-slate-400">Mensual: </span>
-                  <span className="text-rose-300 line-through">€39</span>
-                  <span className="text-white font-bold"> → €49</span>
-                  <span className="text-rose-400 ml-1">+€10/mes</span>
+                  <span className="text-rose-300 line-through">{importe(PRICING.monthly.promo)}</span>
+                  <span className="text-white font-bold"> → {importe(PRICING.monthly.original)}</span>
+                  <span className="text-rose-400 ml-1">+{importe(PRECIO_USUARIO_EXTRA)}/mes</span>
                 </div>
                 <div>
                   <span className="text-slate-400">Setup: </span>
-                  <span className="text-rose-300 line-through">€149-199</span>
-                  <span className="text-white font-bold"> → €299</span>
+                  <span className="text-rose-300 line-through">{importe(PRICING.annual.setupPromo)}-{importe(PRICING.monthly.setupPromo)}</span>
+                  <span className="text-white font-bold"> → {importe(PRICING.monthly.setupOriginal)}</span>
                 </div>
               </div>
             </div>

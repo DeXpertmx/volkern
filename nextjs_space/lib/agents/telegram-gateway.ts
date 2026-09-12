@@ -1,8 +1,10 @@
 import { prisma } from '@/lib/db';
 import { TelegramService } from '@/lib/telegram';
 import { rateLimiter } from '@/lib/rate-limiter';
+import { formatearImporte } from '@/lib/moneda';
 import { sanitizeInput, ConversationContextAgent } from './conversation-context';
 import { ChatbotAuditLogger } from './audit-logger';
+import { monedaDelTenant } from './moneda-tenant';
 
 export interface TelegramUpdate {
   update_id: number;
@@ -215,9 +217,12 @@ export class TelegramGatewayAgent {
           return { success: true, response: msg };
         }
 
+        // La previsión es dinero que el usuario lee, así que va en la divisa de su
+        // cuenta: el euro escrito a mano mostraba euros a un tenant en pesos.
+        const moneda = await monedaDelTenant(tenantId);
         let msg = `🤖 <b>INTELIGENCIA FISCAL AI (30 DÍAS)</b>\n\n`;
-        msg += `💰 Facturación Est.: ${forecast.totalInvoiced.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}\n`;
-        msg += `🏛️ IVA Estimado: ${forecast.estimatedVAT.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}\n`;
+        msg += `💰 Facturación Est.: ${formatearImporte(forecast.totalInvoiced, moneda)}\n`;
+        msg += `🏛️ IVA Estimado: ${formatearImporte(forecast.estimatedVAT, moneda)}\n`;
         msg += `📈 Tendencia: <b>${forecast.trend}</b>\n\n`;
         msg += `<i>Nota: Esta es una estimación basada en patrones de facturación.</i>`;
 

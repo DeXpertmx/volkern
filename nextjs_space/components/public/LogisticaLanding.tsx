@@ -4,11 +4,24 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { MONEDA_PLATAFORMA, formatearImporte } from '@/lib/moneda';
 import {
   ArrowRight, Check, Zap, MessageCircle, Users, BarChart3,
   TrendingUp, Clock, AlertTriangle, Search, FileText,
   Target, Truck, Layers, ShieldCheck, Eye, MapPin,
 } from 'lucide-react';
+
+/**
+ * Precio mensual publicado de la vertical, en la divisa de la plataforma.
+ *
+ * La logística todavía no está en `lib/vertical-plans.ts` (el catálogo que usa
+ * el cobro), así que el precio se declara aquí una sola vez en lugar de repetido
+ * como literal en la tabla; en cuanto la vertical entre al catálogo, esta
+ * constante se sustituye por `getVerticalPlanPrice`.
+ */
+const PRECIO_MES = 50;
+const PRECIO_MES_TEXTO = formatearImporte(PRECIO_MES, MONEDA_PLATAFORMA, 0);
+const CON_VOLKERN = `${PRECIO_MES_TEXTO}/mes`;
 
 /* ─── Data ────────────────────────────────────────────────────────────────── */
 
@@ -285,14 +298,14 @@ export default function LogisticaLanding() {
                 <motion.div key={tool.name} initial={{ opacity: 0, x: -10 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.3, delay: i * 0.05 }}
                   className="grid grid-cols-3 gap-4 px-6 py-4 border-b border-slate-800/50 last:border-b-0 hover:bg-slate-800/30 transition-colors">
                   <span className="text-slate-300 font-medium">{tool.name}</span>
-                  <span className="text-red-400 text-right font-mono font-semibold">€{tool.price}</span>
+                  <span className="text-red-400 text-right font-mono font-semibold">{formatearImporte(tool.price, MONEDA_PLATAFORMA, 0)}</span>
                   <span className="text-yellow-400 text-right font-mono font-semibold flex items-center justify-end gap-2"><Check className="w-4 h-4" /> Incluido</span>
                 </motion.div>
               ))}
               <div className="grid grid-cols-3 gap-4 px-6 py-5 bg-slate-800/50 border-t-2 border-yellow-500/30">
                 <span className="text-white font-bold text-lg">Total</span>
-                <span className="text-red-400 text-right font-bold text-lg font-mono">€{TOTAL_COMPETITOR}+</span>
-                <span className="text-yellow-400 text-right font-bold text-lg font-mono">€50/mes</span>
+                <span className="text-red-400 text-right font-bold text-lg font-mono">{formatearImporte(TOTAL_COMPETITOR, MONEDA_PLATAFORMA, 0)}+</span>
+                <span className="text-yellow-400 text-right font-bold text-lg font-mono">{CON_VOLKERN}</span>
               </div>
             </div>
           </div>
