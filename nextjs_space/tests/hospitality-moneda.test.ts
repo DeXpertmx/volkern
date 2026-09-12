@@ -2,8 +2,11 @@ import { describe, it, expect } from 'vitest';
 import {
   formatearImporte,
   monedaEfectiva,
+  monedaEscritura,
   monedaPredominante,
+  primeraMoneda,
   simboloMoneda,
+  MONEDAS_SELECCIONABLES,
 } from '../lib/hospitality/moneda';
 
 describe('monedaPredominante', () => {
@@ -39,6 +42,50 @@ describe('monedaEfectiva', () => {
     expect(monedaEfectiva([], null)).toBe('');
     expect(monedaEfectiva([null], undefined)).toBe('');
     expect(monedaEfectiva([], '')).toBe('');
+  });
+});
+
+describe('primeraMoneda', () => {
+  it('respeta el orden de precedencia, no la mayoría', () => {
+    // Con dos candidatos distintos, la predominancia daría un empate y decidiría el
+    // alfabeto; aquí tiene que ganar el que va primero.
+    expect(primeraMoneda('USD', 'EUR')).toBe('USD');
+    expect(primeraMoneda(undefined, 'EUR', 'MXN')).toBe('EUR');
+    expect(primeraMoneda('', null, ' eur ')).toBe('EUR');
+  });
+
+  it('devuelve cadena vacía si ningún candidato trae valor', () => {
+    expect(primeraMoneda()).toBe('');
+    expect(primeraMoneda(undefined, null, '')).toBe('');
+  });
+});
+
+describe('monedaEscritura', () => {
+  it('usa el primer candidato con valor', () => {
+    expect(monedaEscritura('MXN', 'EUR')).toBe('MXN');
+    expect(monedaEscritura(undefined, 'EUR')).toBe('EUR');
+  });
+
+  it('solo cae al mínimo del esquema cuando no hay nada más', () => {
+    // Es una escritura: la columna no admite nulos. En producción el tenant siempre
+    // trae moneda, así que este caso no se alcanza.
+    expect(monedaEscritura(undefined, undefined)).toBe('MXN');
+    expect(monedaEscritura('', null)).toBe('MXN');
+  });
+
+  it('nunca devuelve cadena vacía', () => {
+    for (const caso of [[], [''], [null], ['', undefined, null]] as Array<Array<string | null | undefined>>) {
+      expect(monedaEscritura(...caso)).not.toBe('');
+    }
+  });
+});
+
+describe('MONEDAS_SELECCIONABLES', () => {
+  it('es la única lista de divisas que ve la interfaz', () => {
+    expect([...MONEDAS_SELECCIONABLES]).toEqual(['MXN', 'USD', 'EUR']);
+    for (const moneda of MONEDAS_SELECCIONABLES) {
+      expect(simboloMoneda(moneda)).not.toBe('');
+    }
   });
 });
 

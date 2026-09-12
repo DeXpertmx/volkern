@@ -8,6 +8,25 @@
  */
 
 /**
+ * Divisas que la interfaz ofrece elegir.
+ *
+ * Vive aquí, y no en cada pantalla, para que las vistas no contengan ningún
+ * código de divisa: la guardia de tests falla si aparece uno fuera de este
+ * archivo, porque cada literal suelto por el módulo acabó siendo un valor por
+ * defecto que nadie eligió.
+ */
+export const MONEDAS_SELECCIONABLES = ['MXN', 'USD', 'EUR'] as const;
+
+/**
+ * Valor que la base de datos exige cuando no hay ninguna divisa que usar.
+ *
+ * No es una decisión de negocio: las columnas de moneda no admiten nulos, así que
+ * es el mínimo que el esquema acepta. Solo se usa en las escrituras y nunca gana
+ * sobre un dato real ni sobre la moneda del tenant.
+ */
+const MONEDA_MINIMA_ESQUEMA = 'MXN';
+
+/**
  * Moneda predominante de una lista de valores.
  *
  * Devuelve `null` si no hay ninguno: en ese caso el consumidor decide su
@@ -42,6 +61,34 @@ export function monedaEfectiva(
   monedaTenant?: string | null
 ): string {
   return monedaPredominante(valores) || (monedaTenant || '').trim().toUpperCase() || '';
+}
+
+/**
+ * Primera divisa presente de una lista ordenada por precedencia.
+ *
+ * A diferencia de `monedaPredominante`, aquí el orden manda: sirve para cadenas
+ * del tipo "lo que pidió el cliente, si no lo que hereda, si no la del tenant".
+ * Devuelve cadena vacía si ninguna trae valor.
+ */
+export function primeraMoneda(...valores: Array<string | null | undefined>): string {
+  for (const valor of valores) {
+    const moneda = (valor || '').trim().toUpperCase();
+    if (moneda) return moneda;
+  }
+  return '';
+}
+
+/**
+ * Divisa con la que se escribe un registro nuevo (unidad, plan, reserva).
+ *
+ * Toma los candidatos en orden de precedencia y aplica al final la red de
+ * seguridad que exigen las escrituras, donde guardar cadena vacía sería peor que
+ * el mínimo del esquema. Centralizarla aquí evita que cada ruta cargue con su
+ * propio `|| 'MXN'`, que es como el valor del esquema terminó decidiendo la divisa
+ * de todo el módulo.
+ */
+export function monedaEscritura(...valores: Array<string | null | undefined>): string {
+  return primeraMoneda(...valores) || MONEDA_MINIMA_ESQUEMA;
 }
 
 /**
