@@ -44,21 +44,6 @@
   "app/dashboard/finanzas/contabilidad/modelo347/page.tsx": {
     "simbolo": 1
   },
-  "app/dashboard/finanzas/gastos/bandeja/page.tsx": {
-    "simbolo": 2
-  },
-  "app/dashboard/finanzas/gastos/escanear/page.tsx": {
-    "simbolo": 6
-  },
-  "app/dashboard/finanzas/gastos/page.tsx": {
-    "simbolo": 3
-  },
-  "app/dashboard/finanzas/nominas/page.tsx": {
-    "simbolo": 1
-  },
-  "app/dashboard/finanzas/proveedores/page.tsx": {
-    "simbolo": 4
-  },
   "app/dashboard/seguros/page.tsx": {
     "simbolo": 1
   },
@@ -98,12 +83,6 @@
   "components/hubs/ConfiguracionDashboard.tsx": {
     "simbolo": 1
   },
-  "components/hubs/FinanzasDashboard.tsx": {
-    "simbolo": 5
-  },
-  "components/hubs/GlobalFinancialCockpit.tsx": {
-    "simbolo": 9
-  },
   "components/hubs/InventarioDashboard.tsx": {
     "simbolo": 1
   },
@@ -112,9 +91,6 @@
   },
   "components/hubs/ProyectosDashboard.tsx": {
     "simbolo": 6
-  },
-  "components/hubs/accounting/Modelo130Dashboard.tsx": {
-    "simbolo": 2
   },
   "components/public/AcademyLanding.tsx": {
     "simbolo": 7

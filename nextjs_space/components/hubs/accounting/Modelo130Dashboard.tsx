@@ -265,7 +265,7 @@ export function Modelo130Dashboard() {
               </CardHeader>
               <CardContent>
                 <div className={cn("text-3xl font-black", isResultPositive ? "text-white" : "text-slate-400")}>
-                  {isResultPositive ? formatCurrency(resultToPay) : '0,00 €'}
+                  {isResultPositive ? formatCurrency(resultToPay) : formatCurrency(0)}
                 </div>
                 <p className={cn("text-xs mt-1 font-medium", isResultPositive ? "text-emerald-300" : "text-slate-500")}>
                   {isResultPositive ? `Pago fraccionado al ${(paymentRate * 100).toFixed(0)}%` : 'No procede pago'}
@@ -417,7 +417,7 @@ export function Modelo130Dashboard() {
                     "text-2xl font-black",
                     isResultPositive ? "text-white" : "text-slate-400"
                   )}>
-                    {isResultPositive ? formatCurrency(resultToPay) : '0,00 €'}
+                    {isResultPositive ? formatCurrency(resultToPay) : formatCurrency(0)}
                   </span>
                 </div>
               </div>

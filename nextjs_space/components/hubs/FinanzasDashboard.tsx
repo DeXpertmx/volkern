@@ -21,19 +21,24 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import useSWR from 'swr'
+import { formatearImporte } from '@/lib/moneda'
+import { useMonedaTenant } from '@/lib/use-moneda-tenant'
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
 export default function FinanzasDashboard() {
   const { data: expenses, isLoading: loadingExpenses } = useSWR('/api/erp/expenses?limit=5', fetcher)
   const [period, setPeriod] = useState('Este mes')
+  // La divisa de reporte del tenant: el cockpit mostraba euros escritos a mano,
+  // así que un tenant con la moneda en pesos veía sus cifras en euros.
+  const moneda = useMonedaTenant()
 
   // Mock de datos financieros para la demo del Cockpit
   // En producción esto vendría de un endpoint de agregación /api/erp/finance/summary
   const stats = [
     { 
       label: 'Ingresos Totales', 
-      value: '€42,500.00', 
+      value: formatearImporte(42500, moneda), 
       change: '+12.5%', 
       trend: 'up', 
       icon: TrendingUp,
@@ -42,7 +47,7 @@ export default function FinanzasDashboard() {
     },
     { 
       label: 'Gastos Operativos', 
-      value: '€18,200.00', 
+      value: formatearImporte(18200, moneda), 
       change: '+4.2%', 
       trend: 'down', 
       icon: TrendingDown,
@@ -51,7 +56,7 @@ export default function FinanzasDashboard() {
     },
     { 
       label: 'Margen Neto', 
-      value: '€24,300.00', 
+      value: formatearImporte(24300, moneda), 
       change: '+8.1%', 
       trend: 'up', 
       icon: DollarSign,
@@ -180,7 +185,7 @@ export default function FinanzasDashboard() {
                 <div>
                   <p className="text-xs font-bold text-amber-800 dark:text-amber-400 mb-1">ALERTA DE PROACTIVIDAD</p>
                   <p className="text-[11px] text-amber-700/80 dark:text-amber-500/80 leading-snug">
-                    Se detectó un aumento del 15% en 'Suscripciones Software'. Revisa licencias inactivas para optimizar €400/mes.
+                    Se detectó un aumento del 15% en 'Suscripciones Software'. Revisa licencias inactivas para optimizar {formatearImporte(400, moneda)}/mes.
                   </p>
                 </div>
               </div>
@@ -221,7 +226,7 @@ export default function FinanzasDashboard() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-black tracking-tight">-€{exp.amount.toFixed(2)}</p>
+                      <p className="text-sm font-black tracking-tight">-{formatearImporte(exp.amount, exp.currency || moneda)}</p>
                       <p className="text-[10px] text-muted-foreground">{new Date(exp.date).toLocaleDateString()}</p>
                     </div>
                   </div>

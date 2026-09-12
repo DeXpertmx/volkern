@@ -25,12 +25,17 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import useSWR from 'swr'
+import { formatearImporte } from '@/lib/moneda'
+import { useMonedaTenant } from '@/lib/use-moneda-tenant'
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
 export default function GlobalFinancialCockpit() {
   const { data: finance, error, isLoading } = useSWR('/api/erp/finance/consolidation', fetcher)
   const [region, setRegion] = useState('ES')
+  // La divisa de reporte del tenant: el cockpit escribía euros a mano junto a las
+  // cifras reales de la consolidación, así que un tenant en pesos veía euros.
+  const moneda = useMonedaTenant()
 
   if (error && error.status === 403) {
      return (
@@ -57,9 +62,9 @@ export default function GlobalFinancialCockpit() {
   }
 
   const stats = [
-    { label: 'Caja Real', value: `€${finance?.pnl?.netProfit.toLocaleString() || '0'}`, detail: 'Disponibilidad inmediata', icon: Wallet, color: 'text-primary', bg: 'bg-primary/10' },
+    { label: 'Caja Real', value: formatearImporte(finance?.pnl?.netProfit ?? 0, moneda), detail: 'Disponibilidad inmediata', icon: Wallet, color: 'text-primary', bg: 'bg-primary/10' },
     { label: 'EBITDA (Est.)', value: '38.2%', detail: 'Salud operativa', icon: ShieldCheck, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-    { label: 'Tax liability', value: `€${finance?.tax?.taxLiability.toLocaleString() || '0'}`, detail: 'Previsión fiscal', icon: Receipt, color: 'text-rose-500', bg: 'bg-rose-500/10' },
+    { label: 'Tax liability', value: formatearImporte(finance?.tax?.taxLiability ?? 0, moneda), detail: 'Previsión fiscal', icon: Receipt, color: 'text-rose-500', bg: 'bg-rose-500/10' },
     { label: 'Runway', value: '18 meses', detail: 'Supervivencia', icon: Clock, color: 'text-amber-500', bg: 'bg-amber-500/10' },
   ]
 
@@ -138,7 +143,7 @@ export default function GlobalFinancialCockpit() {
                       </div>
                       <div>
                          <p className="text-[10px] font-black uppercase text-amber-600 tracking-widest">Marketing</p>
-                         <p className="text-xl font-black">€4,200.20</p>
+                         <p className="text-xl font-black">{formatearImporte(4200.2, moneda)}</p>
                       </div>
                       <Progress value={75} className="h-1.5 bg-amber-200/50 [&>div]:bg-amber-500" />
                       <p className="text-[9px] text-amber-700 italic">"Gasto en anuncios meta un 20% arriba del mes anterior."</p>
@@ -151,7 +156,7 @@ export default function GlobalFinancialCockpit() {
                       </div>
                       <div>
                          <p className="text-[10px] font-black uppercase text-blue-600 tracking-widest">Personal</p>
-                         <p className="text-xl font-black">€6,800.00</p>
+                         <p className="text-xl font-black">{formatearImporte(6800, moneda)}</p>
                       </div>
                       <Progress value={45} className="h-1.5 bg-blue-200/50 [&>div]:bg-blue-500" />
                       <p className="text-[9px] text-blue-700 italic">"Nóminas y seguridad social sin variaciones."</p>
@@ -164,7 +169,7 @@ export default function GlobalFinancialCockpit() {
                       </div>
                       <div>
                          <p className="text-[10px] font-black uppercase text-emerald-600 tracking-widest">Operaciones</p>
-                         <p className="text-xl font-black">€1,100.00</p>
+                         <p className="text-xl font-black">{formatearImporte(1100, moneda)}</p>
                       </div>
                       <Progress value={25} className="h-1.5 bg-emerald-200/50 [&>div]:bg-emerald-500" />
                       <p className="text-[9px] text-emerald-700 italic">"Costo de materiales un 10% bajo el presupuesto."</p>
@@ -184,11 +189,11 @@ export default function GlobalFinancialCockpit() {
               <CardContent className="px-8 pb-8 space-y-8">
                  <div className="flex justify-between items-end">
                     <div className="space-y-1">
-                       <p className="text-3xl font-black tracking-tighter">€{currentRevenue.toLocaleString()}</p>
+                       <p className="text-3xl font-black tracking-tighter">{formatearImporte(currentRevenue, moneda)}</p>
                        <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Ingresos Totales Actuales</p>
                     </div>
                     <div className="text-right space-y-1">
-                       <p className="text-xl font-bold tracking-tight text-primary">€{(finance?.pnl?.totalExpenses || 0).toLocaleString()}</p>
+                       <p className="text-xl font-bold tracking-tight text-primary">{formatearImporte(finance?.pnl?.totalExpenses || 0, moneda)}</p>
                        <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest italic">Break-even Goal</p>
                     </div>
                  </div>
@@ -205,8 +210,8 @@ export default function GlobalFinancialCockpit() {
                  <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-dashed text-[11px] font-medium text-slate-500 leading-relaxed italic">
                     <Info className="w-4 h-4 text-primary shrink-0" />
                     {currentRevenue >= (finance?.pnl?.totalExpenses || 0) 
-                      ? "Felicidades: Has superado el punto de equilibrio. Cada euro adicional es beneficio neto antes de impuestos."
-                      : `Te faltan €${((finance?.pnl?.totalExpenses || 0) - currentRevenue).toLocaleString()} en facturación para cubrir todos tus costos este mes.`}
+                      ? "Felicidades: Has superado el punto de equilibrio. Cada importe adicional es beneficio neto antes de impuestos."
+                      : `Te faltan ${formatearImporte((finance?.pnl?.totalExpenses || 0) - currentRevenue, moneda)} en facturación para cubrir todos tus costos este mes.`}
                  </div>
               </CardContent>
            </Card>
@@ -259,7 +264,7 @@ export default function GlobalFinancialCockpit() {
                  <div className="p-5 rounded-3xl bg-slate-50 border border-slate-100 space-y-4">
                     <div>
                        <p className="text-[9px] font-black uppercase text-muted-foreground tracking-widest">Reserva Estimada</p>
-                       <p className="text-3xl font-black tracking-tighter">€{finance?.tax?.taxLiability.toLocaleString() || '0'}</p>
+                       <p className="text-3xl font-black tracking-tighter">{formatearImporte(finance?.tax?.taxLiability ?? 0, moneda)}</p>
                     </div>
                     <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-bold">
                        <ShieldCheck className="w-4 h-4 text-emerald-500" />

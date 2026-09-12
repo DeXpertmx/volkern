@@ -13,6 +13,8 @@ import useSWR from "swr"
 import { toast } from "sonner"
 import IvaRatesEditor from "@/components/finance/IvaRatesEditor"
 import FiscalRegimeEditor from "@/components/finance/FiscalRegimeEditor"
+import { formatearImporte } from '@/lib/moneda'
+import { useMonedaTenant } from '@/lib/use-moneda-tenant'
 import { EXPENSE_CATEGORIES } from "@/lib/finance/expense-categories"
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
@@ -52,6 +54,9 @@ const emptyForm = { name: '', taxId: '', email: '', phone: '', streetType: '', s
 
 export default function ProveedoresPage() {
   const { data: suppliers, isLoading, mutate } = useSWR('/api/erp/suppliers', fetcher)
+  // La divisa de los saldos es la del proveedor y, si no la declara, la del
+  // tenant: la pantalla escribía euros a mano.
+  const moneda = useMonedaTenant()
   const [createOpen, setCreateOpen] = useState(false)
   const [detailSupplier, setDetailSupplier] = useState<any>(null)
   const [deepLinkedId, setDeepLinkedId] = useState<string | null>(null)
@@ -338,7 +343,7 @@ export default function ProveedoresPage() {
                     <div>
                        <p className="text-[10px] font-bold text-muted-foreground uppercase">Balance Pendiente</p>
                        <p className={`text-lg font-black tracking-tighter ${supplier.balance > 0 ? 'text-rose-500' : 'text-emerald-600'}`}>
-                         €{supplier.balance.toFixed(2)}
+                         {formatearImporte(supplier.balance, supplier.currency || moneda)}
                        </p>
                     </div>
                     <Button variant="ghost" size="sm" className="rounded-lg text-primary font-bold" onClick={() => setDetailSupplier(supplier)}>Detalle</Button>
@@ -388,7 +393,7 @@ export default function ProveedoresPage() {
               <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900 space-y-1">
                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5"><CreditCard className="w-3 h-3" /> Balance</p>
                 <p className={`text-sm font-black tracking-tight ${detailSupplier?.balance > 0 ? 'text-rose-500' : 'text-emerald-600'}`}>
-                  €{Number(detailSupplier?.balance || 0).toFixed(2)}
+                  {formatearImporte(Number(detailSupplier?.balance || 0), detailSupplier?.currency || moneda)}
                 </p>
               </div>
             </div>
@@ -441,12 +446,12 @@ export default function ProveedoresPage() {
                         <p className="font-medium truncate">{e.description}</p>
                         <p className="text-[10px] text-muted-foreground">{new Date(e.date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
                       </div>
-                      <span className="font-black tracking-tighter shrink-0">-€{Number(e.amount).toFixed(2)}</span>
+                      <span className="font-black tracking-tighter shrink-0">-{formatearImporte(Number(e.amount), e.currency || moneda)}</span>
                     </div>
                   ))}
                   <div className="flex justify-between border-t pt-2 text-[10px] font-bold uppercase text-muted-foreground">
                     <span>Total (últimos {supplierExpenses.length})</span>
-                    <span className="text-foreground font-black">-€{expensesTotal.toFixed(2)}</span>
+                    <span className="text-foreground font-black">-{formatearImporte(expensesTotal, moneda)}</span>
                   </div>
                 </div>
               )}

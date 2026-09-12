@@ -30,6 +30,8 @@ import { BankSelector } from '@/components/hubs/accounting/BankSelector';
 import { PlusCircle, X } from 'lucide-react';
 
 export default function AccountingDashboard() {
+  // La divisa de los asientos es la del tenant: la pantalla escribía euros a mano.
+  const moneda = useMonedaTenant();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showBankSelector, setShowBankSelector] = useState(false);
@@ -162,7 +164,7 @@ export default function AccountingDashboard() {
                   </div>
                   <div className="text-right">
                     <p className="text-lg font-black text-slate-900">
-                      {entry.lines[0]?.debit > 0 ? entry.lines[0]?.debit : entry.lines[0]?.credit} €
+                      {formatearImporte(entry.lines[0]?.debit > 0 ? entry.lines[0]?.debit : entry.lines[0]?.credit, moneda)}
                     </p>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                       {entry.lines[0]?.account?.name}

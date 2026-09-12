@@ -17,6 +17,8 @@ import {
 import useSWR from "swr"
 import ExpenseVerificationDetails from "@/components/finance/ExpenseVerificationDetails"
 import { ImportGastosModal } from "@/components/finance/ImportGastosModal"
+import { formatearImporte } from '@/lib/moneda'
+import { useMonedaTenant } from '@/lib/use-moneda-tenant'
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
@@ -33,6 +35,9 @@ function SortIcon({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) {
 export default function GastosPage() {
   const router = useRouter()
   const { data, isLoading, mutate } = useSWR('/api/erp/expenses', fetcher)
+  // La divisa del gasto es la suya y, si no la tiene, la del tenant: la tabla
+  // escribía euros a mano.
+  const moneda = useMonedaTenant()
   const [selectedExpense, setSelectedExpense] = useState<any>(null)
   const [importOpen, setImportOpen] = useState(false)
 
@@ -228,13 +233,13 @@ export default function GastosPage() {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <span className="text-xs font-semibold text-slate-600">
-                          {expense.taxableBase != null ? `€${expense.taxableBase.toFixed(2)}` : '—'}
+                          {expense.taxableBase != null ? formatearImporte(expense.taxableBase, expense.currency || moneda) : '—'}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
                         <span className="text-xs font-semibold text-slate-600">
                           {expense.vatAmount != null
-                            ? `€${expense.vatAmount.toFixed(2)}${expense.vatRate != null ? ` (${expense.vatRate}%)` : ''}`
+                            ? `${formatearImporte(expense.vatAmount, expense.currency || moneda)}${expense.vatRate != null ? ` (${expense.vatRate}%)` : ''}`
                             : '—'}
                         </span>
                       </td>
@@ -272,7 +277,7 @@ export default function GastosPage() {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-3 text-right">
-                           <span className="text-sm font-black tracking-tighter">-€{expense.amount.toFixed(2)}</span>
+                           <span className="text-sm font-black tracking-tighter">-{formatearImporte(expense.amount, expense.currency || moneda)}</span>
                            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
                               <Eye className="w-4 h-4" />
                            </Button>

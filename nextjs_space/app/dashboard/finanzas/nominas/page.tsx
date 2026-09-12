@@ -5,11 +5,15 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Plus, Users, Calendar, DollarSign, Search, Filter } from "lucide-react"
 import useSWR from "swr"
+import { formatearImporte } from '@/lib/moneda'
+import { useMonedaTenant } from '@/lib/use-moneda-tenant'
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
 export default function NominasPage() {
   const { data: payroll, isLoading } = useSWR('/api/erp/finance/payroll', fetcher)
+  // La divisa de la nómina es la del tenant: la pantalla escribía euros a mano.
+  const moneda = useMonedaTenant()
 
   return (
     <div className="space-y-6">
@@ -65,7 +69,7 @@ export default function NominasPage() {
                         </Badge>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <span className="text-sm font-black tracking-tighter">€{p.amount.toLocaleString()}</span>
+                        <span className="text-sm font-black tracking-tighter">{formatearImporte(p.amount, p.currency || moneda)}</span>
                       </td>
                     </tr>
                   ))
