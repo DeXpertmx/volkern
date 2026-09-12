@@ -9,7 +9,7 @@ import {
   perChannelRevenueTrend,
   type AnalyticsReservationInput,
 } from '@/lib/hospitality/analytics';
-import { monedaPredominante } from '@/lib/hospitality/moneda';
+import { monedaEfectiva } from '@/lib/hospitality/moneda';
 
 /**
  * GET /api/hospitality/dashboard — KPIs operativos del módulo (plan §23).
@@ -177,9 +177,10 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json({
-      // La moneda la dictan las reservas reales, no el valor por defecto del
-      // esquema: la página la usa para escribir los importes.
-      moneda: monedaPredominante(reservations.map((r) => r.currency)) || '',
+      // La moneda la dictan las reservas reales y, si no las hay, la del tenant.
+      // El valor por defecto del esquema no entra: la página la usa para escribir
+      // los importes y 'MXN' no es una decisión del negocio.
+      moneda: monedaEfectiva(reservations.map((r) => r.currency), auth.tenant!.moneda),
       kpis: {
         totalUnidades,
         unidadesPorEstado,

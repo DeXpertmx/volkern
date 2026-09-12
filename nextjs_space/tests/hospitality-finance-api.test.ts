@@ -51,7 +51,8 @@ import {
   PATCH as pagoPATCH,
 } from '@/app/api/hospitality/reservations/[id]/payments/[paymentId]/route';
 
-const auth = { valid: true, tenant: { id: 'tenant_a' }, user: { id: 'user_a' } };
+// El tenant trae su moneda de reporte: es la fuente autoritativa del respaldo.
+const auth = { valid: true, tenant: { id: 'tenant_a', moneda: 'EUR' }, user: { id: 'user_a' } };
 
 const request = (method: string, body?: unknown, url = 'http://test.local/api/hospitality') =>
   new Request(url, {
@@ -218,7 +219,28 @@ describe('la moneda sale del dato, no del valor por defecto del esquema', () => 
     expect(rep.moneda).toBe('EUR');
   });
 
-  it('sin reservas no inventa divisa: ni euros ni pesos por defecto', async () => {
+  it('sin reservas cae a la moneda del tenant, no al valor por defecto del esquema', async () => {
+    mocks.hospitalityReservation.findMany.mockResolvedValue([]);
+
+    const fin = await (await finanzasGET(request('GET'))).json();
+    expect(fin.moneda).toBe('EUR');
+
+    const rep = await (
+      await reportesGET(
+        request('GET', undefined, 'http://test.local/api/hospitality/reportes?desde=2026-10-10&hasta=2026-10-12')
+      )
+    ).json();
+    expect(rep.moneda).toBe('EUR');
+  });
+
+  it('si el tenant no tiene moneda, informa la ausencia en lugar de inventarla', async () => {
+    // Un tenant sin moneda no puede caer a 'MXN': el valor del esquema no es una
+    // decisión del negocio y mostrarlo sería inventar el dato.
+    mocks.authenticateRequest.mockResolvedValue({
+      valid: true,
+      tenant: { id: 'tenant_sin_moneda' },
+      user: { id: 'user_a' },
+    });
     mocks.hospitalityReservation.findMany.mockResolvedValue([]);
 
     const fin = await (await finanzasGET(request('GET'))).json();
@@ -230,6 +252,14 @@ describe('la moneda sale del dato, no del valor por defecto del esquema', () => 
       )
     ).json();
     expect(rep.moneda).toBe('');
+  });
+
+  it('el dato de las reservas gana sobre la moneda del tenant', async () => {
+    // El respaldo es para cuando no hay dato, no para reescribir lo que ya hay.
+    mocks.hospitalityReservation.findMany.mockResolvedValue([reservaFila({ currency: 'MXN' })]);
+
+    const fin = await (await finanzasGET(request('GET'))).json();
+    expect(fin.moneda).toBe('MXN');
   });
 });
 

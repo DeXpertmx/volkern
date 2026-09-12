@@ -115,7 +115,12 @@ export async function GET(req: NextRequest) {
     }
     guests = guests.slice(0, limit);
 
-    return NextResponse.json({ guests, total: guests.length });
+    return NextResponse.json({
+      guests,
+      total: guests.length,
+      // Respaldo para la vista: sin estancias no hay divisa que deducir de los datos.
+      moneda: auth.tenant!.moneda ?? null,
+    });
   } catch (error) {
     console.error('Error obteniendo huéspedes:', error);
     return NextResponse.json({ error: 'Error al obtener huéspedes' }, { status: 500 });

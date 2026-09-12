@@ -41,7 +41,7 @@ function buildReq(method: string, body?: any, url = 'https://volkern.app/api/hos
   }) as any;
 }
 
-const AUTH_OK = { valid: true, tenant: { id: 't1' }, user: { id: 'u1' } };
+const AUTH_OK = { valid: true, tenant: { id: 't1', moneda: 'EUR' }, user: { id: 'u1' } };
 
 describe('GET /api/hospitality/reservations (filtros)', () => {
   beforeEach(() => {
@@ -204,5 +204,33 @@ describe('POST /api/hospitality/reservations (alta manual)', () => {
         data: expect.objectContaining({ contactId: 'c-existing' }),
       })
     );
+  });
+
+  describe('divisa de la reserva', () => {
+    it('sin moneda explícita se crea en la del tenant, no en la del esquema', async () => {
+      const { moneda, ...sinMoneda } = VALID_BODY;
+      const res = await POST(buildReq('POST', sinMoneda));
+      expect(res.status).toBe(201);
+
+      const data = prisma.hospitalityReservation.create.mock.calls[0][0].data;
+      expect(data.currency).toBe('EUR');
+    });
+
+    it('la moneda explícita gana sobre la del tenant', async () => {
+      await POST(buildReq('POST', { ...VALID_BODY, moneda: 'USD' }));
+
+      const data = prisma.hospitalityReservation.create.mock.calls[0][0].data;
+      expect(data.currency).toBe('USD');
+    });
+
+    it('sin moneda en el tenant conserva el valor del esquema como última red', async () => {
+      // La columna no admite nulos: aquí sí es preferible 'MXN' a una cadena vacía.
+      mockAuth.mockResolvedValue({ valid: true, tenant: { id: 't1' }, user: { id: 'u1' } });
+      const { moneda, ...sinMoneda } = VALID_BODY;
+      await POST(buildReq('POST', sinMoneda));
+
+      const data = prisma.hospitalityReservation.create.mock.calls[0][0].data;
+      expect(data.currency).toBe('MXN');
+    });
   });
 });

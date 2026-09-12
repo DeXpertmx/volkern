@@ -38,7 +38,11 @@ export async function GET(req: NextRequest) {
       orderBy: [{ propertyId: 'asc' }, { unitId: 'asc' }, { nombre: 'asc' }],
     });
 
-    return NextResponse.json({ ratePlans: plans, total: plans.length });
+    return NextResponse.json({
+      ratePlans: plans,
+      total: plans.length,
+      moneda: auth.tenant!.moneda ?? null,
+    });
   } catch (error) {
     console.error('Error obteniendo planes tarifarios:', error);
     return NextResponse.json({ error: 'Error al obtener los planes tarifarios' }, { status: 500 });
@@ -81,9 +85,9 @@ export async function POST(req: NextRequest) {
         nombre: String(nombre).trim(),
         codigo: codigo ? String(codigo).trim() : null,
         tarifa,
-        // El plan hereda la divisa de su unidad antes de caer al valor del
-        // esquema: fijar 'MXN' aquí metía planes en pesos en una cuenta europea.
-        moneda: moneda || unit.moneda || 'MXN',
+        // El plan hereda la divisa de su unidad y, si la unidad no tiene, la del
+        // tenant. El valor por defecto del esquema no se usa como respaldo.
+        moneda: moneda || unit.moneda || auth.tenant!.moneda || 'MXN',
         minNoches: Math.max(1, parseInt(minNoches) || 1),
         maxNoches: maxNoches != null ? parseInt(maxNoches) : null,
         checkInDias: Array.isArray(checkInDias) && checkInDias.length ? checkInDias : Prisma.JsonNull,

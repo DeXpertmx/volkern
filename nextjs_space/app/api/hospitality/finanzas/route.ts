@@ -11,7 +11,7 @@ import {
   filasFinancieras,
   resumenFinanciero,
 } from '@/lib/hospitality/finance-summary';
-import { monedaPredominante } from '@/lib/hospitality/moneda';
+import { monedaEfectiva } from '@/lib/hospitality/moneda';
 
 /**
  * GET /api/hospitality/finanzas — informe financiero del período (FASE 3.B).
@@ -72,10 +72,9 @@ export async function GET(req: NextRequest) {
       estadosCobro: conteoPorEstadoCobro(filas),
       reservas: filas,
       propiedades,
-      // Moneda predominante de las reservas del período: sale del dato real, no
-      // de la primera fila ni del valor por defecto del esquema. Sin reservas
-      // no se inventa divisa, y la página muestra su estado vacío.
-      moneda: monedaPredominante(filas.map((f) => f.moneda)) ?? '',
+      // Moneda de las reservas del período y, si no hay, la del tenant. Ni la
+      // primera fila ni el valor por defecto del esquema entran en la decisión.
+      moneda: monedaEfectiva(filas.map((f) => f.moneda), auth.tenant?.moneda),
     });
   } catch (error) {
     console.error('Error obteniendo finanzas de hospitality:', error);
