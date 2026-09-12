@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { 
   LineChart as LineChartIcon, 
   Wallet, 
@@ -13,11 +13,9 @@ import {
   Calendar,
   FileText,
   BarChart3,
-  Users,
   ShieldCheck,
   ChevronRight,
   Info,
-  Flame,
   Target
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -27,6 +25,7 @@ import { Progress } from '@/components/ui/progress'
 import useSWR from 'swr'
 import { formatearImporte } from '@/lib/moneda'
 import { useMonedaTenant } from '@/lib/use-moneda-tenant'
+import { resumirConsolidacion } from '@/lib/finance/resumen-financiero'
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
@@ -36,6 +35,10 @@ export default function GlobalFinancialCockpit() {
   // La divisa de reporte del tenant: el cockpit escribía euros a mano junto a las
   // cifras reales de la consolidación, así que un tenant en pesos veía euros.
   const moneda = useMonedaTenant()
+  // Este panel leía `pnl.totalRevenue`, `pnl.netProfit` y `pnl.totalExpenses`:
+  // campos que la consolidación nunca devolvió, así que enseñaba ceros con el
+  // endpoint respondiendo 200. El resumen se traduce en el módulo compartido.
+  const resumen = useMemo(() => resumirConsolidacion(finance), [finance])
 
   if (error && error.status === 403) {
      return (
@@ -61,16 +64,25 @@ export default function GlobalFinancialCockpit() {
      )
   }
 
-  const stats = [
-    { label: 'Caja Real', value: formatearImporte(finance?.pnl?.netProfit ?? 0, moneda), detail: 'Disponibilidad inmediata', icon: Wallet, color: 'text-primary', bg: 'bg-primary/10' },
-    { label: 'EBITDA (Est.)', value: '38.2%', detail: 'Salud operativa', icon: ShieldCheck, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-    { label: 'Tax liability', value: formatearImporte(finance?.tax?.taxLiability ?? 0, moneda), detail: 'Previsión fiscal', icon: Receipt, color: 'text-rose-500', bg: 'bg-rose-500/10' },
-    { label: 'Runway', value: '18 meses', detail: 'Supervivencia', icon: Clock, color: 'text-amber-500', bg: 'bg-amber-500/10' },
-  ]
+  /** Importe del tenant, con `—` cuando el dato no existe y `…` mientras carga. */
+  const importe = (valor: number | null | undefined) => {
+    if (isLoading && !finance) return '…'
+    return valor === null || valor === undefined ? '—' : formatearImporte(valor, moneda)
+  }
+  const provision = Number(finance?.tax?.estimatedLiability)
+  const { ingresos, gastos, beneficio, margen } = resumen.cifras
+  const { diasDeCaja } = resumen.proyeccion
 
-  const revenueGoal = 25000;
-  const currentRevenue = finance?.pnl?.totalRevenue || 0;
-  const breakEvenProgress = Math.min((currentRevenue / (finance?.pnl?.totalExpenses || 1)) * 100, 100);
+  const currentRevenue = ingresos ?? 0;
+  const totalExpenses = gastos ?? 0;
+  const breakEvenProgress = totalExpenses > 0 ? Math.min((currentRevenue / totalExpenses) * 100, 100) : 0;
+
+  const stats = [
+    { label: 'Resultado del periodo', value: importe(beneficio), detail: 'Ingresos menos gastos', icon: Wallet, color: 'text-primary', bg: 'bg-primary/10' },
+    { label: 'Margen', value: margen === null ? '—' : `${margen.toFixed(1)} %`, detail: 'Sobre ingresos del periodo', icon: BarChart3, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+    { label: 'Provisión fiscal', value: Number.isFinite(provision) ? importe(provision) : '—', detail: 'Estimación de la skill fiscal', icon: Receipt, color: 'text-rose-500', bg: 'bg-rose-500/10' },
+    { label: 'Días de caja', value: diasDeCaja === null ? '—' : `${Math.round(diasDeCaja)} días`, detail: 'Pipeline ponderado frente al gasto medio', icon: Clock, color: 'text-amber-500', bg: 'bg-amber-500/10' },
+  ]
 
   return (
     <div className="space-y-8 pb-10">
@@ -131,49 +143,33 @@ export default function GlobalFinancialCockpit() {
              <CardHeader className="bg-slate-50/50 border-b">
                 <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
                    <FileText className="w-4 h-4 text-primary" />
-                   Mapa de Calor de Gastos
+                   Consolidación del periodo
                 </CardTitle>
              </CardHeader>
-             <CardContent className="p-8">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                   <div className="p-6 rounded-3xl bg-amber-50 border border-amber-100 space-y-4">
-                      <div className="flex justify-between items-center">
-                         <Badge className="bg-amber-200 text-amber-800 border-none rounded-lg text-[8px] font-black uppercase">Fuga Alta</Badge>
-                         <Flame className="w-4 h-4 text-amber-500" />
-                      </div>
-                      <div>
-                         <p className="text-[10px] font-black uppercase text-amber-600 tracking-widest">Marketing</p>
-                         <p className="text-xl font-black">{formatearImporte(4200.2, moneda)}</p>
-                      </div>
-                      <Progress value={75} className="h-1.5 bg-amber-200/50 [&>div]:bg-amber-500" />
-                      <p className="text-[9px] text-amber-700 italic">"Gasto en anuncios meta un 20% arriba del mes anterior."</p>
-                   </div>
-                   
-                   <div className="p-6 rounded-3xl bg-blue-50 border border-blue-100 space-y-4">
-                      <div className="flex justify-between items-center">
-                         <Badge className="bg-blue-200 text-blue-800 border-none rounded-lg text-[8px] font-black uppercase">Estable</Badge>
-                         <Users className="w-4 h-4 text-blue-500" />
-                      </div>
-                      <div>
-                         <p className="text-[10px] font-black uppercase text-blue-600 tracking-widest">Personal</p>
-                         <p className="text-xl font-black">{formatearImporte(6800, moneda)}</p>
-                      </div>
-                      <Progress value={45} className="h-1.5 bg-blue-200/50 [&>div]:bg-blue-500" />
-                      <p className="text-[9px] text-blue-700 italic">"Nóminas y seguridad social sin variaciones."</p>
-                   </div>
-
-                   <div className="p-6 rounded-3xl bg-emerald-50 border border-emerald-100 space-y-4">
-                      <div className="flex justify-between items-center">
-                         <Badge className="bg-emerald-200 text-emerald-800 border-none rounded-lg text-[8px] font-black uppercase">Optimizado</Badge>
-                         <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                      </div>
-                      <div>
-                         <p className="text-[10px] font-black uppercase text-emerald-600 tracking-widest">Operaciones</p>
-                         <p className="text-xl font-black">{formatearImporte(1100, moneda)}</p>
-                      </div>
-                      <Progress value={25} className="h-1.5 bg-emerald-200/50 [&>div]:bg-emerald-500" />
-                      <p className="text-[9px] text-emerald-700 italic">"Costo de materiales un 10% bajo el presupuesto."</p>
-                   </div>
+             <CardContent className="p-8 space-y-5">
+                {/* Aquí había tres tarjetas con importes fijos (4.200,20 € de marketing,
+                    6.800 € de personal, 1.100 € de operaciones) y frases de mercado
+                    inventadas. El desglose real por categoría vive en Finanzas → Gastos,
+                    así que este panel enseña lo que la consolidación sí calcula. */}
+                <div className="p-5 rounded-3xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
+                   <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest mb-2">Lo que dice la skill</p>
+                   {resumen.resumen ? (
+                      <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line">{resumen.resumen}</p>
+                   ) : (
+                      <p className="text-xs text-slate-500 leading-relaxed">
+                         {isLoading
+                            ? 'Calculando la consolidación del periodo…'
+                            : 'Sin movimientos en el periodo: no hay facturas cobradas ni gastos pagados que analizar.'}
+                      </p>
+                   )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                   <Button variant="outline" className="rounded-xl text-[10px] font-black uppercase tracking-widest" onClick={() => (window as any).location.href = '/dashboard/finanzas/gastos'}>
+                      Ver desglose de gastos
+                   </Button>
+                   <Button variant="outline" className="rounded-xl text-[10px] font-black uppercase tracking-widest" onClick={() => (window as any).location.href = '/dashboard/finanzas/facturacion'}>
+                      Ver facturación
+                   </Button>
                 </div>
              </CardContent>
            </Card>
@@ -192,8 +188,7 @@ export default function GlobalFinancialCockpit() {
                        <p className="text-3xl font-black tracking-tighter">{formatearImporte(currentRevenue, moneda)}</p>
                        <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Ingresos Totales Actuales</p>
                     </div>
-                    <div className="text-right space-y-1">
-                       <p className="text-xl font-bold tracking-tight text-primary">{formatearImporte(finance?.pnl?.totalExpenses || 0, moneda)}</p>
+                    <div className="text-right space-y-1">                         <p className="text-xl font-bold tracking-tight text-primary">{importe(totalExpenses)}</p>
                        <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest italic">Break-even Goal</p>
                     </div>
                  </div>
@@ -209,9 +204,11 @@ export default function GlobalFinancialCockpit() {
                  
                  <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-dashed text-[11px] font-medium text-slate-500 leading-relaxed italic">
                     <Info className="w-4 h-4 text-primary shrink-0" />
-                    {currentRevenue >= (finance?.pnl?.totalExpenses || 0) 
-                      ? "Felicidades: Has superado el punto de equilibrio. Cada importe adicional es beneficio neto antes de impuestos."
-                      : `Te faltan ${formatearImporte((finance?.pnl?.totalExpenses || 0) - currentRevenue, moneda)} en facturación para cubrir todos tus costos este mes.`}
+                    {totalExpenses <= 0
+                      ? "No hay gastos registrados en el periodo, así que el punto de equilibrio no es calculable todavía."
+                      : currentRevenue >= totalExpenses
+                        ? "Felicidades: Has superado el punto de equilibrio. Cada importe adicional es beneficio neto antes de impuestos."
+                        : `Te faltan ${importe(totalExpenses - currentRevenue)} en facturación para cubrir todos tus costos este mes.`}
                  </div>
               </CardContent>
            </Card>
@@ -231,7 +228,9 @@ export default function GlobalFinancialCockpit() {
                  <div className="p-5 rounded-2xl bg-white/5 border border-white/10 transition-colors">
                     <p className="text-[10px] font-bold text-primary uppercase mb-2">ANÁLISIS DE RENTABILIDAD</p>
                     <p className="text-xs text-slate-300 leading-relaxed font-medium">
-                      "Tu margen de beneficio neto del <span className="text-white font-bold">{finance?.pnl?.margin || '0'}%</span> está un <span className="text-emerald-400 font-bold">4% por encima</span> del promedio del sector."
+                      {margen === null
+                        ? "Todavía no hay ingresos en el periodo, así que no hay margen que analizar. Cuando cobres la primera factura este panel comparará ingresos y gastos."
+                        : <>"Tu margen de beneficio neto del <span className="text-white font-bold">{margen.toFixed(1)}%</span> sale de {importe(ingresos)} de ingresos frente a {importe(gastos)} de gastos en el periodo."</>}
                     </p>
                  </div>
                  
@@ -264,7 +263,7 @@ export default function GlobalFinancialCockpit() {
                  <div className="p-5 rounded-3xl bg-slate-50 border border-slate-100 space-y-4">
                     <div>
                        <p className="text-[9px] font-black uppercase text-muted-foreground tracking-widest">Reserva Estimada</p>
-                       <p className="text-3xl font-black tracking-tighter">{formatearImporte(finance?.tax?.taxLiability ?? 0, moneda)}</p>
+                       <p className="text-3xl font-black tracking-tighter">{Number.isFinite(provision) ? importe(provision) : '—'}</p>
                     </div>
                     <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-bold">
                        <ShieldCheck className="w-4 h-4 text-emerald-500" />
