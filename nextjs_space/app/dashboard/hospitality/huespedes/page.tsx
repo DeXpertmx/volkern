@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Users, Search, Loader2, Mail, Phone, Moon, DollarSign, ExternalLink, CalendarDays, UserRound, Link2, UserPlus } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -26,6 +27,14 @@ interface Estancia {
   specialRequests: string | null;
   propertyNombre: string | null;
   unitNombre: string | null;
+  registro?: {
+    total: number;
+    registrados: number;
+    pendientes: number;
+    estado: string;
+    etiqueta: string;
+    listoParaEnviar: boolean;
+  } | null;
 }
 
 interface Guest {
@@ -497,6 +506,19 @@ export default function HospitalityHuespedesPage() {
                         <p className="mt-2 text-[11px] text-muted-foreground">
                           Ref. {r.externalBookingId} · {r.propertyNombre || 'Propiedad'}
                         </p>
+                        {r.registro && r.registro.total > 0 && (
+                          <p className="mt-2 flex items-center justify-between gap-2 text-[11px] border-t pt-2">
+                            <span className="text-muted-foreground flex items-center gap-1">
+                              <Users className="h-3.5 w-3.5" /> Registro de viajeros: {r.registro.etiqueta}
+                            </span>
+                            <Link
+                              href="/dashboard/hospitality/viajeros"
+                              className="font-medium text-primary hover:underline whitespace-nowrap"
+                            >
+                              Gestionar
+                            </Link>
+                          </p>
+                        )}
                       </CardContent>
                     </Card>
                   );

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -19,6 +20,7 @@ import {
   Loader2,
   CalendarDays,
   User,
+  UserRound,
   Phone,
   Mail,
   BedDouble,
@@ -36,6 +38,10 @@ import {
   Trash2,
   Ban,
 } from 'lucide-react';
+import {
+  FICHAS_ESTADO,
+  type EstadoRegistro,
+} from '@/lib/hospitality/compliance';
 import {
   buildDays,
   layoutReservations,
@@ -83,6 +89,16 @@ interface RawReservation {
   guestData?: any;
   contact?: { id: string; nombre: string | null; email: string | null; telefono: string | null } | null;
   unit?: { id: string; nombre: string; codigo: string | null } | null;
+  // Resumen del registro de viajeros (solo lectura, calculado por el dominio).
+  registro?: {
+    total: number;
+    registrados: number;
+    pendientes: number;
+    estado: EstadoRegistro;
+    etiqueta: string;
+    listoParaEnviar: boolean;
+  } | null;
+  llegaManana?: boolean;
 }
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -123,6 +139,20 @@ export default function HospitalityCalendar() {
     motivo: string;
   } | null>(null);
   const [blockSaving, setBlockSaving] = useState(false);
+  const [avisoCerrado, setAvisoCerrado] = useState(false);
+
+  // Llegadas de mañana con el registro de viajeros a medias: hay que recoger datos
+  // hoy, porque mañana el huésped ya está en la puerta.
+  const llegadasPendientes = useMemo(
+    () =>
+      reservations.filter(
+        (r) =>
+          r.llegaManana &&
+          r.registro &&
+          (r.registro.estado === 'datos_pendientes' || r.registro.estado === 'pendiente_envio')
+      ),
+    [reservations]
+  );
 
   const rangeEnd = useMemo(() => new Date(rangeStart.getTime() + 6 * 24 * 60 * 60 * 1000), [rangeStart]);
 
@@ -202,6 +232,8 @@ export default function HospitalityCalendar() {
         currency: r.currency,
         specialRequests: r.specialRequests,
         externalBookingId: r.externalBookingId,
+        registro: r.registro ?? null,
+        llegaManana: r.llegaManana ?? false,
       }));
       setReservations(mapped);
     } catch {
@@ -437,6 +469,33 @@ export default function HospitalityCalendar() {
 
   return (
     <div className="p-6 space-y-4">
+      {/* Aviso: llegadas de mañana con el registro de viajeros a medias */}
+      {!avisoCerrado && llegadasPendientes.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 shrink-0" />
+            <span>
+              <strong>
+                {llegadasPendientes.length} llegada{llegadasPendientes.length !== 1 ? 's' : ''} de mañana
+              </strong>{' '}
+              con el registro de viajeros incompleto ({llegadasPendientes.map((r) => r.registro!.etiqueta).join('; ')}).
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link href="/dashboard/hospitality/viajeros" className="inline-flex">
+              <Button size="sm" variant="outline">Completar datos</Button>
+            </Link>
+            <button
+              onClick={() => setAvisoCerrado(true)}
+              className="p-1 rounded hover:bg-amber-100 dark:hover:bg-amber-900"
+              aria-label="Cerrar aviso"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
@@ -851,6 +910,36 @@ export default function HospitalityCalendar() {
                   {selected.unitNombre || 'Sin unidad asignada'}
                 </p>
               </div>
+
+              {/* Registro de viajeros (SES.HOSPEDAJES) */}
+              {selected.registro && (
+                <div className="rounded-lg border p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                        <UserRound className="h-4 w-4 text-primary" /> Registro de viajeros
+                      </p>
+                      <p className="text-sm mt-1">{selected.registro.etiqueta}</p>
+                    </div>
+                    <span
+                      className="text-xs font-semibold whitespace-nowrap"
+                      title={FICHAS_ESTADO[selected.registro.estado as EstadoRegistro]?.descripcion}
+                    >
+                      {FICHAS_ESTADO[selected.registro.estado as EstadoRegistro]?.icono}{' '}
+                      {FICHAS_ESTADO[selected.registro.estado as EstadoRegistro]?.etiqueta}
+                    </span>
+                  </div>
+                  {selected.registro.total > 0 && (
+                    <Link
+                      href="/dashboard/hospitality/viajeros"
+                      className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                    >
+                      Gestionar en el registro de viajeros
+                      <ExternalLink className="h-3 w-3" />
+                    </Link>
+                  )}
+                </div>
+              )}
 
               {/* Huésped */}
               <div className="rounded-lg border p-3 space-y-1.5">

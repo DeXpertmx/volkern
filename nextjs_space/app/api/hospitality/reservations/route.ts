@@ -8,6 +8,7 @@ import { monedaEscritura } from '@/lib/moneda';
 import { logAuditAction } from '@/lib/permissions';
 import { dispatchConnectivityPush } from '@/lib/hospitality/sync';
 import { unitOccupiedOnDay, type ActiveReservationSpan } from '@/lib/hospitality/availability';
+import { resumenDeReserva } from '@/lib/hospitality/compliance';
 
 const ESTADOS_VALIDOS = ['pending', 'confirmed', 'cancelled', 'checked_in', 'checked_out', 'no_show'];
 const CANALES_COMUNES = ['Airbnb', 'Booking.com', 'Expedia', 'Directa', 'Volkern'];
@@ -58,15 +59,60 @@ export async function GET(req: NextRequest) {
       where.checkIn = { lt: new Date(to) };
     }
 
-    const reservations = await prisma.hospitalityReservation.findMany({
+    const filas = await prisma.hospitalityReservation.findMany({
       where,
       include: {
         unit: { select: { id: true, nombre: true, codigo: true } },
         property: { select: { id: true, nombre: true } },
         contact: { select: { id: true, nombre: true, email: true, telefono: true } },
+        // Registro de viajeros (solo lectura): el resumen lo calcula el dominio,
+        // igual que la bandeja del Ministerio — las tres superficies no pueden
+        // discrepar de la misma reserva. Los viajeros se leen SOLO para calcular
+        // el resumen y nunca salen crudos por aquí: el número de documento sale
+        // enmascarado por `viajeroPublico` desde su propio endpoint, no desde este.
+        travelers: {
+          select: {
+            nombre: true,
+            apellido1: true,
+            apellido2: true,
+            tipoDocumento: true,
+            numeroDocumento: true,
+            soporteDocumento: true,
+            fechaNacimiento: true,
+            nacionalidad: true,
+          },
+        },
+        compliance: {
+          select: { estadoReserva: true, estadoViajeros: true, enviadoEn: true, procesadoEn: true },
+        },
       },
       orderBy: [{ checkIn: 'asc' }],
       take: limit,
+    });
+
+    // Aviso de llegadas de mañana: medianoche local +1, la misma referencia de día
+    // que usa el planning para pintar sus columnas.
+    const manana = new Date();
+    manana.setDate(manana.getDate() + 1);
+    const isoManana = `${manana.getFullYear()}-${String(manana.getMonth() + 1).padStart(2, '0')}-${String(manana.getDate()).padStart(2, '0')}`;
+    const isoDe = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+    const reservations = filas.map((r) => {
+      const { travelers, compliance, ...resto } = r;
+      const resumen = resumenDeReserva(travelers ?? [], compliance ?? null);
+      return {
+        ...resto,
+        registro: {
+          total: resumen.total,
+          registrados: resumen.registrados,
+          pendientes: resumen.pendientes,
+          estado: resumen.estado,
+          etiqueta: resumen.etiqueta,
+          listoParaEnviar: resumen.listoParaEnviar,
+        },
+        llegaManana: isoDe(r.checkIn) === isoManana,
+      };
     });
 
     return NextResponse.json({ reservations, moneda: auth.tenant!.moneda ?? null });
