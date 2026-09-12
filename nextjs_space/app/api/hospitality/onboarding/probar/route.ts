@@ -116,6 +116,8 @@ export async function POST(req: NextRequest) {
       hotelCode: snapshot.hotelCode,
       roomCode: unidad.roomCode!,
       rateplanCode: unidad.rateplanCode,
+      // La reserva de prueba se emite en la divisa de la unidad, no en una fija.
+      currency: unidad.moneda,
       sufijo: `${propertyId}-${Date.now()}`,
     });
 
