@@ -8,6 +8,8 @@ import {
   CardTitle, 
   CardDescription 
 } from "@/components/ui/card";
+import { formatearImporte } from "@/lib/moneda";
+import { useMonedaTenant } from "@/lib/use-moneda-tenant";
 import { Button } from "@/components/ui/button";
 import { 
   FileText, 
@@ -24,6 +26,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 export function IrpfDashboard() {
+  const moneda = useMonedaTenant();
   const [loading, setLoading] = useState(true);
   const [report, setReport] = useState<any>(null);
   const [year, setYear] = useState(new Date().getFullYear());
@@ -111,9 +114,8 @@ export function IrpfDashboard() {
     );
   }
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(amount);
-  };
+  // El importe se escribe en la divisa del tenant, con el formateador único.
+  const formatCurrency = (amount: number) => formatearImporte(amount, moneda);
 
   const totalRetenciones = report?.retentions?.amount || 0;
   const totalBase = report?.retentions?.base || 0;

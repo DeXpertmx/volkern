@@ -17,42 +17,34 @@ vi.mock('@/lib/db', () => {
 });
 
 import { 
-  formatCurrency, 
   getFiscalConfigForWebhook, 
   getFiscalConfig,
   CURRENCY_BY_COUNTRY,
   TAX_NAME_BY_COUNTRY,
   FISCAL_ID_LABEL_BY_COUNTRY,
 } from '@/lib/fiscal-engine';
+import { formatearImporte, nombreMoneda, simboloMoneda } from '@/lib/moneda';
 import { prisma } from '@/lib/db';
 
-describe('FiscalEngine — formatCurrency', () => {
-  it('debe formatear números con símbolo $ y 2 decimales por defecto', () => {
-    expect(formatCurrency(0)).toBe('$0,00');
-    // El formato de miles depende del locale disponible en el entorno de test
-    const result = formatCurrency(1000);
-    expect(result).toMatch(/\$1[.,]?000[.,]00/);
-    expect(formatCurrency(1000.5)).toMatch(/\$1[.,]?000[.,]50/);
+describe('FiscalEngine — el dinero y la divisa salen del módulo único', () => {
+  it('CURRENCY_BY_COUNTRY toma el nombre y el símbolo del catálogo de divisas', () => {
+    // El motor declara la divisa de cada país; el nombre y el símbolo no los
+    // escribe él, los lee del catálogo (eran la tercera copia de la misma tabla).
+    expect(CURRENCY_BY_COUNTRY['ES']).toEqual({ code: 'EUR', symbol: '€', name: 'Euro' });
+    expect(CURRENCY_BY_COUNTRY['MX']).toEqual({
+      code: 'MXN',
+      symbol: simboloMoneda('MXN'),
+      name: nombreMoneda('MXN'),
+    });
+    expect(CURRENCY_BY_COUNTRY['US'].code).toBe('USD');
+    expect(CURRENCY_BY_COUNTRY['GB'].code).toBe('GBP');
+    expect(CURRENCY_BY_COUNTRY['DE'].code).toBe('EUR');
   });
 
-  it('debe usar el símbolo proporcionado', () => {
-    expect(formatCurrency(100, '€')).toBe('€100,00');
-    expect(formatCurrency(50, '£')).toBe('£50,00');
-  });
-
-  it('debe respetar el número de decimales', () => {
-    expect(formatCurrency(100.123, '$', 0)).toBe('$100');
-    expect(formatCurrency(100.123, '$', 3)).toBe('$100,123');
-  });
-
-  it('debe manejar números negativos', () => {
-    const result = formatCurrency(-500, '$');
-    // El signo negativo aparece después del símbolo: $ -500,00 → $-500,00
-    expect(result).toMatch(/^\$-500[,.]00$/);
-  });
-
-  it('debe formatear correctamente usando locale es-ES', () => {
-    expect(formatCurrency(1234567.89, '€')).toBe('€1.234.567,89');
+  it('los importes se escriben con formatearImporte, que coloca el símbolo según la divisa', () => {
+    expect(formatearImporte(1234567.89, 'EUR')).toMatch(/^1\.234\.567,89\s€$/);
+    expect(formatearImporte(100.123, 'EUR', 0)).toMatch(/^100\s€$/);
+    expect(formatearImporte(null, 'EUR')).toBe('—');
   });
 });
 
@@ -120,8 +112,12 @@ describe('FiscalEngine — getFiscalConfigForWebhook', () => {
 describe('FiscalEngine — constantes de país', () => {
   it('CURRENCY_BY_COUNTRY debe tener los países principales', () => {
     expect(CURRENCY_BY_COUNTRY['ES']).toEqual({ code: 'EUR', symbol: '€', name: 'Euro' });
-    expect(CURRENCY_BY_COUNTRY['MX']).toEqual({ code: 'MXN', symbol: '$', name: 'Peso Mexicano' });
-    expect(CURRENCY_BY_COUNTRY['US']).toEqual({ code: 'USD', symbol: '$', name: 'Dólar Estadounidense' });
+    expect(CURRENCY_BY_COUNTRY['MX']).toEqual({
+      code: 'MXN',
+      symbol: simboloMoneda('MXN'),
+      name: nombreMoneda('MXN'),
+    });
+    expect(CURRENCY_BY_COUNTRY['US'].code).toBe('USD');
   });
 
   it('TAX_NAME_BY_COUNTRY debe tener nombres correctos', () => {

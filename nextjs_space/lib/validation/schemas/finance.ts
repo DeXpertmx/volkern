@@ -49,8 +49,10 @@ export const ExternalInvoiceCreateSchema = z.object({
     .describe('CUID del contacto existente. Requerido si no se envía leadId (uno de los dos es obligatorio).'),
   amount: z.coerce.number().positive('amount debe ser un número positivo')
     .describe('Importe total de la factura (>0). Acepta string coerced a number (e.g. "750.50" → 750.5). Si envías `items`, se calcula del desglose.'),
-  currency: z.string().length(3).optional().default('EUR')
-    .describe('Código de moneda ISO 4217 (exactamente 3 caracteres, default EUR).'),
+  // Sin divisa por defecto: si el cliente no la envía, la factura se emite en la
+  // moneda de reporte del tenant.
+  currency: z.string().length(3).optional()
+    .describe('Código de moneda ISO 4217 (exactamente 3 caracteres). Si se omite, se usa la del tenant.'),
   description: z.string().optional().default('Factura externa')
     .describe('Descripción visible de la factura (default "Factura externa").'),
   items: z.array(InvoiceItemSchema).optional()

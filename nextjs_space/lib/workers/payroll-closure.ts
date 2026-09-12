@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db';
+import { monedaEscritura } from '@/lib/moneda';
 import { VaultService } from '../security/vault';
 import { skillsLogger } from '../skills/observability';
 
@@ -18,7 +19,7 @@ export class PayrollClosureService {
       where: { id: employeeId },
       include: { 
         user: true,
-        tenant: { select: { vaultSeed: true } }
+        tenant: { select: { vaultSeed: true, moneda: true } }
       }
     });
 
@@ -79,7 +80,8 @@ export class PayrollClosureService {
       fullName: employee.fullName,
       period: `${month}/${year}`,
       totalExpenses: totalAmount,
-      currency: expenses[0]?.currency || 'EUR',
+      // La divisa del primer gasto manda; si no la trae, la de la cuenta.
+      currency: monedaEscritura(expenses[0]?.currency, employee.tenant?.moneda),
       ticketCount: expenses.length,
       anomaliesCount,
       integrityCheck: 'PASSED',

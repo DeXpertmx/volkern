@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
+import { formatearImporte, primeraMoneda } from '@/lib/moneda';
 import {
   buildContextoPlantilla,
   renderPlantilla,
@@ -58,7 +59,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           checkIn: 'viernes, 15 de octubre',
           checkOut: 'domingo, 18 de octubre',
           noches: '3',
-          importe: '$6,900',
+          // El importe de ejemplo se escribe como los reales: en la divisa del
+          // tenant y con el formateador del módulo de dinero.
+          importe: formatearImporte(6900, primeraMoneda(auth.tenant?.moneda)),
           estado: 'confirmed',
         };
 

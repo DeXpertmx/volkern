@@ -5,19 +5,15 @@
   },
   "app/admin/auditoria/[id]/page.tsx": {
     "divisa": 0,
-    "formato": 3
+    "formato": 1
   },
   "app/admin/auditoria/page.tsx": {
     "divisa": 0,
-    "formato": 6
+    "formato": 2
   },
   "app/admin/planes/page.tsx": {
     "divisa": 1,
     "formato": 0
-  },
-  "app/admin/saas/tenants/[id]/page.tsx": {
-    "divisa": 0,
-    "formato": 1
   },
   "app/admin/saas/tenants/page.tsx": {
     "divisa": 5,
@@ -48,22 +44,6 @@
     "formato": 0
   },
   "app/api/catalogo/route.ts": {
-    "divisa": 1,
-    "formato": 0
-  },
-  "app/api/citas/accion/route.ts": {
-    "divisa": 0,
-    "formato": 3
-  },
-  "app/api/citas/route.ts": {
-    "divisa": 0,
-    "formato": 1
-  },
-  "app/api/compliance/certificate-pdf/route.ts": {
-    "divisa": 0,
-    "formato": 1
-  },
-  "app/api/configuracion/fiscal/emisores/route.ts": {
     "divisa": 1,
     "formato": 0
   },
@@ -115,37 +95,13 @@
     "divisa": 5,
     "formato": 0
   },
-  "app/api/erp/payroll/sign/[id]/route.ts": {
-    "divisa": 0,
-    "formato": 1
-  },
   "app/api/erp/projects/[id]/milestones/[milestoneId]/route.ts": {
-    "divisa": 1,
-    "formato": 0
-  },
-  "app/api/invoices/[id]/pdf/route.ts": {
-    "divisa": 4,
-    "formato": 2
-  },
-  "app/api/invoices/[id]/send-email/route.ts": {
-    "divisa": 5,
-    "formato": 1
-  },
-  "app/api/invoices/route.ts": {
     "divisa": 1,
     "formato": 0
   },
   "app/api/leads/[id]/convert/route.ts": {
     "divisa": 1,
     "formato": 0
-  },
-  "app/api/ordenes-venta/route.ts": {
-    "divisa": 1,
-    "formato": 0
-  },
-  "app/api/portal/[token]/fiscal/route.ts": {
-    "divisa": 1,
-    "formato": 2
   },
   "app/api/public/plans/route.ts": {
     "divisa": 2,
@@ -164,10 +120,6 @@
     "formato": 0
   },
   "app/api/tenants/create/route.ts": {
-    "divisa": 1,
-    "formato": 0
-  },
-  "app/api/v1/finance/global/route.ts": {
     "divisa": 1,
     "formato": 0
   },
@@ -199,33 +151,13 @@
     "divisa": 1,
     "formato": 0
   },
-  "app/dashboard/auditoria/page.tsx": {
-    "divisa": 0,
-    "formato": 1
-  },
-  "app/dashboard/automatizaciones/[id]/executions/page.tsx": {
-    "divisa": 0,
-    "formato": 1
-  },
   "app/dashboard/catalogo/page.tsx": {
     "divisa": 3,
     "formato": 1
   },
-  "app/dashboard/chatbot/analytics/page.tsx": {
-    "divisa": 0,
-    "formato": 4
-  },
-  "app/dashboard/chatbot/page.tsx": {
-    "divisa": 0,
-    "formato": 1
-  },
   "app/dashboard/citas/[id]/page.tsx": {
     "divisa": 0,
-    "formato": 3
-  },
-  "app/dashboard/compliance/page.tsx": {
-    "divisa": 0,
-    "formato": 1
+    "formato": 2
   },
   "app/dashboard/contactos/[id]/page.tsx": {
     "divisa": 2,
@@ -267,49 +199,9 @@
     "divisa": 0,
     "formato": 2
   },
-  "app/dashboard/finanzas/contabilidad/balance/page.tsx": {
-    "divisa": 1,
-    "formato": 2
-  },
-  "app/dashboard/finanzas/contabilidad/cuenta-resultados/page.tsx": {
-    "divisa": 1,
-    "formato": 2
-  },
-  "app/dashboard/finanzas/contabilidad/page.tsx": {
-    "divisa": 1,
-    "formato": 2
-  },
-  "app/dashboard/finanzas/contabilidad/trial-balance/page.tsx": {
-    "divisa": 1,
-    "formato": 2
-  },
-  "app/dashboard/finanzas/facturacion/page.tsx": {
-    "divisa": 1,
-    "formato": 2
-  },
-  "app/dashboard/finanzas/gastos/bandeja/page.tsx": {
-    "divisa": 0,
-    "formato": 1
-  },
-  "app/dashboard/finanzas/gastos/escanear/page.tsx": {
-    "divisa": 18,
-    "formato": 0
-  },
-  "app/dashboard/integraciones/page.tsx": {
-    "divisa": 0,
-    "formato": 1
-  },
-  "app/dashboard/integraciones/webhooks-salientes/page.tsx": {
-    "divisa": 0,
-    "formato": 1
-  },
   "app/dashboard/leads/[id]/page.tsx": {
     "divisa": 1,
     "formato": 2
-  },
-  "app/dashboard/mi-tarjeta/escanear/page.tsx": {
-    "divisa": 0,
-    "formato": 1
   },
   "app/dashboard/pipeline/[id]/page.tsx": {
     "divisa": 2,
@@ -367,17 +259,9 @@
     "divisa": 0,
     "formato": 1
   },
-  "components/admin/CertificadoCumplimiento.tsx": {
-    "divisa": 0,
-    "formato": 1
-  },
   "components/ads/AdABTestManager.tsx": {
     "divisa": 0,
     "formato": 3
-  },
-  "components/ads/AdsBudgetRulesList.tsx": {
-    "divisa": 0,
-    "formato": 1
   },
   "components/ads/AdsCampaignDetail.tsx": {
     "divisa": 0,
@@ -407,14 +291,6 @@
     "divisa": 2,
     "formato": 1
   },
-  "components/compliance/WebhookAuditSection.tsx": {
-    "divisa": 0,
-    "formato": 1
-  },
-  "components/config/ConfigHistorial.tsx": {
-    "divisa": 0,
-    "formato": 1
-  },
   "components/developers/WebhookTester.tsx": {
     "divisa": 1,
     "formato": 0
@@ -422,26 +298,6 @@
   "components/document-preview.tsx": {
     "divisa": 0,
     "formato": 2
-  },
-  "components/finance/DirectInvoiceForm.tsx": {
-    "divisa": 2,
-    "formato": 0
-  },
-  "components/finance/ExpenseVerificationDetails.tsx": {
-    "divisa": 9,
-    "formato": 0
-  },
-  "components/finance/ImportGastosModal.tsx": {
-    "divisa": 1,
-    "formato": 2
-  },
-  "components/finance/ManualInvoiceModal.tsx": {
-    "divisa": 7,
-    "formato": 2
-  },
-  "components/fiscal/EmisoresFiscalesTab.tsx": {
-    "divisa": 18,
-    "formato": 0
   },
   "components/hr/expense-approval-feed.tsx": {
     "divisa": 3,
@@ -455,57 +311,13 @@
     "divisa": 24,
     "formato": 0
   },
-  "components/hubs/FleetLiveMap.tsx": {
-    "divisa": 0,
-    "formato": 1
-  },
   "components/hubs/GlobalCockpitDashboard.tsx": {
     "divisa": 1,
-    "formato": 2
-  },
-  "components/hubs/LogisticaTrackMap.tsx": {
-    "divisa": 0,
     "formato": 2
   },
   "components/hubs/ProyectosDashboard.tsx": {
     "divisa": 5,
     "formato": 0
-  },
-  "components/hubs/accounting/FiscalCalendarDashboard.tsx": {
-    "divisa": 1,
-    "formato": 2
-  },
-  "components/hubs/accounting/IrpfDashboard.tsx": {
-    "divisa": 1,
-    "formato": 2
-  },
-  "components/hubs/accounting/Modelo115Dashboard.tsx": {
-    "divisa": 1,
-    "formato": 2
-  },
-  "components/hubs/accounting/Modelo130Dashboard.tsx": {
-    "divisa": 1,
-    "formato": 2
-  },
-  "components/hubs/accounting/Modelo180Dashboard.tsx": {
-    "divisa": 1,
-    "formato": 2
-  },
-  "components/hubs/accounting/Modelo347Dashboard.tsx": {
-    "divisa": 1,
-    "formato": 2
-  },
-  "components/hubs/accounting/Modelo349Dashboard.tsx": {
-    "divisa": 1,
-    "formato": 2
-  },
-  "components/hubs/accounting/Modelo390Dashboard.tsx": {
-    "divisa": 1,
-    "formato": 2
-  },
-  "components/hubs/accounting/TaxDashboard.tsx": {
-    "divisa": 1,
-    "formato": 2
   },
   "components/public/CountUp.tsx": {
     "divisa": 0,
@@ -539,10 +351,6 @@
     "divisa": 0,
     "formato": 2
   },
-  "components/webcreator/LeftPanelContent.tsx": {
-    "divisa": 0,
-    "formato": 1
-  },
   "components/webcreator/blocks/components/BookingBlock.ts": {
     "divisa": 2,
     "formato": 0
@@ -569,7 +377,7 @@
   },
   "lib/agents/execution-engine.ts": {
     "divisa": 2,
-    "formato": 23
+    "formato": 20
   },
   "lib/agents/intent-classifier.ts": {
     "divisa": 2,
@@ -591,21 +399,13 @@
     "divisa": 1,
     "formato": 0
   },
-  "lib/automation/variables-parser.ts": {
-    "divisa": 0,
-    "formato": 2
-  },
   "lib/automation-engine.ts": {
     "divisa": 0,
-    "formato": 3
+    "formato": 1
   },
   "lib/chat/chatbot-service.ts": {
     "divisa": 1,
     "formato": 0
-  },
-  "lib/compliance-alerts.ts": {
-    "divisa": 0,
-    "formato": 1
   },
   "lib/contratos/placeholders.ts": {
     "divisa": 3,
@@ -621,34 +421,6 @@
   },
   "lib/erp/hr-service.ts": {
     "divisa": 1,
-    "formato": 0
-  },
-  "lib/erp/pdf-service.ts": {
-    "divisa": 0,
-    "formato": 1
-  },
-  "lib/finance/billing-service.ts": {
-    "divisa": 1,
-    "formato": 0
-  },
-  "lib/finance/inbound-invoice-service.ts": {
-    "divisa": 3,
-    "formato": 0
-  },
-  "lib/finance/payroll/es/sepa-generator.ts": {
-    "divisa": 1,
-    "formato": 0
-  },
-  "lib/finance/telegram-expense.ts": {
-    "divisa": 1,
-    "formato": 0
-  },
-  "lib/fiscal-engine.ts": {
-    "divisa": 15,
-    "formato": 1
-  },
-  "lib/fiscal-validation.ts": {
-    "divisa": 13,
     "formato": 0
   },
   "lib/import/import-catalog.ts": {
@@ -689,10 +461,6 @@
   },
   "lib/insurance/currency.ts": {
     "divisa": 12,
-    "formato": 0
-  },
-  "lib/invoice-parser.ts": {
-    "divisa": 21,
     "formato": 0
   },
   "lib/invoicing-service.ts": {
@@ -739,10 +507,6 @@
     "divisa": 1,
     "formato": 0
   },
-  "lib/skills/booking-skills.ts": {
-    "divisa": 0,
-    "formato": 1
-  },
   "lib/skills/catalog-skills.ts": {
     "divisa": 1,
     "formato": 0
@@ -763,47 +527,11 @@
     "divisa": 1,
     "formato": 0
   },
-  "lib/skills/vault-payroll-skills.ts": {
-    "divisa": 1,
-    "formato": 0
-  },
   "lib/types.ts": {
     "divisa": 8,
     "formato": 0
   },
   "lib/utils.ts": {
-    "divisa": 1,
-    "formato": 0
-  },
-  "lib/validation/common.ts": {
-    "divisa": 1,
-    "formato": 0
-  },
-  "lib/validation/schemas/academy.ts": {
-    "divisa": 1,
-    "formato": 0
-  },
-  "lib/validation/schemas/admin.ts": {
-    "divisa": 2,
-    "formato": 0
-  },
-  "lib/validation/schemas/erp.ts": {
-    "divisa": 1,
-    "formato": 0
-  },
-  "lib/validation/schemas/facturas.ts": {
-    "divisa": 2,
-    "formato": 0
-  },
-  "lib/validation/schemas/finance.ts": {
-    "divisa": 2,
-    "formato": 0
-  },
-  "lib/validation/schemas/partner-payroll.ts": {
-    "divisa": 1,
-    "formato": 0
-  },
-  "lib/workers/payroll-closure.ts": {
     "divisa": 1,
     "formato": 0
   }

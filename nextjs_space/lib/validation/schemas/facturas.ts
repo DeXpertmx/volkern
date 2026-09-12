@@ -402,7 +402,9 @@ export const EmisorCreateSchema = z.object({
   telefono: z.string().max(30).optional(),
   email: z.string().email('Email inválido'),
   sitioWeb: z.string().url().optional().nullable(),
-  monedaPredeterminada: z.string().length(3).optional().default('EUR'),
+  // Sin divisa por defecto: la ruta del emisor la resuelve con la del país y la
+  // del tenant.
+  monedaPredeterminada: z.string().length(3).optional(),
   serieFactura: z.string().max(10).optional().default('F'),
   logoUrl: z.string().url().optional().nullable(),
   colorPrimario: z.string().max(7).optional(),
@@ -474,7 +476,8 @@ export const PayrollCreateSchema = z.object({
   employeeName: z.string().min(1, 'Nombre de empleado requerido').max(255),
   userId: z.string().optional(),
   amount: z.coerce.number().min(0, 'Monto requerido'),
-  currency: z.string().length(3).optional().default('EUR'),
+  // Sin divisa por defecto: la nómina se paga en la divisa del tenant.
+  currency: z.string().length(3).optional(),
   period: z.string().min(1, 'Período requerido').max(50),
   status: z.enum(['PAID', 'PENDING', 'CANCELLED']).optional().default('PAID'),
   date: z.string().datetime().optional(),

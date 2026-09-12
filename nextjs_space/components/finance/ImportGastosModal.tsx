@@ -1,6 +1,8 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { formatearImporte } from '@/lib/moneda';
+import { useMonedaTenant } from '@/lib/use-moneda-tenant';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -55,9 +57,6 @@ const FIELD_LABELS: { key: string; label: string; required?: boolean }[] = [
   { key: 'TOTAL', label: 'TOTAL' },
 ];
 
-const fmt = (n: number) =>
-  new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(n);
-
 export function ImportGastosModal({
   open,
   onOpenChange,
@@ -68,6 +67,9 @@ export function ImportGastosModal({
   onSuccess?: () => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const moneda = useMonedaTenant();
+  // La previsualización de la importación se escribe en la divisa del tenant.
+  const fmt = (n: number) => formatearImporte(n, moneda);
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);

@@ -5,13 +5,13 @@ import { prisma } from '@/lib/db';
 import { generatePdf } from '@/lib/pdf-generator';
 import { authenticateRequest } from '@/lib/api-key-auth';
 import { sendEmail } from '@/lib/ses-email';
+import { formatearImporte, primeraMoneda } from '@/lib/moneda';
 
 // ─── Helpers (misma lógica que el endpoint PDF) ───────────────
 
+/** El formato del dinero lo decide el módulo de dinero, no este correo. */
 function formatCurrency(amount: number, currency: string): string {
-  const symbols: Record<string, string> = { EUR: '€', USD: '$', MXN: '$' };
-  const symbol = symbols[currency] || '€';
-  return `${amount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${symbol}`;
+  return formatearImporte(amount, currency);
 }
 
 function formatISODate(date: Date | string): string {
@@ -54,7 +54,8 @@ interface InvoiceMetadata {
 function generateInvoiceHTML(invoice: any, tenant: any): string {
   const meta = (invoice.metadata || {}) as InvoiceMetadata;
   const items = meta.items || [];
-  const moneda = invoice.moneda || 'EUR';
+  // La divisa de la factura manda; si no la trae, la del tenant.
+  const moneda = primeraMoneda(invoice.moneda, tenant?.moneda);
 
   const clienteNombre = meta.clienteNombre || invoice.contact?.nombre || invoice.lead?.nombre || 'Cliente';
   const clienteNif = meta.clienteNif || invoice.contact?.perfilFiscal?.nif || '';
@@ -227,7 +228,7 @@ function generateInvoiceHTML(invoice: any, tenant: any): string {
 function generateEmailHTML(invoice: any, tenant: any, pdfFilename: string): string {
   const meta = (invoice.metadata || {}) as InvoiceMetadata;
   const items = meta.items || [];
-  const moneda = invoice.moneda || 'EUR';
+  const moneda = primeraMoneda(invoice.moneda, tenant?.moneda);
   const total = items.reduce((sum, item) => sum + (item.cantidad * item.precioUnitario), 0);
   const emisorNombre = tenant?.razonSocial || tenant?.nombre || 'Empresa';
 

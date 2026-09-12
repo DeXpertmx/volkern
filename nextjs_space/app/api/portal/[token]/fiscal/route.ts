@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { formatearImporte, monedaEfectiva } from '@/lib/moneda';
 import { TaxType } from '@prisma/client';
 
 /**
@@ -83,6 +84,17 @@ export async function GET(
         })
       : [];
 
+    // La divisa de las cifras del portal es la de las facturas del contacto y, si
+    // no hay ninguna, la del tenant: el portal escribía euros para todos.
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { moneda: true },
+    });
+    const monedaPortal = monedaEfectiva(
+      invoices.map((i) => i.moneda),
+      tenant?.moneda
+    );
+
     // 4. Obtener resumen de IVA del trimestre actual
     const now = new Date();
     const currentQuarter = Math.ceil((now.getMonth() + 1) / 3);
@@ -144,8 +156,7 @@ export async function GET(
       // Si el servicio no existe, continuar sin deadlines
     }
 
-    const formatCurrency = (amount: number) =>
-      new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(amount);
+    const formatCurrency = (amount: number) => formatearImporte(amount, monedaPortal);
 
     // 6. Obtener Modelo 349 (IVA Intracomunitario) del contacto actual
     let modelo349Summary: {

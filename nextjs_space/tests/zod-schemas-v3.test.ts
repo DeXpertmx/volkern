@@ -701,12 +701,13 @@ describe('ProductionScrapSchema', () => {
 
 describe('ProjectCreateSchema', () => {
   it('debe aceptar proyecto mínimo', () => ok(ProjectCreateSchema, { name: 'Proyecto X' }));
-  it('debe aplicar defaults (budget=0, currency=EUR)', () => {
+  it('debe aplicar los defaults del presupuesto y no inventar divisa', () => {
     const r = check(ProjectCreateSchema, { name: 'P' });
     expect(r.success).toBe(true);
     if (r.success) {
       expect(r.data.budget).toBe(0);
-      expect(r.data.currency).toBe('EUR');
+      // El proyecto se presupuesta en la divisa del tenant, que resuelve la ruta.
+      expect(r.data.currency).toBeUndefined();
     }
   });
   it('debe aceptar con leadId, budget, fechas', () => ok(ProjectCreateSchema, {

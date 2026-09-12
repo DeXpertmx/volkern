@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { formatearImporte } from '@/lib/moneda';
+import { useMonedaTenant } from '@/lib/use-moneda-tenant';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,6 +32,8 @@ interface InvoiceItem {
 }
 
 export function DirectInvoiceForm() {
+  // Los importes del formulario se escriben en la divisa del tenant.
+  const moneda = useMonedaTenant();
   const [items, setItems] = useState<InvoiceItem[]>([
     { id: '1', name: '', description: '', price: 0, quantity: 1 }
   ]);
@@ -165,7 +169,7 @@ export function DirectInvoiceForm() {
           <CardFooter className="flex justify-between border-t p-6 bg-slate-50/50">
             <div className="text-right flex-1 pr-8">
               <p className="text-xs text-slate-400 font-bold uppercase">Subtotal estimado</p>
-              <p className="text-2xl font-black tracking-tight text-slate-900">${subtotal.toFixed(2)} MXN</p>
+              <p className="text-2xl font-black tracking-tight text-slate-900">{formatearImporte(subtotal, moneda)}</p>
             </div>
             <Button size="lg" className="rounded-2xl px-8 font-bold" onClick={() => setStep(2)}>
               Siguiente <ChevronRight className="h-4 w-4 ml-2" />
@@ -228,7 +232,7 @@ export function DirectInvoiceForm() {
                 </div>
                 <div className="flex justify-between pt-4 border-t border-white/10">
                   <span className="font-black uppercase tracking-widest text-primary">Total CFDI</span>
-                  <span className="text-3xl font-black tracking-tighter">${total.toFixed(2)} MXN</span>
+                  <span className="text-3xl font-black tracking-tighter">{formatearImporte(total, moneda)}</span>
                 </div>
               </div>
             </div>

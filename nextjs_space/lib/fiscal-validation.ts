@@ -1,6 +1,8 @@
 // Biblioteca de validación de identificadores fiscales por país
 // Incluye: RFC (México), NIF/CIF (España), EIN (EE.UU.), RUT (Chile), CUIT (Argentina), etc.
 
+import { infoMoneda, MONEDA_POR_PAIS } from './moneda';
+
 export interface FiscalIdConfig {
   pais: string;
   paisNombre: string;
@@ -500,22 +502,20 @@ export function getRegimenesFiscales(pais: string): { codigo: string; nombre: st
   return REGIMENES_FISCALES[pais] || [];
 }
 
-// Monedas por país
-export const MONEDAS_POR_PAIS: Record<string, { codigo: string; nombre: string; simbolo: string }> = {
-  MX: { codigo: 'MXN', nombre: 'Peso Mexicano', simbolo: '$' },
-  ES: { codigo: 'EUR', nombre: 'Euro', simbolo: '€' },
-  US: { codigo: 'USD', nombre: 'Dólar Estadounidense', simbolo: '$' },
-  CL: { codigo: 'CLP', nombre: 'Peso Chileno', simbolo: '$' },
-  AR: { codigo: 'ARS', nombre: 'Peso Argentino', simbolo: '$' },
-  CO: { codigo: 'COP', nombre: 'Peso Colombiano', simbolo: '$' },
-  PE: { codigo: 'PEN', nombre: 'Sol Peruano', simbolo: 'S/' },
-  BR: { codigo: 'BRL', nombre: 'Real Brasileño', simbolo: 'R$' },
-  GB: { codigo: 'GBP', nombre: 'Libra Esterlina', simbolo: '£' },
-  DE: { codigo: 'EUR', nombre: 'Euro', simbolo: '€' },
-  FR: { codigo: 'EUR', nombre: 'Euro', simbolo: '€' },
-  IT: { codigo: 'EUR', nombre: 'Euro', simbolo: '€' },
-  PT: { codigo: 'EUR', nombre: 'Euro', simbolo: '€' },
-};
+/**
+ * Monedas por país, con la forma `{ codigo, nombre, simbolo }` que ya consumían la
+ * API de validación fiscal y el catálogo.
+ *
+ * El nombre y el símbolo de cada divisa los declara `lib/moneda.ts`: esta tabla
+ * era la tercera copia de los mismos trece códigos con sus nombres escritos a mano.
+ */
+export const MONEDAS_POR_PAIS: Record<string, { codigo: string; nombre: string; simbolo: string }> =
+  Object.fromEntries(
+    Object.entries(MONEDA_POR_PAIS).flatMap(([pais, codigo]) => {
+      const info = infoMoneda(codigo);
+      return info ? [[pais, { codigo: info.codigo, nombre: info.nombre, simbolo: info.simbolo }]] : [];
+    })
+  );
 
 // Países de la UE (para lógica de inversión de sujeto pasivo)
 export const PAISES_UE = ['ES', 'DE', 'FR', 'IT', 'PT', 'NL', 'BE', 'AT', 'IE', 'PL', 'SE', 'DK', 'FI', 'GR', 'CZ', 'RO', 'HU', 'SK', 'BG', 'HR', 'SI', 'LT', 'LV', 'EE', 'CY', 'LU', 'MT'];

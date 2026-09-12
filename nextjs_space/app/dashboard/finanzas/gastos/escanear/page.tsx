@@ -2,6 +2,8 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { formatearImporte, monedaEscritura, MONEDAS_SOPORTADAS } from '@/lib/moneda'
+import { useMonedaTenant } from '@/lib/use-moneda-tenant'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -137,6 +139,9 @@ export default function EscanearGastoPage() {
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const pdfInputRef = useRef<HTMLInputElement>(null)
+
+  // La divisa del gasto es la que el usuario elija y, si no elige, la del tenant.
+  const monedaTenant = useMonedaTenant()
 
   const [capturedImage, setCapturedImage] = useState<string | null>(null)
   const [capturedFile, setCapturedFile] = useState<File | null>(null)
@@ -295,7 +300,7 @@ export default function EscanearGastoPage() {
     category: 'otros',
     date: new Date().toISOString().split('T')[0],
     dueDate: '',
-    currency: 'EUR',
+    currency: '',
     paymentMethod: '',
     receiptUrl: '',
     // Identificación factura
@@ -327,6 +332,10 @@ export default function EscanearGastoPage() {
     operationDate: '',
     iban: '',
   })
+
+  // Divisa con la que se guarda y se enseña el gasto: la elegida, si la hay, y si
+  // no la del tenant. Antes nacía en euros para todos.
+  const monedaFormulario = monedaEscritura(form.currency, monedaTenant)
 
   // Ref con el form siempre actual (para usarlo en flujos async tras el OCR)
   const formRef = useRef(form)
@@ -939,7 +948,7 @@ export default function EscanearGastoPage() {
         category: ext.category || 'otros',
         date: ext.date ? formatDetectedDate(ext.date) : prev.date,
         dueDate: ext.fecha_vencimiento ? formatDetectedDate(ext.fecha_vencimiento) : '',
-        currency: ext.moneda || 'EUR',
+        currency: monedaEscritura(ext.moneda, monedaTenant),
         paymentMethod: ext.forma_pago || '',
         receiptUrl: data.receiptUrl,
         // Identificación factura
@@ -1579,7 +1588,7 @@ export default function EscanearGastoPage() {
       const body: Record<string, any> = {
         description: form.description,
         amount: parseFloat(form.amount),
-        currency: form.currency || 'EUR',
+        currency: monedaFormulario,
         date: form.date || undefined,
         dueDate: form.dueDate || undefined,
         paymentMethod: form.paymentMethod || undefined,
@@ -1698,7 +1707,7 @@ export default function EscanearGastoPage() {
       taxRegime: '',
       operationType: '',
       dueDate: '',
-      currency: 'EUR',
+      currency: '',
       paymentMethod: '',
       iban: '',
     })
@@ -2057,11 +2066,11 @@ export default function EscanearGastoPage() {
                     <div>
                       <Label>Moneda</Label>
                       <select
-                        value={form.currency}
+                        value={monedaFormulario}
                         onChange={e => { const v = e.target.value; setForm(p => ({ ...p, currency: v })); maybeProposeRegion('currency', v) }}
                         className="w-full bg-background border rounded-xl px-3 py-2.5 text-sm outline-none"
                       >
-                        {['EUR', 'USD', 'MXN', 'GBP', 'CHF', 'CAD', 'ARS', 'COP', 'CLP', 'PEN', 'BRL'].map(currency => (
+                        {MONEDAS_SOPORTADAS.map(currency => (
                           <option key={currency} value={currency}>{currency}</option>
                         ))}
                       </select>
@@ -2326,7 +2335,7 @@ export default function EscanearGastoPage() {
                       </div>
                       <div className="grid grid-cols-2 gap-2 text-[11px] text-indigo-950">
                         <span>Cuenta de gasto: <strong>{entryProposal.expenseAccountCode} · {entryProposal.expenseAccountName}</strong></span>
-                        <span className="text-right">A pagar proveedor: <strong>{form.currency || 'EUR'} {entryProposal.supplierPayable.toFixed(2)}</strong></span>
+                        <span className="text-right">A pagar proveedor: <strong>{formatearImporte(entryProposal.supplierPayable, monedaFormulario)}</strong></span>
                       </div>
                       <p className="text-[10px] font-semibold text-indigo-800">{entryProposal.treatmentLabel}</p>
                       <div className="overflow-x-auto rounded-lg border border-indigo-100 bg-white/80">
@@ -2347,7 +2356,7 @@ export default function EscanearGastoPage() {
                         </table>
                       </div>
                       {!entryProposal.totalMatches && (
-                        <p className="text-[10px] font-medium text-amber-800">Los componentes fiscales difieren del total detectado en {form.currency || 'EUR'} {entryProposal.sourceTotal.toFixed(2)} por {form.currency || 'EUR'} {Math.abs(entryProposal.difference).toFixed(2)}. Revisa la factura antes de guardar.</p>
+                        <p className="text-[10px] font-medium text-amber-800">Los componentes fiscales difieren del total detectado en {formatearImporte(entryProposal.sourceTotal, monedaFormulario)} por {formatearImporte(Math.abs(entryProposal.difference), monedaFormulario)}. Revisa la factura antes de guardar.</p>
                       )}
                       {entryProposal.requiresFiscalReview && (
                         <p className="text-[10px] font-medium text-amber-800">Esta operación requiere revisión fiscal: el IVA se trata como {entryProposal.reverseChargeVat > 0 ? 'autorrepercutido y soportado' : 'no IVA español'} y no se aplicará como una factura nacional estándar.</p>
@@ -2394,7 +2403,7 @@ export default function EscanearGastoPage() {
           {duplicateCandidate?.duplicate && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-1 text-sm">
               <p><span className="font-semibold">Factura:</span> {duplicateCandidate.duplicate.invoiceNumber || 'Sin número'}</p>
-              <p><span className="font-semibold">Importe:</span> {duplicateCandidate.duplicate.currency || 'EUR'} {Number(duplicateCandidate.duplicate.amount || 0).toFixed(2)}</p>
+              <p><span className="font-semibold">Importe:</span> {formatearImporte(Number(duplicateCandidate.duplicate.amount || 0), duplicateCandidate.duplicate.currency || monedaTenant)}</p>
               <p><span className="font-semibold">Fecha:</span> {duplicateCandidate.duplicate.date ? new Intl.DateTimeFormat('es-ES').format(new Date(duplicateCandidate.duplicate.date)) : '—'}</p>
               {duplicateCandidate.duplicate.description && <p><span className="font-semibold">Descripción:</span> {duplicateCandidate.duplicate.description}</p>}
             </div>

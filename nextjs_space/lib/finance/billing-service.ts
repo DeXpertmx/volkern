@@ -1,6 +1,7 @@
 import { eventBus, EVENTS } from '@/lib/skills/event-bus'
 import { prisma } from '@/lib/db'
 import { InvoicingService } from '@/lib/invoicing-service'
+import { monedaEscritura } from '@/lib/moneda'
 import { addMonths, addYears } from 'date-fns'
 
 export class BillingService {
@@ -73,7 +74,9 @@ export class BillingService {
         tenantId,
         contactId: contactId ?? undefined,
         amount: total ?? undefined,
-        currency: moneda || 'EUR',
+        // La divisa es la de la orden de venta; sin ella, la red de seguridad de
+        // las escrituras (nunca una decisión de negocio escrita aquí).
+        currency: monedaEscritura(moneda),
         description: `Factura orden de venta ${numero}`,
         items: ordenVenta.items.map(item => ({
           name: item.concepto,

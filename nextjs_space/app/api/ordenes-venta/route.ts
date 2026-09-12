@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db'
 import { authenticateRequest } from '@/lib/api-key-auth'
 import { aplicaInversionSujetoPasivo } from '@/lib/fiscal-validation'
 import { validateBody } from '@/lib/validation'
+import { monedaEscritura } from '@/lib/moneda'
 import { CommonSchemas } from '@/lib/validation/common'
 import { z } from 'zod'
 
@@ -144,7 +145,7 @@ export async function POST(req: NextRequest) {
       cotizacionId,
       dealId,
       emisorId,
-      moneda = 'EUR',
+      moneda,
       notas,
       fechaOrden,
       fechaEntrega,
@@ -354,7 +355,8 @@ export async function POST(req: NextRequest) {
         totalImpuestos: totalImpuestosOrden,
         totalRetenciones: totalRetencionesOrden,
         total: Math.round(totalOrden * 100) / 100,
-        moneda,
+        // La divisa la dicta quien crea la orden; si no la indica, la del tenant.
+        moneda: monedaEscritura(moneda, auth.tenant?.moneda),
         redondeoLinea,
         notas,
         notasInternas,

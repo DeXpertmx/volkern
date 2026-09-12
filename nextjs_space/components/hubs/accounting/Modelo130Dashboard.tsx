@@ -8,6 +8,8 @@ import {
   CardTitle, 
   CardDescription 
 } from "@/components/ui/card";
+import { formatearImporte } from "@/lib/moneda";
+import { useMonedaTenant } from "@/lib/use-moneda-tenant";
 import { Button } from "@/components/ui/button";
 import { 
   TrendingUp, 
@@ -24,6 +26,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 export function Modelo130Dashboard() {
+  const moneda = useMonedaTenant();
   const [loading, setLoading] = useState(true);
   const [report, setReport] = useState<any>(null);
   const [year, setYear] = useState(new Date().getFullYear());
@@ -129,9 +132,7 @@ export function Modelo130Dashboard() {
     );
   }
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(amount);
-  };
+  const formatCurrency = (amount: number) => formatearImporte(amount, moneda);
 
   const hasActivity = report?.hasActivity || false;
   const totalIncome = report?.totalIncome || 0;

@@ -8,6 +8,8 @@ import {
   CardTitle, 
   CardDescription 
 } from "@/components/ui/card";
+import { formatearImporte } from "@/lib/moneda";
+import { useMonedaTenant } from "@/lib/use-moneda-tenant";
 import { Button } from "@/components/ui/button";
 import { 
   Calendar,
@@ -79,13 +81,12 @@ function formatDate(dateStr: string) {
   });
 }
 
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(amount);
-}
-
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function FiscalCalendarDashboard() {
+  const moneda = useMonedaTenant();
+  // El importe se escribe en la divisa del tenant, con el formateador único.
+  const formatCurrency = (amount: number) => formatearImporte(amount, moneda);
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<CalendarSummary | null>(null);
   const [year, setYear] = useState(new Date().getFullYear());
@@ -366,6 +367,9 @@ export function FiscalCalendarDashboard() {
 // ─── Deadline Row ────────────────────────────────────────────────────────────
 
 function DeadlineRow({ deadline, overdue }: { deadline: FiscalDeadline; overdue?: boolean }) {
+  // La fila escribe el importe estimado en la divisa del tenant.
+  const moneda = useMonedaTenant();
+  const formatCurrency = (amount: number) => formatearImporte(amount, moneda);
   const modelColorClass = MODEL_COLORS[deadline.model] || 'bg-slate-100 border-slate-200 text-slate-600';
   const modelBg = MODEL_BG[deadline.model] || 'bg-slate-500';
 
