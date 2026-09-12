@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
+import { monedaEscritura } from '@/lib/hospitality/moneda';
 
 /**
  * PATCH /api/hospitality/rateplans/[id] — editar tarifa/restricciones.
@@ -36,9 +37,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       }
       data.tarifa = body.tarifa;
     }
-    // Si el cliente deja la moneda vacía, se hereda la del tenant: nunca el valor
-    // por defecto del esquema, que es 'MXN' para todo el mundo.
-    if (body.moneda !== undefined) data.moneda = body.moneda || auth.tenant!.moneda || 'MXN';
+    // Si el cliente deja la moneda vacía, se hereda la del tenant. La red de
+    // seguridad de la escritura vive en el módulo, no aquí.
+    if (body.moneda !== undefined) {
+      data.moneda = monedaEscritura(body.moneda, auth.tenant!.moneda);
+    }
     if (body.minNoches !== undefined) data.minNoches = Math.max(1, parseInt(body.minNoches) || 1);
     if (body.maxNoches !== undefined) data.maxNoches = body.maxNoches != null ? parseInt(body.maxNoches) : null;
     if (body.checkInDias !== undefined) {

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
+import { monedaEscritura } from '@/lib/hospitality/moneda';
 
 /**
  * Planes de tarifa y restricciones de venta (plan maestro §6, §15).
@@ -86,8 +87,8 @@ export async function POST(req: NextRequest) {
         codigo: codigo ? String(codigo).trim() : null,
         tarifa,
         // El plan hereda la divisa de su unidad y, si la unidad no tiene, la del
-        // tenant. El valor por defecto del esquema no se usa como respaldo.
-        moneda: moneda || unit.moneda || auth.tenant!.moneda || 'MXN',
+        // tenant; la red de seguridad de la escritura vive en el módulo.
+        moneda: monedaEscritura(moneda, unit.moneda, auth.tenant!.moneda),
         minNoches: Math.max(1, parseInt(minNoches) || 1),
         maxNoches: maxNoches != null ? parseInt(maxNoches) : null,
         checkInDias: Array.isArray(checkInDias) && checkInDias.length ? checkInDias : Prisma.JsonNull,
