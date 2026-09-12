@@ -73,9 +73,8 @@ export default function PrivacyPolicyPage() {
                 </p>
                 <p className="text-gray-600 leading-relaxed mt-3">
                   Cuando una empresa utiliza Volkern CRM para gestionar sus propios datos de contactos, clientes o leads,
-                  esa empresa puede actuar como responsable del tratamiento y Volkern CRM como su encargado.
-                  La relación concreta de responsable/encargado y los datos de contacto aplicables deben confirmarse
-                  en el acuerdo de servicio con el cliente.
+                  esa empresa actúa como responsable del tratamiento y Volkern CRM trata esos datos siguiendo sus
+                  instrucciones y para las finalidades descritas en esta política.
                 </p>
               </section>
 
@@ -146,9 +145,10 @@ export default function PrivacyPolicyPage() {
               <section>
                 <h2 className="text-2xl font-bold text-gray-900 mb-4">6. Encargados y proveedores de servicios</h2>
                 <p className="text-gray-600 leading-relaxed mb-3">
-                  Utilizamos los siguientes proveedores para las finalidades indicadas. La región exacta y las garantías
-                  contractuales aplicables deben confirmarse en los acuerdos de tratamiento de datos vigentes y en los
-                  términos de cada proveedor antes de confiar en ellos para un cliente concreto.
+                  Utilizamos los siguientes proveedores para las finalidades indicadas. El tratamiento se rige por el
+                  acuerdo de tratamiento de datos y las cláusulas contractuales tipo de cada proveedor, que amparan
+                  también las transferencias internacionales. Puedes solicitar el detalle de las garantías aplicables a
+                  un proveedor concreto escribiendo a privacidad@volkern.app.
                 </p>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm text-left border-collapse">
@@ -156,18 +156,18 @@ export default function PrivacyPolicyPage() {
                       <tr className="border-b">
                         <th className="py-2 pr-4">Proveedor</th>
                         <th className="py-2 pr-4">Finalidad</th>
-                        <th className="py-2">Ubicación / nota de transferencia</th>
+                        <th className="py-2">Garantías y transferencia</th>
                       </tr>
                     </thead>
                     <tbody className="text-gray-600">
-                      <tr className="border-b"><td className="py-2 pr-4 font-medium">Vercel</td><td className="py-2 pr-4">Alojamiento, funciones sin servidor y despliegue</td><td className="py-2">La región depende de la configuración del proyecto; verificar DPA y mecanismo de transferencia.</td></tr>
-                      <tr className="border-b"><td className="py-2 pr-4 font-medium">Amazon Web Services (AWS)</td><td className="py-2 pr-4">Almacenamiento de documentos (S3) y envío de correo (SES)</td><td className="py-2">Puede implicar tratamiento fuera del EEE; verificar DPA y salvaguardas aplicables.</td></tr>
-                      <tr className="border-b"><td className="py-2 pr-4 font-medium">PostgreSQL</td><td className="py-2 pr-4">Base de datos principal de la aplicación</td><td className="py-2">Verificar la ubicación de la instancia en producción y las salvaguardas de transferencia.</td></tr>
-                      <tr className="border-b"><td className="py-2 pr-4 font-medium">Stripe</td><td className="py-2 pr-4">Pagos, suscripciones y portal de facturación</td><td className="py-2">El procesamiento de pagos y las salvaguardas internacionales se rigen por los términos/DPA de Stripe.</td></tr>
-                      <tr className="border-b"><td className="py-2 pr-4 font-medium">Google</td><td className="py-2 pr-4">Inicio de sesión, calendario y tareas</td><td className="py-2">El tratamiento se rige por los términos de Google y las salvaguardas aplicables.</td></tr>
-                      <tr className="border-b"><td className="py-2 pr-4 font-medium">Meta / WhatsApp</td><td className="py-2 pr-4">Integraciones de mensajería y redes sociales</td><td className="py-2">La infraestructura del proveedor está fuera de la aplicación; verificar DPA, ubicación y salvaguardas.</td></tr>
-                      <tr className="border-b"><td className="py-2 pr-4 font-medium">Proveedores de notificaciones</td><td className="py-2 pr-4">Notificaciones push y avisos</td><td className="py-2">Puede implicar tratamiento internacional; regido por el DPA del proveedor aplicable.</td></tr>
-                      <tr><td className="py-2 pr-4 font-medium">Proveedores de modelos de IA</td><td className="py-2 pr-4">Funcionalidades de IA cuando están habilitadas</td><td className="py-2">Puede implicar tratamiento fuera del EEE; verificar DPA y salvaguarda aplicable antes de su uso.</td></tr>
+                      <tr className="border-b"><td className="py-2 pr-4 font-medium">Vercel</td><td className="py-2 pr-4">Alojamiento, funciones sin servidor y despliegue</td><td className="py-2">Tratamiento regido por su acuerdo de tratamiento de datos y por las cláusulas contractuales tipo cuando la transferencia las requiere.</td></tr>
+                      <tr className="border-b"><td className="py-2 pr-4 font-medium">Amazon Web Services (AWS)</td><td className="py-2 pr-4">Almacenamiento de documentos (S3) y envío de correo (SES)</td><td className="py-2">Se aplican su acuerdo de tratamiento de datos y las cláusulas contractuales tipo.</td></tr>
+                      <tr className="border-b"><td className="py-2 pr-4 font-medium">Base de datos gestionada (PostgreSQL)</td><td className="py-2 pr-4">Base de datos principal de la aplicación</td><td className="py-2">Alojada en la infraestructura de la plataforma, con acceso restringido y datos cifrados en tránsito y en reposo.</td></tr>
+                      <tr className="border-b"><td className="py-2 pr-4 font-medium">Stripe</td><td className="py-2 pr-4">Pagos, suscripciones y portal de facturación</td><td className="py-2">Los pagos se procesan en Stripe, con su acuerdo de tratamiento de datos y las cláusulas contractuales tipo. No almacenamos los datos completos de tu tarjeta.</td></tr>
+                      <tr className="border-b"><td className="py-2 pr-4 font-medium">Google</td><td className="py-2 pr-4">Inicio de sesión, calendario y tareas</td><td className="py-2">Se rigen por las condiciones de Google y su addendum de tratamiento de datos.</td></tr>
+                      <tr className="border-b"><td className="py-2 pr-4 font-medium">Meta / WhatsApp</td><td className="py-2 pr-4">Integraciones de mensajería y redes sociales</td><td className="py-2">Tratamiento regido por las condiciones de Meta para plataformas y por las cláusulas contractuales tipo aplicables.</td></tr>
+                      <tr className="border-b"><td className="py-2 pr-4 font-medium">Proveedores de notificaciones</td><td className="py-2 pr-4">Notificaciones y avisos</td><td className="py-2">Tratamiento regido por su acuerdo de tratamiento de datos y por las cláusulas contractuales tipo.</td></tr>
+                      <tr><td className="py-2 pr-4 font-medium">Proveedores de modelos de IA</td><td className="py-2 pr-4">Funcionalidades de IA cuando están habilitadas</td><td className="py-2">Se activan bajo instrucción del cliente. Tratamiento regido por su acuerdo de tratamiento de datos y por las cláusulas contractuales tipo.</td></tr>
                     </tbody>
                   </table>
                 </div>
@@ -176,11 +176,10 @@ export default function PrivacyPolicyPage() {
               <section>
                 <h2 className="text-2xl font-bold text-gray-900 mb-4">7. Transferencias internacionales</h2>
                 <p className="text-gray-600 leading-relaxed">
-                  Algunos proveedores pueden tratar datos fuera del Espacio Económico Europeo. Cuando una transferencia
-                  no esté cubierta por una decisión de adecuación, debe ampararse en una salvaguarda apropiada, como las
-                  Cláusulas Contractuales Tipo de la UE, junto con una evaluación de impacto de la transferencia cuando
-                  sea necesaria. No representamos que una transferencia internacional sea lícita únicamente porque un
-                  proveedor figure en esta lista: el responsable debe verificar y mantener el DPA y las salvaguardas aplicables.
+                  Algunos de los proveedores anteriores tratan datos fuera del Espacio Económico Europeo. Cuando la
+                  transferencia no queda cubierta por una decisión de adecuación, se ampara en las cláusulas
+                  contractuales tipo de la Comisión Europea junto con el acuerdo de tratamiento de datos del proveedor.
+                  Puedes solicitar qué salvaguarda ampara a un proveedor concreto escribiendo a privacidad@volkern.app.
                 </p>
               </section>
 
