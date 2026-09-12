@@ -240,11 +240,12 @@ describe('la deuda del resto de la plataforma no puede crecer', () => {
   it('la deuda está acotada y se puede leer de un vistazo', () => {
     const { divisa, formato } = totalDe(baseline);
     // Estos números no son un objetivo: son el techo del día en que se inventarió
-    // la deuda (246 archivos). El techo solo puede bajar; cada bajada exige
-    // regenerar el inventario, así que queda en el diff y se ve.
-    expect(Object.keys(baseline).length).toBeLessThanOrEqual(246);
+    // la deuda, ya rebajado al arreglar las escrituras de ERP (246 → 242 archivos).
+    // El techo solo puede bajar; cada bajada exige regenerar el inventario, así que
+    // queda en el diff y se ve.
+    expect(Object.keys(baseline).length).toBeLessThanOrEqual(242);
     expect(divisa).toBeGreaterThan(0);
-    expect(divisa).toBeLessThanOrEqual(628);
+    expect(divisa).toBeLessThanOrEqual(624);
     expect(formato).toBeLessThanOrEqual(242);
   });
 
