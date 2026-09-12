@@ -27,7 +27,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { formatearImporte, monedaEfectiva } from '@/lib/hospitality/moneda';
+import { formatearImporte, monedaEfectiva, MONEDAS_SELECCIONABLES } from '@/lib/hospitality/moneda';
 
 interface Property {
   id: string;
@@ -60,7 +60,6 @@ interface RatePlan {
   property?: { id: string; nombre: string };
 }
 
-const MONEDAS = ['MXN', 'USD', 'EUR'];
 const DIAS_SEMANA = [
   { v: 0, label: 'Dom' },
   { v: 1, label: 'Lun' },
@@ -572,7 +571,7 @@ export default function HospitalityTarifasPage() {
                 <Select value={form.moneda} onValueChange={(v) => setForm({ ...form, moneda: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {MONEDAS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                    {MONEDAS_SELECCIONABLES.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>

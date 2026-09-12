@@ -165,7 +165,8 @@ export default function HospitalityReportesPage() {
     cargar();
   }, [cargar]);
 
-  const moneda = datos?.moneda || 'EUR';
+  // Igual que en Finanzas: sin divisa informada no se inventa una.
+  const moneda = datos?.moneda || '';
 
   const exportar = () => {
     const params = new URLSearchParams({

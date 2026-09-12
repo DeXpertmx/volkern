@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
-import { monedaEfectiva } from '@/lib/hospitality/moneda';
+import { monedaEfectiva, MONEDAS_SELECCIONABLES } from '@/lib/hospitality/moneda';
 import {
   Building2,
   DoorOpen,
@@ -846,7 +846,7 @@ export default function HospitalityPage() {
                 <Select value={unitForm.moneda} onValueChange={(v) => setUnitForm({ ...unitForm, moneda: v })}>
                   <SelectTrigger id="u-moneda"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {['MXN', 'USD', 'EUR'].map((m) => (
+                    {MONEDAS_SELECCIONABLES.map((m) => (
                       <SelectItem key={m} value={m}>{m}</SelectItem>
                     ))}
                   </SelectContent>

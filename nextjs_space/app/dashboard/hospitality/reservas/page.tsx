@@ -19,7 +19,7 @@ import {
   CheckCircle2,
   XCircle,
 } from 'lucide-react';
-import { formatearImporte, monedaEfectiva } from '@/lib/hospitality/moneda';
+import { formatearImporte, monedaEfectiva, MONEDAS_SELECCIONABLES } from '@/lib/hospitality/moneda';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -557,7 +557,7 @@ export default function HospitalityReservasPage() {
                   <Select value={form.moneda} onValueChange={(v) => setForm({ ...form, moneda: v })}>
                     <SelectTrigger id="r-moneda"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {['MXN', 'USD', 'EUR'].map((m) => (
+                      {MONEDAS_SELECCIONABLES.map((m) => (
                         <SelectItem key={m} value={m}>{m}</SelectItem>
                       ))}
                     </SelectContent>
