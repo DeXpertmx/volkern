@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { formatearImporte } from '@/lib/hospitality/moneda';
 
 // ─── Tipos ──────────────────────────────────────────────────────────────────
 
@@ -117,17 +118,9 @@ function primerDiaDelMes(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
 }
 
-function simbolo(moneda: string): string {
-  const m = (moneda || '').toUpperCase();
-  if (m === 'EUR') return '€';
-  if (m === 'USD' || m === 'MXN') return '$';
-  return '';
-}
-
+/** Delegado en el módulo compartido: una sola forma de escribir dinero en el módulo. */
 function importe(valor: number | null, moneda: string): string {
-  if (valor === null || valor === undefined) return '—';
-  const numero = valor.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return `${numero} ${simbolo(moneda)}`.trim();
+  return formatearImporte(valor, moneda, 2);
 }
 
 function pct(valor: number): string {

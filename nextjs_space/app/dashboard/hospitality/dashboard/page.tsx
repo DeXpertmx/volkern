@@ -38,6 +38,7 @@ import {
   Legend,
 } from 'recharts';
 import { channelStyle, statusLabel } from '@/lib/hospitality/calendar';
+import { formatearImporte } from '@/lib/hospitality/moneda';
 
 interface Kpis {
   totalUnidades: number;
@@ -83,6 +84,8 @@ interface IngresoCanalSerie {
 }
 
 interface DashboardData {
+  /** Moneda predominante de las reservas del período, resuelta por la API. */
+  moneda: string;
   kpis: Kpis;
   mixCanales: CanalMix[];
   proximos7: DiaOcupacion[];
@@ -98,10 +101,6 @@ const PIE_COLORS = ['#FF5A5F', '#003580', '#00355F', '#DF7A00', '#4F46E5', '#647
 
 function pct(v: number): string {
   return `${Math.round(v * 100)}%`;
-}
-
-function money(v: number): string {
-  return v.toLocaleString('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 });
 }
 
 export default function HospitalityDashboardPage() {
@@ -149,7 +148,10 @@ export default function HospitalityDashboardPage() {
     );
   }
 
-  const { kpis, mixCanales, proximos7, ocupacionPropiedades, ingresosPorCanal, operaciones } = data;
+  const { moneda, kpis, mixCanales, proximos7, ocupacionPropiedades, ingresosPorCanal, operaciones } = data;
+  // Los importes se escriben en la moneda que traen los datos, nunca en una
+  // constante: el esquema por defecto es 'MXN' y este tenant trabaja en euros.
+  const money = (v: number) => formatearImporte(v, moneda, 0);
   const limpiezaPendiente = (operaciones.limpieza.pending || 0) + (operaciones.limpieza.in_progress || 0);
   const mantenimientoAbierto = (operaciones.mantenimiento.abierta || 0) + (operaciones.mantenimiento.en_proceso || 0);
 

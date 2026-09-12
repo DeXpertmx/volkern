@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { channelStyle, statusLabel } from '@/lib/hospitality/calendar';
+import { formatearImporte, monedaPredominante } from '@/lib/hospitality/moneda';
 
 interface Estancia {
   id: string;
@@ -228,8 +229,16 @@ export default function HospitalityHuespedesPage() {
       estancias: guests.reduce((a, g) => a + g.totalEstancias, 0),
       noches: guests.reduce((a, g) => a + g.totalNoches, 0),
       gasto: guests.reduce((a, g) => a + g.totalGasto, 0),
+      // La moneda sale de las estancias reales, no de una constante: el esquema
+      // trae 'MXN' por defecto y un tenant europeo vería pesos.
+      moneda: monedaPredominante(guests.flatMap((g) => g.reservas.map((r) => r.currency))) || '',
     }),
     [guests]
+  );
+
+  const monedaSeleccionada = useMemo(
+    () => (selected ? monedaPredominante(selected.reservas.map((r) => r.currency)) || '' : ''),
+    [selected]
   );
 
   return (
@@ -244,7 +253,7 @@ export default function HospitalityHuespedesPage() {
           <p className="text-muted-foreground mt-1">
             {guests.length} huéspedes · {totales.estancias} estancias · {totales.noches} noches
             {totales.gasto > 0 && (
-              <> · {totales.gasto.toLocaleString('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 })}</>
+              <> · {formatearImporte(totales.gasto, totales.moneda, 0)}</>
             )}
           </p>
         </div>
@@ -345,7 +354,13 @@ export default function HospitalityHuespedesPage() {
                   </div>
                   <div>
                     <p className="text-lg font-bold">
-                      {g.totalGasto > 0 ? g.totalGasto.toLocaleString('es-MX', { maximumFractionDigits: 0 }) : '—'}
+                      {g.totalGasto > 0
+                        ? formatearImporte(
+                            g.totalGasto,
+                            monedaPredominante(g.reservas.map((r) => r.currency)) || '',
+                            0
+                          )
+                        : '—'}
                     </p>
                     <p className="text-[11px] text-muted-foreground">Gasto</p>
                   </div>
@@ -406,7 +421,7 @@ export default function HospitalityHuespedesPage() {
                     : 'Huésped sin datos de contacto'}
                   {' · '}
                   {selected.totalEstancias} estancia{selected.totalEstancias !== 1 ? 's' : ''} · {selected.totalNoches} noche{selected.totalNoches !== 1 ? 's' : ''}
-                  {selected.totalGasto > 0 && <> · {selected.totalGasto.toLocaleString('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 })}</>}
+                  {selected.totalGasto > 0 && <> · {formatearImporte(selected.totalGasto, monedaSeleccionada, 0)}</>}
                 </SheetDescription>
               </SheetHeader>
 
@@ -464,7 +479,7 @@ export default function HospitalityHuespedesPage() {
                             <p className="font-medium flex items-center gap-1">
                               <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
                               {r.amountAfterTax != null
-                                ? `${r.amountAfterTax.toLocaleString('es-MX')} ${r.currency || ''}`
+                                ? formatearImporte(r.amountAfterTax, r.currency || '', 0)
                                 : '—'}
                             </p>
                           </div>

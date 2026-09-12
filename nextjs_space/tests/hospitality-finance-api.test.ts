@@ -160,6 +160,79 @@ describe('GET /api/hospitality/finanzas', () => {
   });
 });
 
+describe('la moneda sale del dato, no del valor por defecto del esquema', () => {
+  // El esquema trae 'MXN' en todos los campos de moneda. Si alguna capa lo
+  // usara como constante, un tenant español vería pesos sin que nadie lo note.
+  it('Finanzas informa la divisa de las reservas cuando es EUR', async () => {
+    const res = await finanzasGET(request('GET'));
+    const data = await res.json();
+    expect(data.moneda).toBe('EUR');
+    expect(data.reservas[0].moneda).toBe('EUR');
+    expect(data.porCanal[0].etiqueta).toBe('Airbnb');
+  });
+
+  it('Finanzas informa MXN si las reservas están en pesos: no está fijada a euros', async () => {
+    mocks.hospitalityReservation.findMany.mockResolvedValue([reservaFila({ currency: 'MXN' })]);
+    const res = await finanzasGET(request('GET'));
+    const data = await res.json();
+    expect(data.moneda).toBe('MXN');
+    expect(data.reservas[0].moneda).toBe('MXN');
+  });
+
+  it('la exportación CSV lleva la divisa de cada reserva', async () => {
+    const res = await finanzasGET(
+      request('GET', undefined, 'http://test.local/api/hospitality/finanzas?formato=csv')
+    );
+    const texto = await res.text();
+    expect(texto.split('\n')[0]).toContain('moneda');
+    expect(texto.split('\n')[1]).toContain('EUR');
+  });
+
+  it('Reportes informa la divisa de las reservas', async () => {
+    const res = await reportesGET(
+      request('GET', undefined, 'http://test.local/api/hospitality/reportes?desde=2026-10-10&hasta=2026-10-12')
+    );
+    const data = await res.json();
+    expect(data.moneda).toBe('EUR');
+    expect(data.financiero.totales.bruto).toBe(660);
+  });
+
+  it('con divisas mezcladas gana la predominante, no la primera fila', async () => {
+    // La primera reserva está en pesos y las otras dos en euros: informar la
+    // primera fila escribiría el informe entero en la divisa equivocada.
+    mocks.hospitalityReservation.findMany.mockResolvedValue([
+      reservaFila({ id: 'r1', currency: 'MXN' }),
+      reservaFila({ id: 'r2', currency: 'EUR' }),
+      reservaFila({ id: 'r3', currency: 'EUR' }),
+    ]);
+
+    const fin = await (await finanzasGET(request('GET'))).json();
+    expect(fin.moneda).toBe('EUR');
+    expect(fin.reservas[0].moneda).toBe('MXN');
+
+    const rep = await (
+      await reportesGET(
+        request('GET', undefined, 'http://test.local/api/hospitality/reportes?desde=2026-10-10&hasta=2026-10-12')
+      )
+    ).json();
+    expect(rep.moneda).toBe('EUR');
+  });
+
+  it('sin reservas no inventa divisa: ni euros ni pesos por defecto', async () => {
+    mocks.hospitalityReservation.findMany.mockResolvedValue([]);
+
+    const fin = await (await finanzasGET(request('GET'))).json();
+    expect(fin.moneda).toBe('');
+
+    const rep = await (
+      await reportesGET(
+        request('GET', undefined, 'http://test.local/api/hospitality/reportes?desde=2026-10-10&hasta=2026-10-12')
+      )
+    ).json();
+    expect(rep.moneda).toBe('');
+  });
+});
+
 describe('GET /api/hospitality/reportes', () => {
   it('exige sesión válida', async () => {
     mocks.authenticateRequest.mockResolvedValue({ valid: false, error: 'No autorizado' });
