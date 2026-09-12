@@ -7,11 +7,15 @@
 #   2. docker save → tarballs en /tmp
 #   3. scp de los tarballs (+ scripts de deploy) al VPS
 #   4. Ejecuta deploy-app.sh EN el VPS (load → migraciones → update → verificar)
+#   5. Smoke test del clasificador determinista contra el entorno desplegado
+#      (scripts/smoke-clasificador.sh). Falla el despliegue si el servicio
+#      desplegado no resuelve las frases sin LLM.
 #
 # Uso (desde el repo, puede pedir sudo para docker):
 #   bash deploy-vps/deploy-local.sh
 #   bash deploy-vps/deploy-local.sh --skip-build     # solo re-exporta y despliega
 #   bash deploy-vps/deploy-local.sh --skip-migrator  # no construye/subé migrator (sin cambios de BD)
+#   bash deploy-vps/deploy-local.sh --skip-smoke     # no ejecuta el smoke post-despliegue
 #   bash deploy-vps/deploy-local.sh --keep-tarballs  # no borra tarballs en /tmp local
 #   bash deploy-vps/deploy-local.sh --keep           # pasa --keep a deploy-app.sh (no limpia en VPS)
 #
@@ -40,11 +44,13 @@ KEEP_LOCAL=0
 KEEP_REMOTE=""
 SKIP_BUILD=0
 SKIP_MIGRATOR=0
+SKIP_SMOKE=0
 
 for a in "$@"; do
   case "$a" in
     --skip-build) SKIP_BUILD=1 ;;
     --skip-migrator) SKIP_MIGRATOR=1 ;;
+    --skip-smoke) SKIP_SMOKE=1 ;;
     --keep-tarballs) KEEP_LOCAL=1 ;;
     --keep) KEEP_REMOTE="--keep" ;;
   esac
@@ -64,10 +70,10 @@ docker_cmd() {
 # 1. BUILD
 # ═══════════════════════════════════════════════════════════════
 if [ "$SKIP_BUILD" = "1" ]; then
-  echo "→ [1/4] Build: omitido (--skip-build). Usando imágenes ya construidas."
+  echo "→ [1/5] Build: omitido (--skip-build). Usando imágenes ya construidas."
 else
   echo ""
-  echo "→ [1/4] Build de volkern-erp:latest${SKIP_MIGRATOR:+ (sin migrator)} (puede tardar 10-20 min) ..."
+  echo "→ [1/5] Build de volkern-erp:latest${SKIP_MIGRATOR:+ (sin migrator)} (puede tardar 10-20 min) ..."
   if ! docker_cmd version >/dev/null 2>&1; then
     echo "✗ docker no accesible ni con sudo. Revisa el daemon." >&2
     exit 1
@@ -83,7 +89,7 @@ fi
 # 2. EXPORT (docker save → tarballs)
 # ═══════════════════════════════════════════════════════════════
 echo ""
-echo "→ [2/4] Exportando imágenes a tarballs ..."
+echo "→ [2/5] Exportando imágenes a tarballs ..."
 docker_cmd save -o "$LATEST_TAR" volkern-erp:latest
 TARBALLS="$LATEST_TAR"
 if [ "$SKIP_MIGRATOR" = "1" ]; then
@@ -103,7 +109,7 @@ ls -lh $TARBALLS
 # 3. SCP al VPS
 # ═══════════════════════════════════════════════════════════════
 echo ""
-echo "→ [3/4] Subiendo tarballs y scripts al VPS ..."
+echo "→ [3/5] Subiendo tarballs y scripts al VPS ..."
 $SSH "$VPS" "mkdir -p /root/deploy-vps" >/dev/null 2>&1 || true
 $SCP $TARBALLS "$VPS:/tmp/"
 # Los scripts del repo son la fuente de verdad; se sincronizan en cada deploy
@@ -113,11 +119,27 @@ $SCP deploy-vps/deploy-app.sh deploy-vps/run-migrations.sh "$VPS:/root/deploy-vp
 # 4. DEPLOY REMOTO (load → migraciones → update → verificar → limpiar)
 # ═══════════════════════════════════════════════════════════════
 echo ""
-echo "→ [4/4] Ejecutando deploy en el VPS ..."
+echo "→ [4/5] Ejecutando deploy en el VPS ..."
 if [ "$SKIP_MIGRATOR" = "1" ]; then
   $SSH "$VPS" "bash /root/deploy-vps/deploy-app.sh /tmp/volkern-erp-latest.tar $KEEP_REMOTE"
 else
   $SSH "$VPS" "bash /root/deploy-vps/deploy-app.sh /tmp/volkern-erp-latest.tar /tmp/volkern-erp-migrator.tar $KEEP_REMOTE"
+fi
+
+# ═══════════════════════════════════════════════════════════════
+# 5. SMOKE TEST POST-DESPLIEGUE
+# ═══════════════════════════════════════════════════════════════
+# Comprueba contra el servicio YA desplegado (no contra el repo) que las
+# frases del clasificador se resuelven sin LLM. Sin este paso, un despliegue
+# que no incorpore el arreglo pasa en verde: la guardia de vitest valida el
+# código local, no la imagen que está sirviendo.
+SMOKE_RC=0
+echo ""
+if [ "$SKIP_SMOKE" = "1" ]; then
+  echo "→ [5/5] Smoke test: omitido (--skip-smoke)."
+else
+  echo "→ [5/5] Smoke test del clasificador determinista ..."
+  bash scripts/smoke-clasificador.sh || SMOKE_RC=$?
 fi
 
 # ═══════════════════════════════════════════════════════════════
@@ -127,6 +149,15 @@ if [ "$KEEP_LOCAL" = "0" ]; then
   echo ""
   echo "→ Limpieza local: eliminando tarballs de /tmp ..."
   rm -f "$LATEST_TAR" "$MIGRATOR_TAR"
+fi
+
+# El smoke se evalúa AL FINAL para que la limpieza de tarballs ocurra siempre,
+# pero un fallo no se silencia: la app ya corre la imagen nueva y hay que decirlo.
+if [ "$SMOKE_RC" -ne 0 ]; then
+  echo ""
+  echo "=== Deploy aplicado, pero el SMOKE TEST FALLÓ ==="
+  echo "La app ya corre la imagen nueva, pero no resolvió las frases del clasificador sin LLM."
+  exit "$SMOKE_RC"
 fi
 
 echo ""
