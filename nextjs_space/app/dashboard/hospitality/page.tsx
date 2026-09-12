@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
+import { monedaPredominante } from '@/lib/hospitality/moneda';
 import {
   Building2,
   DoorOpen,
@@ -125,6 +126,14 @@ export default function HospitalityPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
 
+  // La moneda por defecto de una unidad nueva sale de las que ya existen, no de
+  // una constante: el esquema trae 'MXN' y en un tenant que trabaja en euros
+  // crear una unidad desde aquí metería pesos en el inventario.
+  const monedaUnidades = useMemo(
+    () => monedaPredominante(units.map((u) => u.moneda)) || EMPTY_UNIT_FORM.moneda,
+    [units]
+  );
+
   // Dialog propiedad
   const [propertyDialog, setPropertyDialog] = useState<{ open: boolean; editing: Property | null }>({ open: false, editing: null });
   const [propertyForm, setPropertyForm] = useState<typeof EMPTY_PROPERTY_FORM>({ ...EMPTY_PROPERTY_FORM });
@@ -133,7 +142,7 @@ export default function HospitalityPage() {
 
   // Dialog unidad
   const [unitDialog, setUnitDialog] = useState<{ open: boolean; editing: Unit | null }>({ open: false, editing: null });
-  const [unitForm, setUnitForm] = useState<typeof EMPTY_UNIT_FORM>({ ...EMPTY_UNIT_FORM });
+  const [unitForm, setUnitForm] = useState<typeof EMPTY_UNIT_FORM>({ ...EMPTY_UNIT_FORM, moneda: monedaUnidades });
   const [unitFotoUrl, setUnitFotoUrl] = useState('');
 
   // Confirmación de borrado
@@ -224,7 +233,7 @@ export default function HospitalityPage() {
       if (res.ok) {
         toast.success(unitDialog.editing ? 'Unidad actualizada' : 'Unidad creada');
         setUnitDialog({ open: false, editing: null });
-        setUnitForm({ ...EMPTY_UNIT_FORM, propertyId: properties[0]?.id || '' });
+        setUnitForm({ ...EMPTY_UNIT_FORM, propertyId: properties[0]?.id || '', moneda: monedaUnidades });
         await loadAll();
       } else {
         toast.error(data.error || 'Error al guardar');
@@ -283,7 +292,7 @@ export default function HospitalityPage() {
   };
 
   const openNewUnit = () => {
-    setUnitForm({ ...EMPTY_UNIT_FORM, propertyId: properties[0]?.id || '' });
+    setUnitForm({ ...EMPTY_UNIT_FORM, propertyId: properties[0]?.id || '', moneda: monedaUnidades });
     setUnitDialog({ open: true, editing: null });
   };
 
