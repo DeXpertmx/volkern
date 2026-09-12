@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api-client';
+import { formatCurrencyExact } from '@/components/insurance/portfolio-format';
 import {
   Shield,
   FileText,
@@ -236,7 +237,7 @@ export default function SegurosDashboardPage() {
                           </Badge>
                         </td>
                         <td className="py-2 text-right">
-                          {p.primaAnual ? `${p.primaAnual.toLocaleString('es-ES')} ${p.moneda || 'EUR'}` : '—'}
+                          {p.primaAnual ? formatCurrencyExact(p.primaAnual, p.moneda) : '—'}
                         </td>
                         <td className="py-2">
                           <span className={daysLeft <= 30 ? 'text-red-600 font-medium' : ''}>

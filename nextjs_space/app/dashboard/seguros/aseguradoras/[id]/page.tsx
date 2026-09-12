@@ -31,6 +31,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
+import { useMonedaTenant } from '@/lib/use-moneda-tenant';
 
 // ─── Tipos de los bloques JSON (coinciden con lib/insurance/aseguradora-types.ts) ───
 
@@ -234,6 +235,10 @@ export default function AseguradoraDetailPage() {
   const [deducibleStr, setDeducibleStr] = useState('');
   const [cuentas, setCuentas] = useState<CuentaBancaria[]>([]);
   const [monedaBase, setMonedaBase] = useState('');
+  // Pista de moneda de todos los campos de divisa de la ficha: la del tenant,
+  // que es la que este broker usa de verdad. Si aún no cargó, el campo queda sin
+  // pista en lugar de sugerir una divisa ajena.
+  const monedaTenant = useMonedaTenant();
   const [monedaLiquidacion, setMonedaLiquidacion] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [oauthClientId, setOauthClientId] = useState('');
@@ -587,7 +592,7 @@ export default function AseguradoraDetailPage() {
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Límites de Suscripción</p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <TextField label="Monto máximo automático" value={String(limites.montoMaximoAutomatico ?? '')} onChange={v => setLimites(p => ({ ...p, montoMaximoAutomatico: Number(v) || 0 }))} placeholder="250000" />
-                <TextField label="Moneda" value={limites.moneda || ''} onChange={v => setLimites(p => ({ ...p, moneda: v }))} placeholder="EUR" />
+                <TextField label="Moneda" value={limites.moneda || ''} onChange={v => setLimites(p => ({ ...p, moneda: v }))} placeholder={monedaTenant} />
                 <BoolSelect
                   label="Requiere aprobación manual"
                   value={!!limites.requiereAprobacionManual}
@@ -617,8 +622,8 @@ export default function AseguradoraDetailPage() {
             saving={savingBlock === 'b5'}
           >
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <TextField label="Moneda base" value={monedaBase} onChange={setMonedaBase} placeholder="EUR" />
-              <TextField label="Moneda de liquidación" value={monedaLiquidacion} onChange={setMonedaLiquidacion} placeholder="EUR" />
+              <TextField label="Moneda base" value={monedaBase} onChange={setMonedaBase} placeholder={monedaTenant} />
+              <TextField label="Moneda de liquidación" value={monedaLiquidacion} onChange={setMonedaLiquidacion} placeholder={monedaTenant} />
             </div>
             <div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Cuentas Bancarias</p>
@@ -633,7 +638,7 @@ export default function AseguradoraDetailPage() {
                   { key: 'clabe', label: 'CLABE' },
                   { key: 'iban', label: 'IBAN' },
                   { key: 'swift', label: 'SWIFT' },
-                  { key: 'moneda', label: 'Moneda', placeholder: 'EUR' },
+                  { key: 'moneda', label: 'Moneda', placeholder: monedaTenant },
                 ]}
               />
             </div>

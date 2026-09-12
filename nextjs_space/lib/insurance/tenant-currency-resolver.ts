@@ -20,6 +20,7 @@
  * testearla de forma aislada y reusarla en distintos frontends (CLI, API, UI).
  */
 import { SUPPORTED_CURRENCIES, type Currency } from './currency';
+import { MONEDA_MINIMA_ESQUEMA } from '@/lib/moneda';
 
 export type ResolverSource = 'auto-from-polizas' | 'explicit' | 'fallback-default';
 
@@ -65,7 +66,7 @@ export function resolveTenantCurrency(
   polizasPorMoneda: Record<string, number>,
   opts: ResolveOptions = {}
 ): CurrencyResolution {
-  const fallback = opts.fallbackDefault ?? 'MXN';
+  const fallback = opts.fallbackDefault ?? MONEDA_MINIMA_ESQUEMA;
 
   // 1) Explícita del usuario: prioriza toda la evidencia.
   if (explicitCurrency) {

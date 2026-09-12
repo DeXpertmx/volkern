@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { apiFetch } from '@/lib/api-client';
+import { MONEDAS_SELECCIONABLES, monedaEfectiva } from '@/lib/moneda';
+import { useMonedaTenant } from '@/lib/use-moneda-tenant';
 import {
   FileText,
   Plus,
@@ -110,7 +112,29 @@ interface Poliza {
   productoSeguro: { id: string; nombre: string; ramo: string };
 }
 
+/**
+ * Estado inicial del formulario de póliza. La divisa por defecto es la del
+ * tenant: estaba fija a 'EUR', así que una póliza nueva de un tenant con la
+ * moneda en pesos nacía en euros.
+ */
+const formularioPoliza = (moneda: string) => ({
+  clienteId: '',
+  aseguradoraId: '',
+  productoSeguroId: '',
+  numeroPoliza: '',
+  descripcion: '',
+  sumaAsegurada: '',
+  primaAnual: '',
+  formaPago: 'ANUAL',
+  moneda,
+  fechaInicio: new Date().toISOString().split('T')[0],
+  fechaVencimiento: '',
+  comisionPct: '',
+  notas: '',
+});
+
 export default function PolizasPage() {
+  const monedaTenant = useMonedaTenant();
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -133,21 +157,7 @@ export default function PolizasPage() {
   const [importing, setImporting] = useState(false);
 
   // Form data
-  const [formData, setFormData] = useState({
-    clienteId: '',
-    aseguradoraId: '',
-    productoSeguroId: '',
-    numeroPoliza: '',
-    descripcion: '',
-    sumaAsegurada: '',
-    primaAnual: '',
-    formaPago: 'ANUAL',
-    moneda: 'EUR',
-    fechaInicio: new Date().toISOString().split('T')[0],
-    fechaVencimiento: '',
-    comisionPct: '',
-    notas: '',
-  });
+  const [formData, setFormData] = useState(() => formularioPoliza(''));
 
   // Dropdown data
   const [clientes, setClientes] = useState<{ id: string; nombre: string }[]>([]);
@@ -244,7 +254,7 @@ export default function PolizasPage() {
       sumaAsegurada: poliza.sumaAsegurada ? String(poliza.sumaAsegurada) : '',
       primaAnual: poliza.primaAnual ? String(poliza.primaAnual) : '',
       formaPago: poliza.formaPago || 'ANUAL',
-      moneda: poliza.moneda || 'EUR',
+      moneda: monedaEfectiva([poliza.moneda], monedaTenant),
       fechaInicio: poliza.fechaInicio.split('T')[0],
       fechaVencimiento: poliza.fechaVencimiento.split('T')[0],
       comisionPct: poliza.comisionPct ? String(poliza.comisionPct) : '',
@@ -255,21 +265,7 @@ export default function PolizasPage() {
   };
 
   const resetForm = () => {
-    setFormData({
-      clienteId: '',
-      aseguradoraId: '',
-      productoSeguroId: '',
-      numeroPoliza: '',
-      descripcion: '',
-      sumaAsegurada: '',
-      primaAnual: '',
-      formaPago: 'ANUAL',
-      moneda: 'EUR',
-      fechaInicio: new Date().toISOString().split('T')[0],
-      fechaVencimiento: '',
-      comisionPct: '',
-      notas: '',
-    });
+    setFormData(formularioPoliza(monedaTenant));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -785,9 +781,11 @@ export default function PolizasPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="EUR">EUR (€)</SelectItem>
-                    <SelectItem value="MXN">MXN ($)</SelectItem>
-                    <SelectItem value="USD">USD ($)</SelectItem>
+                    {MONEDAS_SELECCIONABLES.map((m) => (
+                      <SelectItem key={m} value={m}>
+                        {m}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

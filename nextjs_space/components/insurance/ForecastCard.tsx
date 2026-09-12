@@ -54,6 +54,8 @@ export interface ForecastAlert {
 
 export interface ForecastData {
   generado: string;
+  /** Divisa de reporte del tenant: las series llegan ya convertidas a ella. */
+  tenantMoneda?: string;
   ventana: ForecastPoint[];
   proyeccion: number;
   confianza: number;
@@ -154,6 +156,10 @@ export function ForecastCard({ data, loading }: ForecastCardProps) {
     return { color: 'text-red-700', bg: 'bg-red-50', ring: 'ring-red-200', label: 'Baja' };
   }, [accuracy]);
 
+  // Divisa con la que se escribe el dinero de la tarjeta: la de reporte del
+  // tenant, que es a la que el endpoint ya convierte las series.
+  const monedaTenant = data?.tenantMoneda ?? '';
+
   // ─── Pendiente → icono ────────────────────────────────────────────
   const SlopeIcon = slope > 50 ? TrendingUp : slope < -50 ? TrendingDown : Minus;
   const slopeLabel = slope > 50 ? '+' : '';
@@ -191,9 +197,9 @@ export function ForecastCard({ data, loading }: ForecastCardProps) {
               </span>
             )}
           </div>
-          <p className="text-4xl font-bold mt-1 tabular-nums">{formatCurrency(proyeccion)}</p>
+          <p className="text-4xl font-bold mt-1 tabular-nums">{formatCurrency(proyeccion, monedaTenant)}</p>
           <p className="text-xs text-muted-foreground mt-1">
-            Rango probable: {formatCurrency(rangoMin)} – {formatCurrency(rangoMax)}
+            Rango probable: {formatCurrency(rangoMin, monedaTenant)} – {formatCurrency(rangoMax, monedaTenant)}
             {accuracy.experimental && accuracy.bandaMultiplicador > 1 && (
               <span className="ml-1 text-amber-700">
                 · banda ×{accuracy.bandaMultiplicador.toFixed(1)} (incertidumbre alta)
@@ -212,7 +218,7 @@ export function ForecastCard({ data, loading }: ForecastCardProps) {
           <div className="flex items-center gap-1 text-xs text-muted-foreground">
             <SlopeIcon className="w-3.5 h-3.5" />
             <span className="tabular-nums">
-              Pendiente {slopeLabel}{Math.round(slope).toLocaleString('es-MX')} / mes
+              Pendiente {slopeLabel}{formatCurrency(Math.round(slope), monedaTenant)} / mes
             </span>
           </div>
         </div>

@@ -17,13 +17,29 @@ import { join, relative, sep } from 'node:path';
  *
  * Cómo se aplica, en dos niveles:
  *
- *   • **Zonas limpias, cero tolerancia.** Hospitality (ERP de alojamiento) ya no
- *     tiene ni un literal: la guardia falla ante el primero.
+ *   • **Zonas limpias, cero tolerancia.** Hospitality (ERP de alojamiento) y el
+ *     vertical inmobiliario ya no tienen ni un literal: la guardia falla ante el
+ *     primero.
  *   • **Ratchet con recuento exacto.** El resto de la plataforma tiene deuda
- *     heredada: mock data de aseguradoras, plantillas de CSV de ejemplo y
- *     formateos sueltos. Está inventariada en `moneda-baseline.json`, archivo por
- *     archivo, y **no puede crecer**: cualquier literal nuevo, en un archivo nuevo
- *     o en uno ya listado, hace fallar esta prueba.
+ *     heredada. Está inventariada en `moneda-baseline.json`, archivo por archivo,
+ *     y **no puede crecer**: cualquier literal nuevo, en un archivo nuevo o en
+ *     uno ya listado, hace fallar esta prueba.
+ *
+ * Qué queda en el inventario y por qué, para que nadie lo confunda con trabajo
+ * pendiente:
+ *
+ *   • **Contratos de proveedor** (`lib/insurance/connectors/…`, incluido su mock
+ *     data). Los códigos de divisa son los que envía la aseguradora en su payload;
+ *     reescribirlos como constantes de la plataforma sería mentir sobre el
+ *     contrato externo.
+ *   • **Tabla de tipos de cambio** (`lib/insurance/currency.ts`). Sus claves son
+ *     divisas por definición; es el único sitio donde un mapa de códigos no es
+ *     deuda.
+ *   • **Ejemplos de plantilla de importación** (`lib/insurance/csv-template.ts`)
+ *     y la frase de ejemplo de un clasificador de intenciones: son datos de
+ *     muestra que el usuario lee, no decisiones de formato.
+ *   • **Deuda real heredada** en ERP, fiscal y finanzas, que sí es trabajo
+ *     pendiente y por eso puede bajar pero no subir.
  *
  * Regenerar el inventario tras reducir deuda (nunca para dar de alta deuda nueva):
  *
@@ -42,6 +58,11 @@ const ZONAS_LIMPIAS = [
   'lib/hospitality',
   'app/dashboard/hospitality',
   'app/api/hospitality',
+  // El vertical inmobiliario bajó a cero y se queda en cero.
+  'lib/real-estate',
+  'app/dashboard/real-estate',
+  'app/api/real-estate',
+  'lib/puck/components/real-estate',
 ];
 
 const CARPETAS = ['app', 'components', 'lib'];
@@ -240,13 +261,15 @@ describe('la deuda del resto de la plataforma no puede crecer', () => {
   it('la deuda está acotada y se puede leer de un vistazo', () => {
     const { divisa, formato } = totalDe(baseline);
     // Estos números no son un objetivo: son el techo del día en que se inventarió
-    // la deuda, ya rebajado al arreglar las escrituras de ERP (246 → 242 archivos).
+    // la deuda, rebajado tres veces al migrar escrituras a la divisa del tenant:
+    // ERP (246 → 242 archivos), después seguros + inmobiliario (242 → 203) y por
+    // último la respuesta de /api/tenant/moneda (203 → 202).
     // El techo solo puede bajar; cada bajada exige regenerar el inventario, así que
     // queda en el diff y se ve.
-    expect(Object.keys(baseline).length).toBeLessThanOrEqual(242);
+    expect(Object.keys(baseline).length).toBeLessThanOrEqual(202);
     expect(divisa).toBeGreaterThan(0);
-    expect(divisa).toBeLessThanOrEqual(624);
-    expect(formato).toBeLessThanOrEqual(242);
+    expect(divisa).toBeLessThanOrEqual(491);
+    expect(formato).toBeLessThanOrEqual(204);
   });
 
   it('la mayor parte de la deuda son catálogos y datos de ejemplo, no decisiones', () => {

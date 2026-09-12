@@ -245,7 +245,7 @@ export async function GET(request: NextRequest) {
       const key = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
       const montoEnTarget = fxConvert(
         Number(p.primaAnual ?? 0),
-        (p.moneda as string) ?? 'USD',
+        (p.moneda as string) ?? tenantMoneda,
         tenantMoneda
       );
       accumulator.set(key, (accumulator.get(key) ?? 0) + montoEnTarget);

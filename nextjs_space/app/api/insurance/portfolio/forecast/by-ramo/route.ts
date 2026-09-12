@@ -120,7 +120,7 @@ export async function GET(request: NextRequest) {
           polizasEmitidas.map(p => ({
             fechaEmision: p.fechaEmision,
             primaAnual: p.primaAnual
-              ? fxConvert(Number(p.primaAnual), (p.moneda as string) ?? 'USD', tenantMoneda)
+              ? fxConvert(Number(p.primaAnual), (p.moneda as string) ?? tenantMoneda, tenantMoneda)
               : null,
           })),
           JSON.parse(JSON.stringify(skeleton))

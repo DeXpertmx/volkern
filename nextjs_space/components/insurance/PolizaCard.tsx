@@ -3,7 +3,8 @@
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, User, Shield, Building2, Euro } from 'lucide-react';
+import { Calendar, User, Shield, Building2 } from 'lucide-react';
+import { formatCurrencyExact } from '@/components/insurance/portfolio-format';
 
 interface PolizaCardProps {
   poliza: {
@@ -96,10 +97,7 @@ export function PolizaCard({ poliza, onClick }: PolizaCardProps) {
           </div>
           {poliza.primaAnual && (
             <div className="flex items-center gap-2 text-muted-foreground">
-              <Euro className="w-3.5 h-3.5" />
-              <span>
-                {poliza.primaAnual.toLocaleString('es-ES')} {poliza.moneda || 'EUR'}/año
-              </span>
+              <span>{formatCurrencyExact(poliza.primaAnual, poliza.moneda)}/año</span>
             </div>
           )}
         </div>

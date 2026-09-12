@@ -32,6 +32,9 @@ vi.mock('@/lib/db', () => ({
     user: {
       findFirst: vi.fn(),
     },
+    tenant: {
+      findUnique: vi.fn(),
+    },
   },
   getTenantDb: vi.fn(),
   dbContext: { tenantId: 'test-tenant-id' },
@@ -77,6 +80,57 @@ const polizaCreada = {
 describe('create_poliza', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Broker europeo: la divisa de reporte de su tenant es la que hereda cada
+    // póliza en la que el usuario no escriba una divisa propia.
+    (prisma.tenant.findUnique as any).mockResolvedValue({ moneda: 'EUR' });
+  });
+
+  it('hereda la divisa de reporte del tenant cuando no se indica otra', async () => {
+    (prisma.tenant.findUnique as any).mockResolvedValue({ moneda: 'MXN' });
+    (prisma.contact.findFirst as any).mockResolvedValue(clienteJuan);
+    (prisma.aseguradora.findFirst as any).mockResolvedValue(aseguradoraAXA);
+    (prisma.productoSeguro.findFirst as any).mockResolvedValue(productoVida);
+    (prisma.poliza.findFirst as any).mockResolvedValue(null);
+    (prisma.poliza.create as any).mockResolvedValue(polizaCreada);
+
+    await create_poliza({
+      tenantId: TENANT_ID,
+      numeroPoliza: 'AXA-5555',
+      cliente: 'juan@mail.com',
+      aseguradora: 'AXA',
+      fechaVencimiento: '2026-12-31',
+      userId: USER_ID,
+    });
+
+    expect(prisma.poliza.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ moneda: 'MXN' }),
+      }),
+    );
+  });
+
+  it('la divisa que escribe el usuario gana sobre la del tenant', async () => {
+    (prisma.contact.findFirst as any).mockResolvedValue(clienteJuan);
+    (prisma.aseguradora.findFirst as any).mockResolvedValue(aseguradoraAXA);
+    (prisma.productoSeguro.findFirst as any).mockResolvedValue(productoVida);
+    (prisma.poliza.findFirst as any).mockResolvedValue(null);
+    (prisma.poliza.create as any).mockResolvedValue(polizaCreada);
+
+    await create_poliza({
+      tenantId: TENANT_ID,
+      numeroPoliza: 'AXA-6666',
+      cliente: 'juan@mail.com',
+      aseguradora: 'AXA',
+      fechaVencimiento: '2026-12-31',
+      moneda: 'usd',
+      userId: USER_ID,
+    });
+
+    expect(prisma.poliza.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ moneda: 'USD' }),
+      }),
+    );
   });
 
   it('crea la póliza resolviendo cliente por email y aseguradora por nombre', async () => {
