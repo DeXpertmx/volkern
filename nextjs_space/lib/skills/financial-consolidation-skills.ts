@@ -2,6 +2,8 @@ import { prisma } from '@/lib/db';
 import { skillsLogger, trackSkillExecution } from './observability';
 import { Decimal } from 'decimal.js';
 import { generateIntegrityHash, verifyFinancialIntegrity } from '@/lib/security/integrity-service';
+import { MONEDA_MINIMA_ESQUEMA } from '@/lib/moneda';
+import { fxConvert } from '@/lib/insurance/currency';
 
 /**
  * ERP Financial Brain Skills (The Financial Brain)
@@ -54,35 +56,60 @@ export async function auditExpenseIntegrity(input: { tenantId: string }) {
 /**
  * Skill: project_financial_forecast
  * Predice el flujo de caja (Cash Flow) basado en el pipeline de ventas y gastos fijos.
+ *
+ * Las dos consultas que sostenían esto pedían campos que no existen en el
+ * esquema (`Lead.valorEstimado` y `Expense.type`), así que la habilidad lanzaba
+ * en cada llamada y con ella el cockpit financiero. Ahora sale de datos reales:
+ * el pipeline activo de Deals —valor convertido a la divisa del tenant y
+ * ponderado por la probabilidad de su etapa— y el gasto mensual medio de los
+ * últimos tres meses, que es lo más cerca que está el esquema de un gasto fijo.
+ *
+ * No hay valores de relleno: sin pipeline o sin gasto el dato es 0 o `null`, y
+ * quien lo muestre decide cómo decirlo. Antes devolvía 5.000 y 1.200 euros
+ * inventados cuando no encontraba nada.
  */
 export async function projectFinancialForecast(input: { tenantId: string }) {
   return await trackSkillExecution('project_financial_forecast', async () => {
-    // Lógica predictiva basada en promedios y pipeline
     const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), 1);
-    
-    // Simplificación: Obtenemos el forecast basado en el pipeline actual (Lead Value) y gastos fijos
-    const leads = await prisma.lead.aggregate({
-      where: { tenantId: input.tenantId, estado: 'ganado' }, // En un sistema real usaríamos el funnel
-      _sum: { valorEstimado: true } as any
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: input.tenantId },
+      select: { moneda: true },
     });
+    const moneda = tenant?.moneda || MONEDA_MINIMA_ESQUEMA;
 
-    const expenses = await prisma.expense.aggregate({
-      where: { tenantId: input.tenantId, type: 'RECURRING' } as any,
-      _sum: { amount: true }
+    const [deals, etapas] = await Promise.all([
+      prisma.deal.findMany({
+        where: { tenantId: input.tenantId, estado: 'activo' },
+        select: { valor: true, moneda: true, etapa: true },
+      }),
+      prisma.pipelineStage.findMany({
+        where: { tenantId: input.tenantId },
+        select: { nombre: true, probabilidad: true },
+      }),
+    ]);
+    const probabilidadPorEtapa = new Map(etapas.map((e) => [e.nombre, e.probabilidad]));
+
+    let expectedIn = new Decimal(0);
+    for (const deal of deals) {
+      const probabilidad = probabilidadPorEtapa.get(deal.etapa) ?? 100;
+      const valor = fxConvert(Number(deal.valor) || 0, deal.moneda || moneda, moneda);
+      expectedIn = expectedIn.add(new Decimal(valor).mul(probabilidad).div(100));
+    }
+
+    const desde = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+    const gastos = await prisma.expense.aggregate({
+      where: { tenantId: input.tenantId, status: 'PAID', date: { gte: desde } },
+      _sum: { amount: true },
     });
+    const committedOut = (gastos._sum.amount || 0) / 3;
 
-    const expectedIn = (leads._sum as any)?.valorEstimado || 5000;
-    const committedOut = (expenses._sum as any)?.amount || 1200;
-
-    const runwayDays = committedOut > 0 ? (expectedIn / (committedOut / 30)) : 365;
+    // Días de caja: cuántos días cubre el pipeline al ritmo de gasto actual. Sin
+    // gasto declarado no hay nada que cubrir y el dato no es calculable.
+    const runwayDays = committedOut > 0 ? expectedIn.div(committedOut / 30).toNumber() : null;
 
     return {
-      content: `Proyección a 30 días: 
-      - Ingreso esperado: €${expectedIn.toLocaleString()}
-      - Gasto comprometido: €${committedOut.toLocaleString()}
-      - Salud de Runway: ${runwayDays.toFixed(0)} días estimados.`,
-      data: { expectedIn, committedOut, runwayDays }
+      content: `Proyección a 30 días: \n      - Ingreso esperado (pipeline ponderado): ${expectedIn.toNumber().toLocaleString()}\n      - Gasto mensual medio: ${committedOut.toLocaleString()}\n      - Salud de Runway: ${runwayDays === null ? 'no calculable (sin gasto registrado)' : `${runwayDays.toFixed(0)} días estimados`}.`,
+      data: { expectedIn: expectedIn.toNumber(), committedOut, runwayDays }
     };
   });
 }
