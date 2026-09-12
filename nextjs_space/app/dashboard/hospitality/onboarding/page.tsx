@@ -138,7 +138,10 @@ export default function HospitalityOnboardingPage() {
     tipo: 'apartamento',
     capacidad: '2',
     tarifaBase: '',
-    moneda: 'MXN',
+    // Vacío = la divisa del inventario del tenant. Fijar 'MXN' aquí creaba
+    // unidades en pesos en una cuenta europea, y el valor por defecto del
+    // esquema no tiene por qué ser el del negocio.
+    moneda: '',
   });
 
   // Paso 5 — catálogo externo
@@ -246,7 +249,7 @@ export default function HospitalityOnboardingPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'No se pudo crear la unidad');
       toast.success('Unidad creada');
-      setNuevaUnidad({ nombre: '', codigo: '', tipo: 'apartamento', capacidad: '2', tarifaBase: '', moneda: 'MXN' });
+      setNuevaUnidad({ nombre: '', codigo: '', tipo: 'apartamento', capacidad: '2', tarifaBase: '', moneda: '' });
       await cargar(snapshot.propiedad.id);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Error creando la unidad');
@@ -605,7 +608,7 @@ export default function HospitalityOnboardingPage() {
                   <Input
                     value={nuevaUnidad.moneda}
                     onChange={(e) => setNuevaUnidad({ ...nuevaUnidad, moneda: e.target.value })}
-                    placeholder="MXN"
+                    placeholder="Vacío = la del inventario"
                   />
                 </div>
                 <div className="sm:col-span-3">

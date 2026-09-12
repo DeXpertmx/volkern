@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
 import { logAuditAction } from '@/lib/permissions';
+import { monedaPredominante } from '@/lib/hospitality/moneda';
 
 // GET /api/hospitality/units — listar unidades del tenant (filtrable por propiedad)
 export async function GET(req: NextRequest) {
@@ -76,6 +77,21 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // La divisa de una unidad nueva sale de las que ya existen en el tenant, no
+    // de una constante: el esquema trae 'MXN' por defecto, así que un tenant
+    // europeo que omitiera el campo creaba inventario en pesos sin que nadie lo
+    // note. Solo si el tenant aún no tiene ninguna unidad se cae al valor del
+    // esquema.
+    const monedaExplicita = moneda ? String(moneda).toUpperCase().trim() : '';
+    let monedaUnidad = monedaExplicita;
+    if (!monedaUnidad) {
+      const existentes = await prisma.hospitalityUnit.findMany({
+        where: { tenantId: auth.tenant!.id },
+        select: { moneda: true },
+      });
+      monedaUnidad = monedaPredominante(existentes.map((u) => u.moneda)) || 'MXN';
+    }
+
     const unit = await prisma.hospitalityUnit.create({
       data: {
         tenantId: auth.tenant!.id,
@@ -85,7 +101,7 @@ export async function POST(req: NextRequest) {
         tipo: tipo || 'apartamento',
         capacidad: parseInt(capacidad) || 2,
         tarifaBase: tarifaBase !== undefined ? parseFloat(tarifaBase) || null : null,
-        moneda: moneda ? String(moneda).toUpperCase().trim() : 'MXN',
+        moneda: monedaUnidad,
         estado: estado || 'available',
       },
       include: { property: { select: { id: true, nombre: true } } },
