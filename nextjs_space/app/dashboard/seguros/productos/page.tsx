@@ -25,6 +25,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
+import { formatearImporte } from '@/lib/moneda';
+import { useMonedaTenant } from '@/lib/use-moneda-tenant';
 import { ImportEntityWizard } from '@/components/insurance/ImportEntityWizard';
 import {
   buildTemplateProductos,
@@ -102,6 +104,9 @@ export default function ProductosPage() {
   const [descripcion, setDescripcion] = useState('');
   const [primaReferencia, setPrimaReferencia] = useState('');
   const [comisionPct, setComisionPct] = useState('');
+  // La prima de referencia no trae divisa propia, así que se escribe con la del
+  // tenant en vez de dar por hecho la convención de pesos.
+  const monedaTenant = useMonedaTenant();
 
   useEffect(() => {
     loadProductos();
@@ -327,7 +332,7 @@ export default function ProductosPage() {
                     )}
                     <div className="flex justify-between text-xs text-muted-foreground pt-2 border-t">
                       {p.primaReferencia !== null && (
-                        <span>Prima ref: <strong>${p.primaReferencia.toLocaleString('es-MX')}</strong></span>
+                        <span>Prima ref: <strong>{formatearImporte(p.primaReferencia, monedaTenant)}</strong></span>
                       )}
                       {p.comisionPct !== null && <span>Comisión: <strong>{p.comisionPct}%</strong></span>}
                     </div>

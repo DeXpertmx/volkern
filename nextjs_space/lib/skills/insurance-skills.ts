@@ -10,6 +10,7 @@
  */
 
 import { prisma } from '@/lib/db';
+import { monedaEscritura } from '@/lib/moneda';
 import { convertLead } from './contact-skills';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -180,7 +181,11 @@ export async function create_poliza(input: {
       primaAnual: normalizarNumero(input.primaAnual),
       sumaAsegurada: normalizarNumero(input.sumaAsegurada),
       formaPago,
-      moneda: input.moneda?.toUpperCase() || 'EUR',
+      // Divisa de la póliza: la que pida quien la crea y, si no, la de reporte
+      // del tenant —la que ese broker usa de verdad—. Antes caía a un literal
+      // fijo, así que una correduría mexicana que no dijera la divisa guardaba
+      // la póliza en euros.
+      moneda: monedaEscritura(input.moneda?.toUpperCase(), await monedaDelTenant(tenantId)),
       notas: input.notas,
       createdById: await resolveCreator(tenantId, input.userId),
       estado: 'ACTIVA',
@@ -193,6 +198,18 @@ export async function create_poliza(input: {
   });
 
   return { poliza, message: `Póliza ${poliza.numeroPoliza} creada para ${cliente.nombre}` };
+}
+
+/**
+ * Moneda de reporte del tenant: la divisa con la que se escriben sus registros
+ * cuando quien los crea no indica otra.
+ */
+async function monedaDelTenant(tenantId: string): Promise<string | undefined> {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { moneda: true },
+  });
+  return tenant?.moneda ?? undefined;
 }
 
 // Helpers de respaldo: crean aseguradora/producto por defecto si la IA no los especifica

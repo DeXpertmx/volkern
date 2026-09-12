@@ -18,6 +18,7 @@ import {
   Target,
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api-client';
+import { MONEDA_MINIMA_ESQUEMA } from '@/lib/moneda';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -344,7 +345,7 @@ export default function PortfolioPage() {
                   <span className="text-amber-700">{m.count} pólizas</span>
                   <span className="text-amber-600">·</span>
                   <span className="text-amber-800 tabular-nums">
-                    {m.totalOriginal.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+                    {formatCurrency(m.totalOriginal, m.moneda)}
                   </span>
                 </span>
               ))}
@@ -407,9 +408,9 @@ export default function PortfolioPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-emerald-700">{formatCurrency(kpis.primaTotal, snapshot?.tenantMoneda ?? 'MXN')}</div>
+            <div className="text-3xl font-bold text-emerald-700">{formatCurrency(kpis.primaTotal, snapshot?.tenantMoneda ?? MONEDA_MINIMA_ESQUEMA)}</div>
             <p className="text-xs text-emerald-700/70 mt-1">
-              promedio: {formatCurrency(kpis.primaPromedio, snapshot?.tenantMoneda ?? 'MXN')} / póliza
+              promedio: {formatCurrency(kpis.primaPromedio, snapshot?.tenantMoneda ?? MONEDA_MINIMA_ESQUEMA)} / póliza
             </p>
           </CardContent>
         </Card>
@@ -597,7 +598,7 @@ export default function PortfolioPage() {
                           </Badge>
                         </div>
                         <span className="text-sm text-muted-foreground tabular-nums">
-                          {formatCurrency(r.primaTotal, snapshot?.tenantMoneda ?? 'MXN')}
+                          {formatCurrency(r.primaTotal, snapshot?.tenantMoneda ?? MONEDA_MINIMA_ESQUEMA)}
                         </span>
                       </div>
                       <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
@@ -643,7 +644,7 @@ export default function PortfolioPage() {
                         <div className="flex items-center justify-between mb-1">
                           <span className="font-medium truncate">{a.nombre}</span>
                           <span className="text-sm text-muted-foreground tabular-nums ml-2">
-                            {formatCurrency(a.primaTotal, snapshot?.tenantMoneda ?? 'MXN')}
+                            {formatCurrency(a.primaTotal, snapshot?.tenantMoneda ?? MONEDA_MINIMA_ESQUEMA)}
                           </span>
                         </div>
                         <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
@@ -716,13 +717,13 @@ export default function PortfolioPage() {
                           <span
                             className="ml-1 text-[10px] text-muted-foreground tabular-nums"
                             title={`≈ ${formatCurrencyExact(
-                              fxPolizaToTarget(p.primaAnual, p.moneda, snapshot?.tenantMoneda ?? 'MXN'),
-                              snapshot?.tenantMoneda ?? 'MXN'
-                            )} (convertido a ${snapshot?.tenantMoneda ?? 'MXN'})`}
+                              fxPolizaToTarget(p.primaAnual, p.moneda, snapshot?.tenantMoneda ?? MONEDA_MINIMA_ESQUEMA),
+                              snapshot?.tenantMoneda ?? MONEDA_MINIMA_ESQUEMA
+                            )} (convertido a ${snapshot?.tenantMoneda ?? MONEDA_MINIMA_ESQUEMA})`}
                           >
                             ≈ {formatCurrency(
-                              fxPolizaToTarget(p.primaAnual, p.moneda, snapshot?.tenantMoneda ?? 'MXN'),
-                              snapshot?.tenantMoneda ?? 'MXN'
+                              fxPolizaToTarget(p.primaAnual, p.moneda, snapshot?.tenantMoneda ?? MONEDA_MINIMA_ESQUEMA),
+                              snapshot?.tenantMoneda ?? MONEDA_MINIMA_ESQUEMA
                             )}
                           </span>
                         )}
@@ -776,8 +777,8 @@ export default function PortfolioPage() {
                     {p.moneda !== snapshot?.tenantMoneda && (
                       <span className="text-[10px] text-purple-600 ml-1 tabular-nums">
                         ≈ {formatCurrency(
-                          fxPolizaToTarget(p.primaAnual, p.moneda, snapshot?.tenantMoneda ?? 'MXN'),
-                          snapshot?.tenantMoneda ?? 'MXN'
+                          fxPolizaToTarget(p.primaAnual, p.moneda, snapshot?.tenantMoneda ?? MONEDA_MINIMA_ESQUEMA),
+                          snapshot?.tenantMoneda ?? MONEDA_MINIMA_ESQUEMA
                         )}
                       </span>
                     )}

@@ -5,6 +5,11 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import {
+  formatearImporte,
+  MONEDA_PLATAFORMA,
+  MONEDAS_SOPORTADAS,
+} from '@/lib/moneda';
+import {
   ArrowRight, Check, Shield, Users, BarChart3,
   TrendingUp, Clock, AlertTriangle, Calendar,
   Lightbulb, FileText, Building2, RefreshCw,
@@ -48,7 +53,9 @@ const MODULES = [
   'Forecast multi-ramo con calendario estacional',
   'Importador Excel/CSV',
   'Alertas y notificaciones (in-app + WhatsApp)',
-  'Multi-moneda (EUR, USD, MXN, GBP y +6 más)',
+  // La lista de divisas la dicta el catálogo: si mañana se soporta una más, la
+  // portada lo dice sin que nadie tenga que acordarse de esta línea.
+  `Multi-moneda (${MONEDAS_SOPORTADAS.slice(0, 4).join(', ')} y +${MONEDAS_SOPORTADAS.length - 4} más)`,
 ];
 
 const BENEFITS = [
@@ -414,12 +421,12 @@ export default function InsuranceLanding() {
                 <motion.div key={tool.name} initial={{ opacity: 0, x: -10 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.3, delay: i * 0.05 }}
                   className="grid grid-cols-2 gap-4 px-6 py-4 border-b border-slate-800/50 last:border-b-0 hover:bg-slate-800/30 transition-colors">
                   <span className="text-slate-300 font-medium">{tool.name}</span>
-                  <span className="text-red-400 text-right font-mono font-semibold">{tool.price === 0 ? 'Gratis' : `€${tool.price.toLocaleString('es-ES')}`}</span>
+                  <span className="text-red-400 text-right font-mono font-semibold">{tool.price === 0 ? 'Gratis' : formatearImporte(tool.price, MONEDA_PLATAFORMA, 0)}</span>
                 </motion.div>
               ))}
               <div className="grid grid-cols-2 gap-4 px-6 py-5 bg-slate-800/50 border-t-2 border-emerald-500/30">
                 <span className="text-white font-bold text-lg">Coste de oportunidad total</span>
-                <span className="text-red-400 text-right font-bold text-lg font-mono">€{TOTAL_COMPETITOR.toLocaleString('es-ES')}+</span>
+                <span className="text-red-400 text-right font-bold text-lg font-mono">{formatearImporte(TOTAL_COMPETITOR, MONEDA_PLATAFORMA, 0)}+</span>
               </div>
             </div>
             <div className="flex items-center justify-center gap-4 mt-6">
@@ -430,7 +437,7 @@ export default function InsuranceLanding() {
               <ArrowRight className="w-6 h-6 text-slate-600" />
               <div className="bg-slate-900/50 border border-emerald-500/20 rounded-xl p-4">
                 <p className="text-slate-400 text-sm">Ahorro potencial</p>
-                <p className="text-emerald-400 text-2xl font-bold">€{TOTAL_COMPETITOR - 99}/mes+</p>
+                <p className="text-emerald-400 text-2xl font-bold">{formatearImporte(TOTAL_COMPETITOR - 99, MONEDA_PLATAFORMA, 0)}/mes+</p>
               </div>
             </div>
           </div>

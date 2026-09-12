@@ -10,6 +10,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { formatCurrencyExact } from '@/components/insurance/portfolio-format';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -298,7 +299,7 @@ export function CalendarioRenovaciones({
                       <div className="text-right shrink-0">
                         {p.primaAnual && (
                           <p className="text-xs font-medium">
-                            {p.primaAnual.toLocaleString('es-ES')} {p.moneda || 'EUR'}
+                            {formatCurrencyExact(p.primaAnual, p.moneda)}
                           </p>
                         )}
                         <div className={`flex items-center gap-1 mt-1 ${urgente ? 'text-red-600' : diasRestantes <= 30 ? 'text-amber-600' : 'text-muted-foreground'}`}>

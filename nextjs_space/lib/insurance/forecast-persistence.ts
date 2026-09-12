@@ -48,7 +48,7 @@ export async function sumaRealDelMes(
   });
   return rows.reduce(
     (acc, r) =>
-      acc + fxConvert(Number(r.primaAnual ?? 0), (r.moneda as string) ?? 'USD', targetCurrency),
+      acc + fxConvert(Number(r.primaAnual ?? 0), (r.moneda as string) ?? targetCurrency, targetCurrency),
     0
   );
 }

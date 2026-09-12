@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Input } from '@/components/ui/input';
+import { formatCurrencyExact } from '@/components/insurance/portfolio-format';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
@@ -195,7 +196,7 @@ export function PolizaTable({
                     <td className="p-3 text-sm hidden md:table-cell">{p.cliente?.nombre || '—'}</td>
                     <td className="p-3 text-sm hidden md:table-cell">{p.aseguradora?.nombre || '—'}</td>
                     <td className="p-3 text-sm hidden lg:table-cell">
-                      {p.primaAnual ? `${p.primaAnual.toLocaleString('es-ES')} ${p.moneda || 'EUR'}` : '—'}
+                      {p.primaAnual ? formatCurrencyExact(p.primaAnual, p.moneda) : '—'}
                     </td>
                     <td className="p-3 text-sm hidden lg:table-cell">
                       {new Date(p.fechaVencimiento).toLocaleDateString('es-ES')}

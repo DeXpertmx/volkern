@@ -11,14 +11,6 @@
     "divisa": 0,
     "formato": 6
   },
-  "app/admin/partner-onboarding/bulk/page.tsx": {
-    "divisa": 3,
-    "formato": 0
-  },
-  "app/admin/partner-onboarding/page.tsx": {
-    "divisa": 6,
-    "formato": 0
-  },
   "app/admin/planes/page.tsx": {
     "divisa": 1,
     "formato": 0
@@ -129,22 +121,6 @@
   },
   "app/api/erp/projects/[id]/milestones/[milestoneId]/route.ts": {
     "divisa": 1,
-    "formato": 0
-  },
-  "app/api/insurance/polizas/route.ts": {
-    "divisa": 1,
-    "formato": 0
-  },
-  "app/api/insurance/portfolio/forecast/by-ramo/route.ts": {
-    "divisa": 1,
-    "formato": 0
-  },
-  "app/api/insurance/portfolio/forecast/route.ts": {
-    "divisa": 1,
-    "formato": 0
-  },
-  "app/api/insurance/portfolio/route.ts": {
-    "divisa": 4,
     "formato": 0
   },
   "app/api/invoices/[id]/pdf/route.ts": {
@@ -343,34 +319,6 @@
     "divisa": 10,
     "formato": 2
   },
-  "app/dashboard/seguros/aseguradoras/[id]/page.tsx": {
-    "divisa": 4,
-    "formato": 0
-  },
-  "app/dashboard/seguros/page.tsx": {
-    "divisa": 1,
-    "formato": 1
-  },
-  "app/dashboard/seguros/polizas/page.tsx": {
-    "divisa": 9,
-    "formato": 0
-  },
-  "app/dashboard/seguros/portfolio/page.tsx": {
-    "divisa": 11,
-    "formato": 1
-  },
-  "app/dashboard/seguros/productos/page.tsx": {
-    "divisa": 0,
-    "formato": 1
-  },
-  "app/dashboard/seguros/renovaciones/page.tsx": {
-    "divisa": 1,
-    "formato": 1
-  },
-  "app/dashboard/seguros/siniestros/page.tsx": {
-    "divisa": 9,
-    "formato": 1
-  },
   "app/dashboard/telefonia/page.tsx": {
     "divisa": 1,
     "formato": 0
@@ -559,37 +507,9 @@
     "divisa": 1,
     "formato": 2
   },
-  "components/insurance/CalendarioRenovaciones.tsx": {
-    "divisa": 1,
-    "formato": 1
-  },
-  "components/insurance/ForecastCard.tsx": {
-    "divisa": 0,
-    "formato": 1
-  },
-  "components/insurance/PolizaCard.tsx": {
-    "divisa": 1,
-    "formato": 1
-  },
-  "components/insurance/PolizaForm.tsx": {
-    "divisa": 7,
-    "formato": 0
-  },
-  "components/insurance/PolizaTable.tsx": {
-    "divisa": 1,
-    "formato": 1
-  },
-  "components/insurance/PortfolioBriefing.tsx": {
-    "divisa": 0,
-    "formato": 1
-  },
   "components/public/CountUp.tsx": {
     "divisa": 0,
     "formato": 1
-  },
-  "components/public/InsuranceLanding.tsx": {
-    "divisa": 4,
-    "formato": 2
   },
   "components/public/NewLanding.tsx": {
     "divisa": 8,
@@ -771,18 +691,6 @@
     "divisa": 12,
     "formato": 0
   },
-  "lib/insurance/forecast-persistence.ts": {
-    "divisa": 1,
-    "formato": 0
-  },
-  "lib/insurance/post-import-moneda-autofix.ts": {
-    "divisa": 5,
-    "formato": 0
-  },
-  "lib/insurance/tenant-currency-resolver.ts": {
-    "divisa": 1,
-    "formato": 0
-  },
   "lib/invoice-parser.ts": {
     "divisa": 21,
     "formato": 0
@@ -850,10 +758,6 @@
   "lib/skills/index.ts": {
     "divisa": 3,
     "formato": 2
-  },
-  "lib/skills/insurance-skills.ts": {
-    "divisa": 1,
-    "formato": 0
   },
   "lib/skills/siniestros-skills.ts": {
     "divisa": 1,
