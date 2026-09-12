@@ -25,7 +25,10 @@ export async function analyzeGlobalProfitability(input: { tenantId: string, user
     const moneda = tenant?.moneda || MONEDA_MINIMA_ESQUEMA;
 
     const margin = new Decimal(summary.margin);
-    const status = margin.gt(15) ? 'SALUDABLE' : 'CRÍTICO';
+    // Sin ingresos ni gastos no hay salud que juzgar: llamar CRÍTICO a un periodo
+    // sin movimientos es alarmar con datos que no existen.
+    const sinMovimientos = !summary.revenue && !summary.expenses;
+    const status = sinMovimientos ? 'SIN DATOS' : margin.gt(15) ? 'SALUDABLE' : 'CRÍTICO';
 
     return {
       content: `Análisis de Rentabilidad (${period}): \n      - Ingresos: ${formatearImporte(summary.revenue, moneda)}\n      - Gastos Totales: ${formatearImporte(summary.expenses, moneda)}\n      - Margen: ${summary.margin}%\n      - Estado: ${status}`,
