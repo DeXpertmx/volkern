@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
-import { monedaEfectiva, MONEDAS_SELECCIONABLES } from '@/lib/hospitality/moneda';
+import { monedaEfectiva, MONEDAS_SELECCIONABLES } from '@/lib/moneda';
 import {
   Building2,
   DoorOpen,

@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
 import { logAuditAction } from '@/lib/permissions';
-import { monedaEscritura, monedaPredominante } from '@/lib/hospitality/moneda';
+import { monedaEscritura, monedaPredominante } from '@/lib/moneda';
 
 // GET /api/hospitality/units — listar unidades del tenant (filtrable por propiedad)
 export async function GET(req: NextRequest) {

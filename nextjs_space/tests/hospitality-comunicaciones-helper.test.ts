@@ -85,9 +85,13 @@ describe('buildContextoPlantilla', () => {
     expect(ctx.propiedad).toBe('Villa Mar');
     expect(ctx.canal).toBe('Airbnb');
     expect(ctx.referencia).toBe('BK-1');
-    // Formato del módulo compartido (convención española) y en la divisa de la
-    // reserva: antes este mensaje al huésped se escribía con locale mexicano.
-    expect(ctx.importe.replace(/[.\u00a0\u202f\s]/g, '')).toBe('6900,00$');
+    // Formato del módulo compartido y en la divisa de la reserva: el peso se
+    // escribe en su propia convención (símbolo delante, punto decimal), que es la
+    // que espera el tenant. Antes este mensaje lo componía un formato local.
+    expect(ctx.importe).toContain('$');
+    expect(ctx.importe).toContain('6,900');
+    expect(ctx.importe).toContain('.00');
+    expect(ctx.importe).not.toContain('€');
   });
 
   it('el importe del mensaje va en la divisa de la reserva, no en pesos', () => {

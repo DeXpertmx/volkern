@@ -32,7 +32,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { formatearImporte } from '@/lib/hospitality/moneda';
+import { formatearImporte } from '@/lib/moneda';
 
 // ─── Tipos de la API ────────────────────────────────────────────────────────
 

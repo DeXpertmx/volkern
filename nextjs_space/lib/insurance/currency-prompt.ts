@@ -15,6 +15,7 @@
  * la lista + helpers (renderOptions, parseAnswer). El caller decide si
  * persiste (script → BD, UI → state del formulario).
  */
+import { MONEDA_MINIMA_ESQUEMA } from '@/lib/moneda';
 import { SUPPORTED_CURRENCIES, type Currency } from './currency';
 
 export interface CurrencyMenuOption {
@@ -99,7 +100,7 @@ export interface CurrencyPromptResult {
 export function parseCurrencyAnswer(raw: string): CurrencyPromptResult {
   const trimmed = (raw ?? '').trim();
   if (!trimmed) {
-    return { code: 'MXN', source: 'default' };
+    return { code: MONEDA_MINIMA_ESQUEMA, source: 'default' };
   }
   const upper = trimmed.toUpperCase();
 
@@ -114,7 +115,7 @@ export function parseCurrencyAnswer(raw: string): CurrencyPromptResult {
     return { code: upper as Currency, source: 'code' };
   }
 
-  return { code: 'MXN', source: 'invalid' };
+  return { code: MONEDA_MINIMA_ESQUEMA, source: 'invalid' };
 }
 
 /**

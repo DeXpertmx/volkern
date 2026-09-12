@@ -19,7 +19,7 @@ import {
   CheckCircle2,
   XCircle,
 } from 'lucide-react';
-import { formatearImporte, monedaEfectiva, MONEDAS_SELECCIONABLES } from '@/lib/hospitality/moneda';
+import { formatearImporte, monedaEfectiva, MONEDAS_SELECCIONABLES } from '@/lib/moneda';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

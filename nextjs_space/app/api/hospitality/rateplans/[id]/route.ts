@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
-import { monedaEscritura } from '@/lib/hospitality/moneda';
+import { monedaEscritura } from '@/lib/moneda';
 
 /**
  * PATCH /api/hospitality/rateplans/[id] — editar tarifa/restricciones.

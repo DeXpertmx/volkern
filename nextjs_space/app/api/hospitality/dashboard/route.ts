@@ -9,7 +9,7 @@ import {
   perChannelRevenueTrend,
   type AnalyticsReservationInput,
 } from '@/lib/hospitality/analytics';
-import { monedaEfectiva } from '@/lib/hospitality/moneda';
+import { monedaEfectiva } from '@/lib/moneda';
 
 /**
  * GET /api/hospitality/dashboard — KPIs operativos del módulo (plan §23).

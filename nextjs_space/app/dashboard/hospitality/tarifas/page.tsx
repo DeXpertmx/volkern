@@ -27,7 +27,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { formatearImporte, monedaEfectiva, MONEDAS_SELECCIONABLES } from '@/lib/hospitality/moneda';
+import { formatearImporte, monedaEfectiva, MONEDAS_SELECCIONABLES } from '@/lib/moneda';
 
 interface Property {
   id: string;

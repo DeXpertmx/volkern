@@ -38,7 +38,7 @@ import {
   Legend,
 } from 'recharts';
 import { channelStyle, statusLabel } from '@/lib/hospitality/calendar';
-import { formatearImporte } from '@/lib/hospitality/moneda';
+import { formatearImporte } from '@/lib/moneda';
 
 interface Kpis {
   totalUnidades: number;

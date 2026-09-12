@@ -1,13 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import {
+  esMonedaSoportada,
   formatearImporte,
+  localeDeMoneda,
   monedaEfectiva,
   monedaEscritura,
   monedaPredominante,
   primeraMoneda,
-  simboloMoneda,
   MONEDAS_SELECCIONABLES,
-} from '../lib/hospitality/moneda';
+} from '../lib/moneda';
 
 describe('monedaPredominante', () => {
   it('devuelve la moneda que más se repite', () => {
@@ -84,23 +85,38 @@ describe('MONEDAS_SELECCIONABLES', () => {
   it('es la única lista de divisas que ve la interfaz', () => {
     expect([...MONEDAS_SELECCIONABLES]).toEqual(['MXN', 'USD', 'EUR']);
     for (const moneda of MONEDAS_SELECCIONABLES) {
-      expect(simboloMoneda(moneda)).not.toBe('');
+      expect(esMonedaSoportada(moneda)).toBe(true);
     }
   });
 });
 
-describe('simboloMoneda', () => {
-  it('reconoce las divisas del módulo', () => {
-    expect(simboloMoneda('EUR')).toBe('€');
-    expect(simboloMoneda('eur')).toBe('€');
-    expect(simboloMoneda('USD')).toBe('$');
-    expect(simboloMoneda('MXN')).toBe('$');
-    expect(simboloMoneda('GBP')).toBe('£');
+describe('esMonedaSoportada', () => {
+  it('reconoce las divisas del módulo, sin importar el formato', () => {
+    expect(esMonedaSoportada('EUR')).toBe(true);
+    expect(esMonedaSoportada('eur')).toBe(true);
+    expect(esMonedaSoportada(' eur ')).toBe(true);
   });
 
-  it('no inventa símbolo para una divisa desconocida', () => {
-    expect(simboloMoneda('XYZ')).toBe('');
-    expect(simboloMoneda('')).toBe('');
+  it('rechaza lo que no es una divisa conocida', () => {
+    expect(esMonedaSoportada('XYZ')).toBe(false);
+    expect(esMonedaSoportada('')).toBe(false);
+    expect(esMonedaSoportada(null)).toBe(false);
+    expect(esMonedaSoportada(undefined)).toBe(false);
+  });
+});
+
+describe('localeDeMoneda', () => {
+  it('el peso se escribe en convención mexicana y el euro en española', () => {
+    expect(localeDeMoneda('MXN')).toBe('es-MX');
+    expect(localeDeMoneda('mxn')).toBe('es-MX');
+    expect(localeDeMoneda(' eur ')).toBe('es-ES');
+  });
+
+  it('una divisa sin convención declarada usa la de la plataforma', () => {
+    expect(localeDeMoneda('USD')).toBe('es-ES');
+    expect(localeDeMoneda('XYZ')).toBe('es-ES');
+    expect(localeDeMoneda('')).toBe('es-ES');
+    expect(localeDeMoneda(null)).toBe('es-ES');
   });
 });
 
@@ -114,14 +130,38 @@ describe('simboloMoneda', () => {
  */
 const sinSeparadores = (texto: string) => texto.replace(/[.\u00a0\u202f]/g, '').replace(/\s/g, '');
 
+/** Cambia los espacios tipográficos de `Intl` por espacios normales. */
+const espaciosNormales = (texto: string) => texto.replace(/[\u00a0\u202f]/g, ' ');
+
 describe('formatearImporte', () => {
   it('escribe el importe en convención española con su símbolo', () => {
     expect(sinSeparadores(formatearImporte(1234.5, 'EUR'))).toBe('1234,50€');
   });
 
-  it('respeta la moneda que se le pasa en lugar de asumir pesos', () => {
-    expect(sinSeparadores(formatearImporte(63350, 'EUR', 0))).toBe('63350€');
-    expect(sinSeparadores(formatearImporte(63350, 'MXN', 0))).toBe('63350$');
+  it('cada divisa se escribe en la convención de su tenant', () => {
+    // Es la decisión de producto: un tenant con la moneda en pesos ve `$1,235`,
+    // y uno con la moneda en euros `1235 €`. La decide el módulo, no la pantalla.
+    expect(formatearImporte(1235.4, 'MXN', 0)).toBe('$1,235');
+    expect(espaciosNormales(formatearImporte(1235.4, 'EUR', 0))).toBe('1235 €');
+  });
+
+  it('el dólar y el peso no se confunden aunque los dos lleven `$`', () => {
+    const usd = formatearImporte(1235.4, 'USD', 0);
+    const mxn = formatearImporte(1235.4, 'MXN', 0);
+
+    expect(usd).not.toBe(mxn);
+    expect(usd).toMatch(/US/);
+    expect(mxn).toBe('$1,235');
+  });
+
+  it('no lanza con una divisa que no reconoce', () => {
+    // Un código malformado hacía lanzar RangeError al formateo nativo y dejaba la
+    // pantalla en blanco; ahora se escribe el importe sin símbolo.
+    expect(sinSeparadores(formatearImporte(1200, 'XX'))).toBe('1200,00');
+    expect(sinSeparadores(formatearImporte(1200, ''))).toBe('1200,00');
+    // Un código bien formado pero desconocido no es un error: se escribe tal cual,
+    // que informa más que un símbolo inventado.
+    expect(sinSeparadores(formatearImporte(1200, 'XYZ'))).toBe('1200,00XYZ');
   });
 
   it('un importe ausente no se pinta como cero', () => {
