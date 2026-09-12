@@ -126,6 +126,7 @@ describe('Hospitality onboarding (§31) — reserva de prueba', () => {
       hotelCode: 'sandbox-pms',
       roomCode: 'suite',
       rateplanCode: 'suite-d-ep',
+      currency: 'eur',
       checkin,
       noches: 3,
       sufijo: 'abc',
@@ -140,6 +141,8 @@ describe('Hospitality onboarding (§31) — reserva de prueba', () => {
     expect(payload.rooms?.[0]?.rateplanCode).toBe('suite-d-ep');
     expect(payload.rooms?.[0]?.prices).toHaveLength(3);
     expect(payload.amount?.amountAfterTax).toBe(3000);
+    // La divisa la dicta la unidad: no se hereda el 'MXN' del esquema.
+    expect(payload.amount?.currency).toBe('EUR');
     expect(payload.guest?.email?.startsWith(ONBOARDING_TEST_EMAIL_PREFIX)).toBe(true);
     // Los opcionales del contrato van presentes (null), no omitidos.
     expect(payload).toHaveProperty('cmBookingId', null);
@@ -150,6 +153,7 @@ describe('Hospitality onboarding (§31) — reserva de prueba', () => {
     const payload = buildTestReservationPayload({
       hotelCode: 'sandbox-pms',
       roomCode: 'executive',
+      currency: 'EUR',
       sufijo: 'x',
     });
     const noches =

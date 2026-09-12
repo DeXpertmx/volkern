@@ -320,6 +320,12 @@ export function buildTestReservationPayload(input: {
   hotelCode: string;
   roomCode: string;
   rateplanCode?: string | null;
+  /**
+   * Divisa de la unidad. Obligatoria a propósito: fijarla aquí dejaba toda
+   * reserva de prueba en el valor por defecto del esquema ('MXN'), incluso en
+   * una cuenta europea.
+   */
+  currency: string;
   /** Fecha de llegada (por defecto: mañana). */
   checkin?: Date;
   noches?: number;
@@ -353,7 +359,7 @@ export function buildTestReservationPayload(input: {
       amountAfterTax: precioNoche * noches,
       amountBeforeTax: precioNoche * noches,
       tax: 0,
-      currency: 'MXN',
+      currency: input.currency.trim().toUpperCase(),
       commission: null,
       tcs: null,
       tds: null,
