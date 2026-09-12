@@ -19,6 +19,7 @@ import {
   CheckCircle2,
   XCircle,
 } from 'lucide-react';
+import { formatearImporte, monedaPredominante } from '@/lib/hospitality/moneda';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -138,6 +139,14 @@ export default function HospitalityReservasPage() {
   const [form, setForm] = useState<typeof EMPTY_FORM>({ ...EMPTY_FORM });
   const [saving, setSaving] = useState(false);
 
+  // La moneda de la vista sale de los datos, nunca de una constante: el esquema
+  // trae 'MXN' por defecto y fijarla aquí dejaba a un tenant español con pesos.
+  // Si aún no hay datos se cae al valor del esquema, que es el que usaría la API.
+  const monedaLista = useMemo(
+    () => monedaPredominante(reservas.map((r) => r.currency)) || EMPTY_FORM.moneda,
+    [reservas]
+  );
+
   const cargar = useCallback(async () => {
     try {
       setLoading(true);
@@ -183,7 +192,7 @@ export default function HospitalityReservasPage() {
 
   const abrirNueva = () => {
     setEditing(null);
-    setForm({ ...EMPTY_FORM, propertyId: properties[0]?.id || '' });
+    setForm({ ...EMPTY_FORM, propertyId: properties[0]?.id || '', moneda: monedaLista });
     setFormOpen(true);
   };
 
@@ -201,7 +210,7 @@ export default function HospitalityReservasPage() {
       checkout: r.checkOut.slice(0, 10),
       estado: r.estado,
       importe: r.amountAfterTax != null ? String(r.amountAfterTax) : '',
-      moneda: r.currency || 'MXN',
+      moneda: r.currency || monedaLista,
       notas: r.specialRequests || '',
     });
     setFormOpen(true);
@@ -288,7 +297,8 @@ export default function HospitalityReservasPage() {
             Reservas
           </h1>
           <p className="text-muted-foreground mt-1">
-            {reservas.length} reservas · {totalNoches} noches · {totalIngresos > 0 ? totalIngresos.toLocaleString('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }) : '—'}
+            {reservas.length} reservas · {totalNoches} noches ·{' '}
+            {totalIngresos > 0 ? formatearImporte(totalIngresos, monedaLista, 0) : '—'}
           </p>
         </div>
         <Button onClick={abrirNueva}>
@@ -418,7 +428,7 @@ export default function HospitalityReservasPage() {
                           {r.amountAfterTax != null ? (
                             <span className="flex items-center gap-1">
                               <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
-                              {r.amountAfterTax.toLocaleString('es-MX')} {r.currency || ''}
+                              {formatearImporte(r.amountAfterTax, r.currency || monedaLista, 0)}
                             </span>
                           ) : (
                             <span className="text-muted-foreground">—</span>
