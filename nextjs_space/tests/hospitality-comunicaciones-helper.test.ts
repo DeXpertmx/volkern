@@ -85,7 +85,28 @@ describe('buildContextoPlantilla', () => {
     expect(ctx.propiedad).toBe('Villa Mar');
     expect(ctx.canal).toBe('Airbnb');
     expect(ctx.referencia).toBe('BK-1');
-    expect(ctx.importe).toContain('6,900');
+    // Formato del módulo compartido (convención española) y en la divisa de la
+    // reserva: antes este mensaje al huésped se escribía con locale mexicano.
+    expect(ctx.importe.replace(/[.\u00a0\u202f\s]/g, '')).toBe('6900,00$');
+  });
+
+  it('el importe del mensaje va en la divisa de la reserva, no en pesos', () => {
+    const contexto = (currency: string) =>
+      buildContextoPlantilla({
+        reserva: {
+          checkIn: new Date('2026-10-15T00:00:00Z'),
+          checkOut: new Date('2026-10-17T00:00:00Z'),
+          amountAfterTax: 12500,
+          currency,
+          guestData: { nombre: 'Ana' },
+        },
+      }).importe;
+
+    expect(contexto('EUR')).toContain('€');
+    expect(contexto('USD')).toContain('$');
+    // Sin divisa en la reserva no se inventa una: el importe sale sin símbolo.
+    expect(contexto('')).not.toContain('€');
+    expect(contexto('')).not.toContain('$');
   });
 
   it('sin importe no inventa precio', () => {

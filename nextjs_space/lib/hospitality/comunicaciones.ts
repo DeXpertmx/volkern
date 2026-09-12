@@ -9,6 +9,7 @@
  * en consola para auditoría y la operación que disparó sigue su curso.
  */
 
+import { formatearImporte } from '@/lib/hospitality/moneda'
 import { prisma } from '@/lib/db'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { sendEmail } from '@/lib/ses-email'
@@ -91,9 +92,12 @@ export function buildContextoPlantilla(params: {
     checkIn: checkIn ? checkIn.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' }) : '',
     checkOut: checkOut ? checkOut.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' }) : '',
     noches: String(noches),
-    importe: reserva.amountAfterTax != null
-      ? new Intl.NumberFormat('es-MX', { style: 'currency', currency: reserva.currency || 'MXN' }).format(reserva.amountAfterTax)
-      : '',
+    // El importe va en la divisa de la reserva y con el formato del módulo: antes
+    // este mensaje al huésped se escribía con locale mexicano y caía a pesos.
+    importe:
+      reserva.amountAfterTax != null
+        ? formatearImporte(reserva.amountAfterTax, reserva.currency || '', 2)
+        : '',
     estado: reserva.estado || '',
   }
 }
