@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api-client';
+import { formatearImporte, MONEDAS_SELECCIONABLES } from '@/lib/moneda';
 import type { InmuebleParsed } from '@/lib/real-estate/property-helpers';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -83,11 +84,16 @@ const DEFAULT_FILTERS: Filters = {
   minArea: '',
 };
 
-const initialForm = {
+/**
+ * Estado inicial del formulario de alta. La divisa por defecto es la del
+ * tenant: estaba fija a 'EUR', así que un inmueble nuevo de un tenant con la
+ * moneda en pesos nacía en euros.
+ */
+const formularioInicial = (moneda: string) => ({
   nombre: '',
   descripcion: '',
   precioBase: '',
-  moneda: 'EUR',
+  moneda,
   operationType: '',
   propertyType: '',
   city: '',
@@ -103,9 +109,9 @@ const initialForm = {
   energyCertDate: '',
   energyCertExpiry: '',
   energyCertUrl: '',
-};
+});
 
-type FormData = typeof initialForm;
+type FormData = ReturnType<typeof formularioInicial>;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -133,12 +139,8 @@ const STATUS_OPTIONS = [
   { value: 'alquilada', label: 'Alquilada', color: 'bg-indigo-500' },
 ];
 
-const formatCurrency = (value: number, currency: string = 'EUR') =>
-  new Intl.NumberFormat('es-ES', {
-    style: 'currency',
-    currency: currency,
-    maximumFractionDigits: 0,
-  }).format(value);
+const formatCurrency = (value: number, currency: string = '') =>
+  formatearImporte(value, currency, 0);
 
 const getStatusBadge = (status: string | null) => {
   const opt = STATUS_OPTIONS.find((s) => s.value === status);
@@ -194,7 +196,8 @@ export default function RealEstatePropertiesPage() {
   const [ownerDialogOpen, setOwnerDialogOpen] = useState(false);
   const [selectedOwner, setSelectedOwner] = useState<{ owner: InmuebleParsed['owner']; name: string } | null>(null);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState<FormData>(initialForm);
+  const [form, setForm] = useState<FormData>(() => formularioInicial(''));
+  const [monedaTenant, setMonedaTenant] = useState('');
 
   // ─── Data Fetching ──────────────────────────────────────────────────────────
 
@@ -242,6 +245,11 @@ export default function RealEstatePropertiesPage() {
         const data = await res.json();
         if (data.stats) {
           setStats(data.stats);
+        }
+        // La API informa la divisa de reporte del tenant: es la que debe nacer
+        // marcada en el formulario de alta.
+        if (typeof data.moneda === 'string') {
+          setMonedaTenant(data.moneda);
         }
       }
     } catch (error) {
@@ -353,7 +361,7 @@ export default function RealEstatePropertiesPage() {
       if (res.ok) {
         toast.success('Propiedad creada correctamente');
         setDialogOpen(false);
-        setForm(initialForm);
+        setForm(formularioInicial(monedaTenant));
         fetchProperties(1);
         fetchStats();
       } else {
@@ -406,7 +414,7 @@ export default function RealEstatePropertiesPage() {
             <RefreshCw className="h-4 w-4 mr-2" />
             Actualizar
           </Button>
-          <Button onClick={() => { setForm(initialForm); setDialogOpen(true); }}>
+          <Button onClick={() => { setForm(formularioInicial(monedaTenant)); setDialogOpen(true); }}>
             <Plus className="h-4 w-4 mr-2" />
             Nueva Propiedad
           </Button>
@@ -630,7 +638,7 @@ export default function RealEstatePropertiesPage() {
                   : 'Comienza añadiendo tu primera propiedad inmobiliaria.'}
               </p>
               {!filters.search && !filters.operationType && !filters.status && (
-                <Button onClick={() => { setForm(initialForm); setDialogOpen(true); }}>
+                <Button onClick={() => { setForm(formularioInicial(monedaTenant)); setDialogOpen(true); }}>
                   <Plus className="h-4 w-4 mr-2" />
                   Añadir Primera Propiedad
                 </Button>
@@ -932,10 +940,11 @@ export default function RealEstatePropertiesPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="EUR">€ EUR</SelectItem>
-                    <SelectItem value="USD">$ USD</SelectItem>
-                    <SelectItem value="MXN">$ MXN</SelectItem>
-                    <SelectItem value="COP">$ COP</SelectItem>
+                    {MONEDAS_SELECCIONABLES.map((m) => (
+                      <SelectItem key={m} value={m}>
+                        {m}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

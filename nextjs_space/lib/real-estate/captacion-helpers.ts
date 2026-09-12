@@ -252,7 +252,9 @@ export async function createCaptacion(
       precioMinimo: data.precioMinimo || null,
       comisionPorcentaje: data.comisionPorcentaje || null,
       comisionFija: data.comisionFija || null,
-      comisionMoneda: data.comisionMoneda || 'EUR',
+      // Sin divisa indicada se deja que aplique el valor por defecto de la
+      // columna, en vez de repetir aquí el mismo literal.
+      comisionMoneda: data.comisionMoneda || undefined,
       comisionCondiciones: data.comisionCondiciones || null,
       comisionNotas: data.comisionNotas || null,
       condicionesPago: data.condicionesPago || null,

@@ -8,6 +8,7 @@
 
 import { prisma } from '@/lib/db';
 import type { CatalogoItem } from '@prisma/client';
+import { monedaEfectiva } from '@/lib/moneda';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -117,7 +118,7 @@ export function parseInmueble(item: CatalogoItem): InmuebleParsed {
     nombre: item.nombre,
     descripcion: item.descripcion,
     precioBase: item.precioBase,
-    moneda: item.moneda || 'EUR',
+    moneda: monedaEfectiva([item.moneda]),
     activo: item.activo,
     destacado: item.destacado,
     media: item.media,

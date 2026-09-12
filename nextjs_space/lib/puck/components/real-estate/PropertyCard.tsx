@@ -10,6 +10,7 @@ import React from "react";
 import { Card as UICard, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { formatearImporte } from "@/lib/moneda";
 import { Bed, Bath, Maximize, MapPin } from "lucide-react";
 
 export interface PropertyCardData {
@@ -42,13 +43,9 @@ export const PropertyCardComponent: React.FC<PropertyCardProps> = ({
       ? property.media[0].url
       : "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=600&q=80";
 
-  const formatPrice = (price: number, currency: string) => {
-    return new Intl.NumberFormat("es-ES", {
-      style: "currency",
-      currency: currency || "EUR",
-      maximumFractionDigits: 0,
-    }).format(price);
-  };
+  // El precio se escribe en la divisa del inmueble, no en una fija: un inmueble
+  // en pesos se anunciaba con el símbolo del euro.
+  const formatPrice = (price: number, moneda: string) => formatearImporte(price, moneda, 0);
 
   const operationLabel =
     fields.tipo_operacion === "venta"

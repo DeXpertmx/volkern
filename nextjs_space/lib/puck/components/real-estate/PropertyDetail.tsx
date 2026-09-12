@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { formatearImporte } from "@/lib/moneda";
 import {
   Bed,
   Bath,
@@ -184,13 +185,8 @@ export const PropertyDetailComponent: React.FC<PropertyDetailProps> = ({
     typeof m === "string" ? m : m.url
   );
 
-  const formatPrice = (price: number, currency: string) => {
-    return new Intl.NumberFormat("es-ES", {
-      style: "currency",
-      currency: currency || "EUR",
-      maximumFractionDigits: 0,
-    }).format(price);
-  };
+  // El precio se escribe en la divisa del inmueble, no en una fija.
+  const formatPrice = (price: number, moneda: string) => formatearImporte(price, moneda, 0);
 
   const booleans = ["ascensor", "parking", "piscina", "jardin", "trastero", "amueblado"];
 
