@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
-import { monedaPredominante } from '@/lib/hospitality/moneda';
+import { monedaEfectiva } from '@/lib/hospitality/moneda';
 import {
   Building2,
   DoorOpen,
@@ -107,7 +107,8 @@ const EMPTY_PROPERTY_FORM = {
 
 const EMPTY_UNIT_FORM = {
   propertyId: '', nombre: '', codigo: '', tipo: 'apartamento', capacidad: '2',
-  tarifaBase: '', moneda: 'MXN', descripcion: '', fotos: [] as string[],
+  // Vacío a propósito: lo rellena la divisa resuelta del tenant.
+  tarifaBase: '', moneda: '', descripcion: '', fotos: [] as string[],
   amenidades: [] as string[], estado: 'available',
 };
 
@@ -125,13 +126,15 @@ export default function HospitalityPage() {
 
   const [properties, setProperties] = useState<Property[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
+  // Moneda de reporte del tenant: respaldo cuando aún no hay inventario.
+  const [monedaTenant, setMonedaTenant] = useState('');
 
-  // La moneda por defecto de una unidad nueva sale de las que ya existen, no de
-  // una constante: el esquema trae 'MXN' y en un tenant que trabaja en euros
-  // crear una unidad desde aquí metería pesos en el inventario.
+  // La moneda por defecto de una unidad nueva sale de las que ya existen y, si no
+  // hay ninguna, de la moneda del tenant. El valor por defecto del esquema ('MXN')
+  // no participa: metía pesos en el inventario de un tenant que trabaja en euros.
   const monedaUnidades = useMemo(
-    () => monedaPredominante(units.map((u) => u.moneda)) || EMPTY_UNIT_FORM.moneda,
-    [units]
+    () => monedaEfectiva(units.map((u) => u.moneda), monedaTenant),
+    [units, monedaTenant]
   );
 
   // Dialog propiedad
@@ -162,6 +165,7 @@ export default function HospitalityPage() {
       if (unitRes.ok) {
         const data = await unitRes.json();
         setUnits(data.units || []);
+        if (data.moneda) setMonedaTenant(data.moneda);
       }
     } catch (error) {
       toast.error('Error al cargar datos de Hospitality');

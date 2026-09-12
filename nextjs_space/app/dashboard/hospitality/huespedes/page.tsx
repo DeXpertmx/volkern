@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { channelStyle, statusLabel } from '@/lib/hospitality/calendar';
-import { formatearImporte, monedaPredominante } from '@/lib/hospitality/moneda';
+import { formatearImporte, monedaEfectiva } from '@/lib/hospitality/moneda';
 
 interface Estancia {
   id: string;
@@ -74,6 +74,8 @@ export default function HospitalityHuespedesPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [guests, setGuests] = useState<Guest[]>([]);
+  // Moneda de reporte del tenant, para cuando no hay estancias de las que deducirla.
+  const [monedaTenant, setMonedaTenant] = useState('');
   const [q, setQ] = useState('');
   const [order, setOrder] = useState<'ultima' | 'nombre'>('ultima');
   const [selected, setSelected] = useState<Guest | null>(null);
@@ -96,6 +98,7 @@ export default function HospitalityHuespedesPage() {
       if (res.ok) {
         const d = await res.json();
         setGuests(d.guests || []);
+        if (d.moneda) setMonedaTenant(d.moneda);
       } else {
         toast.error('Error al cargar huéspedes');
       }
@@ -229,16 +232,18 @@ export default function HospitalityHuespedesPage() {
       estancias: guests.reduce((a, g) => a + g.totalEstancias, 0),
       noches: guests.reduce((a, g) => a + g.totalNoches, 0),
       gasto: guests.reduce((a, g) => a + g.totalGasto, 0),
-      // La moneda sale de las estancias reales, no de una constante: el esquema
-      // trae 'MXN' por defecto y un tenant europeo vería pesos.
-      moneda: monedaPredominante(guests.flatMap((g) => g.reservas.map((r) => r.currency))) || '',
+      // La moneda sale de las estancias reales y, si no hay, de la del tenant.
+      moneda: monedaEfectiva(
+        guests.flatMap((g) => g.reservas.map((r) => r.currency)),
+        monedaTenant
+      ),
     }),
-    [guests]
+    [guests, monedaTenant]
   );
 
   const monedaSeleccionada = useMemo(
-    () => (selected ? monedaPredominante(selected.reservas.map((r) => r.currency)) || '' : ''),
-    [selected]
+    () => (selected ? monedaEfectiva(selected.reservas.map((r) => r.currency), monedaTenant) : ''),
+    [selected, monedaTenant]
   );
 
   return (
@@ -357,7 +362,7 @@ export default function HospitalityHuespedesPage() {
                       {g.totalGasto > 0
                         ? formatearImporte(
                             g.totalGasto,
-                            monedaPredominante(g.reservas.map((r) => r.currency)) || '',
+                            monedaEfectiva(g.reservas.map((r) => r.currency), monedaTenant),
                             0
                           )
                         : '—'}

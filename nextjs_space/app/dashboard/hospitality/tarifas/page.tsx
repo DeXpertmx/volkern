@@ -27,7 +27,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { formatearImporte, monedaPredominante } from '@/lib/hospitality/moneda';
+import { formatearImporte, monedaEfectiva } from '@/lib/hospitality/moneda';
 
 interface Property {
   id: string;
@@ -72,7 +72,7 @@ const DIAS_SEMANA = [
 ];
 
 const EMPTY_FORM = {
-  nombre: '', codigo: '', tarifa: '', moneda: 'MXN', minNoches: '1', maxNoches: '',
+  nombre: '', codigo: '', tarifa: '', moneda: '', minNoches: '1', maxNoches: '',
   checkInDias: [] as number[], checkOutDias: [] as number[], activo: true,
 };
 
@@ -84,6 +84,8 @@ export default function HospitalityTarifasPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [plans, setPlans] = useState<RatePlan[]>([]);
+  // Moneda de reporte del tenant: respaldo cuando el inventario aún no dice nada.
+  const [monedaTenant, setMonedaTenant] = useState('');
 
   const [filterProperty, setFilterProperty] = useState('all');
   const [filterUnit, setFilterUnit] = useState('all');
@@ -108,6 +110,7 @@ export default function HospitalityTarifasPage() {
       if (unitRes.ok) {
         const d = await unitRes.json();
         setUnits(d.units || []);
+        if (d.moneda) setMonedaTenant(d.moneda);
       }
       if (planRes.ok) {
         const d = await planRes.json();
@@ -150,9 +153,9 @@ export default function HospitalityTarifasPage() {
     const defaultUnit = filteredUnits[0]?.id || '';
     setForm({
       ...EMPTY_FORM,
-      // La divisa por defecto del plan sale de las unidades, no de una constante:
-      // el esquema trae 'MXN' y aquí se creaban planes de tarifa en pesos.
-      moneda: monedaPredominante(filteredUnits.map((u) => u.moneda)) || 'MXN',
+      // La divisa por defecto del plan sale de las unidades y, si aún no hay, de la
+      // moneda del tenant. Nunca del valor por defecto del esquema.
+      moneda: monedaEfectiva(filteredUnits.map((u) => u.moneda), monedaTenant),
       activo: true,
     });
     setDialogOpen(true);
