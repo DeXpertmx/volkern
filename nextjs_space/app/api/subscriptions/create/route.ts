@@ -7,6 +7,7 @@ import { prisma } from '@/lib/db'
 import { stripe } from '@/lib/stripe'
 import { PLAN_PRICES, PLANS } from '@/lib/plans'
 import { calcularPrecio } from '@/lib/pricing-engine'
+import { VERTICAL_PLAN_IDS, getVerticalPlan } from '@/lib/vertical-plans'
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,8 +18,14 @@ export async function POST(request: NextRequest) {
 
     const { planId, interval = 'monthly' } = await request.json()
 
-    const validPaidPlans = [PLANS.ESENCIAL, PLANS.PROFESIONAL, PLANS.INFINITY, PLANS.SCALE, PLANS.COMPLIANCE]
-    if (!validPaidPlans.includes(planId)) {
+    // Lo que la plataforma vende son las verticales. Esencial/Profesional/Infinity
+    // quedan fuera de la venta: su checkout dependía de `NEXT_PUBLIC_STRIPE_PRICE_*`,
+    // variables que no existen en producción, y devolvía un 500 al pulsar el plan.
+    // Si un tenant sigue en uno de ellos, su precio se conserva en PLAN_PRICES,
+    // pero no se puede contratar desde aquí.
+    const vertical = getVerticalPlan(planId)
+    const validPaidPlans = [...VERTICAL_PLAN_IDS, PLANS.SCALE, PLANS.COMPLIANCE]
+    if (!vertical && !validPaidPlans.includes(planId)) {
       return NextResponse.json({ error: 'Plan inválido' }, { status: 400 })
     }
     if (!['monthly', 'yearly'].includes(interval)) {
@@ -60,6 +67,75 @@ export async function POST(request: NextRequest) {
     const origin = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://volkern.app'
     const successUrl = `${origin}/dashboard/configuracion/billing?success=true`
     const cancelUrl = `${origin}/dashboard/configuracion/billing?canceled=true`
+
+    // ─── Verticales: el precio publicado, desde la fuente única ─────────────
+    // El importe se construye en línea con `price_data` —el mismo patrón que ya
+    // usaba el motor dinámico— así que el cobro no depende de ninguna variable
+    // de entorno ni de Stripe Price IDs precreados. El descuento anual (20 %) sale
+    // de PLAN_PRICES, donde se deriva de la misma fuente única.
+    if (vertical) {
+      const priceInfo = PLAN_PRICES[vertical.id as keyof typeof PLAN_PRICES]
+      const unitAmount = interval === 'yearly' ? priceInfo.yearly : priceInfo.monthly
+
+      const checkoutSession = await stripe.checkout.sessions.create({
+        customer: customerId,
+        mode: 'subscription',
+        payment_method_types: ['card'],
+        line_items: [
+          {
+            price_data: {
+              currency: 'eur',
+              product_data: {
+                name: `Volkern ${vertical.name}`,
+                description: vertical.subtitle,
+              },
+              recurring: { interval: interval === 'yearly' ? 'year' : 'month' },
+              unit_amount: Math.round(unitAmount * 100),
+            },
+            quantity: 1,
+          },
+        ],
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+        metadata: {
+          tenantId: tenant.id,
+          plan: vertical.id,
+          vertical: vertical.id,
+          interval,
+        },
+        subscription_data: {
+          metadata: {
+            tenantId: tenant.id,
+            plan: vertical.id,
+            vertical: vertical.id,
+            interval,
+          },
+        },
+      })
+
+      await prisma.auditLog.create({
+        data: {
+          accion: 'crear',
+          entidad: 'Subscription',
+          entidadId: checkoutSession.id,
+          descripcion: `Checkout de la vertical ${vertical.name} iniciado (${unitAmount} € / ${interval === 'yearly' ? 'año' : 'mes'})`,
+          cambiosDespues: {
+            planId: vertical.id,
+            vertical: vertical.id,
+            interval,
+            unitAmount,
+            sessionId: checkoutSession.id,
+          },
+          userId: user.id,
+          tenantId: tenant.id,
+        },
+      })
+
+      return NextResponse.json({
+        success: true,
+        checkoutUrl: checkoutSession.url,
+      })
+    }
 
     const isDynamicPlan = [PLANS.SCALE, PLANS.COMPLIANCE].includes(planId)
 

@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import { getVerticalPlanPrice } from '@/lib/vertical-plans';
 import { Button } from '@/components/ui/button';
 import {
   ArrowRight, Zap, Home, GraduationCap, Calculator,
@@ -21,7 +22,6 @@ const VERTICALS = [
     title: 'CRM & Ventas',
     subtitle: 'Pipeline, leads y cierres',
     icon: TrendingUp,
-    price: '49',
     target: 'Equipos comerciales B2B',
     color: 'cyan',
     modules: ['CRM de ventas', 'Pipeline personalizable', 'Automatización de seguimiento', 'Email integrado', 'Telefonía', 'Dashboard de ventas', 'Reportes y analítica', 'Scoring de leads', 'Pronósticos'],
@@ -32,7 +32,6 @@ const VERTICALS = [
     title: 'Agencia Marketing',
     subtitle: 'Campañas, leads y conversión',
     icon: PenTool,
-    price: '49',
     target: 'Agencias y equipos de growth',
     color: 'purple',
     modules: ['Campañas multicanal', 'Email marketing', 'Constructor web', 'Hub social', 'Formularios inteligentes', 'Chatbot IA', 'Automatización', 'CRM integrado'],
@@ -43,7 +42,6 @@ const VERTICALS = [
     title: 'Academia',
     subtitle: 'Cursos, pagos y alumnos',
     icon: GraduationCap,
-    price: '49',
     target: 'Creadores de cursos y escuelas',
     color: 'yellow',
     modules: ['LMS con cursos', 'Gestión de estudiantes', 'Cuestionarios', 'Comunidad', 'Pagos integrados', 'Email marketing', 'Landing pages', 'Automatización'],
@@ -54,7 +52,6 @@ const VERTICALS = [
     title: 'Asesoría Contable',
     subtitle: 'Clientes, documentos y compliance',
     icon: Calculator,
-    price: '59',
     target: 'Despachos y asesorías fiscales',
     color: 'blue',
     modules: ['Gestión de clientes', 'Documentos y contratos', 'Conciliación bancaria', 'Impuestos AEAT', 'Calendario fiscal', 'Firma digital', 'CRM integrado', 'Chatbot IA'],
@@ -65,7 +62,6 @@ const VERTICALS = [
     title: 'Recursos Humanos',
     subtitle: 'Empleados, procesos y control',
     icon: UserCheck,
-    price: '39',
     target: 'Empresas con 10-200 empleados',
     color: 'rose',
     modules: ['Gestión de plantilla', 'Nóminas (Vault)', 'Vacaciones y ausencias', 'Documentos y contratos', 'Firma digital', 'Cursos', 'Chatbot IA', 'Formularios'],
@@ -76,7 +72,6 @@ const VERTICALS = [
     title: 'Inmobiliaria',
     subtitle: 'Propiedades, leads y cierres',
     icon: Home,
-    price: '59',
     target: 'Inmobiliarias y agentes',
     color: 'emerald',
     modules: ['Gestión de propiedades', 'CRM inmobiliario', 'Pipeline de ventas', 'Automatización', 'Landing pages', 'Email marketing', 'Firma digital', 'Chatbot IA'],
@@ -87,7 +82,6 @@ const VERTICALS = [
     title: 'Industria',
     subtitle: 'Procesos, tareas y trazabilidad',
     icon: Factory,
-    price: '59',
     target: 'Plantas, logística y manufactura',
     color: 'orange',
     modules: ['Producción y BoM', 'Control de calidad', 'Inventario', 'Proyectos', 'Activos', 'Logística', 'Finanzas', 'Chatbot IA'],
@@ -98,7 +92,6 @@ const VERTICALS = [
     title: 'Facturación',
     subtitle: 'Facturas, cobros e IVA',
     icon: Receipt,
-    price: '19',
     target: 'Autónomos y pequeños comercios',
     color: 'green',
     modules: ['Facturación electrónica', 'Control de cobros', 'Catálogo de productos', 'Envío a AEAT', 'Cotizaciones', 'CRM básico', 'Mensajes', 'Citas'],
@@ -195,7 +188,9 @@ export default function PricingPage() {
                       {/* Price */}
                       <div className="mb-4">
                         <div className="flex items-baseline gap-1">
-                          <span className="text-3xl font-black text-white">€{v.price}</span>
+                          {/* El precio no se escribe aquí: sale de la fuente única
+                              (lib/vertical-plans.ts), la misma que usa el cobro. */}
+                          <span className="text-3xl font-black text-white">€{getVerticalPlanPrice(v.id) ?? 0}</span>
                           <span className="text-sm text-slate-500">/mes</span>
                         </div>
                         <p className="text-[10px] text-slate-600 mt-0.5">14 días gratis · Sin permanencia</p>

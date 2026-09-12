@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { VERTICAL_PLANS } from '@/lib/vertical-plans';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, FileText } from 'lucide-react';
@@ -99,14 +100,13 @@ export default function TermsOfServicePage() {
                   centrales (leads, contactos, pipeline, tareas, analytics, mensajes y citas). Precios mensuales vigentes:
                 </p>
                 <ul className="list-disc pl-6 text-gray-600 space-y-2">
-                  <li><strong>CRM:</strong> 49 €/mes</li>
-                  <li><strong>Marketing:</strong> 49 €/mes</li>
-                  <li><strong>Academia:</strong> 49 €/mes</li>
-                  <li><strong>Contabilidad:</strong> 59 €/mes</li>
-                  <li><strong>RRHH:</strong> 39 €/mes</li>
-                  <li><strong>Inmobiliaria:</strong> 59 €/mes</li>
-                  <li><strong>Industria:</strong> 59 €/mes</li>
-                  <li><strong>Facturación:</strong> 19 €/mes</li>
+                  {/* Los precios no se escriben aquí: salen de la fuente única
+                      (lib/vertical-plans.ts), la misma que usa el cobro. */}
+                  {VERTICAL_PLANS.map((v) => (
+                    <li key={v.id}>
+                      <strong>{v.name}:</strong> {v.price} €/mes
+                    </li>
+                  ))}
                 </ul>
                 <p className="text-gray-600 leading-relaxed mt-4">
                   Todos los planes incluyen una prueba gratuita de 14 días, sin tarjeta y sin permanencia.
