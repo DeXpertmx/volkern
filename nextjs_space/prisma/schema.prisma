@@ -508,6 +508,10 @@ model Tenant {
   hospitalityPaymentAccounts    HospitalityPaymentAccount[]      @relation("HospitalityPaymentAccounts")
   hospitalitySyncLogs           HospitalitySyncLog[]              @relation("HospitalitySyncLogs")
   hospitalityCommunicationTemplates HospitalityCommunicationTemplate[] @relation("HospitalityCommunicationTemplates")
+  hospitalityComplianceConfigs   HospitalityComplianceConfig[]     @relation("HospitalityComplianceConfigs")
+  hospitalityTravelers           HospitalityTraveler[]             @relation("HospitalityTravelers")
+  hospitalityCompliances         HospitalityCompliance[]           @relation("HospitalityCompliances")
+  hospitalityComplianceEvents    HospitalityComplianceEvent[]      @relation("HospitalityComplianceEvents")
   automationActionExecutions    AutomationActionExecution[]        @relation("AutomationActionExecutions")
 }
 
@@ -8238,6 +8242,8 @@ model HospitalityReservation {
   cleaningTasks         HospitalityCleaningTask[]
   items                 HospitalityReservationItem[]
   payments              HospitalityPayment[]
+  travelers             HospitalityTraveler[]   @relation("HospitalityReservationTravelers")
+  compliance            HospitalityCompliance?   @relation("HospitalityReservationCompliance")
 
   @@unique([tenantId, channel, externalBookingId])
   @@index([tenantId])
@@ -8478,5 +8484,129 @@ model HospitalityCommunicationTemplate {
   @@index([canal])
   @@index([activo])
   @@map("hospitality_communication_templates")
+}
+
+// ─── Registro de viajeros (SES.HOSPEDAJES) ─────────────────────────────
+// Cumplimiento del registro obligatorio de viajeros ante el Ministerio del
+// Interior. Los datos personales de los viajeros son sensibles y por eso viven
+// aquí y no en el CRM: cada acceso se audita y la interfaz nunca enseña un
+// documento completo sin privilegio (ver lib/hospitality/compliance.ts).
+//
+// Las credenciales son POR TENANT: cada cuenta se registra como entidad ante
+// SES.HOSPEDAJES y recibe las suyas, cifradas en reposo.
+//
+// El código de comunicación que devuelve el Ministerio NUNCA es identidad
+// interna: la identidad es id + tenantId.
+
+model HospitalityComplianceConfig {
+  id             String    @id @default(cuid())
+  tenantId       String    @unique
+  activo         Boolean   @default(false)
+  entorno        String    @default("pruebas") // pruebas|produccion
+  entidadNombre  String?
+  entidadNif     String?
+  usuarioEnc     String?
+  passwordEnc    String?
+  certificadoEnc String? // Credencial digital / certificado de la entidad
+  estadoConexion String    @default("sin_configurar")
+  ultimoEnvio    DateTime?
+  ultimoCodigo   String?
+  ultimoError    String?
+  fechaCreacion  DateTime  @default(now())
+  fechaEdicion   DateTime  @updatedAt
+  tenant         Tenant    @relation("HospitalityComplianceConfigs", fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([estadoConexion])
+  @@map("hospitality_compliance_config")
+}
+
+// Una persona alojada en una reserva. No tiene por qué ser el titular (el
+// contacto del CRM): una reserva puede alojar a varios viajeros y el Ministerio
+// pide los datos de cada uno.
+//
+// El catálogo de tipos de documento y el juego exacto de campos obligatorios los
+// fija el Ministerio; aquí solo se declaran los que la documentación ya nombra.
+model HospitalityTraveler {
+  id               String    @id @default(cuid())
+  tenantId         String
+  reservationId    String
+  esTitular        Boolean   @default(false)
+  orden            Int       @default(0)
+  nombre           String
+  apellido1        String
+  apellido2        String?
+  tipoDocumento    String?
+  numeroDocumento  String?
+  soporteDocumento String?
+  fechaNacimiento  DateTime?
+  nacionalidad     String?
+  estado           String    @default("pendiente")
+  fechaCreacion    DateTime  @default(now())
+  fechaEdicion     DateTime  @updatedAt
+  tenant           Tenant    @relation("HospitalityTravelers", fields: [tenantId], references: [id], onDelete: Cascade)
+  reservation      HospitalityReservation @relation("HospitalityReservationTravelers", fields: [reservationId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([reservationId])
+  @@index([estado])
+  @@map("hospitality_travelers")
+}
+
+// El registro de una reserva ante SES.HOSPEDAJES.
+//
+// Son DOS comunicaciones y se llevan por separado, porque el Ministerio las
+// distingue: la reserva de hospedaje (RH), que acompaña a la reserva, y el parte
+// de viajeros (PV), que son las personas que efectivamente se alojan.
+model HospitalityCompliance {
+  id                 String    @id @default(cuid())
+  tenantId           String
+  reservationId      String    @unique
+  estadoReserva      String    @default("pendiente") // Comunicación RH
+  estadoViajeros     String    @default("pendiente") // Comunicación PV
+  codigoComunicacion String?
+  loteId             String?
+  enviadoEn          DateTime?
+  procesadoEn        DateTime?
+  codigoError        String?
+  mensajeError       String?
+  fechaCreacion      DateTime  @default(now())
+  fechaEdicion       DateTime  @updatedAt
+  tenant             Tenant    @relation("HospitalityCompliances", fields: [tenantId], references: [id], onDelete: Cascade)
+  reservation        HospitalityReservation @relation("HospitalityReservationCompliance", fields: [reservationId], references: [id], onDelete: Cascade)
+  eventos            HospitalityComplianceEvent[]
+
+  @@index([tenantId])
+  @@index([estadoReserva])
+  @@index([estadoViajeros])
+  @@map("hospitality_compliance")
+}
+
+// Bitácora de qué se envió al Ministerio y qué respondió.
+//
+// No guarda el XML con los documentos completos: guarda el resumen con el
+// documento enmascarado, más la respuesta y su código, que es lo que permite
+// responder «qué enviamos el 12/09 y qué contestaron» sin multiplicar la
+// exposición de los datos personales.
+model HospitalityComplianceEvent {
+  id                 String   @id @default(cuid())
+  tenantId           String
+  reservationId      String
+  complianceId       String?
+  tipo               String // reserva|viajeros|anulacion|acceso
+  estado             String // enviado|procesando|ok|error|anulado
+  codigoComunicacion String?
+  codigoError        String?
+  mensajeError       String?
+  detalle            String?
+  usuarioId          String?
+  fechaCreacion      DateTime @default(now())
+  tenant             Tenant   @relation("HospitalityComplianceEvents", fields: [tenantId], references: [id], onDelete: Cascade)
+  compliance         HospitalityCompliance? @relation(fields: [complianceId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([reservationId])
+  @@index([complianceId])
+  @@index([tipo])
+  @@map("hospitality_compliance_events")
 }
 
