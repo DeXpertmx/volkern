@@ -21,7 +21,7 @@ vi.mock('@/lib/api-key-auth', () => {
     return async (request: Request, _context?: any) => {
       const mockAuth = {
         valid: true,
-        tenant: { id: 'test-tenant-id', nombre: 'Test', slug: 'test', plan: 'pro' },
+        tenant: { id: 'test-tenant-id', nombre: 'Test', slug: 'test', plan: 'pro', moneda: 'MXN' },
         user: { id: 'test-user-id', name: 'Test User', email: 'test@test.com' },
       };
       return handler(request, mockAuth);
@@ -158,10 +158,22 @@ describe('POST /api/erp/projects', () => {
     );
   });
 
-  it('debe usar EUR como currency por defecto', async () => {
+  it('debe usar la moneda del tenant (no la del esquema) cuando no se indica divisa', async () => {
     mockTx.project.create.mockResolvedValue({ id: 'p1', name: 'Test', status: 'PLANNING', budget: 0, startDate: new Date() });
 
     await POST(mockRequest({ name: 'Test' }), undefined);
+
+    expect(mockTx.project.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ currency: 'MXN' }),
+      }),
+    );
+  });
+
+  it('la divisa explícita del usuario gana sobre la del tenant', async () => {
+    mockTx.project.create.mockResolvedValue({ id: 'p2', name: 'Test', status: 'PLANNING', budget: 0, startDate: new Date() });
+
+    await POST(mockRequest({ name: 'Test', currency: 'EUR' }), undefined);
 
     expect(mockTx.project.create).toHaveBeenCalledWith(
       expect.objectContaining({

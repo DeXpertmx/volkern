@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { skills } from '@/lib/skills';
+import { monedaEscritura } from '@/lib/moneda';
 
 /**
  * GET /api/erp/expenses - Listar gastos con filtros
@@ -168,7 +169,10 @@ export const POST = withTenantAuth(async (request, auth) => {
       leadId: body.leadId,
       description: body.description,
       amount: parseFloat(body.amount),
-      currency: body.currency || 'EUR',
+      // La divisa la dicta el usuario y, si no la indica, la moneda de reporte
+      // del tenant. Antes caía a 'EUR' —el valor por defecto de la columna—, así
+      // que un gasto de un tenant en pesos se guardaba en euros.
+      currency: monedaEscritura(body.currency, auth.tenant?.moneda),
       date: body.date ? new Date(body.date) : undefined,
       dueDate: body.dueDate ? new Date(body.dueDate) : undefined,
       paymentMethod: body.paymentMethod,
