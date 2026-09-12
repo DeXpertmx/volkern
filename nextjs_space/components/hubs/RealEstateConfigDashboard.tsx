@@ -10,6 +10,7 @@ import {
   CardDescription,
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { MONEDAS_SELECCIONABLES } from '@/lib/moneda'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -131,7 +132,9 @@ function StatusItem({
 export default function RealEstateConfigDashboard() {
   const [config, setConfig] = useState<RealEstateConfig>({
     enabled: false,
-    defaultCurrency: 'EUR',
+    // La divisa real llega de la configuración guardada; hasta entonces el
+    // select muestra su placeholder en vez de inventar un euro.
+    defaultCurrency: '',
     commissionType: 'porcentaje_venta',
     defaultCommissionPct: 3,
     defaultMonthlyFee: 0,
@@ -595,10 +598,11 @@ export default function RealEstateConfigDashboard() {
                     <SelectValue placeholder="Seleccionar moneda" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="EUR">EUR (€)</SelectItem>
-                    <SelectItem value="USD">USD ($)</SelectItem>
-                    <SelectItem value="MXN">MXN ($)</SelectItem>
-                    <SelectItem value="COP">COP ($)</SelectItem>
+                    {MONEDAS_SELECCIONABLES.map((m) => (
+                      <SelectItem key={m} value={m}>
+                        {m}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">

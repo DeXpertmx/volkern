@@ -8,6 +8,7 @@
 
 import { prisma } from '@/lib/db';
 import type { Comision, Deal, User } from '@prisma/client';
+import { formatearImporte, monedaEscritura } from '@/lib/moneda';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -66,7 +67,7 @@ export interface FranchiseCommissionSummary {
  * Calcula la comisión según la regla especificada
  */
 export function calculateCommission(input: CommissionInput): CommissionResult {
-  const { valorOperacion, rule } = input;
+  const { valorOperacion, rule, moneda } = input;
   const desglose: string[] = [];
   let montoComision = 0;
 
@@ -75,7 +76,7 @@ export function calculateCommission(input: CommissionInput): CommissionResult {
       // % sobre el precio de venta total
       const pct = rule.porcentaje || 3; // default 3%
       montoComision = valorOperacion * (pct / 100);
-      desglose.push(`${pct}% sobre ${valorOperacion.toLocaleString('es-ES')} = ${montoComision.toLocaleString('es-ES')}`);
+      desglose.push(`${pct}% sobre ${formatearImporte(valorOperacion, moneda)} = ${formatearImporte(montoComision, moneda)}`);
       break;
     }
 
@@ -83,13 +84,13 @@ export function calculateCommission(input: CommissionInput): CommissionResult {
       // % sobre la comisión total (útil para splits internos)
       const pct = rule.porcentaje || 100;
       montoComision = valorOperacion * (pct / 100);
-      desglose.push(`${pct}% del valor de operación = ${montoComision.toLocaleString('es-ES')}`);
+      desglose.push(`${pct}% del valor de operación = ${formatearImporte(montoComision, moneda)}`);
       break;
     }
 
     case 'monto_fijo': {
       montoComision = rule.montoFijo || 0;
-      desglose.push(`Tarifa fija: ${montoComision.toLocaleString('es-ES')}`);
+      desglose.push(`Tarifa fija: ${formatearImporte(montoComision, moneda)}`);
       break;
     }
 
@@ -107,7 +108,7 @@ export function calculateCommission(input: CommissionInput): CommissionResult {
         if (valorOperacion >= tier.desde && valorOperacion <= tier.hasta) {
           montoComision = valorOperacion * (tier.porcentaje / 100);
           desglose.push(
-            `Tramo ${tier.desde.toLocaleString('es-ES')}–${tier.hasta.toLocaleString('es-ES')}: ${tier.porcentaje}% = ${montoComision.toLocaleString('es-ES')}`
+            `Tramo ${formatearImporte(tier.desde, moneda, 0)}–${formatearImporte(tier.hasta, moneda, 0)}: ${tier.porcentaje}% = ${formatearImporte(montoComision, moneda)}`
           );
           break;
         }
@@ -119,7 +120,7 @@ export function calculateCommission(input: CommissionInput): CommissionResult {
         if (valorOperacion > lastTier.hasta) {
           montoComision = valorOperacion * (lastTier.porcentaje / 100);
           desglose.push(
-            `Excede último tramo: ${lastTier.porcentaje}% = ${montoComision.toLocaleString('es-ES')}`
+            `Excede último tramo: ${lastTier.porcentaje}% = ${formatearImporte(montoComision, moneda)}`
           );
         }
       }
@@ -128,7 +129,7 @@ export function calculateCommission(input: CommissionInput): CommissionResult {
 
     case 'suscripcion_mensual': {
       montoComision = rule.cuotaMensual || 0;
-      desglose.push(`Suscripción mensual: ${montoComision.toLocaleString('es-ES')}/mes`);
+      desglose.push(`Suscripción mensual: ${formatearImporte(montoComision, moneda)}/mes`);
       // La suscripción no tiene split — el monto completo va a la franquicia
       return {
         montoCalculado: montoComision,
@@ -150,8 +151,8 @@ export function calculateCommission(input: CommissionInput): CommissionResult {
 
   if (rule.splitAgente !== undefined || rule.splitAgencia !== undefined) {
     desglose.push(
-      `Split: ${splitAgente.toLocaleString('es-ES')} agente (${rule.splitAgente || 0}%) + ` +
-      `${splitAgencia.toLocaleString('es-ES')} agencia (${rule.splitAgencia || 0}%)`
+      `Split: ${formatearImporte(splitAgente, moneda)} agente (${rule.splitAgente || 0}%) + ` +
+      `${formatearImporte(splitAgencia, moneda)} agencia (${rule.splitAgencia || 0}%)`
     );
   }
 
@@ -174,7 +175,10 @@ export async function createCommissionFromDeal(
   rule: CommissionRule,
   userMoneda?: string
 ): Promise<Comision> {
-  const moneda = userMoneda || deal.moneda || 'EUR';
+  // Divisa de la comisión: la que pida quien la crea, si no la del negocio del
+  // que sale. Antes caía a 'EUR' —el valor por defecto de la columna—, así que
+  // una comisión de una operación en pesos se guardaba en euros.
+  const moneda = monedaEscritura(userMoneda, deal.moneda);
 
   const calcResult = calculateCommission({
     dealId: deal.id,
@@ -258,7 +262,7 @@ export async function getFranchiseCommissionSummary(
       totalComisiones,
       pendientes,
       pagadas,
-      moneda: tInfo.moneda || 'EUR',
+      moneda: monedaEscritura(tInfo.moneda),
       desglose: comisiones.map(c => ({
         dealId: c.dealId,
         dealTitulo: c.deal?.titulo || '—',
@@ -325,7 +329,7 @@ export async function getFranchiseGlobalStats(tenantId: string) {
     childTenants: childTenants.map(t => ({
       id: t.id,
       nombre: t.nombre,
-      moneda: t.moneda || 'EUR',
+      moneda: monedaEscritura(t.moneda),
     })),
   };
 }

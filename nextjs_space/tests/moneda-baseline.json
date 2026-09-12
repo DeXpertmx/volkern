@@ -47,10 +47,6 @@
     "divisa": 0,
     "formato": 2
   },
-  "app/api/ai/real-estate/consult/route.ts": {
-    "divisa": 1,
-    "formato": 3
-  },
   "app/api/catalogo/[id]/route.ts": {
     "divisa": 2,
     "formato": 0
@@ -181,14 +177,6 @@
   },
   "app/api/public/users/[slug]/route.ts": {
     "divisa": 2,
-    "formato": 0
-  },
-  "app/api/real-estate/franchise/commissions/route.ts": {
-    "divisa": 1,
-    "formato": 0
-  },
-  "app/api/real-estate/properties/route.ts": {
-    "divisa": 1,
     "formato": 0
   },
   "app/api/signup/route.ts": {
@@ -352,14 +340,6 @@
     "formato": 2
   },
   "app/dashboard/pipeline/page.tsx": {
-    "divisa": 10,
-    "formato": 2
-  },
-  "app/dashboard/real-estate/page.tsx": {
-    "divisa": 1,
-    "formato": 2
-  },
-  "app/dashboard/real-estate/properties/page.tsx": {
     "divisa": 10,
     "formato": 2
   },
@@ -541,10 +521,6 @@
   },
   "components/hubs/ProyectosDashboard.tsx": {
     "divisa": 5,
-    "formato": 0
-  },
-  "components/hubs/RealEstateConfigDashboard.tsx": {
-    "divisa": 9,
     "formato": 0
   },
   "components/hubs/accounting/FiscalCalendarDashboard.tsx": {
@@ -855,34 +831,6 @@
     "divisa": 1,
     "formato": 0
   },
-  "lib/puck/components/real-estate/PropertyCard.tsx": {
-    "divisa": 1,
-    "formato": 2
-  },
-  "lib/puck/components/real-estate/PropertyDetail.tsx": {
-    "divisa": 1,
-    "formato": 2
-  },
-  "lib/puck/components/real-estate/RealEstateDashboard.tsx": {
-    "divisa": 1,
-    "formato": 2
-  },
-  "lib/real-estate/captacion-helpers.ts": {
-    "divisa": 1,
-    "formato": 0
-  },
-  "lib/real-estate/commission-calculator.ts": {
-    "divisa": 3,
-    "formato": 11
-  },
-  "lib/real-estate/exporters/json-exporter.ts": {
-    "divisa": 1,
-    "formato": 0
-  },
-  "lib/real-estate/property-helpers.ts": {
-    "divisa": 1,
-    "formato": 0
-  },
   "lib/skills/booking-skills.ts": {
     "divisa": 0,
     "formato": 1
@@ -906,10 +854,6 @@
   "lib/skills/insurance-skills.ts": {
     "divisa": 1,
     "formato": 0
-  },
-  "lib/skills/real-estate-skills.ts": {
-    "divisa": 3,
-    "formato": 2
   },
   "lib/skills/siniestros-skills.ts": {
     "divisa": 1,

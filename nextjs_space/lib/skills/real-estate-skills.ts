@@ -8,6 +8,7 @@
 import { prisma } from "@/lib/db";
 import { parseInmueble, getPropertyWithFields, updatePropertyCustomFields } from "@/lib/real-estate/property-helpers";
 import { calculateCommission, createCommissionFromDeal } from "@/lib/real-estate/commission-calculator";
+import { formatearImporte, monedaEfectiva, monedaEscritura } from "@/lib/moneda";
 import { AIEngine } from "@/lib/event-engine/ai-engine/ai-engine";
 
 // ─── 1. Generar descripción comercial ──────────────────────────────────────
@@ -361,11 +362,12 @@ Formato:
         : 'Propiedad destacada con buena relación calidad-precio'
     );
 
-    const currency = p.moneda || 'EUR';
+    // La divisa del inmueble, tal como la normaliza `parseInmueble`.
+    const currency = monedaEfectiva([parsed.moneda]);
     return {
       id: p.id,
       titulo: p.titulo || p.nombre || `${parsed.propertyType || 'Inmueble'} en ${parsed.operationType || 'venta'}`,
-      precioFormateado: parsed.precioBase?.toLocaleString('es-ES', { style: 'currency', currency }) || 'Consultar',
+      precioFormateado: parsed.precioBase ? formatearImporte(parsed.precioBase, currency) : 'Consultar',
       ubicacion,
       tipoOperacion: parsed.operationType || '',
       tipoInmueble: parsed.propertyType || '',
@@ -437,7 +439,7 @@ export async function calculate_franchise_commissions(input: {
       tenantId: deal.tenantId,
       userId,
       valorOperacion: deal.valorReal || deal.valor,
-      moneda: deal.moneda || 'EUR',
+      moneda: monedaEscritura(deal.moneda),
       rule: {
         tipo: tipoComision,
         porcentaje,
@@ -453,7 +455,7 @@ export async function calculate_franchise_commissions(input: {
       montoFijo,
       splitAgente,
       splitAgencia,
-    }, deal.moneda || 'EUR');
+    }, deal.moneda);
 
     return {
       success: true,
