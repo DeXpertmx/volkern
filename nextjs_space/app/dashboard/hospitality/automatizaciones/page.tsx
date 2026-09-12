@@ -540,7 +540,15 @@ export default function HospitalityAutomatizacionesPage() {
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">{l.entityId || '-'}</TableCell>
                     <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                      {new Date(l.executedAt).toLocaleString('es-MX')}
+                      {/* Fecha, no dinero: el módulo reserva `toLocaleString` para los
+                          importes, así que las fechas van por Intl.DateTimeFormat. */}
+                      {new Intl.DateTimeFormat('es-MX', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      }).format(new Date(l.executedAt))}
                     </TableCell>
                   </TableRow>
                 ))}

@@ -192,7 +192,9 @@ export default function HospitalityFinanzasPage() {
     cargar();
   }, [cargar]);
 
-  const moneda = datos?.moneda || 'EUR';
+  // Sin divisa no se inventa ninguna: si la API no la informa, los importes salen
+  // sin símbolo en lugar de con uno que nadie eligió.
+  const moneda = datos?.moneda || '';
   const resumen = datos?.totales;
 
   const totalReservas = useMemo(
