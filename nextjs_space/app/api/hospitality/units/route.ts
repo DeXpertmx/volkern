@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
 import { logAuditAction } from '@/lib/permissions';
-import { monedaPredominante } from '@/lib/hospitality/moneda';
+import { monedaEfectiva } from '@/lib/hospitality/moneda';
 
 // GET /api/hospitality/units — listar unidades del tenant (filtrable por propiedad)
 export async function GET(req: NextRequest) {
@@ -36,7 +36,9 @@ export async function GET(req: NextRequest) {
       orderBy: [{ propertyId: 'asc' }, { nombre: 'asc' }],
     });
 
-    return NextResponse.json({ units });
+    // La divisa del tenant viaja con la lista para que la vista la use de respaldo
+    // cuando no haya datos de los que deducirla.
+    return NextResponse.json({ units, moneda: auth.tenant!.moneda ?? null });
   } catch (error) {
     console.error('Error obteniendo unidades:', error);
     return NextResponse.json({ error: 'Error al obtener unidades' }, { status: 500 });
@@ -77,11 +79,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // La divisa de una unidad nueva sale de las que ya existen en el tenant, no
-    // de una constante: el esquema trae 'MXN' por defecto, así que un tenant
-    // europeo que omitiera el campo creaba inventario en pesos sin que nadie lo
-    // note. Solo si el tenant aún no tiene ninguna unidad se cae al valor del
-    // esquema.
+    // La divisa de una unidad nueva se resuelve así: lo que mande el cliente, si
+    // no, la que ya usa el inventario del tenant, y si el tenant aún no tiene
+    // unidades, su moneda de reporte. El valor por defecto del esquema ('MXN')
+    // no participa: es el último recurso de la base de datos, no una decisión del
+    // negocio, y usarlo como respaldo dejaba a una cuenta europea en pesos.
     const monedaExplicita = moneda ? String(moneda).toUpperCase().trim() : '';
     let monedaUnidad = monedaExplicita;
     if (!monedaUnidad) {
@@ -89,7 +91,10 @@ export async function POST(req: NextRequest) {
         where: { tenantId: auth.tenant!.id },
         select: { moneda: true },
       });
-      monedaUnidad = monedaPredominante(existentes.map((u) => u.moneda)) || 'MXN';
+      // El 'MXN' final es una red de seguridad para una escritura, no un valor por
+      // defecto: la columna no admite nulos y es preferible al valor vacío. En
+      // producción `Tenant.moneda` siempre trae valor, así que no se alcanza.
+      monedaUnidad = monedaEfectiva(existentes.map((u) => u.moneda), auth.tenant!.moneda) || 'MXN';
     }
 
     const unit = await prisma.hospitalityUnit.create({

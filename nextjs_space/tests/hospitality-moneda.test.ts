@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   formatearImporte,
+  monedaEfectiva,
   monedaPredominante,
   simboloMoneda,
 } from '../lib/hospitality/moneda';
@@ -18,6 +19,26 @@ describe('monedaPredominante', () => {
   it('devuelve null cuando no hay ninguna moneda, en vez de inventar una', () => {
     expect(monedaPredominante([])).toBeNull();
     expect(monedaPredominante([null, '', undefined])).toBeNull();
+  });
+});
+
+describe('monedaEfectiva', () => {
+  it('el dato manda sobre la moneda del tenant', () => {
+    expect(monedaEfectiva(['MXN'], 'EUR')).toBe('MXN');
+    expect(monedaEfectiva(['MXN', 'MXN', 'EUR'], 'EUR')).toBe('MXN');
+  });
+
+  it('sin datos usa la moneda de reporte del tenant', () => {
+    expect(monedaEfectiva([], 'EUR')).toBe('EUR');
+    expect(monedaEfectiva([null, '', undefined], ' eur ')).toBe('EUR');
+  });
+
+  it('nunca devuelve el valor por defecto del esquema', () => {
+    // 'MXN' no aparece por ningún lado si ni los datos ni el tenant lo dicen: el
+    // defecto de la base de datos no es una decisión del negocio.
+    expect(monedaEfectiva([], null)).toBe('');
+    expect(monedaEfectiva([null], undefined)).toBe('');
+    expect(monedaEfectiva([], '')).toBe('');
   });
 });
 

@@ -26,6 +26,25 @@ export function monedaPredominante(valores: Array<string | null | undefined>): s
 }
 
 /**
+ * Divisa con la que hay que escribir, resuelta en este orden:
+ *
+ *   1. la que dictan los datos (si hay más de una, la predominante);
+ *   2. la moneda de reporte del tenant (`Tenant.moneda`), que es la fuente
+ *      autoritativa y existe desde que se crea la cuenta;
+ *   3. cadena vacía, para no inventar una divisa cuando no hay ni datos ni
+ *      tenant del que tirar.
+ *
+ * El valor por defecto del esquema nunca entra en esta cadena: es el último
+ * recurso del motor de base de datos, no una decisión del negocio.
+ */
+export function monedaEfectiva(
+  valores: Array<string | null | undefined>,
+  monedaTenant?: string | null
+): string {
+  return monedaPredominante(valores) || (monedaTenant || '').trim().toUpperCase() || '';
+}
+
+/**
  * Símbolo de la moneda. Devuelve cadena vacía si no se reconoce, para no
  * etiquetar un importe con un símbolo que no le corresponde.
  */

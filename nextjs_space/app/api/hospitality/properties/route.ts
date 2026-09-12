@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
       orderBy: { fechaCreacion: 'desc' },
     });
 
-    return NextResponse.json({ properties });
+    return NextResponse.json({ properties, moneda: auth.tenant!.moneda ?? null });
   } catch (error) {
     console.error('Error obteniendo propiedades:', error);
     return NextResponse.json({ error: 'Error al obtener propiedades' }, { status: 500 });
@@ -87,7 +87,8 @@ export async function POST(req: NextRequest) {
           tipo: u.tipo || 'apartamento',
           capacidad: Number(u.capacidad) || 2,
           tarifaBase: u.tarifaBase != null && u.tarifaBase !== '' ? Number(u.tarifaBase) : null,
-          moneda: u.moneda || 'MXN',
+          // Alta rápida de unidades: la divisa sale del tenant, no del esquema.
+          moneda: u.moneda || auth.tenant!.moneda || 'MXN',
         })),
       });
     }

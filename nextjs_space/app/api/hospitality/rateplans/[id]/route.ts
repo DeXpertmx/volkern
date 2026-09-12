@@ -36,7 +36,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       }
       data.tarifa = body.tarifa;
     }
-    if (body.moneda !== undefined) data.moneda = body.moneda || 'MXN';
+    // Si el cliente deja la moneda vacía, se hereda la del tenant: nunca el valor
+    // por defecto del esquema, que es 'MXN' para todo el mundo.
+    if (body.moneda !== undefined) data.moneda = body.moneda || auth.tenant!.moneda || 'MXN';
     if (body.minNoches !== undefined) data.minNoches = Math.max(1, parseInt(body.minNoches) || 1);
     if (body.maxNoches !== undefined) data.maxNoches = body.maxNoches != null ? parseInt(body.maxNoches) : null;
     if (body.checkInDias !== undefined) {

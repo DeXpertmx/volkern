@@ -12,7 +12,7 @@ import {
   reportePropiedades,
   reporteVentas,
 } from '@/lib/hospitality/reportes';
-import { monedaPredominante } from '@/lib/hospitality/moneda';
+import { monedaEfectiva } from '@/lib/hospitality/moneda';
 
 /** Estados de unidad que no forman parte del inventario vendible. */
 const NO_VENDIBLES = ['out_of_service'];
@@ -118,8 +118,9 @@ export async function GET(req: NextRequest) {
         limpieza: porEstado(limpiezas),
         incidencias: porEstado(incidencias),
       },
-      // Igual que en Finanzas: la divisa la dictan las reservas del período.
-      moneda: monedaPredominante(reservas.map((r) => r.moneda)) ?? '',
+      // Igual que en Finanzas: la divisa la dictan las reservas del período y, si
+      // no hay, la del tenant.
+      moneda: monedaEfectiva(reservas.map((r) => r.moneda), auth.tenant?.moneda),
     });
   } catch (error) {
     console.error('Error obteniendo reportes de hospitality:', error);

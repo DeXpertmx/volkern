@@ -3,9 +3,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 /**
  * El esquema trae `'MXN'` como valor por defecto en todos los campos de moneda.
  * Si la API lo usara como respaldo, un tenant que trabaja en euros crearía
- * inventario en pesos con solo omitir el campo. Estas pruebas fijan que la
- * divisa sale del dato real (las unidades del tenant, la unidad del plan) y que
- * el valor del esquema es el último recurso, no el primero.
+ * inventario en pesos con solo omitir el campo. Estas pruebas fijan la cadena
+ * completa: dato explícito → dato real (inventario, unidad) → moneda de reporte
+ * del tenant (`Tenant.moneda`). El valor del esquema queda solo como red de
+ * seguridad de la escritura, nunca como primera opción.
  */
 
 const hoisted = vi.hoisted(() => ({
@@ -29,7 +30,7 @@ vi.mock('@/lib/permissions', () => ({
 vi.mock('@/lib/api-key-auth', () => ({
   authenticateRequest: vi.fn().mockResolvedValue({
     valid: true,
-    tenant: { id: 'tenant_a' },
+    tenant: { id: 'tenant_a', moneda: 'EUR' },
     user: { id: 'user_1' },
   }),
 }));
@@ -92,7 +93,24 @@ describe('POST /api/hospitality/units — divisa por defecto', () => {
     expect(hoisted.hospitalityUnit.findMany).not.toHaveBeenCalled();
   });
 
-  it('sin divisa y sin unidades previas cae al valor del esquema', async () => {
+  it('sin divisa y sin inventario previo cae a la moneda de reporte del tenant', async () => {
+    hoisted.hospitalityUnit.findMany.mockResolvedValue([]);
+
+    await postUnit(jsonReq({ propertyId: 'prop_a', nombre: 'Suite 1' }));
+
+    expect(hoisted.hospitalityUnit.create.mock.calls[0][0].data.moneda).toBe('EUR');
+  });
+
+  it('sin divisa en el tenant queda el valor del esquema, nunca una cadena vacía', async () => {
+    // La columna no admite nulos y es una escritura: aquí 'MXN' es preferible a
+    // guardar una unidad sin divisa. En producción `Tenant.moneda` siempre trae
+    // valor, así que este caso no se alcanza.
+    const { authenticateRequest } = await import('@/lib/api-key-auth');
+    vi.mocked(authenticateRequest).mockResolvedValueOnce({
+      valid: true,
+      tenant: { id: 'tenant_a' },
+      user: { id: 'user_1' },
+    } as never);
     hoisted.hospitalityUnit.findMany.mockResolvedValue([]);
 
     await postUnit(jsonReq({ propertyId: 'prop_a', nombre: 'Suite 1' }));
@@ -139,13 +157,13 @@ describe('POST /api/hospitality/rateplans — divisa por defecto', () => {
     expect(hoisted.hospitalityRatePlan.create.mock.calls[0][0].data.moneda).toBe('USD');
   });
 
-  it('sin divisa en la unidad cae al valor del esquema', async () => {
+  it('sin divisa en la unidad cae a la del tenant', async () => {
     hoisted.hospitalityUnit.findFirst.mockResolvedValue({ id: 'unit_a', moneda: null });
 
     await postRatePlan(
       jsonReq({ propertyId: 'prop_a', unitId: 'unit_a', nombre: 'Tarifa base', tarifa: 120 })
     );
 
-    expect(hoisted.hospitalityRatePlan.create.mock.calls[0][0].data.moneda).toBe('MXN');
+    expect(hoisted.hospitalityRatePlan.create.mock.calls[0][0].data.moneda).toBe('EUR');
   });
 });

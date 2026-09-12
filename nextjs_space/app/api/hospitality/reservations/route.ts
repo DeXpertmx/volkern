@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
       take: limit,
     });
 
-    return NextResponse.json({ reservations });
+    return NextResponse.json({ reservations, moneda: auth.tenant!.moneda ?? null });
   } catch (error) {
     console.error('Error obteniendo reservas:', error);
     return NextResponse.json({ error: 'Error al obtener reservas' }, { status: 500 });
@@ -228,7 +228,10 @@ export async function POST(req: NextRequest) {
         specialRequests: notas || null,
         pah: false,
         amountAfterTax: importe != null && importe !== '' ? Number(importe) : null,
-        currency: moneda || 'MXN',
+        // La divisa de la reserva la decide quien la crea; si no la indica, la del
+        // tenant. El valor por defecto del esquema dejaba reservas en pesos
+        // dentro de una cuenta europea.
+        currency: moneda || auth.tenant!.moneda || 'MXN',
         guestData: !contactId && (huespedNombre || huespedEmail || huespedTelefono)
           ? { firstName: huespedNombre || null, email: huespedEmail || null, phone: huespedTelefono || null }
           : undefined,
