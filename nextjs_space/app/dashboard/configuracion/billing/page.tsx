@@ -7,7 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { Check, CreditCard, Loader2, AlertCircle, TrendingUp, ArrowRight, Shield, Sparkles } from 'lucide-react'
-import { PLANS, PLAN_FEATURES, PLAN_PRICES } from '@/lib/plans'
+import { PLANS, ALL_MODULES } from '@/lib/plans'
+import { VERTICAL_PLANS } from '@/lib/vertical-plans'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,7 +22,11 @@ import {
 import { ComplianceProUpgrade } from '@/components/compliance/ComplianceProUpgrade'
 
 const NEW_PLANS = [PLANS.SCALE, PLANS.COMPLIANCE]
-const OLD_PLANS = [PLANS.ESENCIAL, PLANS.PROFESIONAL, PLANS.INFINITY]
+
+// Etiqueta legible de cada módulo, para no listar ids crudos en las tarjetas.
+const MODULE_LABEL: Record<string, string> = Object.fromEntries(
+  ALL_MODULES.map((m) => [m.id, m.label]),
+)
 
 function isNewPlan(plan: string | undefined): boolean {
   return plan ? (NEW_PLANS as string[]).includes(plan) : false
@@ -190,28 +195,12 @@ export default function BillingPage() {
   const currentPlan = status?.plan
   const isNew = isNewPlan(currentPlan)
 
-  // Old plan plan list for backward compatibility
-  const oldPlans = [
-    {
-      id: PLANS.ESENCIAL,
-      name: '🟢 Esencial',
-      price: '69€',
-      features: PLAN_FEATURES[PLANS.ESENCIAL]
-    },
-    {
-      id: PLANS.PROFESIONAL,
-      name: '🔵 Profesional',
-      price: '149€',
-      features: PLAN_FEATURES[PLANS.PROFESIONAL],
-      popular: true
-    },
-    {
-      id: PLANS.INFINITY,
-      name: '🟣 Infinity',
-      price: '299€',
-      features: PLAN_FEATURES[PLANS.INFINITY]
-    }
-  ]
+  // Lo que la plataforma ofrece y cobra son las 8 verticales, con el precio que
+  // publica lib/vertical-plans.ts (la misma fuente que usan la portada, /precios
+  // y los términos legales). Esencial/Profesional/Infinity salieron de aquí
+  // porque su checkout dependía de Stripe Price IDs que no existen en producción
+  // y pulsarlos devolvía un 500.
+  const verticals = VERTICAL_PLANS
 
   if (loading) {
     return (
@@ -286,20 +275,20 @@ export default function BillingPage() {
                         </Link>
                       </Button>
                     </>
-                  ) : oldPlans
-                    .filter(p => p.id !== status.plan)
-                    .map(p => (
+                  ) : verticals
+                    .filter(v => v.id !== status.plan)
+                    .map(v => (
                       <Button
-                        key={p.id}
+                        key={v.id}
                         variant="outline"
-                        onClick={() => handleChangePlan(p.id)}
+                        onClick={() => handleChangePlan(v.id)}
                         disabled={actionLoading}
                         className="font-medium"
                       >
-                        {actionLoading && selectedPlan === p.id ? (
+                        {actionLoading && selectedPlan === v.id ? (
                           <Loader2 className="w-4 h-4 animate-spin mr-2" />
                         ) : null}
-                        Cambiar a {p.name}
+                        Cambiar a {v.name}
                       </Button>
                     ))}
                 </div>
@@ -347,109 +336,53 @@ export default function BillingPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {isNew ? (
-              <div className="flex flex-col items-center text-center py-6 space-y-4">
-                <div className="flex gap-4">
-                  <div className="bg-white rounded-xl p-6 border-2 border-purple-200 ring-2 ring-purple-100 max-w-xs">
-                    <Badge className="mb-2 bg-purple-600 text-white">Recomendado</Badge>
-                    <h3 className="text-lg font-bold">🚀 Scale</h3>
-                    <p className="text-sm text-gray-500 mt-1">Operación centralizada</p>
-                    <p className="text-2xl font-black mt-3">Desde 49€<span className="text-sm font-normal text-gray-400">/mes</span></p>
-                    <ul className="mt-4 space-y-2 mb-6 text-left">
-                      <li className="flex items-start gap-2 text-sm text-gray-600">
-                        <Check className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-                        <span>CRM, Ventas, Marketing, RRHH</span>
-                      </li>
-                      <li className="flex items-start gap-2 text-sm text-gray-600">
-                        <Check className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-                        <span>Automatizaciones y webhooks</span>
-                      </li>
-                      <li className="flex items-start gap-2 text-sm text-gray-600">
-                        <Check className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-                        <span>1-99 usuarios escalables</span>
-                      </li>
-                    </ul>
-                    <Button
-                      onClick={() => handleSubscribe(PLANS.SCALE)}
-                      disabled={actionLoading}
-                      className="w-full font-bold bg-purple-600 hover:bg-purple-700"
-                    >
-                      {actionLoading && selectedPlan === PLANS.SCALE ? (
-                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                      ) : null}
-                      Elegir Scale
-                    </Button>
-                  </div>
-                  <div className="bg-white rounded-xl p-6 border-2 border-indigo-200 max-w-xs">
-                    <h3 className="text-lg font-bold">🔒 Compliance Pro</h3>
-                    <p className="text-sm text-gray-500 mt-1">Control y auditoría total</p>
-                    <p className="text-2xl font-black mt-3">Desde 149€<span className="text-sm font-normal text-gray-400">/mes</span></p>
-                    <ul className="mt-4 space-y-2 mb-6 text-left">
-                      <li className="flex items-start gap-2 text-sm text-gray-600">
-                        <Check className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-                        <span>Todo Scale + Compliance</span>
-                      </li>
-                      <li className="flex items-start gap-2 text-sm text-gray-600">
-                        <Check className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-                        <span>Auditoría y trazabilidad</span>
-                      </li>
-                      <li className="flex items-start gap-2 text-sm text-gray-600">
-                        <Check className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-                        <span>Soporte dedicado</span>
-                      </li>
-                    </ul>
-                    <Button
-                      onClick={() => handleSubscribe(PLANS.COMPLIANCE)}
-                      disabled={actionLoading}
-                      className="w-full font-bold"
-                      variant="outline"
-                    >
-                      {actionLoading && selectedPlan === PLANS.COMPLIANCE ? (
-                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                      ) : null}
-                      Elegir Compliance Pro
-                    </Button>
-                  </div>
-                </div>
-                <p className="text-sm text-gray-500">
-                  ¿Quieres personalizar usuarios y contactos?{' '}
-                  <Link href="/precios" className="text-purple-600 font-medium hover:underline">
-                    Configura tu plan exacto
-                  </Link>
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {oldPlans.map((plan) => (
-                  <div key={plan.id} className={`bg-white rounded-xl p-5 border-2 ${plan.popular ? 'border-indigo-500 ring-2 ring-indigo-100' : 'border-gray-200'}`}>
-                    {plan.popular && (
-                      <Badge className="mb-2 bg-indigo-600 text-white">Más popular</Badge>
-                    )}
-                    <h3 className="text-lg font-bold">{plan.name}</h3>
-                    <p className="text-2xl font-black mt-2">{plan.price}<span className="text-sm font-normal text-gray-400">/mes</span></p>
-                    <ul className="mt-4 space-y-2 mb-6">
-                      {plan.features.slice(0, 5).map((f: string, i: number) => (
-                        <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {verticals.map((v) => {
+                const destacados = v.modules
+                  .map((id) => MODULE_LABEL[id])
+                  .filter(Boolean)
+                  .slice(0, 4)
+
+                return (
+                  <div
+                    key={v.id}
+                    className="bg-white rounded-xl p-5 border-2 border-gray-200 flex flex-col"
+                  >
+                    <h3 className="text-lg font-bold">{v.name}</h3>
+                    <p className="text-sm text-gray-500 mt-1">{v.subtitle}</p>
+                    <p className="text-2xl font-black mt-3">
+                      {v.price}€<span className="text-sm font-normal text-gray-400">/mes</span>
+                    </p>
+                    <ul className="mt-4 space-y-2 mb-6 flex-1">
+                      {destacados.map((f) => (
+                        <li key={f} className="flex items-start gap-2 text-sm text-gray-600">
                           <Check className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
                           <span>{f}</span>
                         </li>
                       ))}
                     </ul>
                     <Button
-                      onClick={() => handleSubscribe(plan.id)}
+                      onClick={() => handleSubscribe(v.id)}
                       disabled={actionLoading}
-                      className={`w-full font-bold ${plan.popular ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : ''}`}
-                      variant={plan.popular ? 'default' : 'outline'}
+                      className="w-full font-bold"
+                      variant="outline"
                     >
-                      {actionLoading && selectedPlan === plan.id ? (
+                      {actionLoading && selectedPlan === v.id ? (
                         <Loader2 className="w-4 h-4 animate-spin mr-2" />
                       ) : null}
-                      Elegir {plan.name}
+                      Elegir {v.name}
                     </Button>
                   </div>
-                ))}
-              </div>
-            )}
+                )
+              })}
+            </div>
+            <p className="text-sm text-gray-500 mt-4">
+              Precios sin impuestos. El detalle de cada vertical está en{' '}
+              <Link href="/precios" className="text-purple-600 font-medium hover:underline">
+                la página de precios
+              </Link>
+              .
+            </p>
           </CardContent>
         </Card>
       )}
