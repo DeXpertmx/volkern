@@ -19,23 +19,39 @@ import { apiFetch } from '@/lib/api-client';
  *
  * El endpoint es `/api/tenant/moneda`, la ruta que ya usa Configuración para
  * mostrar y cambiar la misma moneda.
+ *
+ * La petición se comparte entre todos los componentes montados: una pantalla que
+ * enseña nueve paneles de dinero pedía la misma divisa nueve veces. Es una sola
+ * promesa en memoria, así que la primera llamada la dispara y el resto la
+ * reutilizan; el valor no cambia durante la vida de la página, porque cambiarlo
+ * recarga la configuración desde Configuración.
  */
+let peticionMoneda: Promise<string> | null = null;
+
+function pedirMoneda(): Promise<string> {
+  if (!peticionMoneda) {
+    peticionMoneda = apiFetch('/api/tenant/moneda')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => (typeof data?.moneda === 'string' ? data.moneda : ''))
+      .catch(() => {
+        // Sin divisa del tenant la pantalla no se rompe: el formulario la pide.
+        // El fallo no se cachea, para que un reintento posterior sí la pida.
+        peticionMoneda = null;
+        return '';
+      });
+  }
+  return peticionMoneda;
+}
+
 export function useMonedaTenant(): string {
   const [moneda, setMoneda] = useState('');
 
   useEffect(() => {
     let activo = true;
 
-    apiFetch('/api/tenant/moneda')
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (activo && typeof data?.moneda === 'string') {
-          setMoneda(data.moneda);
-        }
-      })
-      .catch(() => {
-        // Sin divisa del tenant la pantalla no se rompe: el formulario la pide.
-      });
+    pedirMoneda().then((valor) => {
+      if (activo) setMoneda(valor);
+    });
 
     return () => {
       activo = false;

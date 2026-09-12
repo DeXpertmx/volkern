@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { formatearImporte } from '@/lib/moneda';
+import { useMonedaTenant } from '@/lib/use-moneda-tenant';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -45,6 +47,7 @@ export default function MesaFacturacionPage() {
   const [ordenes, setOrdenes] = useState<OrdenPendiente[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const moneda = useMonedaTenant();
   const [activeTab, setActiveTab] = useState('pendientes');
   const [manualModalOpen, setManualModalOpen] = useState(false);
   
@@ -118,9 +121,9 @@ export default function MesaFacturacionPage() {
     }
   };
 
-  const formatCurrency = (amount: number, currency: string = 'EUR') => {
-    return new Intl.NumberFormat('es-ES', { style: 'currency', currency }).format(amount);
-  };
+  // La divisa de la factura manda; si no viene, la del tenant.
+  const formatCurrency = (amount: number, currency: string = moneda) =>
+    formatearImporte(amount, currency);
 
   return (
     <div className="p-6 space-y-8 max-w-7xl mx-auto">

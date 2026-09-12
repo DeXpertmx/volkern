@@ -22,7 +22,8 @@ export const CursoCreateSchema = z.object({
   tipoMonetizacion: z.enum(monetizacionOptions).optional().default('one_time'),
   precio: z.coerce.number().optional().default(0),
   precioSuscripcion: z.coerce.number().optional(),
-  moneda: z.string().optional().default('EUR'),
+  // Sin divisa por defecto: la ruta del curso la resuelve con la del tenant.
+  moneda: z.string().optional(),
   permiteCupones: z.boolean().optional().default(true),
   tipoAcceso: z.enum(accesoOptions).optional().default('immediate'),
   fechaInicio: z.string().datetime().optional().nullable(),

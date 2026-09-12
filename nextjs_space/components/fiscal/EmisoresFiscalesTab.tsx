@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, Building2, Star, MapPin, Phone, Mail, ShieldCheck, ShieldAlert, Upload, KeyRound } from 'lucide-react';
+import { CATALOGO_MONEDAS, monedaDePais, MONEDA_MINIMA_ESQUEMA } from '@/lib/moneda';
 
 interface Emisor {
   id: string;
@@ -51,16 +52,23 @@ const PAISES = [
   { code: 'PE', name: 'Perú', idType: 'RUC', regime: ['General', 'MYPE', 'RUS'] }
 ];
 
-const MONEDAS = [
-  { code: 'MXN', symbol: '$', name: 'Peso Mexicano' },
-  { code: 'EUR', symbol: '€', name: 'Euro' },
-  { code: 'USD', symbol: '$', name: 'Dólar Estadounidense' },
-  { code: 'CLP', symbol: '$', name: 'Peso Chileno' },
-  { code: 'ARS', symbol: '$', name: 'Peso Argentino' },
-  { code: 'COP', symbol: '$', name: 'Peso Colombiano' },
-  { code: 'PEN', symbol: 'S/', name: 'Sol Peruano' },
-  { code: 'GBP', symbol: '£', name: 'Libra Esterlina' }
-];
+/**
+ * Divisas del formulario: el catálogo lo declara el módulo de dinero y aquí solo
+ * se le da la forma que espera esta pestaña.
+ */
+const MONEDAS = CATALOGO_MONEDAS.map((m) => ({
+  code: m.codigo,
+  symbol: m.simbolo,
+  name: m.nombre,
+}));
+
+/**
+ * Divisa con la que nace un emisor.
+ *
+ * Se resuelve por país —el formulario arranca en España— y no con un `'EUR'`
+ * escrito aquí, que era el motivo de que un emisor mexicano naciera en euros.
+ */
+const MONEDA_INICIAL: string = monedaDePais('ES')?.codigo || MONEDA_MINIMA_ESQUEMA;
 
 interface Props {
   onUpdate: () => void;
@@ -85,7 +93,7 @@ export default function EmisoresFiscalesTab({ onUpdate }: Props) {
     estadoProvincia: '',
     telefono: '',
     email: '',
-    monedaPorDefecto: 'EUR',
+    monedaPorDefecto: MONEDA_INICIAL,
     serieFactura: '',
     esPrincipal: false,
     verifactuEnabled: false,
@@ -106,15 +114,7 @@ export default function EmisoresFiscalesTab({ onUpdate }: Props) {
       setFormData(prev => ({
         ...prev,
         tipoIdentificador: paisConfig.idType,
-        monedaPorDefecto: MONEDAS.find(m => 
-          (formData.pais === 'MX' && m.code === 'MXN') ||
-          (formData.pais === 'ES' && m.code === 'EUR') ||
-          (formData.pais === 'US' && m.code === 'USD') ||
-          (formData.pais === 'CL' && m.code === 'CLP') ||
-          (formData.pais === 'AR' && m.code === 'ARS') ||
-          (formData.pais === 'CO' && m.code === 'COP') ||
-          (formData.pais === 'PE' && m.code === 'PEN')
-        )?.code || prev.monedaPorDefecto
+        monedaPorDefecto: monedaDePais(formData.pais)?.codigo || prev.monedaPorDefecto
       }));
     }
   }, [formData.pais]);
@@ -228,7 +228,11 @@ export default function EmisoresFiscalesTab({ onUpdate }: Props) {
       estadoProvincia: emisor.estadoProvincia || '',
       telefono: emisor.telefono || '',
       email: emisor.email || '',
-      monedaPorDefecto: emisor.monedaPredeterminada || emisor.monedaPorDefecto || 'MXN',
+      monedaPorDefecto:
+        emisor.monedaPredeterminada ||
+        emisor.monedaPorDefecto ||
+        monedaDePais(emisor.pais)?.codigo ||
+        MONEDA_MINIMA_ESQUEMA,
       serieFactura: emisor.serieFactura || '',
       esPrincipal: emisor.esPrincipal || false,
       verifactuEnabled: emisor.verifactuEnabled || false,
@@ -267,7 +271,7 @@ export default function EmisoresFiscalesTab({ onUpdate }: Props) {
       estadoProvincia: '',
       telefono: '',
       email: '',
-      monedaPorDefecto: 'EUR',
+      monedaPorDefecto: MONEDA_INICIAL,
       serieFactura: '',
       esPrincipal: false,
       verifactuEnabled: false,

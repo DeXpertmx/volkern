@@ -82,12 +82,14 @@ describe('Zod — Academy', () => {
       ok(CursoCreateSchema, valid);
     });
 
-    it('debe aplicar defaults: nivel=principiante, moneda=EUR, tipoMonetizacion=one_time, publicado=false', () => {
+    it('debe aplicar defaults: nivel=principiante, tipoMonetizacion=one_time, publicado=false', () => {
       const r = check(CursoCreateSchema, valid);
       expect(r.success).toBe(true);
       if (r.success) {
         expect(r.data.nivel).toBe('principiante');
-        expect(r.data.moneda).toBe('EUR');
+        // La divisa no tiene valor por defecto: la resuelve quien escribe con la
+        // del tenant.
+        expect(r.data.moneda).toBeUndefined();
         expect(r.data.tipoMonetizacion).toBe('one_time');
         expect(r.data.publicado).toBe(false);
         expect(r.data.permiteComentarios).toBe(true);
@@ -650,13 +652,14 @@ describe('Zod — Employees', () => {
       ok(EmployeeCreateSchema, valid);
     });
 
-    it('debe aplicar defaults: tipoContrato=indefinido, jornada=completa, moneda=EUR', () => {
+    it('debe aplicar defaults: tipoContrato=indefinido, jornada=completa', () => {
       const r = check(EmployeeCreateSchema, valid);
       expect(r.success).toBe(true);
       if (r.success) {
         expect(r.data.tipoContrato).toBe('indefinido');
         expect(r.data.jornada).toBe('completa');
-        expect(r.data.moneda).toBe('EUR');
+        // Sin divisa por defecto: la de la nómina es la del tenant.
+        expect(r.data.moneda).toBeUndefined();
       }
     });
 
@@ -983,11 +986,13 @@ describe('Zod — Admin', () => {
       ok(PlanCreateSchema, valid);
     });
 
-    it('debe aplicar defaults: moneda=MXN, intervalo=mensual, esPopular=false', () => {
+    it('debe aplicar defaults: moneda=EUR (la de la plataforma), intervalo=mensual, esPopular=false', () => {
       const r = check(PlanCreateSchema, valid);
       expect(r.success).toBe(true);
       if (r.success) {
-        expect(r.data.moneda).toBe('MXN');
+        // Los planes son el catálogo de Volkern: su precio se publica en la divisa
+        // de la plataforma, no en pesos.
+        expect(r.data.moneda).toBe('EUR');
         expect(r.data.intervalo).toBe('mensual');
         expect(r.data.esPopular).toBe(false);
       }

@@ -1,4 +1,5 @@
 import { Decimal } from 'decimal.js'
+import { MONEDA_SEPA } from '@/lib/moneda'
 import { PayrollSealer } from './payroll-sealer'
 
 export class SEPAGenerator {
@@ -64,7 +65,7 @@ export class SEPAGenerator {
     return `
       <CdtTrfTxInf>
         <PmtId><EndToEndId>${p.id}</EndToEndId></PmtId>
-        <Amt><InstdAmt Ccy="EUR">${new Decimal(p.netTotal.toString()).toFixed(2)}</InstdAmt></Amt>
+        <Amt><InstdAmt Ccy="${MONEDA_SEPA}">${new Decimal(p.netTotal.toString()).toFixed(2)}</InstdAmt></Amt>
         <Cdtr>
           <Nm>${p.employee.fullName}</Nm>
         </Cdtr>

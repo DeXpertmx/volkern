@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { monedaEscritura } from '@/lib/moneda';
 
 /**
  * GET /api/v1/finance/global
@@ -183,7 +184,9 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       scope: isAgency ? 'AGENCY' : 'BUSINESS',
-      currency: tenant.moneda || 'EUR',
+      // Divisa de reporte del tenant; sin ella, la red de seguridad de las
+      // escrituras. Nunca un euro escrito aquí.
+      currency: monedaEscritura(tenant.moneda),
       tenantName: tenant.nombre,
       period: { from: fromDate.toISOString(), to: now.toISOString() },
       totals: {

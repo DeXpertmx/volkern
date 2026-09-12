@@ -86,8 +86,15 @@ export const CommonSchemas = {
   /** Fecha ISO */
   fechaISO: z.string().datetime({ message: 'Formato de fecha inválido (ISO 8601)' }),
 
-  /** Moneda (3 letras) */
-  moneda: z.string().length(3, 'Código de moneda de 3 caracteres').default('EUR'),
+  /**
+   * Moneda (3 letras).
+   *
+   * Sin valor por defecto a propósito: quien escribe decide, y si el cliente no
+   * la envía se usa la moneda de reporte del tenant. Un `'EUR'` aquí no era una
+   * decisión de nadie —y ganaba sobre la del tenant— así que acababa guardado en
+   * órdenes de venta y cotizaciones de cuentas que facturan en otra divisa.
+   */
+  moneda: z.string().length(3, 'Código de moneda de 3 caracteres').optional(),
 
   /** TenantId — requerido en rutas públicas */
   tenantId: z.string().min(1, 'Tenant ID requerido'),

@@ -15,6 +15,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { chipMoneda, formatearImporte, MONEDAS_SELECCIONABLES } from '@/lib/moneda';
+import { useMonedaTenant } from '@/lib/use-moneda-tenant';
 import {
   Plus, Trash2, Receipt, FileText, ShieldCheck,
   CheckCircle2, Clock, AlertCircle, User,
@@ -368,8 +370,13 @@ export function ManualInvoiceModal({ open, onOpenChange, onSuccess }: ManualInvo
   // Cliente seleccionado
   const [contactoSeleccionado, setContactoSeleccionado] = useState<ContactResult | null>(null);
 
-  // Moneda
-  const [moneda, setMoneda] = useState('EUR');
+  // Moneda: nace de la del tenant, no de un euro escrito aquí.
+  const monedaTenant = useMonedaTenant();
+  const [moneda, setMoneda] = useState('');
+
+  useEffect(() => {
+    setMoneda((actual) => actual || monedaTenant);
+  }, [monedaTenant]);
 
   // Líneas de factura
   const [lineas, setLineas] = useState<InvoiceLineItem[]>([
@@ -418,7 +425,7 @@ export function ManualInvoiceModal({ open, onOpenChange, onSuccess }: ManualInvo
     return acc;
   }, {});
 
-  const fmt = (amount: number) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: moneda }).format(amount);
+  const fmt = (amount: number) => formatearImporte(amount, moneda);
 
   // ─── Catálogo Search ──────────────────────────
 
@@ -604,7 +611,7 @@ export function ManualInvoiceModal({ open, onOpenChange, onSuccess }: ManualInvo
     setStep(1);
     setContactoSeleccionado(null);
     setLineas([{ id: '1', concepto: '', descripcion: '', cantidad: 1, precioUnitario: 0, descuento: 0, tasaImpuestoPorcentaje: 21, tasaImpuestoNombre: 'IVA General' }]);
-    setMoneda('EUR');
+    setMoneda(monedaTenant);
     setNotas('');
     setTipoDescuento('linea');
     setDescuentoGlobal(0);
@@ -666,10 +673,10 @@ export function ManualInvoiceModal({ open, onOpenChange, onSuccess }: ManualInvo
             <div className="flex items-center gap-4">
               <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Moneda:</Label>
               <div className="flex gap-1.5">
-                {['EUR', 'USD', 'MXN'].map(c => (
+                {MONEDAS_SELECCIONABLES.map(c => (
                   <Button key={c} variant={moneda === c ? 'default' : 'outline'} size="sm" className="rounded-lg min-w-[60px]"
                     onClick={() => setMoneda(c)}>
-                    {c === 'EUR' ? '€' : c === 'USD' ? '$' : 'MX$'} {c}
+                    {chipMoneda(c)}
                   </Button>
                 ))}
               </div>

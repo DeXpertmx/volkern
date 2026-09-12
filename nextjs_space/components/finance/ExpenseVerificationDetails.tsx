@@ -22,6 +22,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import { formatearImporte } from '@/lib/moneda'
+import { useMonedaTenant } from '@/lib/use-moneda-tenant'
 
 // Import map dynamically to avoid SSR issues
 const VisionLockMap = dynamic(() => import('./VisionLockMap'), { 
@@ -70,6 +72,8 @@ interface ExpenseVerificationDetailsProps {
 }
 
 export default function ExpenseVerificationDetails({ expense, tenantConfig }: ExpenseVerificationDetailsProps) {
+  // Sin divisa en el gasto manda la del tenant, no un euro escrito aquí.
+  const monedaTenant = useMonedaTenant()
   const [isValidating, setIsValidating] = useState(false)
 
   const formatDate = (value?: string | Date | null) => {
@@ -102,7 +106,7 @@ export default function ExpenseVerificationDetails({ expense, tenantConfig }: Ex
     .filter(r => Number.isFinite(r.rate) && Number.isFinite(r.base) && Number.isFinite(r.cuota))
   const vatBaseTotal = vatRows.reduce((s, r) => s + r.base, 0)
   const vatCuotaTotal = vatRows.reduce((s, r) => s + r.cuota, 0)
-  const cur = expense.currency || 'EUR'
+  const cur = expense.currency || monedaTenant
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -167,14 +171,14 @@ export default function ExpenseVerificationDetails({ expense, tenantConfig }: Ex
               <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 shadow-inner">
                 <p className="text-[9px] font-black text-muted-foreground uppercase mb-1">Base Imponible</p>
                 <p className="text-sm font-black tracking-tight">
-                  {expense.taxableBase != null ? `${expense.currency || 'EUR'} ${expense.taxableBase.toFixed(2)}` : '—'}
+                  {expense.taxableBase != null ? formatearImporte(expense.taxableBase, cur) : '—'}
                 </p>
               </div>
               <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 shadow-inner">
                 <p className="text-[9px] font-black text-muted-foreground uppercase mb-1">IVA</p>
                 <p className="text-sm font-black tracking-tight">
                   {expense.vatAmount != null
-                    ? `${expense.currency || 'EUR'} ${expense.vatAmount.toFixed(2)}${expense.vatRate != null ? ` (${expense.vatRate}%)` : ''}`
+                    ? `${formatearImporte(expense.vatAmount, cur)}${expense.vatRate != null ? ` (${expense.vatRate}%)` : ''}`
                     : '—'}
                 </p>
               </div>
@@ -182,7 +186,7 @@ export default function ExpenseVerificationDetails({ expense, tenantConfig }: Ex
                 <p className="text-[9px] font-black text-muted-foreground uppercase mb-1">IRPF (Retención)</p>
                 <p className="text-sm font-black tracking-tight">
                   {expense.metadata?.irpfAmount != null
-                    ? `${expense.currency || 'EUR'} ${expense.metadata.irpfAmount.toFixed(2)}${expense.metadata.irpfRate != null ? ` (${expense.metadata.irpfRate}%)` : ''}`
+                    ? `${formatearImporte(expense.metadata.irpfAmount, cur)}${expense.metadata.irpfRate != null ? ` (${expense.metadata.irpfRate}%)` : ''}`
                     : '—'}
                 </p>
               </div>
@@ -190,8 +194,8 @@ export default function ExpenseVerificationDetails({ expense, tenantConfig }: Ex
                 <p className="text-[9px] font-black text-muted-foreground uppercase mb-1">Total Factura</p>
                 <p className="text-sm font-black tracking-tight">
                   {expense.metadata?.totalFactura != null
-                    ? `${expense.currency || 'EUR'} ${expense.metadata.totalFactura.toFixed(2)}`
-                    : `${expense.currency || 'EUR'} ${expense.amount.toFixed(2)}`}
+                    ? formatearImporte(expense.metadata.totalFactura, cur)
+                    : formatearImporte(expense.amount, cur)}
                 </p>
               </div>
             </div>
@@ -253,8 +257,7 @@ export default function ExpenseVerificationDetails({ expense, tenantConfig }: Ex
           <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
             <p className="text-[9px] font-black text-muted-foreground uppercase mb-1">Retención IVA</p>
             <p className="text-sm font-black">
-              {expense.metadata?.ivaRetentionAmount != null
-                ? `${expense.currency || 'EUR'} ${expense.metadata.ivaRetentionAmount.toFixed(2)}${expense.metadata.ivaRetentionRate != null ? ` (${expense.metadata.ivaRetentionRate}%)` : ''}`
+              {expense.metadata?.ivaRetentionAmount != null                    ? `${formatearImporte(expense.metadata.ivaRetentionAmount, cur)}${expense.metadata.ivaRetentionRate != null ? ` (${expense.metadata.ivaRetentionRate}%)` : ''}`
                 : '—'}
             </p>
           </div>
@@ -264,7 +267,7 @@ export default function ExpenseVerificationDetails({ expense, tenantConfig }: Ex
           </div>
           <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
             <p className="text-[9px] font-black text-muted-foreground uppercase mb-1">Cuota recargo</p>
-            <p className="text-sm font-black">{expense.metadata?.surchargeAmount != null ? `${expense.currency || 'EUR'} ${expense.metadata.surchargeAmount.toFixed(2)}` : '—'}</p>
+            <p className="text-sm font-black">{expense.metadata?.surchargeAmount != null ? formatearImporte(expense.metadata.surchargeAmount, cur) : '—'}</p>
           </div>
         </CardContent>
       </Card>
@@ -284,7 +287,7 @@ export default function ExpenseVerificationDetails({ expense, tenantConfig }: Ex
           </div>
           <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
             <p className="text-[9px] font-black text-muted-foreground uppercase mb-1">Moneda</p>
-            <p className="text-sm font-black">{expense.currency || 'EUR'}</p>
+            <p className="text-sm font-black">{cur}</p>
           </div>
           <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
             <p className="text-[9px] font-black text-muted-foreground uppercase mb-1 flex items-center gap-1"><CreditCard className="w-3 h-3" /> Forma de pago</p>

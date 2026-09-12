@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { formatearImporte } from '@/lib/moneda';
+import { useMonedaTenant } from '@/lib/use-moneda-tenant';
 import { 
   BarChart3, 
   BookOpen, 
@@ -276,6 +278,10 @@ export default function AccountingDashboard() {
 }
 
 function StatCard({ title, value, icon, trend, color }: any) {
+  // La divisa del panel es la del tenant: la tarjeta pide el importe formateado
+  // al módulo de dinero en vez de escribir euros a mano.
+  const moneda = useMonedaTenant();
+
   return (
     <Card className="rounded-[2rem] border-none shadow-lg shadow-slate-200/40 bg-white overflow-hidden group hover:shadow-xl transition-all border border-transparent hover:border-slate-100">
       <CardContent className="p-6">
@@ -290,7 +296,7 @@ function StatCard({ title, value, icon, trend, color }: any) {
         <div>
           <p className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-1">{title}</p>
           <p className="text-3xl font-black text-slate-900">
-            {new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(value)}
+            {formatearImporte(value, moneda)}
           </p>
         </div>
       </CardContent>

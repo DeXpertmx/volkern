@@ -1,0 +1,227 @@
+{
+  "app/.well-known/agent-card.json/route.ts": {
+    "simbolo": 2
+  },
+  "app/admin/billing/page.tsx": {
+    "simbolo": 5
+  },
+  "app/admin/marketing/page.tsx": {
+    "simbolo": 2
+  },
+  "app/admin/planes/page.tsx": {
+    "simbolo": 2
+  },
+  "app/admin/saas/churn/page.tsx": {
+    "simbolo": 2
+  },
+  "app/admin/saas/page.tsx": {
+    "simbolo": 1
+  },
+  "app/admin/saas/revenue/page.tsx": {
+    "simbolo": 7
+  },
+  "app/admin/saas/tenants/[id]/page.tsx": {
+    "simbolo": 6
+  },
+  "app/admin/saas/tenants/page.tsx": {
+    "simbolo": 5
+  },
+  "app/api/invoices/[id]/pdf/route.ts": {
+    "simbolo": 1
+  },
+  "app/api/invoices/[id]/send-email/route.ts": {
+    "simbolo": 1
+  },
+  "app/api/webhooks/telegram/route.ts": {
+    "simbolo": 1
+  },
+  "app/checkout/page.tsx": {
+    "simbolo": 4
+  },
+  "app/dashboard/compliance/page.tsx": {
+    "simbolo": 1
+  },
+  "app/dashboard/finanzas/contabilidad/modelo347/page.tsx": {
+    "simbolo": 1
+  },
+  "app/dashboard/finanzas/gastos/bandeja/page.tsx": {
+    "simbolo": 2
+  },
+  "app/dashboard/finanzas/gastos/escanear/page.tsx": {
+    "simbolo": 6
+  },
+  "app/dashboard/finanzas/gastos/page.tsx": {
+    "simbolo": 3
+  },
+  "app/dashboard/finanzas/nominas/page.tsx": {
+    "simbolo": 1
+  },
+  "app/dashboard/finanzas/proveedores/page.tsx": {
+    "simbolo": 4
+  },
+  "app/dashboard/seguros/page.tsx": {
+    "simbolo": 1
+  },
+  "app/dashboard/strategy/page.tsx": {
+    "simbolo": 1
+  },
+  "app/member/dashboard/page.tsx": {
+    "simbolo": 3
+  },
+  "app/neting/page.tsx": {
+    "simbolo": 4
+  },
+  "app/portal/[token]/page.tsx": {
+    "simbolo": 4
+  },
+  "app/precios/page.tsx": {
+    "simbolo": 3
+  },
+  "app/signup/page.tsx": {
+    "simbolo": 1
+  },
+  "app/soluciones/insurance/page.tsx": {
+    "simbolo": 1
+  },
+  "components/admin/GlobalAnalytics.tsx": {
+    "simbolo": 1
+  },
+  "components/ads/AdsBudgetRuleForm.tsx": {
+    "simbolo": 1
+  },
+  "components/compliance/ComplianceProUpgrade.tsx": {
+    "simbolo": 3
+  },
+  "components/dashboard-stats.tsx": {
+    "simbolo": 2
+  },
+  "components/hubs/ConfiguracionDashboard.tsx": {
+    "simbolo": 1
+  },
+  "components/hubs/FinanzasDashboard.tsx": {
+    "simbolo": 5
+  },
+  "components/hubs/GlobalFinancialCockpit.tsx": {
+    "simbolo": 9
+  },
+  "components/hubs/InventarioDashboard.tsx": {
+    "simbolo": 1
+  },
+  "components/hubs/ProduccionDashboard.tsx": {
+    "simbolo": 4
+  },
+  "components/hubs/ProyectosDashboard.tsx": {
+    "simbolo": 6
+  },
+  "components/hubs/accounting/Modelo130Dashboard.tsx": {
+    "simbolo": 2
+  },
+  "components/public/AcademyLanding.tsx": {
+    "simbolo": 7
+  },
+  "components/public/AccountingLanding.tsx": {
+    "simbolo": 7
+  },
+  "components/public/ComplianceProLanding.tsx": {
+    "simbolo": 1
+  },
+  "components/public/CrmVentasLanding.tsx": {
+    "simbolo": 7
+  },
+  "components/public/FacturacionLanding.tsx": {
+    "simbolo": 6
+  },
+  "components/public/IndustriaLanding.tsx": {
+    "simbolo": 6
+  },
+  "components/public/InsuranceLanding.tsx": {
+    "simbolo": 7
+  },
+  "components/public/LogisticaLanding.tsx": {
+    "simbolo": 3
+  },
+  "components/public/MarketingLanding.tsx": {
+    "simbolo": 7
+  },
+  "components/public/NetingLanding.tsx": {
+    "simbolo": 41
+  },
+  "components/public/NewLanding.tsx": {
+    "simbolo": 1
+  },
+  "components/public/PricingClient.tsx": {
+    "simbolo": 6
+  },
+  "components/public/PricingPage.tsx": {
+    "simbolo": 2
+  },
+  "components/public/ProductosLanding.tsx": {
+    "simbolo": 1
+  },
+  "components/public/RRHHLanding.tsx": {
+    "simbolo": 6
+  },
+  "components/public/RealEstateLanding.tsx": {
+    "simbolo": 6
+  },
+  "components/public/SimplifiedLanding.tsx": {
+    "simbolo": 1
+  },
+  "components/sovereignty/integrity-graph.tsx": {
+    "simbolo": 1
+  },
+  "components/webcreator/VariableDocumentationPanel.tsx": {
+    "simbolo": 3
+  },
+  "components/webcreator/blocks/DocumentBlocks.ts": {
+    "simbolo": 4
+  },
+  "components/webcreator/blocks/components/BookingBlock.ts": {
+    "simbolo": 1
+  },
+  "lib/agents/execution-engine.ts": {
+    "simbolo": 9
+  },
+  "lib/agents/intents/crm-intents.ts": {
+    "simbolo": 3
+  },
+  "lib/agents/intents/finance-intents.ts": {
+    "simbolo": 5
+  },
+  "lib/approval-workflow-service.ts": {
+    "simbolo": 14
+  },
+  "lib/compliance-rules.ts": {
+    "simbolo": 2
+  },
+  "lib/erp/pdf-service.ts": {
+    "simbolo": 1
+  },
+  "lib/insurance/connectors/gnp/mock-data.ts": {
+    "simbolo": 5
+  },
+  "lib/insurance/connectors/qualitas/mock-data.ts": {
+    "simbolo": 2
+  },
+  "lib/insurance/connectors/tirea/mock-data.ts": {
+    "simbolo": 2
+  },
+  "lib/navigation-config.ts": {
+    "simbolo": 1
+  },
+  "lib/puck/components/index.tsx": {
+    "simbolo": 2
+  },
+  "lib/puck/puck-config.tsx": {
+    "simbolo": 3
+  },
+  "lib/seo/agent-skills.ts": {
+    "simbolo": 2
+  },
+  "lib/skills/financial-consolidation-skills.ts": {
+    "simbolo": 4
+  },
+  "lib/skills/index.ts": {
+    "simbolo": 1
+  }
+}

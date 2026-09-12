@@ -8,6 +8,8 @@ import {
   CardTitle, 
   CardDescription 
 } from "@/components/ui/card";
+import { formatearImporte } from "@/lib/moneda";
+import { useMonedaTenant } from "@/lib/use-moneda-tenant";
 import { Button } from "@/components/ui/button";
 import { 
   FileText, 
@@ -27,6 +29,7 @@ import { cn } from "@/lib/utils";
 const THRESHOLD = 3005.06;
 
 export function Modelo347Dashboard() {
+  const moneda = useMonedaTenant();
   const [loading, setLoading] = useState(true);
   const [report, setReport] = useState<any>(null);
   const [year, setYear] = useState(new Date().getFullYear());
@@ -126,9 +129,7 @@ export function Modelo347Dashboard() {
     );
   }
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(amount);
-  };
+  const formatCurrency = (amount: number) => formatearImporte(amount, moneda);
 
   const hasOps = report?.hasOperations || false;
   const filteredOps = getFilteredOps();

@@ -3,9 +3,10 @@
  *
  * Regla de la plataforma, verificada por `tests/moneda-plataforma-guard.test.ts`:
  *
- *   **Este archivo es el único que puede contener un código de divisa o un
- *   formato de dinero.** Todo lo demás pide la divisa a los datos —o a la moneda
- *   de reporte del tenant— y escribe el importe con `formatearImporte`.
+ *   **Este archivo es el único que puede contener un código de divisa, un formato
+ *   de dinero o un símbolo pegado a una cifra.** Todo lo demás pide la divisa a
+ *   los datos —o a la moneda de reporte del tenant— y escribe el importe con
+ *   `formatearImporte`.
  *
  * Por qué existe. La plataforma tenía tres formas de escribir dinero conviviendo
  * (`lib/utils`, `components/insurance/portfolio-format` y el módulo de
@@ -124,6 +125,28 @@ export function nombreMoneda(codigo: string | null | undefined): string {
   return infoMoneda(normalizado)?.nombre || normalizado;
 }
 
+/**
+ * Códigos de divisa con forma de patrón, para leer dinero dentro de un texto.
+ *
+ * Quien tiene que reconocer una divisa en el texto de una factura —el lector de
+ * documentos— construye su expresión regular con esto en vez de repetir la lista
+ * de códigos: era la cuarta copia de la misma tabla, y la única forma de que un
+ * código nuevo del catálogo se leyera también ahí.
+ */
+export const PATRON_CODIGOS_MONEDA = MONEDAS_SOPORTADAS.join('|');
+
+/**
+ * Divisa que escribe ese símbolo, o `null` si es ambiguo o desconocido.
+ *
+ * El símbolo no identifica una divisa por sí solo —`$` es el dólar, el peso
+ * mexicano, el chileno y media docena más—, así que solo responde cuando hay una
+ * única candidata y calla cuando el documento no da para más.
+ */
+export function monedaDeSimbolo(simbolo: string): Currency | null {
+  const candidatas = CATALOGO_MONEDAS.filter((m) => m.simbolo === (simbolo || '').trim());
+  return candidatas.length === 1 ? candidatas[0].codigo : null;
+}
+
 /** Símbolo ('$') o cadena vacía si la divisa no se reconoce. */
 export function simboloMoneda(codigo: string | null | undefined): string {
   return infoMoneda(codigo)?.simbolo || '';
@@ -142,6 +165,55 @@ export function chipMoneda(codigo: string | null | undefined): string {
   if (!info) return (codigo || '').trim().toUpperCase();
   return info.simbolo ? `${info.simbolo} · ${info.codigo}` : info.codigo;
 }
+
+/**
+ * Divisa con la que opera cada país.
+ *
+ * Es la traducción país → divisa, y sí es conocimiento del dinero: estaba copiada
+ * en tres sitios —el motor fiscal, la validación fiscal y la pestaña de emisores—
+ * con los códigos, los nombres y los símbolos escritos a mano en cada uno, así que
+ * una divisa nueva o un nombre corregido había que cambiarlo tres veces y siempre
+ * se olvidaba una.
+ *
+ * Aquí solo se declara el código: el nombre y el símbolo salen de
+ * `CATALOGO_MONEDAS`, que ya es la única ficha de una divisa en la plataforma.
+ */
+export const MONEDA_POR_PAIS: Record<string, Currency> = {
+  MX: 'MXN',
+  ES: 'EUR',
+  US: 'USD',
+  CL: 'CLP',
+  AR: 'ARS',
+  CO: 'COP',
+  PE: 'PEN',
+  BR: 'BRL',
+  GB: 'GBP',
+  DE: 'EUR',
+  FR: 'EUR',
+  IT: 'EUR',
+  PT: 'EUR',
+};
+
+/**
+ * Ficha de la divisa de un país, o `undefined` si el país no está en la tabla.
+ *
+ * Devolver `undefined` en vez de una divisa inventada es deliberado: quien llama
+ * decide su respaldo (la divisa del tenant, la del emisor o la mínima del
+ * esquema), en lugar de que este módulo imponga una que nadie eligió.
+ */
+export function monedaDePais(pais: string | null | undefined): MonedaInfo | undefined {
+  const codigo = MONEDA_POR_PAIS[(pais || '').trim().toUpperCase()];
+  return codigo ? infoMoneda(codigo) : undefined;
+}
+
+/**
+ * Divisa del esquema de transferencias SEPA.
+ *
+ * No es un valor por defecto que nadie eligió: SEPA es la zona única de pagos en
+ * euros, así que un fichero de nóminas SEPA solo puede viajar en euros. Vive aquí
+ * para que el generador del XML no escriba el código a mano.
+ */
+export const MONEDA_SEPA: Currency = 'EUR';
 
 /**
  * Valor que la base de datos exige cuando no hay ninguna divisa que usar.

@@ -55,7 +55,7 @@ const MoneyAmountSchema = z
     "Importe debe tener max 2 decimales (centimos exactos)."
   )
   .transform((n) => Math.round(n * 100) / 100) // Normaliza a 2 decimales.
-  .describe("Importe monetario en EUR (max 2 decimales).");
+  .describe("Importe monetario en la divisa de la nómina (max 2 decimales).");
 
 const OverrideLineSchema = z.object({
   conceptCode: z

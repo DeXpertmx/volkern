@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { formatearImporte } from '@/lib/moneda'
+import { useMonedaTenant } from '@/lib/use-moneda-tenant'
 import { TrendingUp, TrendingDown, FileText, Download, Equal } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -29,6 +31,7 @@ interface PyGReport {
 export default function PyGPage() {
   const [data, setData] = useState<PyGReport | null>(null)
   const [loading, setLoading] = useState(true)
+  const moneda = useMonedaTenant()
 
   useEffect(() => {
     fetchData()
@@ -56,8 +59,7 @@ export default function PyGPage() {
     </div>
   )
 
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(value)
+  const formatCurrency = (value: number) => formatearImporte(value, moneda)
 
   const isPositive = (data?.resultadoEjercicio || 0) >= 0
 

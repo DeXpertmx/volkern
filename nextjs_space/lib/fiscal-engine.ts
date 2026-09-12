@@ -1,6 +1,14 @@
 // Motor de Cálculo Fiscal Dinámico para Volkern CRM
 
 import { prisma } from '@/lib/db';
+import {
+  infoMoneda,
+  monedaDePais,
+  primeraMoneda,
+  simboloMoneda,
+  MONEDA_POR_PAIS,
+  MONEDA_MINIMA_ESQUEMA,
+} from './moneda';
 import { TASAS_IVA_PREDETERMINADAS } from './fiscal-validation';
 
 export interface FiscalConfig {
@@ -28,21 +36,22 @@ export interface FiscalConfig {
   tasasDisponibles: any[];
 }
 
-export const CURRENCY_BY_COUNTRY: Record<string, { code: string; symbol: string; name: string }> = {
-  MX: { code: 'MXN', symbol: '$', name: 'Peso Mexicano' },
-  ES: { code: 'EUR', symbol: '€', name: 'Euro' },
-  US: { code: 'USD', symbol: '$', name: 'Dólar Estadounidense' },
-  CL: { code: 'CLP', symbol: '$', name: 'Peso Chileno' },
-  AR: { code: 'ARS', symbol: '$', name: 'Peso Argentino' },
-  CO: { code: 'COP', symbol: '$', name: 'Peso Colombiano' },
-  PE: { code: 'PEN', symbol: 'S/', name: 'Sol Peruano' },
-  BR: { code: 'BRL', symbol: 'R$', name: 'Real Brasileño' },
-  GB: { code: 'GBP', symbol: '£', name: 'Libra Esterlina' },
-  DE: { code: 'EUR', symbol: '€', name: 'Euro' },
-  FR: { code: 'EUR', symbol: '€', name: 'Euro' },
-  IT: { code: 'EUR', symbol: '€', name: 'Euro' },
-  PT: { code: 'EUR', symbol: '€', name: 'Euro' },
-};
+/**
+ * Divisa de cada país, con la forma `{ code, symbol, name }` que consumen la API
+ * fiscal y los formularios.
+ *
+ * La tabla país → divisa la declara `lib/moneda.ts`, que es el único módulo que
+ * conoce nombres y símbolos; aquí solo se le da la forma que esperaban los
+ * consumidores. Antes esta constante repetía los trece nombres y símbolos, y eran
+ * los mismos trece que repetían la validación fiscal y la pestaña de emisores.
+ */
+export const CURRENCY_BY_COUNTRY: Record<string, { code: string; symbol: string; name: string }> =
+  Object.fromEntries(
+    Object.entries(MONEDA_POR_PAIS).flatMap(([pais, codigo]) => {
+      const info = infoMoneda(codigo);
+      return info ? [[pais, { code: info.codigo, symbol: info.simbolo, name: info.nombre }]] : [];
+    })
+  );
 
 export const TAX_NAME_BY_COUNTRY: Record<string, string> = {
   MX: 'IVA', ES: 'IVA', US: 'Tax', CL: 'IVA', AR: 'IVA', 
@@ -138,14 +147,17 @@ export async function getFiscalConfig(
 
     if (esOperacionExtranjera || aplicaReverseCharge) taxRate = 0;
 
-    const currency = CURRENCY_BY_COUNTRY[paisEmisor] || { code: 'USD', symbol: '$', name: 'Dólar' };
-    
+    // Sin país reconocido no se inventa una divisa: manda la del emisor y, si
+    // tampoco la hay, el mínimo que el esquema acepta.
+    const infoDelPais = monedaDePais(paisEmisor);
+
     return {
       fiscalIdLabel: FISCAL_ID_LABEL_BY_COUNTRY[paisEmisor] || 'Tax ID',
       taxName: TAX_NAME_BY_COUNTRY[paisEmisor] || 'Tax',
       taxRate,
-      currencyCode: emisor?.monedaPredeterminada || currency.code,
-      currencySymbol: currency.symbol,
+      currencyCode:
+        primeraMoneda(emisor?.monedaPredeterminada, infoDelPais?.codigo) || MONEDA_MINIMA_ESQUEMA,
+      currencySymbol: simboloMoneda(emisor?.monedaPredeterminada || infoDelPais?.codigo),
       emisor: emisor ? {
         id: emisor.id,
         razonSocial: emisor.razonSocial,
@@ -177,15 +189,13 @@ export async function getFiscalConfig(
   } catch (error) {
     console.error('Error getting fiscal config:', error);
     return {
-      fiscalIdLabel: 'NIF/CIF', taxName: 'IVA', taxRate: 21, currencyCode: 'EUR', currencySymbol: '€',
+      fiscalIdLabel: 'NIF/CIF', taxName: 'IVA', taxRate: 21,
+      currencyCode: MONEDA_MINIMA_ESQUEMA,
+      currencySymbol: simboloMoneda(MONEDA_MINIMA_ESQUEMA),
       emisor: null, cliente: null, esOperacionExtranjera: false, aplicaReverseCharge: false,
       esClienteExento: false, tasasDisponibles: [],
     };
   }
-}
-
-export function formatCurrency(amount: number, symbol: string = '$', decimals: number = 2): string {
-  return `${symbol}${amount.toLocaleString('es-ES', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`;
 }
 
 export function getFiscalConfigForWebhook(config: FiscalConfig) {
