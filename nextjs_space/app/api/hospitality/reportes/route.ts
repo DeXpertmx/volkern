@@ -12,7 +12,7 @@ import {
   reportePropiedades,
   reporteVentas,
 } from '@/lib/hospitality/reportes';
-import { monedaEfectiva } from '@/lib/hospitality/moneda';
+import { monedaEfectiva } from '@/lib/moneda';
 
 /** Estados de unidad que no forman parte del inventario vendible. */
 const NO_VENDIBLES = ['out_of_service'];

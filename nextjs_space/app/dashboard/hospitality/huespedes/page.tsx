@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { channelStyle, statusLabel } from '@/lib/hospitality/calendar';
-import { formatearImporte, monedaEfectiva } from '@/lib/hospitality/moneda';
+import { formatearImporte, monedaEfectiva } from '@/lib/moneda';
 
 interface Estancia {
   id: string;

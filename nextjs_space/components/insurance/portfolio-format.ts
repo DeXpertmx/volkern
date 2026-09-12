@@ -3,63 +3,40 @@
  * ejecutivo de Seguros (portfolio + timeline). Reusables desde cualquier
  * módulo que necesite moneda, fechas relativas o absolutas en español.
  *
- * Defensa contra regresiones: la regla ESLint custom
- * `eslint-rules/no-hardcoded-currency-fallback` bloquea cualquier intento
- * de reintroducir el string literal 'MXN' en posiciones de fallback dentro
- * de app/api/insurance/portfolio/** y components/insurance/**. Por eso
- * evitamos defaults de la forma `currency = 'MXN'` aquí. Si necesitas un
- * default global, usa `CURRENCY_CONSTANTS.DEFAULT_TENANT_CURRENCY`, que es
- * un acceso por nombre, no un literal — la regla no lo bloqueará.
+ * El formateo lo hace `lib/moneda.ts`, que es el único módulo de la plataforma
+ * que conoce divisas y formatos de dinero (lo verifica
+ * `tests/moneda-plataforma-guard.test.ts`). Este archivo conserva su firma para no
+ * tocar las llamadas de seguros.
+ *
+ * Las páginas deben pasar siempre la moneda explícita (`snapshot.tenantMoneda` o
+ * `poliza.moneda`); el valor por defecto solo cubre el caso de tests o utilidades
+ * que no tienen acceso al snapshot, y ya no es un literal escondido tras un
+ * alias: es el mínimo del esquema, definido una sola vez.
  */
-import { CURRENCY_CONSTANTS } from '@/lib/insurance/currency';
+import { MONEDA_MINIMA_ESQUEMA, formatearImporte } from '@/lib/moneda';
 
 /**
- * Formatea un número como moneda. Default = `CURRENCY_CONSTANTS.DEFAULT_TENANT_CURRENCY`
- * (acceso por nombre, no literal `'MXN'`) para que la ESLint rule no lo marque.
- * Las páginas/llamadas deben pasar siempre la moneda explícita (`snapshot.tenantMoneda`
- * o `poliza.moneda`); el default sólo cubre el caso edge de tests/utils que no
- * tienen acceso al snapshot.
- *
- * El tipo es `string` (no `Currency`) porque los endpoints devuelven `string`
- * en runtime (validado contra `SUPPORTED_CURRENCIES` en server). Esto evita
- * casts innecesarios en cada call site sin perder la defensa de la regla.
+ * Formatea un número como moneda. El tipo es `string` (no `Currency`) porque los
+ * endpoints devuelven `string` en runtime (validado contra `SUPPORTED_CURRENCIES`).
  */
 export function formatCurrency(
   value: number,
-  currency: string = CURRENCY_CONSTANTS.DEFAULT_TENANT_CURRENCY
+  currency: string = MONEDA_MINIMA_ESQUEMA
 ): string {
-  if (!Number.isFinite(value)) return '$0';
-  try {
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency,
-      maximumFractionDigits: 0,
-    }).format(value);
-  } catch {
-    return `$${value.toLocaleString('es-MX')}`;
-  }
+  if (!Number.isFinite(value)) return formatearImporte(0, currency, 0);
+  return formatearImporte(value, currency, 0);
 }
 
 /**
- * Variante con decimales: para pólizas individuales donde el centavos importan.
- * Usar como `formatCurrencyExact(p.primaAnual, p.moneda)`. Default por
- * constante tipada (no literal `'MXN'`) por la misma razón que `formatCurrency`.
+ * Variante con decimales: para pólizas individuales donde los céntimos importan.
+ * Usar como `formatCurrencyExact(p.primaAnual, p.moneda)`.
  */
 export function formatCurrencyExact(
   value: number,
-  currency: string = CURRENCY_CONSTANTS.DEFAULT_TENANT_CURRENCY
+  currency: string = MONEDA_MINIMA_ESQUEMA
 ): string {
-  if (!Number.isFinite(value)) return '$0';
-  try {
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(value);
-  } catch {
-    return `$${value.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  }
+  if (!Number.isFinite(value)) return formatearImporte(0, currency, 2);
+  return formatearImporte(value, currency, 2);
 }
 
 /**

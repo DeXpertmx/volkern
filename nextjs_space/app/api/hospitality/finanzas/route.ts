@@ -11,7 +11,7 @@ import {
   filasFinancieras,
   resumenFinanciero,
 } from '@/lib/hospitality/finance-summary';
-import { monedaEfectiva } from '@/lib/hospitality/moneda';
+import { monedaEfectiva } from '@/lib/moneda';
 
 /**
  * GET /api/hospitality/finanzas — informe financiero del período (FASE 3.B).

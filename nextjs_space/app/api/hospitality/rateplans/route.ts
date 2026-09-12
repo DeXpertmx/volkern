@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
-import { monedaEscritura } from '@/lib/hospitality/moneda';
+import { monedaEscritura } from '@/lib/moneda';
 
 /**
  * Planes de tarifa y restricciones de venta (plan maestro §6, §15).

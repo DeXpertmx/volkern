@@ -9,7 +9,7 @@
  * en consola para auditoría y la operación que disparó sigue su curso.
  */
 
-import { formatearImporte } from '@/lib/hospitality/moneda'
+import { formatearImporte } from '@/lib/moneda'
 import { prisma } from '@/lib/db'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { sendEmail } from '@/lib/ses-email'
