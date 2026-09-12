@@ -19,7 +19,7 @@ import {
   CheckCircle2,
   XCircle,
 } from 'lucide-react';
-import { formatearImporte, monedaPredominante } from '@/lib/hospitality/moneda';
+import { formatearImporte, monedaEfectiva } from '@/lib/hospitality/moneda';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -117,7 +117,8 @@ const EMPTY_FORM = {
   checkout: '',
   estado: 'confirmed',
   importe: '',
-  moneda: 'MXN',
+  // Vacío a propósito: lo rellena la divisa del tenant al abrir el formulario.
+  moneda: '',
   notas: '',
 };
 
@@ -126,6 +127,8 @@ export default function HospitalityReservasPage() {
   const [reservas, setReservas] = useState<Reservation[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
+  // Moneda de reporte del tenant, tal como la devuelve la API.
+  const [monedaTenant, setMonedaTenant] = useState('');
 
   // Filtros
   const [fEstado, setFEstado] = useState('todas');
@@ -139,12 +142,12 @@ export default function HospitalityReservasPage() {
   const [form, setForm] = useState<typeof EMPTY_FORM>({ ...EMPTY_FORM });
   const [saving, setSaving] = useState(false);
 
-  // La moneda de la vista sale de los datos, nunca de una constante: el esquema
-  // trae 'MXN' por defecto y fijarla aquí dejaba a un tenant español con pesos.
-  // Si aún no hay datos se cae al valor del esquema, que es el que usaría la API.
+  // La moneda de la vista sale de los datos; si aún no hay ninguno, de la moneda
+  // de reporte del tenant, que es la fuente autoritativa. Nunca de una constante
+  // del esquema: 'MXN' por defecto dejaba a un tenant español con pesos.
   const monedaLista = useMemo(
-    () => monedaPredominante(reservas.map((r) => r.currency)) || EMPTY_FORM.moneda,
-    [reservas]
+    () => monedaEfectiva(reservas.map((r) => r.currency), monedaTenant),
+    [reservas, monedaTenant]
   );
 
   const cargar = useCallback(async () => {
@@ -163,6 +166,7 @@ export default function HospitalityReservasPage() {
       if (rRes.ok) {
         const d = await rRes.json();
         setReservas(d.reservations || []);
+        if (d.moneda) setMonedaTenant(d.moneda);
       }
       if (pRes.ok) {
         const d = await pRes.json();
