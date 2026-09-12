@@ -209,7 +209,9 @@ export function calcularRentabilidad(input: RentabilidadInput): RentabilidadRese
   const pendiente = Math.max(0, redondear(bruto - cobrado));
 
   return {
-    moneda: input.moneda || 'MXN',
+    // Sin divisa se devuelve cadena vacía en lugar de inventar una: quien conoce
+    // el tenant es la capa que llama, y es la que debe resolver el respaldo.
+    moneda: input.moneda || '',
     bruto,
     desglose: desglosarLineas(input.lineas),
     comisionOta,

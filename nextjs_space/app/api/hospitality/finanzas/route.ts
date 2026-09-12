@@ -42,7 +42,18 @@ export async function GET(req: NextRequest) {
       canal,
     });
 
-    const filas = filasFinancieras(reservas);
+    // Moneda del informe: la de las reservas del período y, si no hay, la del
+    // tenant. Ni la primera fila ni el valor por defecto del esquema entran.
+    const monedaInforme = monedaEfectiva(
+      reservas.map((r) => r.moneda),
+      auth.tenant?.moneda
+    );
+    // Una reserva sin divisa propia se informa en la del informe para no dejar
+    // importes sin símbolo; el dato real nunca se pisa.
+    const filas = filasFinancieras(reservas).map((f) => ({
+      ...f,
+      moneda: f.moneda || monedaInforme,
+    }));
     const totales = resumenFinanciero(filas);
 
     if (formato === 'csv') {
@@ -72,9 +83,7 @@ export async function GET(req: NextRequest) {
       estadosCobro: conteoPorEstadoCobro(filas),
       reservas: filas,
       propiedades,
-      // Moneda de las reservas del período y, si no hay, la del tenant. Ni la
-      // primera fila ni el valor por defecto del esquema entran en la decisión.
-      moneda: monedaEfectiva(filas.map((f) => f.moneda), auth.tenant?.moneda),
+      moneda: monedaInforme,
     });
   } catch (error) {
     console.error('Error obteniendo finanzas de hospitality:', error);

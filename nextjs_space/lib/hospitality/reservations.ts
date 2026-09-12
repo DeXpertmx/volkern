@@ -191,7 +191,9 @@ function extractAmount(payload: WebhookReservationPayload) {
     amountAfterTax: a.amountAfterTax ?? null,
     amountBeforeTax: a.amountBeforeTax ?? null,
     tax: a.tax ?? null,
-    currency: a.currency || 'MXN',
+    // Si el proveedor no manda divisa se guarda vacío ("sin identificar") en vez de
+    // fabricar una: al leer, el respaldo es la moneda del tenant.
+    currency: a.currency || '',
     commission: a.commission ?? null,
     tcs: a.tcs ?? null,
     tds: a.tds ?? null,
