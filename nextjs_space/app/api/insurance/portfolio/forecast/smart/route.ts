@@ -10,6 +10,7 @@ import {
 } from '@/lib/insurance/seasonal-multiplier';
 import { persistSmartForecastLog } from '@/lib/insurance/forecast-persistence';
 import { CURRENCY_CONSTANTS, type Currency } from '@/lib/insurance/currency';
+import { GET as getForecastBase } from '../route';
 
 /**
  * GET /api/insurance/portfolio/forecast/smart
@@ -35,7 +36,8 @@ import { CURRENCY_CONSTANTS, type Currency } from '@/lib/insurance/currency';
  *   }
  *
  * Diferencias con /forecast:
- *  · Reusa TODO el motor lineal (sin duplicar lógica).
+ *  · Reusa TODO el motor lineal llamando a su propio handler en proceso (sin
+ *    duplicar lógica y sin salir a la red).
  *  · Lee/calcula multipliers seasonal (cacheado 30d).
  *  · Enriquece con Google Calendar si el broker tiene OAuth configurado.
  *  · Devuelve además proyectadoBase (sin ajuste) para comparabilidad.
@@ -87,11 +89,11 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // ─── 1. Reutilizar el forecast base vía fetch interno ──────────
-    //   En lugar de duplicar la regresión lineal, hacemos una llamada al
-    //   propio endpoint /forecast con la misma auth. Esto garantiza que
+    // ─── 1. Reutilizar el forecast base ─────────────────────────────
+    //   En lugar de duplicar la regresión lineal, se invoca el handler de
+    //   /forecast en proceso con la misma auth. Esto garantiza que
     //   smart = base + multipliers sin divergencia.
-    const base = await fetchBaseForecast(request, auth.tenant!.id);
+    const base = await fetchBaseForecast(request);
     if (!base.ok) {
       return NextResponse.json(
         { error: 'No pude obtener el forecast base: ' + (base.error || 'desconocido') },
@@ -209,16 +211,22 @@ interface BaseForecastResponse {
 }
 
 /**
- * Llama internamente al endpoint /forecast con la misma autenticación.
- * Devuelve un shape normalizado o un error si falla.
+ * Obtiene el forecast base del mismo motor que sirve /forecast.
+ *
+ * Se llama a su handler **en proceso**. Antes se pedía por HTTP contra la URL
+ * pública copiando las cabeceras del cliente, y detrás del proxy eso no
+ * funciona: la petición viajaba con las cabeceras del proxy en su propio
+ * origen, el proxy la rechazaba y el endpoint devolvía 502, así que la tarjeta
+ * de forecast inteligente nunca mostraba datos en producción.
  */
-async function fetchBaseForecast(request: NextRequest, tenantId: string): Promise<BaseForecastResponse> {
+async function fetchBaseForecast(request: NextRequest): Promise<BaseForecastResponse> {
   try {
     const internalUrl = new URL(request.url);
     internalUrl.pathname = '/api/insurance/portfolio/forecast';
 
-    const headers = new Headers(request.headers);
-    const response = await fetch(internalUrl.toString(), { headers });
+    const response = await getForecastBase(
+      new NextRequest(internalUrl, { method: 'GET', headers: request.headers })
+    );
     if (!response.ok) {
       return { ok: false, error: `HTTP ${response.status}` };
     }
