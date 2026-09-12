@@ -121,6 +121,8 @@ describe('Hospitality CRUD — aislamiento multi-tenant', () => {
 
   it('POST unit crea con tenantId del usuario si la propiedad es suya', async () => {
     hoisted.hospitalityProperty.findFirst.mockResolvedValue({ id: 'prop_a', tenantId: 'tenant_a' });
+    // El tenant no tiene unidades previas: la divisa cae al valor del esquema.
+    hoisted.hospitalityUnit.findMany.mockResolvedValue([]);
     hoisted.hospitalityUnit.create.mockResolvedValue({ id: 'u1', tenantId: 'tenant_a' });
     const res = await postUnit(jsonReq({ propertyId: 'prop_a', nombre: 'Suite 1', capacidad: 2 }));
 

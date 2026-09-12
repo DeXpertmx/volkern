@@ -27,6 +27,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { formatearImporte, monedaPredominante } from '@/lib/hospitality/moneda';
 
 interface Property {
   id: string;
@@ -149,7 +150,9 @@ export default function HospitalityTarifasPage() {
     const defaultUnit = filteredUnits[0]?.id || '';
     setForm({
       ...EMPTY_FORM,
-      moneda: filteredUnits[0]?.moneda || 'MXN',
+      // La divisa por defecto del plan sale de las unidades, no de una constante:
+      // el esquema trae 'MXN' y aquí se creaban planes de tarifa en pesos.
+      moneda: monedaPredominante(filteredUnits.map((u) => u.moneda)) || 'MXN',
       activo: true,
     });
     setDialogOpen(true);
@@ -442,7 +445,7 @@ export default function HospitalityTarifasPage() {
                 <div className="flex items-center gap-4 text-sm">
                   <span className="flex items-center gap-1 font-semibold">
                     <DollarSign className="h-4 w-4 text-primary" />
-                    {p.tarifa.toLocaleString('es-MX')} {p.moneda}
+                    {formatearImporte(p.tarifa, p.moneda, 0)}
                     <span className="text-xs text-muted-foreground font-normal">/noche</span>
                   </span>
                   <span className="flex items-center gap-1 text-xs text-muted-foreground">

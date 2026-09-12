@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
     // La unidad debe existir y pertenecer al tenant (aislamiento multi-tenant).
     const unit = await prisma.hospitalityUnit.findFirst({
       where: { id: unitId, tenantId, propertyId },
-      select: { id: true },
+      select: { id: true, moneda: true },
     });
     if (!unit) {
       return NextResponse.json({ error: 'La unidad no existe en este tenant' }, { status: 404 });
@@ -81,7 +81,9 @@ export async function POST(req: NextRequest) {
         nombre: String(nombre).trim(),
         codigo: codigo ? String(codigo).trim() : null,
         tarifa,
-        moneda: moneda || 'MXN',
+        // El plan hereda la divisa de su unidad antes de caer al valor del
+        // esquema: fijar 'MXN' aquí metía planes en pesos en una cuenta europea.
+        moneda: moneda || unit.moneda || 'MXN',
         minNoches: Math.max(1, parseInt(minNoches) || 1),
         maxNoches: maxNoches != null ? parseInt(maxNoches) : null,
         checkInDias: Array.isArray(checkInDias) && checkInDias.length ? checkInDias : Prisma.JsonNull,
