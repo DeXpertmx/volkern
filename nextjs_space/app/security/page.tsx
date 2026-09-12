@@ -53,7 +53,7 @@ export default function SecurityPolicyPage() {
           <p className="text-xl text-blue-100 max-w-2xl mx-auto">
             Cómo reportar vulnerabilidades de seguridad de forma responsable.
           </p>
-          <p className="text-sm text-blue-200 mt-4">Última actualización: 22 de agosto de 2026</p>
+          <p className="text-sm text-blue-200 mt-4">Última actualización: 3 de septiembre de 2026 · Versión 2026-09</p>
         </div>
       </section>
 
@@ -62,6 +62,15 @@ export default function SecurityPolicyPage() {
         <div className="container mx-auto px-4">
           <div className="max-w-4xl mx-auto">
             <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 md:p-12 space-y-8">
+
+              <p className="text-gray-600 leading-relaxed text-lg">
+                Volkern CRM, operado por <strong>Dimension eXpert LLC</strong>, se compromete a proteger la
+                seguridad de la plataforma y de los datos de nuestros clientes. Esta política describe cómo
+                reportar vulnerabilidades de forma responsable y complementa nuestros{' '}
+                <Link href="/terms" className="text-blue-600 hover:underline">Términos de Servicio</Link> y
+                nuestra{' '}
+                <Link href="/privacy" className="text-blue-600 hover:underline">Política de Privacidad</Link>.
+              </p>
 
               <section className="bg-gray-50 rounded-xl p-6 border border-gray-200">
                 <h2 className="text-xl font-bold text-gray-900 mb-3">Reportar una vulnerabilidad</h2>
@@ -179,6 +188,12 @@ export default function SecurityPolicyPage() {
                     <strong>Sitio web:</strong> <a href="https://volkern.app" className="text-blue-600 hover:underline">https://volkern.app</a>
                   </p>
                 </div>
+                <p className="text-gray-600 leading-relaxed mt-4 text-sm">
+                  Para más detalle sobre el uso de la plataforma, consulta los{' '}
+                  <Link href="/terms" className="text-blue-600 hover:underline">Términos de Servicio</Link>;
+                  para el tratamiento de tus datos, la{' '}
+                  <Link href="/privacy" className="text-blue-600 hover:underline">Política de Privacidad</Link>.
+                </p>
               </section>
 
             </div>
