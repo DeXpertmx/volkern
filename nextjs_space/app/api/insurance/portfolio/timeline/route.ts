@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
+import { fxConvert, CURRENCY_CONSTANTS, type Currency } from '@/lib/insurance/currency';
 
 /**
  * GET /api/insurance/portfolio/timeline?months=12
@@ -10,10 +11,15 @@ import { authenticateRequest } from '@/lib/api-key-auth';
  * Devuelve la serie mensual de prima (últimos N meses) agrupada por mes de
  * `fechaEmision` de las pólizas activas:
  *
- *   [{ mes: '2024-11', label: 'Nov 2024', polizasCount, polizasNuevas, primaTotal, primaPromedio }, ...]
+ *   { tenantMoneda, months, serie: [{ mes: '2024-11', label: 'Nov 2024', polizasCount, polizasNuevas, primaTotal, primaPromedio }, ...], ... }
  *
  * Los meses sin actividad se devuelven con primaTotal=0 para que el chart
  * pueda dibujarlos sin gaps.
+ *
+ * `tenantMoneda` es la divisa de reporte del tenant, y **las sumas están
+ * convertidas a ella**: una póliza en euros y otra en pesos dentro del mismo
+ * tenant no pueden sumarse en bruto, porque el total no significaría nada y la
+ * pantalla lo escribiría con el símbolo de una divisa que no es la suya.
  *
  * Cap de meses: 36 (1 año y medio) para no devolver payloads demasiado
  * grandes para tenants históricos.
@@ -52,6 +58,15 @@ export async function GET(request: NextRequest) {
     // Primer día del mes N meses atrás → al incluirlo, ese mes completo está dentro del rango.
     const startDate = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1);
 
+    // Divisa de reporte del tenant: es a la que se convierten todas las sumas y
+    // la que la pantalla usa para escribir el dinero.
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: auth.tenant!.id },
+      select: { moneda: true },
+    });
+    const tenantMoneda: Currency = (tenant?.moneda as Currency | undefined) ??
+      (CURRENCY_CONSTANTS.DEFAULT_TENANT_CURRENCY as Currency);
+
     // Filtrar en BD por fechaEmision reduce drásticamente el dataset — sólo se bajan
     // las pólizas emitidas dentro de la ventana solicitada.
     const polizas = await prisma.poliza.findMany({
@@ -63,6 +78,7 @@ export async function GET(request: NextRequest) {
         id: true,
         fechaEmision: true,
         primaAnual: true,
+        moneda: true,
         estado: true,
       },
     });
@@ -76,7 +92,13 @@ export async function GET(request: NextRequest) {
       entry.polizasCount += 1;
       // Contar como "nueva" cualquier póliza del rango (no renovación) — es emisión fresca.
       entry.polizasNuevas += 1;
-      entry.primaTotal += Number(p.primaAnual ?? 0);
+      // Convertir a la divisa del tenant antes de sumar: el total debe estar en
+      // la misma divisa que declara `tenantMoneda`.
+      entry.primaTotal += fxConvert(
+        Number(p.primaAnual ?? 0),
+        (p.moneda as string) ?? tenantMoneda,
+        tenantMoneda
+      );
       acumulados.set(key, entry);
     }
 
@@ -101,6 +123,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       generado: new Date().toISOString(),
+      tenantMoneda,
       months,
       serie,
       tendencia,

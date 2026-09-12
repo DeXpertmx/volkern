@@ -167,6 +167,9 @@ export default function PortfolioPage() {
   const [smartForecast, setSmartForecast] = useState<SmartForecastFE | null>(null);
   const [smartLoading, setSmartLoading] = useState(true);
   const [byRamo, setByRamo] = useState<ByRamoData[] | null>(null);
+  // La divisa viaja al lado de la lista de ramos, no dentro de cada ramo: se
+  // guarda aparte para poder pasársela a la cuadrícula.
+  const [monedaByRamo, setMonedaByRamo] = useState('');
   const [byRamoLoading, setByRamoLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
@@ -240,6 +243,7 @@ export default function PortfolioPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? 'No pude obtener el forecast por ramo');
       setByRamo(data.ramos ?? []);
+      setMonedaByRamo(typeof data.tenantMoneda === 'string' ? data.tenantMoneda : '');
     } catch (err) {
       console.error('Error al cargar el forecast por ramo:', err);
     } finally {
@@ -491,7 +495,7 @@ export default function PortfolioPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <MultiRamoForecastGrid data={byRamo} loading={byRamoLoading && !byRamo} />
+          <MultiRamoForecastGrid data={byRamo} loading={byRamoLoading && !byRamo} moneda={monedaByRamo} />
         </CardContent>
       </Card>
 
