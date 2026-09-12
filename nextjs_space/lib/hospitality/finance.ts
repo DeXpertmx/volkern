@@ -136,6 +136,23 @@ export function calcularCobrado(pagos: PagoReserva[]): number {
 }
 
 /**
+ * Dinero devuelto al huésped: suma de los pagos marcados como reembolsados.
+ *
+ * Se calcula sobre los pagos y no sobre el neto cobrado a propósito: una
+ * reserva cobrada y devuelta por el mismo importe deja `cobrado = 0`, y mirando
+ * solo esa resta el reembolso desaparecería del informe.
+ */
+export function calcularReembolsado(pagos: PagoReserva[]): number {
+  return redondear(
+    pagos.reduce(
+      (total, pago) =>
+        total + (pago.estado === 'reembolsado' ? Math.abs(pago.importe || 0) : 0),
+      0
+    )
+  );
+}
+
+/**
  * Estado de cobro derivado de lo cobrado contra el total de la reserva.
  * `total` es el importe a cobrar (normalmente el ingreso bruto).
  */
