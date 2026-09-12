@@ -28,6 +28,33 @@ function res(overrides: Partial<AnalyticsReservationInput> = {}): AnalyticsReser
 
 const HASTA = d(2026, 8, 11); // ventana de 2 días: 10 y 11 sep
 
+describe('coversNight con check-in a mitad del día', () => {
+  // Regresión: las reservas manuales entran a las 15:00 y las de OTA pueden
+  // traer la hora del proveedor. Comparar instantes crudos dejaba fuera la
+  // primera noche, así que el planning y las analíticas no coincidían.
+  it('una reserva que entra a las 15:00 ocupa su primera noche', () => {
+    const conHora = res({
+      checkIn: new Date(2026, 8, 10, 15, 0, 0),
+      checkOut: new Date(2026, 8, 12, 11, 0, 0),
+    });
+    expect(coversNight(conHora, d(2026, 8, 10).getTime())).toBe(true);
+    expect(coversNight(conHora, d(2026, 8, 11).getTime())).toBe(true);
+    // La noche del check-out no se ocupa (§8).
+    expect(coversNight(conHora, d(2026, 8, 12).getTime())).toBe(false);
+  });
+
+  it('coincide con la convención del planning para el mismo caso', () => {
+    const conHora = res({
+      checkIn: new Date(2026, 8, 10, 15, 0, 0),
+      checkOut: new Date(2026, 8, 12, 11, 0, 0),
+    });
+    const noches = [10, 11, 12].filter((dia) =>
+      coversNight(conHora, d(2026, 8, dia).getTime())
+    );
+    expect(noches).toEqual([10, 11]);
+  });
+});
+
 describe('coversNight (§8: checkIn <= D < checkOut)', () => {
   it('cubre las noches de la estancia, no la del check-out', () => {
     const r = res();
