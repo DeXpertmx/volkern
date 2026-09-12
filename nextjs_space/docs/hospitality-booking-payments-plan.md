@@ -16,6 +16,9 @@ porque fueron tomadas explícitamente con el responsable del producto.
 | 1 | Modelo de cobro de las reservas del tenant | **Stripe Connect**, el tenant es el comerciante de fondos. Volkern puede cobrar una tarifa de plataforma. |
 | 2 | Ubicación del Booking Engine | **Sección propia (14 secciones)**, con su configuración, previsualización y enlaces públicos. |
 | 3 | Alcance de Finanzas (primera entrega) | **Rentabilidad por reserva + cobros**, reutilizando el ERP de Volkern para gastos, impuestos y facturación. |
+| 4 | Dónde vive la reserva directa del cliente | **Página pública propia de Hospitality por tenant**, con su enlace y su widget embebible. No se reutiliza el booking de citas de Real Estate: aquel agenda citas de agentes, no reservas de unidades. |
+| 5 | Tipo de cuenta de cobro por tenant | **Stripe Express**: Stripe aloja el alta y el KYC, el tenant cobra en su cuenta y Volkern no toca los fondos. |
+| 6 | Tarifa de plataforma de Volkern | **Configurable con valor 0** en la primera entrega. La cuenta de plataforma es ES/EUR con `charges_enabled` y sin cuentas conectadas todavía. |
 
 ### Reglas no negociables derivadas de las decisiones
 
@@ -178,28 +181,38 @@ que la mayor parte de la rentabilidad es un **cálculo derivado**, no esquema nu
 - [ ] Módulo puro de rentabilidad y estado de cobro + tests.
 - [ ] Guardia de "un solo motor de disponibilidad".
 
-### FASE 3.B — Finanzas
-- [ ] Sección **Finanzas**: por reserva, desglose, comisiones, pagos, pendiente, neto y margen.
-- [ ] Vista de cobros (pagado / pendiente / parcial / reembolsado) y por canal.
-- [ ] Enlace con el ERP para gastos e impuestos (sin duplicar entidades).
+### FASE 3.B — Finanzas  ✅ entregada
+- [x] Sección **Finanzas**: por reserva, desglose, comisiones, pagos, pendiente, neto y margen
+      (`app/dashboard/hospitality/finanzas`, API `GET /api/hospitality/finanzas`).
+- [x] Vista de cobros (pagado / pendiente / parcial / reembolsado) y por canal.
+- [x] Enlace con el ERP para gastos e impuestos (sin duplicar entidades).
+- [x] Ficha por reserva: líneas y pagos editables (`.../items`, `.../payments`).
 
-### FASE 3.C — Stripe Connect
+Nota: el reembolso se calcula desde los pagos, no restando el neto cobrado. Una reserva
+cobrada y devuelta por el mismo importe deja `cobrado = 0`, y mirando solo esa resta el
+devuelto desaparecía del informe.
+
+### FASE 3.C — Stripe Connect  ⏳ pendiente (decisión 5: **Express**)
 - [ ] Alta de cuenta Connect por tenant (onboarding KYC) y su estado.
 - [ ] Cobro de la reserva directa contra la cuenta **del tenant**.
 - [ ] Registro del pago y conciliación con la reserva.
 
-### FASE 3.D — Booking Engine (sección propia)
+### FASE 3.D — Booking Engine (sección propia)  ⏳ pendiente (decisión 4: **página pública propia**)
 - [ ] Configuración: propiedades publicadas, moneda, política, anticipo.
 - [ ] Previsualización de la experiencia de reserva.
 - [ ] Reserva pública: fechas → huéspedes → disponibilidad (motor central) → precio → datos → pago.
 - [ ] Enlaces públicos y embeds.
 - [ ] La reserva entra al flujo común: disponibilidad, CRM, planning, automatizaciones, finanzas.
 
-### FASE 3.E — Reportes
-- [ ] Operación: ocupación, ADR, RevPAR, estancia media, no-shows, cancelaciones, limpiezas, incidencias.
-- [ ] Ventas: reservas e ingresos por canal, reservas directas, antelación media.
-- [ ] Finanzas: bruto, comisiones, gastos, cobros, pendientes, reembolsos, neto, margen.
-- [ ] Por propiedad, con exportación.
+### FASE 3.E — Reportes  ✅ entregada
+- [x] Operación: ocupación, ADR, RevPAR, estancia media, no-shows, cancelaciones, limpiezas, incidencias.
+- [x] Ventas: reservas e ingresos por canal, reservas directas, antelación media.
+- [x] Finanzas: bruto, comisiones, gastos, cobros, pendientes, reembolsos, neto, margen.
+- [x] Por propiedad, con exportación CSV (`GET /api/hospitality/reportes?formato=csv`).
+
+Las métricas viven en `lib/hospitality/reportes.ts` (puro) y el dinero en
+`lib/hospitality/finance.ts` + `finance-summary.ts`: ningún módulo nuevo tiene aritmética
+propia, y la definición de "noche ocupada" sigue siendo una sola (`coversNight`).
 
 ---
 
