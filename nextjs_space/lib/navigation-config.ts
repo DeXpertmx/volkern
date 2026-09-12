@@ -282,7 +282,9 @@ export const HUBS: HubConfig[] = [
       '/dashboard/hospitality/tarifas',
       '/dashboard/hospitality/comunicaciones',
       '/dashboard/hospitality/automatizaciones',
-      '/dashboard/hospitality/onboarding'
+      '/dashboard/hospitality/onboarding',
+      '/dashboard/hospitality/finanzas',
+      '/dashboard/hospitality/reportes'
     ],
     items: [
       { name: 'Inicio', href: '/dashboard/hospitality', icon: Home, planModule: 'hospitality', description: 'Propiedades, unidades y resumen del módulo' },
@@ -296,6 +298,8 @@ export const HUBS: HubConfig[] = [
       { name: 'Huéspedes', href: '/dashboard/hospitality/huespedes', icon: Users, planModule: 'hospitality', description: 'Historial de estancias por huésped vinculado al CRM' },
       { name: 'Comunicaciones', href: '/dashboard/hospitality/comunicaciones', icon: MessageSquareText, planModule: 'hospitality', description: 'Plantillas automáticas por evento (confirmación, check-in, reseña...)' },
       { name: 'Automatizaciones', href: '/dashboard/hospitality/automatizaciones', icon: Zap, planModule: 'hospitality', description: 'Reglas sobre el Automation Engine: eventos → tareas, limpiezas y mensajes' },
+      { name: 'Finanzas', href: '/dashboard/hospitality/finanzas', icon: Wallet, planModule: 'hospitality', description: 'Cobros, comisiones, bruto, neto y margen por reserva y por canal' },
+      { name: 'Reportes', href: '/dashboard/hospitality/reportes', icon: BarChart3, planModule: 'hospitality', description: 'Ocupación, ADR, RevPAR, mix de canales y resultado por propiedad' },
     ]
   },
   {
