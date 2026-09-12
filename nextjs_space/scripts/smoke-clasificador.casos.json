@@ -1,0 +1,33 @@
+{
+  "_nota": [
+    "Fuente única de los casos del clasificador determinista.",
+    "La leen DOS consumidores, y por eso vive en un archivo compartido en vez",
+    "de estar duplicada en cada uno:",
+    "  1. tests/intent-determinista-guard.test.ts — comprueba en local que el",
+    "     detector determinista reconoce cada frase SIN LLM.",
+    "  2. scripts/smoke-clasificador-agent.js — comprueba lo mismo contra el",
+    "     entorno DESPLEGADO, leyendo el marcador '[determinista]' que el",
+    "     clasificador escribe en chatbot_audit_logs.",
+    "Si una frase se renombra o un intent cambia, se cambia aquí una vez."
+  ],
+  "deterministas": [
+    { "mensaje": "envía un email a maria@empresa.com para agradecer la reunión", "intent": "enviar_mensaje" },
+    { "mensaje": "cuánto gané este mes", "intent": "cuenta_resultados" },
+    { "mensaje": "predice el riesgo de fallo del activo prensa S1", "intent": "predecir_fallo_activo" },
+    { "mensaje": "simula un escenario de producción", "intent": "simular_escenario_produccion" },
+    { "mensaje": "qué órdenes no están listas para producir", "intent": "readiness_produccion" },
+    { "mensaje": "mueve el portátil de María a Juan", "intent": "transferir_activo" },
+    { "mensaje": "reagenda la cita de Juan al viernes a las 4pm", "intent": "reagendar_cita" },
+    { "mensaje": "elimina el horario de anuncios de las 9", "intent": "eliminar_horario" },
+    { "mensaje": "saca 10 unidades de stock del jabón de baño", "intent": "ajustar_stock" },
+    { "mensaje": "borra el horario de la campaña de Meta", "intent": "eliminar_horario" },
+    { "mensaje": "mándale un whatsapp a Juan", "intent": "enviar_mensaje" },
+    { "mensaje": "cancela la cita de Alejandra Velázquez", "intent": "cancelar_cita" }
+  ],
+  "sinColision": [
+    { "mensaje": "mueve la tarea de enviar documento para mañana", "intentoProhibido": "transferir_activo" },
+    { "mensaje": "agrega pendiente: enviar documento a Carlos, vence el viernes", "intentoProhibido": "enviar_mensaje" },
+    { "mensaje": "envía un briefing de ventas", "intentoProhibido": "resumen_rrhh" },
+    { "mensaje": "elimina la cita de Alejandra", "intentoProhibido": "reagendar_cita" }
+  ]
+}
