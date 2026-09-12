@@ -92,7 +92,7 @@ jobs:
             fi
           done
 
-      - name: Run integration & deploy guards (scopes, webhooks, UI stubs, deploy scripts)
+      - name: Run integration & deploy guards (scopes, webhooks, UI stubs, deploy scripts, clasificador)
         # Guardias de integración, ejecutadas explícitamente (y antes de la suite
         # completa) para que corran en cada push aunque algún día se filtre la
         # invocación principal de vitest:
@@ -106,7 +106,10 @@ jobs:
         #     eliminado en Docker 26) que abortaban el pipeline en silencio
         #   - deploy-scripts-syntax: todo script de deploy-vps/ y scripts/ pasa `bash -n`
         #     (y shellcheck con severidad error si está disponible) antes de llegar al VPS
-        run: npx vitest run tests/api-key-scopes.test.ts tests/outgoing-webhook-events-guard.test.ts tests/client-catalog-stubs-guard.test.ts tests/deploy-docker-templates-guard.test.ts tests/deploy-scripts-syntax-guard.test.ts
+        #   - intent-determinista: las frases que deben resolverse SIN LLM se
+        #     comprueban contra el detector determinista (no contra classify()):
+        #     en CI no hay claves y caían a consulta_general sin que se notara
+        run: npx vitest run tests/api-key-scopes.test.ts tests/outgoing-webhook-events-guard.test.ts tests/client-catalog-stubs-guard.test.ts tests/deploy-docker-templates-guard.test.ts tests/deploy-scripts-syntax-guard.test.ts tests/intent-determinista-guard.test.ts
 
       - name: Run unit tests
         run: npx vitest run
