@@ -21,15 +21,21 @@
     "simbolo": 7
   },
   "app/admin/saas/tenants/[id]/page.tsx": {
-    "simbolo": 6
+    "simbolo": 9
   },
   "app/admin/saas/tenants/page.tsx": {
     "simbolo": 5
+  },
+  "app/api/customer/chat/route.ts": {
+    "simbolo": 1
   },
   "app/api/invoices/[id]/pdf/route.ts": {
     "simbolo": 1
   },
   "app/api/invoices/[id]/send-email/route.ts": {
+    "simbolo": 1
+  },
+  "app/api/subscriptions/create/route.ts": {
     "simbolo": 1
   },
   "app/api/webhooks/telegram/route.ts": {
@@ -41,10 +47,10 @@
   "app/dashboard/compliance/page.tsx": {
     "simbolo": 1
   },
-  "app/dashboard/finanzas/contabilidad/modelo347/page.tsx": {
+  "app/dashboard/configuracion/billing/page.tsx": {
     "simbolo": 1
   },
-  "app/dashboard/seguros/page.tsx": {
+  "app/dashboard/finanzas/contabilidad/modelo347/page.tsx": {
     "simbolo": 1
   },
   "app/dashboard/strategy/page.tsx": {
@@ -56,16 +62,13 @@
   "app/neting/page.tsx": {
     "simbolo": 4
   },
-  "app/portal/[token]/page.tsx": {
-    "simbolo": 4
-  },
   "app/precios/page.tsx": {
     "simbolo": 3
   },
   "app/signup/page.tsx": {
     "simbolo": 1
   },
-  "app/soluciones/insurance/page.tsx": {
+  "app/terms/page.tsx": {
     "simbolo": 1
   },
   "components/admin/GlobalAnalytics.tsx": {
@@ -80,6 +83,18 @@
   "components/dashboard-stats.tsx": {
     "simbolo": 2
   },
+  "components/hr/BenefitsManager.tsx": {
+    "simbolo": 1
+  },
+  "components/hr/PayrollExecutionConsole.tsx": {
+    "simbolo": 3
+  },
+  "components/hr/PayrollReview.tsx": {
+    "simbolo": 2
+  },
+  "components/hr/PayrollVault.tsx": {
+    "simbolo": 8
+  },
   "components/hubs/ConfiguracionDashboard.tsx": {
     "simbolo": 1
   },
@@ -87,60 +102,18 @@
     "simbolo": 1
   },
   "components/hubs/ProduccionDashboard.tsx": {
-    "simbolo": 4
+    "simbolo": 6
   },
   "components/hubs/ProyectosDashboard.tsx": {
     "simbolo": 6
   },
-  "components/public/AcademyLanding.tsx": {
-    "simbolo": 7
-  },
-  "components/public/AccountingLanding.tsx": {
-    "simbolo": 7
-  },
-  "components/public/ComplianceProLanding.tsx": {
-    "simbolo": 1
-  },
-  "components/public/CrmVentasLanding.tsx": {
-    "simbolo": 7
-  },
-  "components/public/FacturacionLanding.tsx": {
-    "simbolo": 6
-  },
-  "components/public/IndustriaLanding.tsx": {
-    "simbolo": 6
-  },
-  "components/public/InsuranceLanding.tsx": {
-    "simbolo": 7
-  },
-  "components/public/LogisticaLanding.tsx": {
-    "simbolo": 3
-  },
-  "components/public/MarketingLanding.tsx": {
-    "simbolo": 7
-  },
-  "components/public/NetingLanding.tsx": {
-    "simbolo": 41
-  },
-  "components/public/NewLanding.tsx": {
-    "simbolo": 1
-  },
-  "components/public/PricingClient.tsx": {
-    "simbolo": 6
-  },
-  "components/public/PricingPage.tsx": {
+  "components/hubs/accounting/ReconciliationDashboard.tsx": {
     "simbolo": 2
   },
-  "components/public/ProductosLanding.tsx": {
-    "simbolo": 1
+  "components/insurance/MapaCartera.tsx": {
+    "simbolo": 2
   },
-  "components/public/RRHHLanding.tsx": {
-    "simbolo": 6
-  },
-  "components/public/RealEstateLanding.tsx": {
-    "simbolo": 6
-  },
-  "components/public/SimplifiedLanding.tsx": {
+  "components/public/ComplianceProLanding.tsx": {
     "simbolo": 1
   },
   "components/sovereignty/integrity-graph.tsx": {
@@ -155,14 +128,23 @@
   "components/webcreator/blocks/components/BookingBlock.ts": {
     "simbolo": 1
   },
-  "lib/agents/execution-engine.ts": {
-    "simbolo": 9
+  "lib/accounting/fiscal-calendar-service.ts": {
+    "simbolo": 1
+  },
+  "lib/accounting/proactivity-worker.ts": {
+    "simbolo": 1
+  },
+  "lib/agents/command-validator.ts": {
+    "simbolo": 2
   },
   "lib/agents/intents/crm-intents.ts": {
     "simbolo": 3
   },
   "lib/agents/intents/finance-intents.ts": {
     "simbolo": 5
+  },
+  "lib/agents/response-formatter.ts": {
+    "simbolo": 7
   },
   "lib/approval-workflow-service.ts": {
     "simbolo": 14
@@ -171,7 +153,7 @@
     "simbolo": 2
   },
   "lib/erp/pdf-service.ts": {
-    "simbolo": 1
+    "simbolo": 9
   },
   "lib/insurance/connectors/gnp/mock-data.ts": {
     "simbolo": 5
@@ -191,10 +173,19 @@
   "lib/puck/puck-config.tsx": {
     "simbolo": 3
   },
+  "lib/sales/morning-briefing-service.ts": {
+    "simbolo": 1
+  },
   "lib/seo/agent-skills.ts": {
+    "simbolo": 2
+  },
+  "lib/skills/cost-ai-skills.ts": {
     "simbolo": 2
   },
   "lib/skills/index.ts": {
     "simbolo": 1
+  },
+  "lib/skills/real-estate-skills.ts": {
+    "simbolo": 3
   }
 }

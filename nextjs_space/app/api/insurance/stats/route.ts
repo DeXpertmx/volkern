@@ -42,6 +42,10 @@ export async function GET(request: NextRequest) {
       renovaciones30d,
       renovaciones60d,
       oportunidadesDetectadas,
+      // Divisa de reporte del tenant: la prima total es una cifra agregada de
+      // pólizas que pueden venir en divisas distintas, así que el agregado se
+      // escribe en la moneda del tenant y no en la de una fila cualquiera.
+      tenantMoneda: auth.tenant!.moneda || '',
     });
   } catch (error) {
     console.error('Error fetching insurance stats:', error);

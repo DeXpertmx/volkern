@@ -55,10 +55,6 @@
     "divisa": 3,
     "formato": 1
   },
-  "app/api/contratos/public/[id]/pdf/route.ts": {
-    "divisa": 3,
-    "formato": 1
-  },
   "app/api/contratos/route.ts": {
     "divisa": 1,
     "formato": 0
@@ -101,14 +97,6 @@
   },
   "app/api/leads/[id]/convert/route.ts": {
     "divisa": 1,
-    "formato": 0
-  },
-  "app/api/public/plans/route.ts": {
-    "divisa": 2,
-    "formato": 0
-  },
-  "app/api/public/users/[slug]/route.ts": {
-    "divisa": 2,
     "formato": 0
   },
   "app/api/signup/route.ts": {
@@ -235,26 +223,6 @@
     "divisa": 0,
     "formato": 2
   },
-  "app/p/[tenantSlug]/[pageSlug]/PageClient.tsx": {
-    "divisa": 0,
-    "formato": 1
-  },
-  "app/p/[tenantSlug]/propiedades/HeroCarousel.tsx": {
-    "divisa": 0,
-    "formato": 1
-  },
-  "app/p/[tenantSlug]/propiedades/[id]/PropertyDetailClient.tsx": {
-    "divisa": 0,
-    "formato": 1
-  },
-  "app/p/[tenantSlug]/propiedades/[id]/page.tsx": {
-    "divisa": 0,
-    "formato": 1
-  },
-  "app/p/[tenantSlug]/propiedades/page.tsx": {
-    "divisa": 0,
-    "formato": 2
-  },
   "app/signup/page.tsx": {
     "divisa": 0,
     "formato": 1
@@ -319,22 +287,6 @@
     "divisa": 5,
     "formato": 0
   },
-  "components/public/CountUp.tsx": {
-    "divisa": 0,
-    "formato": 1
-  },
-  "components/public/NewLanding.tsx": {
-    "divisa": 8,
-    "formato": 2
-  },
-  "components/public/Pricing.tsx": {
-    "divisa": 3,
-    "formato": 0
-  },
-  "components/public/SimplifiedLanding.tsx": {
-    "divisa": 0,
-    "formato": 2
-  },
   "components/social/SocialAnalyticsWidget.tsx": {
     "divisa": 0,
     "formato": 1
@@ -371,25 +323,9 @@
     "divisa": 3,
     "formato": 0
   },
-  "lib/agents/entity-extractor.ts": {
-    "divisa": 1,
-    "formato": 0
-  },
-  "lib/agents/execution-engine.ts": {
-    "divisa": 2,
-    "formato": 20
-  },
-  "lib/agents/intent-classifier.ts": {
-    "divisa": 2,
-    "formato": 0
-  },
   "lib/agents/intents/insurance-intents.ts": {
     "divisa": 1,
     "formato": 0
-  },
-  "lib/agents/telegram-gateway.ts": {
-    "divisa": 2,
-    "formato": 3
   },
   "lib/automation/actions/integrations.ts": {
     "divisa": 1,

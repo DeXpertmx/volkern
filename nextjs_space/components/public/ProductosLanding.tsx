@@ -4,6 +4,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { getVerticalPlanPrice } from '@/lib/vertical-plans';
+import { MONEDA_PLATAFORMA, formatearImporte } from '@/lib/moneda';
 import { Button } from '@/components/ui/button';
 import {
   ArrowRight, Zap, Home, GraduationCap, Calculator,
@@ -233,7 +234,7 @@ export default function ProductosLanding() {
                       <div className="flex items-baseline gap-1">
                         {/* El precio no se escribe aquí: sale de la fuente única
                             (lib/vertical-plans.ts), la misma que usa el cobro. */}
-                        <span className="text-3xl font-black text-white">€{getVerticalPlanPrice(v.id) ?? 0}</span>
+                        <span className="text-3xl font-black text-white">{formatearImporte(getVerticalPlanPrice(v.id) ?? 0, MONEDA_PLATAFORMA, 0)}</span>
                         <span className="text-sm text-slate-500">/mes</span>
                       </div>
                       <p className="text-[10px] text-slate-600 mt-0.5">Sin permanencia</p>

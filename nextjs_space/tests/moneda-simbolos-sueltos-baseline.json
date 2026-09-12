@@ -1,0 +1,71 @@
+{
+  "app/admin/planes/page.tsx": {
+    "suelto": 1
+  },
+  "app/admin/sales/dashboard/page.tsx": {
+    "suelto": 2
+  },
+  "app/api/contratos/[id]/send/route.ts": {
+    "suelto": 1
+  },
+  "app/api/contratos/[id]/volkernsign/route.ts": {
+    "suelto": 1
+  },
+  "app/api/erp/expenses/scan/route.ts": {
+    "suelto": 1
+  },
+  "app/dashboard/catalogo/page.tsx": {
+    "suelto": 1
+  },
+  "app/dashboard/cotizaciones/nueva/page.tsx": {
+    "suelto": 1
+  },
+  "app/dashboard/ventas/ordenes/page.tsx": {
+    "suelto": 2
+  },
+  "components/accounting/AccountingSlotProvisioningModal.tsx": {
+    "suelto": 3
+  },
+  "components/catalogo/CatalogSearchSelect.tsx": {
+    "suelto": 1
+  },
+  "components/catalogo/CatalogoSelector.tsx": {
+    "suelto": 1
+  },
+  "components/hr/BenefitsManager.tsx": {
+    "suelto": 1
+  },
+  "components/hr/PayrollVault.tsx": {
+    "suelto": 1
+  },
+  "components/hubs/ConfiguracionDashboard.tsx": {
+    "suelto": 7
+  },
+  "components/hubs/GlobalCockpitDashboard.tsx": {
+    "suelto": 1
+  },
+  "components/insurance/MapaCartera.tsx": {
+    "suelto": 4
+  },
+  "components/modals/NewProjectModal.tsx": {
+    "suelto": 1
+  },
+  "components/webcreator/blocks/components/CatalogBlock.ts": {
+    "suelto": 2
+  },
+  "lib/compliance-alerts.ts": {
+    "suelto": 1
+  },
+  "lib/contratos/placeholders.ts": {
+    "suelto": 1
+  },
+  "lib/cotizaciones/cotizacion-pdf.ts": {
+    "suelto": 1
+  },
+  "lib/invoice-parser.ts": {
+    "suelto": 3
+  },
+  "lib/ordenes-venta/orden-pdf.ts": {
+    "suelto": 4
+  }
+}

@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
+import { monedaEfectiva } from '@/lib/moneda'
 import { findBookingUserBySlug } from '@/lib/public-slug-lookup'
 
 
@@ -22,6 +23,9 @@ export async function GET(
                 select: {
                     id: true,
                     nombre: true,
+                    // Divisa de reporte del tenant: es el respaldo de los servicios
+                    // que no declaran la suya (antes caían a un euro fijo).
+                    moneda: true,
                 }
             }
         };
@@ -43,6 +47,10 @@ export async function GET(
         if (!user || !user.bookingEnabled) {
             return NextResponse.json({ error: 'Perfil de agendamiento no encontrado o inactivo' }, { status: 404 })
         }
+
+        // El usuario ya está resuelto: la constante fija el estrechamiento de tipo
+        // para los `map` de abajo, donde TypeScript no lo mantiene sobre un `let`.
+        const usuario = user;
 
         // Obtener servicios desde CatalogoItem y Servicio (legacy)
         const [catalogoItems, serviciosLegacy] = await Promise.all([
@@ -70,7 +78,7 @@ export async function GET(
             descripcion: item.descripcion,
             duracionMinutos: item.duracionMinutos || 60,
             precio: item.precioBase,
-            moneda: item.moneda || 'EUR',
+            moneda: monedaEfectiva([item.moneda], usuario.tenant?.moneda),
             modalidad: item.modalidad || 'presencial'
         }]))
 
@@ -93,7 +101,7 @@ export async function GET(
                     descripcion: s.descripcion,
                     duracionMinutos: s.duracionMinutos || 60,
                     precio: s.precio,
-                    moneda: s.moneda || 'EUR',
+                    moneda: monedaEfectiva([s.moneda], usuario.tenant?.moneda),
                     modalidad: s.modalidad || 'presencial'
                 }))
         ]
