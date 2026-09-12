@@ -199,10 +199,6 @@
     "divisa": 1,
     "formato": 0
   },
-  "app/api/tenant/moneda/route.ts": {
-    "divisa": 1,
-    "formato": 0
-  },
   "app/api/tenants/create/route.ts": {
     "divisa": 1,
     "formato": 0
@@ -793,10 +789,6 @@
   },
   "lib/insurance/csv-template.ts": {
     "divisa": 4,
-    "formato": 0
-  },
-  "lib/insurance/currency-prompt.ts": {
-    "divisa": 24,
     "formato": 0
   },
   "lib/insurance/currency.ts": {

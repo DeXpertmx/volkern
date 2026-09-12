@@ -48,7 +48,100 @@ export type Currency = (typeof MONEDAS_SOPORTADAS)[number];
  * Deliberadamente corta: es una decisión de producto, no la lista de lo que el
  * sistema sabe leer. Vive aquí para que ninguna vista contenga un código.
  */
-export const MONEDAS_SELECCIONABLES = ['MXN', 'USD', 'EUR'] as const;
+export const MONEDAS_SELECCIONABLES = ['MXN', 'USD', 'EUR', 'COP'] as const;
+
+/**
+ * Divisa en la que Volkern factura sus propios planes.
+ *
+ * Es un hecho del producto —`PLAN_PRICES` la usa para construir el cobro y la
+ * web pública para comparar precios— y por eso vive aquí en vez de repetida en
+ * cada pantalla que enseña un precio de Volkern. No tiene nada que ver con la
+ * moneda del tenant: una cuenta puede pagar su suscripción en euros y facturar
+ * a sus propios clientes en pesos.
+ */
+export const MONEDA_PLATAFORMA: Currency = 'EUR';
+
+/**
+ * Ficha con la que se nombra una divisa en la interfaz.
+ *
+ * El nombre y el símbolo de una divisa son conocimiento del dinero, no de la
+ * pantalla que lo enseña: estaban viviendo en el módulo de seguros mientras el
+ * resto de la plataforma no podía nombrar una divisa sin escribirla a mano.
+ */
+export interface MonedaInfo {
+  /** Código ISO 4217. */
+  codigo: Currency;
+  /** Nombre completo en español. */
+  nombre: string;
+  /** Símbolo con el que se escribe el importe. */
+  simbolo: string;
+  /** Ayuda para quien tiene que elegir la moneda de una cuenta. Vacío si no aplica. */
+  nota: string;
+}
+
+/**
+ * Ficha de cada divisa soportada.
+ *
+ * Es un `Record<Currency, …>` a propósito: obliga a que añadir una divisa a
+ * `MONEDAS_SOPORTADAS` sin darle nombre y símbolo no compile.
+ */
+const FICHAS_MONEDA: Record<Currency, { nombre: string; simbolo: string; nota: string }> = {
+  USD: { nombre: 'Dólar estadounidense', simbolo: '$', nota: 'Recomendado si operas desde Estados Unidos' },
+  EUR: { nombre: 'Euro', simbolo: '€', nota: 'Recomendado si operas desde Europa' },
+  MXN: { nombre: 'Peso mexicano', simbolo: '$', nota: 'Default conservador — solo si operas principalmente en México' },
+  GBP: { nombre: 'Libra esterlina', simbolo: '£', nota: 'Recomendado si operas desde Reino Unido' },
+  JPY: { nombre: 'Yen japonés', simbolo: '¥', nota: 'Yen japonés' },
+  CNY: { nombre: 'Yuan chino', simbolo: '¥', nota: 'Yuan chino (RMB)' },
+  CAD: { nombre: 'Dólar canadiense', simbolo: '$', nota: 'Dólar canadiense' },
+  BRL: { nombre: 'Real brasileño', simbolo: 'R$', nota: 'Real brasileño' },
+  CLP: { nombre: 'Peso chileno', simbolo: '$', nota: 'Peso chileno' },
+  ARS: { nombre: 'Peso argentino', simbolo: '$', nota: 'Peso argentino (alta volatilidad)' },
+  COP: { nombre: 'Peso colombiano', simbolo: '$', nota: 'Peso colombiano' },
+  PEN: { nombre: 'Sol peruano', simbolo: 'S/', nota: 'Sol peruano' },
+};
+
+/**
+ * Catálogo de divisas en el orden de `MONEDAS_SOPORTADAS`.
+ *
+ * Es el orden que usa el menú numerado del alta de cuentas, así que no se
+ * reordena sin querer: mover una divisa de sitio cambia el número que el
+ * usuario teclea.
+ */
+export const CATALOGO_MONEDAS: readonly MonedaInfo[] = MONEDAS_SOPORTADAS.map((codigo) => ({
+  codigo,
+  ...FICHAS_MONEDA[codigo],
+}));
+
+/** Ficha de una divisa, o `undefined` si el código no es de los soportados. */
+export function infoMoneda(codigo: string | null | undefined): MonedaInfo | undefined {
+  const normalizado = (codigo || '').trim().toUpperCase();
+  return CATALOGO_MONEDAS.find((m) => m.codigo === normalizado);
+}
+
+/** Nombre completo ('Peso mexicano') o el propio código si no se reconoce. */
+export function nombreMoneda(codigo: string | null | undefined): string {
+  const normalizado = (codigo || '').trim().toUpperCase();
+  return infoMoneda(normalizado)?.nombre || normalizado;
+}
+
+/** Símbolo ('$') o cadena vacía si la divisa no se reconoce. */
+export function simboloMoneda(codigo: string | null | undefined): string {
+  return infoMoneda(codigo)?.simbolo || '';
+}
+
+/** Etiqueta humana de una divisa: `EUR — Euro (€)`. */
+export function etiquetaMoneda(codigo: string | null | undefined): string {
+  const info = infoMoneda(codigo);
+  if (!info) return (codigo || '').trim().toUpperCase();
+  return `${info.codigo} — ${info.nombre} (${info.simbolo})`;
+}
+
+/** Etiqueta corta para chips y avisos: `€ · EUR`. */
+export function chipMoneda(codigo: string | null | undefined): string {
+  const info = infoMoneda(codigo);
+  if (!info) return (codigo || '').trim().toUpperCase();
+  return info.simbolo ? `${info.simbolo} · ${info.codigo}` : info.codigo;
+}
 
 /**
  * Valor que la base de datos exige cuando no hay ninguna divisa que usar.
