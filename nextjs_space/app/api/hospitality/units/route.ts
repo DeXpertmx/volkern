@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
 import { logAuditAction } from '@/lib/permissions';
-import { monedaEfectiva } from '@/lib/hospitality/moneda';
+import { monedaEscritura, monedaPredominante } from '@/lib/hospitality/moneda';
 
 // GET /api/hospitality/units — listar unidades del tenant (filtrable por propiedad)
 export async function GET(req: NextRequest) {
@@ -91,10 +91,12 @@ export async function POST(req: NextRequest) {
         where: { tenantId: auth.tenant!.id },
         select: { moneda: true },
       });
-      // El 'MXN' final es una red de seguridad para una escritura, no un valor por
-      // defecto: la columna no admite nulos y es preferible al valor vacío. En
-      // producción `Tenant.moneda` siempre trae valor, así que no se alcanza.
-      monedaUnidad = monedaEfectiva(existentes.map((u) => u.moneda), auth.tenant!.moneda) || 'MXN';
+      // `monedaEscritura` añade la red de seguridad de las escrituras: la columna
+      // no admite nulos. En producción `Tenant.moneda` siempre trae valor.
+      monedaUnidad = monedaEscritura(
+        monedaPredominante(existentes.map((u) => u.moneda)),
+        auth.tenant!.moneda
+      );
     }
 
     const unit = await prisma.hospitalityUnit.create({

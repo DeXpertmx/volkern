@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
+import { monedaEscritura } from '@/lib/hospitality/moneda';
 import { logAuditAction } from '@/lib/permissions';
 
 // GET /api/hospitality/properties — listar propiedades del tenant
@@ -88,7 +89,7 @@ export async function POST(req: NextRequest) {
           capacidad: Number(u.capacidad) || 2,
           tarifaBase: u.tarifaBase != null && u.tarifaBase !== '' ? Number(u.tarifaBase) : null,
           // Alta rápida de unidades: la divisa sale del tenant, no del esquema.
-          moneda: u.moneda || auth.tenant!.moneda || 'MXN',
+          moneda: monedaEscritura(u.moneda, auth.tenant!.moneda),
         })),
       });
     }

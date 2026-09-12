@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
+import { monedaEscritura } from '@/lib/hospitality/moneda';
 import { logAuditAction } from '@/lib/permissions';
 import { dispatchConnectivityPush } from '@/lib/hospitality/sync';
 import { unitOccupiedOnDay, type ActiveReservationSpan } from '@/lib/hospitality/availability';
@@ -229,9 +230,9 @@ export async function POST(req: NextRequest) {
         pah: false,
         amountAfterTax: importe != null && importe !== '' ? Number(importe) : null,
         // La divisa de la reserva la decide quien la crea; si no la indica, la del
-        // tenant. El valor por defecto del esquema dejaba reservas en pesos
-        // dentro de una cuenta europea.
-        currency: moneda || auth.tenant!.moneda || 'MXN',
+        // tenant. El valor por defecto del esquema dejaba reservas en pesos dentro
+        // de una cuenta europea.
+        currency: monedaEscritura(moneda, auth.tenant!.moneda),
         guestData: !contactId && (huespedNombre || huespedEmail || huespedTelefono)
           ? { firstName: huespedNombre || null, email: huespedEmail || null, phone: huespedTelefono || null }
           : undefined,
