@@ -83,7 +83,11 @@ describe('monedaEscritura', () => {
 
 describe('MONEDAS_SELECCIONABLES', () => {
   it('es la única lista de divisas que ve la interfaz', () => {
-    expect([...MONEDAS_SELECCIONABLES]).toEqual(['MXN', 'USD', 'EUR']);
+    // Es la unión de lo que los formularios ya ofrecían suelto: seguros daba
+    // EUR/MXN/USD y real estate añadía COP en sus dos pantallas de inmuebles.
+    // Al centralizarla, la lista no podía encogerse y dejar sin opción a quien
+    // ya facturaba en pesos colombianos.
+    expect([...MONEDAS_SELECCIONABLES]).toEqual(['MXN', 'USD', 'EUR', 'COP']);
     for (const moneda of MONEDAS_SELECCIONABLES) {
       expect(esMonedaSoportada(moneda)).toBe(true);
     }

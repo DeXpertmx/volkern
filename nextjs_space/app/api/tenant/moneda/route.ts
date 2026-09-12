@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma, globalPrisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { SUPPORTED_CURRENCIES, type Currency } from '@/lib/insurance/currency';
+import { MONEDA_MINIMA_ESQUEMA } from '@/lib/moneda';
 
 /**
  * PATCH /api/tenant/moneda
@@ -142,7 +143,9 @@ export const GET = withTenantAuth(async (_request, auth) => {
   return NextResponse.json({
     tenantId: tenant?.id,
     slug: tenant?.slug,
-    moneda: tenant?.moneda ?? 'MXN',
+    // Sin moneda declarada se responde el mínimo del esquema, que se define una
+    // sola vez en el módulo de dinero en vez de repetirse aquí como literal.
+    moneda: tenant?.moneda ?? MONEDA_MINIMA_ESQUEMA,
     soportadas: SUPPORTED_CURRENCIES,
   });
 }, ['config:read', 'settings:read']);
