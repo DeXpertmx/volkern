@@ -32,6 +32,12 @@ export interface ApiKeyAuthResult {
     plan: string;
     accountType?: string;
     parentId?: string | null;
+    /**
+     * Moneda de reporte del tenant (`Tenant.moneda`). Es la fuente autoritativa
+     * para los valores por defecto: el esquema trae 'MXN' y usarlo como respaldo
+     * deja a una cuenta europea creando y mostrando pesos.
+     */
+    moneda?: string | null;
   };
   user?: {
     id: string;
@@ -82,6 +88,7 @@ async function resolveHierarchicalContext(
     subdomain?: string | null
     plan: string
     accountType?: string
+    moneda?: string | null
   },
   targetTenantId?: string | null
 ): Promise<{ 
@@ -93,6 +100,7 @@ async function resolveHierarchicalContext(
     subdomain?: string | null
     plan: string
     accountType?: string
+    moneda?: string | null
   };
   agencyContext: boolean;
   error?: string;
@@ -105,7 +113,8 @@ async function resolveHierarchicalContext(
     slug: requesterTenant.slug,
     subdomain: requesterTenant.subdomain,
     plan: requesterTenant.plan,
-    accountType: requesterTenant.accountType
+    accountType: requesterTenant.accountType,
+    moneda: requesterTenant.moneda
   };
   let agencyContext = false;
 
@@ -117,7 +126,7 @@ async function resolveHierarchicalContext(
   // Si hay un target ID diferente, validamos permisos
   const impTenant = await prisma.tenant.findUnique({
     where: { id: targetTenantId },
-    select: { id: true, nombre: true, slug: true, subdomain: true, plan: true, estado: true, parentId: true, accountType: true }
+    select: { id: true, nombre: true, slug: true, subdomain: true, plan: true, estado: true, parentId: true, accountType: true, moneda: true }
   });
 
   if (!impTenant) {
@@ -142,7 +151,9 @@ async function resolveHierarchicalContext(
       slug: impTenant.slug,
       subdomain: impTenant.subdomain,
       plan: impTenant.plan,
-      accountType: impTenant.accountType
+      accountType: impTenant.accountType,
+      // Al impersonar manda la moneda del tenant de destino, no la del que entra.
+      moneda: impTenant.moneda
     };
     agencyContext = true;
   } else {
@@ -175,7 +186,7 @@ export async function validateApiKey(
         activo: true,
         expiraEn: true,
         tenant: {
-          select: { id: true, nombre: true, slug: true, subdomain: true, plan: true, accountType: true, parentId: true }
+          select: { id: true, nombre: true, slug: true, subdomain: true, plan: true, accountType: true, parentId: true, moneda: true }
         },
         user: {
           select: { id: true, name: true, email: true, tenantId: true, roleId: true, role: true }
@@ -285,7 +296,7 @@ export async function authenticateRequest(
           tenantId: true,
           roleId: true,
           role: { select: { id: true, nombre: true, permisos: true } },
-          tenant: { select: { id: true, nombre: true, slug: true, subdomain: true, plan: true, accountType: true } }
+          tenant: { select: { id: true, nombre: true, slug: true, subdomain: true, plan: true, accountType: true, moneda: true } }
         }
       });
 
@@ -354,7 +365,7 @@ export async function authenticateRequest(
           // Cargar tenant
           const tenant = await prisma.tenant.findUnique({
             where: { id: decoded.tid },
-            select: { id: true, nombre: true, slug: true, subdomain: true, plan: true, accountType: true }
+            select: { id: true, nombre: true, slug: true, subdomain: true, plan: true, accountType: true, moneda: true }
           });
 
           if (!tenant) {
