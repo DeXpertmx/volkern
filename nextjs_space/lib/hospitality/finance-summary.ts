@@ -62,7 +62,9 @@ export function rentabilidadDeReserva(reserva: ReservaFinanciera): RentabilidadR
     comisionOta: reserva.comisionOta || 0,
     comisionPasarela: reserva.comisionPasarela || 0,
     otrosGastos: reserva.otrosGastos || 0,
-    moneda: reserva.moneda || 'MXN',
+    // Se propaga la divisa tal cual: fabricar una aquí haría que el informe la
+    // tomara por un dato real y ganara sobre la moneda del tenant.
+    moneda: reserva.moneda || '',
   });
 }
 
