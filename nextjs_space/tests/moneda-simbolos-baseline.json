@@ -194,9 +194,6 @@
   "lib/seo/agent-skills.ts": {
     "simbolo": 2
   },
-  "lib/skills/financial-consolidation-skills.ts": {
-    "simbolo": 2
-  },
   "lib/skills/index.ts": {
     "simbolo": 1
   }

@@ -2,7 +2,7 @@ import { prisma } from '@/lib/db';
 import { skillsLogger, trackSkillExecution } from './observability';
 import { Decimal } from 'decimal.js';
 import { generateIntegrityHash, verifyFinancialIntegrity } from '@/lib/security/integrity-service';
-import { MONEDA_MINIMA_ESQUEMA } from '@/lib/moneda';
+import { formatearImporte, MONEDA_MINIMA_ESQUEMA } from '@/lib/moneda';
 import { fxConvert } from '@/lib/insurance/currency';
 
 /**
@@ -19,16 +19,16 @@ export async function analyzeGlobalProfitability(input: { tenantId: string, user
 
     // 🛡️ SESGO DE SEGURIDAD: Auditoría antes de la ejecución (vía logs automáticos de la Skill)
     const summary = await getGlobalFinancialSummaryInternal(tenantId, period);
-    
+
+    // El resumen viaja a la interfaz: la divisa es la del tenant, no un euro fijo.
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { moneda: true } });
+    const moneda = tenant?.moneda || MONEDA_MINIMA_ESQUEMA;
+
     const margin = new Decimal(summary.margin);
     const status = margin.gt(15) ? 'SALUDABLE' : 'CRÍTICO';
 
     return {
-      content: `Análisis de Rentabilidad (${period}): 
-      - Ingresos: €${summary.revenue.toLocaleString()}
-      - Gastos Totales: €${summary.expenses.toLocaleString()}
-      - Margen: ${summary.margin}%
-      - Estado: ${status}`,
+      content: `Análisis de Rentabilidad (${period}): \n      - Ingresos: ${formatearImporte(summary.revenue, moneda)}\n      - Gastos Totales: ${formatearImporte(summary.expenses, moneda)}\n      - Margen: ${summary.margin}%\n      - Estado: ${status}`,
       data: summary
     };
   });
