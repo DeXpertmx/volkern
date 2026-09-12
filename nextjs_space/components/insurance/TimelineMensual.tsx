@@ -15,6 +15,12 @@ export interface TimelinePoint {
 
 export interface TimelineData {
   generado: string;
+  /**
+   * Divisa de reporte del tenant. El endpoint ya convierte a ella todas las
+   * sumas, así que la tarjeta no puede escribir los importes con otra: sin este
+   * dato venían en la moneda mínima del esquema y un tenant en euros veía pesos.
+   */
+  tenantMoneda?: string;
   months: number;
   serie: TimelinePoint[];
   tendencia: number;            // % variacion vs últimos 3 meses
@@ -35,7 +41,7 @@ interface TimelineMensualProps {
  *  · Card de detalle del mes clickeado
  */
 export function TimelineMensual({ data, loading }: TimelineMensualProps) {
-  const { serie, tendencia, mejorMes, totalVentana } = data;
+  const { serie, tendencia, mejorMes, totalVentana, tenantMoneda = '' } = data;
   const [selectedMes, setSelectedMes] = useState<string | null>(
     serie.length > 0 ? serie[serie.length - 1].mes : null
   );
@@ -104,10 +110,10 @@ export function TimelineMensual({ data, loading }: TimelineMensualProps) {
         </div>
         <div className="text-xs text-muted-foreground">
           Total emitido:{' '}
-          <span className="font-semibold text-foreground">{formatCurrency(totalVentana)}</span>
+          <span className="font-semibold text-foreground">{formatCurrency(totalVentana, tenantMoneda)}</span>
           {' '}
           · Promedio mensual:{' '}
-          <span className="font-semibold text-foreground">{formatCurrency(avgMensual)}</span>
+          <span className="font-semibold text-foreground">{formatCurrency(avgMensual, tenantMoneda)}</span>
         </div>
       </div>
 
@@ -162,7 +168,7 @@ export function TimelineMensual({ data, loading }: TimelineMensualProps) {
               key={p.mes}
               type="button"
               onClick={() => setSelectedMes(p.mes)}
-              title={`${p.label}: ${formatCurrency(p.primaTotal)} · ${p.polizasCount} pólizas`}
+              title={`${p.label}: ${formatCurrency(p.primaTotal, tenantMoneda)} · ${p.polizasCount} pólizas`}
               className={`group flex flex-col items-center gap-1 px-1 py-2 rounded-md transition-colors ${
                 isSelected ? 'bg-emerald-50 ring-1 ring-emerald-300' : 'hover:bg-slate-50'
               }`}
@@ -203,7 +209,7 @@ export function TimelineMensual({ data, loading }: TimelineMensualProps) {
                 </span>
               )}
             </h4>
-            <span className="text-2xl font-bold tabular-nums">{formatCurrency(selectedPoint.primaTotal)}</span>
+            <span className="text-2xl font-bold tabular-nums">{formatCurrency(selectedPoint.primaTotal, tenantMoneda)}</span>
           </div>
           <div className="grid grid-cols-3 gap-3 text-sm">
             <div>
@@ -212,7 +218,7 @@ export function TimelineMensual({ data, loading }: TimelineMensualProps) {
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Prima promedio</p>
-              <p className="font-semibold tabular-nums">{formatCurrency(selectedPoint.primaPromedio)}</p>
+              <p className="font-semibold tabular-nums">{formatCurrency(selectedPoint.primaPromedio, tenantMoneda)}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">% del total</p>

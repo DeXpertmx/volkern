@@ -9,6 +9,7 @@ import {
   combinarMultipliers,
 } from '@/lib/insurance/seasonal-multiplier';
 import { persistSmartForecastLog } from '@/lib/insurance/forecast-persistence';
+import { CURRENCY_CONSTANTS, type Currency } from '@/lib/insurance/currency';
 
 /**
  * GET /api/insurance/portfolio/forecast/smart
@@ -20,6 +21,7 @@ import { persistSmartForecastLog } from '@/lib/insurance/forecast-persistence';
  * Respuesta:
  *   {
  *     generado: ISO,
+ *     tenantMoneda: string,               // divisa de reporte, la de las cifras
  *     ventana: TimelinePoint[],          // 6 meses (mismo scope)
  *     proyectadoBase: number,             // forecast SIN multiplicadores
  *     proyectadoAjustado: number,         // forecast × multipliers compuesto
@@ -46,6 +48,8 @@ import { persistSmartForecastLog } from '@/lib/insurance/forecast-persistence';
 
 interface SmartPayload {
   generado: string;
+  /** Divisa de reporte del tenant: todos los importes del payload están en ella. */
+  tenantMoneda: string;
   ventana: Array<{ mes: string; label: string; primaTotal: number; polizasCount: number; polizasNuevas: number; primaPromedio: number }>;
   slope: number;
   r2: number;
@@ -158,8 +162,14 @@ export async function GET(request: NextRequest) {
       mejorRacha: 0, experimental: false, bandaMultiplicador: 1,
     };
 
+    // La divisa la dicta el forecast base, que es de donde salen las cifras: si
+    // aquí se eligiera otra, la tarjeta escribiría los importes con el símbolo de
+    // una divisa que no es la suya.
+    const tenantMoneda = base.tenantMoneda ?? (CURRENCY_CONSTANTS.DEFAULT_TENANT_CURRENCY as Currency);
+
     const payload: SmartPayload = {
       generado: new Date().toISOString(),
+      tenantMoneda,
       ventana,
       slope,
       r2,
@@ -188,6 +198,7 @@ export async function GET(request: NextRequest) {
 interface BaseForecastResponse {
   ok: boolean;
   error?: string;
+  tenantMoneda?: string;
   ventana?: SmartPayload['ventana'];
   proyeccion?: number;
   slope?: number;
@@ -214,6 +225,7 @@ async function fetchBaseForecast(request: NextRequest, tenantId: string): Promis
     const data = await response.json();
     return {
       ok: true,
+      tenantMoneda: typeof data.tenantMoneda === 'string' ? data.tenantMoneda : undefined,
       ventana: data.ventana,
       proyeccion: Math.max(0, Number(data.proyeccion) || 0),
       slope: Number(data.slope) || 0,

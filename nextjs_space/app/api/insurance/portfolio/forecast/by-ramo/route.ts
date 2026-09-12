@@ -181,7 +181,14 @@ export async function GET(request: NextRequest) {
             cliente: p.contacts?.nombre ?? null,
             aseguradora: p.aseguradora?.nombre ?? null,
             producto: p.productoSeguro?.nombre ?? null,
-            primaAnual: Number(p.primaAnual ?? 0),
+            // La prima de cada póliza próxima a vencer se convierte a la divisa
+            // del tenant, que es la que declara `tenantMoneda` y con la que la
+            // cuadrícula la escribe.
+            primaAnual: fxConvert(
+              Number(p.primaAnual ?? 0),
+              (p.moneda as string) ?? tenantMoneda,
+              tenantMoneda
+            ),
             fechaVencimiento: p.fechaVencimiento.toISOString(),
             diasParaVencer: Math.ceil((p.fechaVencimiento.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)),
           })),
