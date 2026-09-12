@@ -15,47 +15,51 @@
  * Cubre además la trampa que causó el fallo: en JavaScript `\b` NO casa entre
  * vocal acentuada y espacio ("gané", "gasté"), así que esas alternativas
  * dentro de un grupo anclado con `\b` final nunca se cumplían.
+ *
+ * Los casos NO viven aquí: se leen de `scripts/smoke-clasificador.casos.json`,
+ * que es el mismo archivo que usa el smoke test post-despliegue
+ * (scripts/smoke-clasificador.sh). Una frase renombrada se cambia una vez y
+ * ambas comprobaciones la ven.
  */
 
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { IntentClassifierAgent } from '@/lib/agents/intent-classifier';
 
-// Frases que FALLARON en CI (todas caían a consulta_general) y su intent real.
-const CASOS: Array<{ mensaje: string; intent: string }> = [
-  { mensaje: 'envía un email a maria@empresa.com para agradecer la reunión', intent: 'enviar_mensaje' },
-  { mensaje: 'cuánto gané este mes', intent: 'cuenta_resultados' },
-  { mensaje: 'predice el riesgo de fallo del activo prensa S1', intent: 'predecir_fallo_activo' },
-  { mensaje: 'simula un escenario de producción', intent: 'simular_escenario_produccion' },
-  { mensaje: 'qué órdenes no están listas para producir', intent: 'readiness_produccion' },
-  { mensaje: 'mueve el portátil de María a Juan', intent: 'transferir_activo' },
-  { mensaje: 'reagenda la cita de Juan al viernes a las 4pm', intent: 'reagendar_cita' },
-  { mensaje: 'elimina el horario de anuncios de las 9', intent: 'eliminar_horario' },
-  { mensaje: 'saca 10 unidades de stock del jabón de baño', intent: 'ajustar_stock' },
-  // Variantes del mismo verbo que se atienden igual sin depender del modelo.
-  { mensaje: 'borra el horario de la campaña de Meta', intent: 'eliminar_horario' },
-  { mensaje: 'mándale un whatsapp a Juan', intent: 'enviar_mensaje' },
-];
+type Caso = { mensaje: string; intent: string };
+type CasoSinColision = { mensaje: string; intentoProhibido: string };
 
-// No colisiones: ampliar verbos y anclas no debe robarle el turno a otros intents.
-const NO_COLISIONA: Array<{ mensaje: string; intentoProhibido: string }> = [
-  { mensaje: 'mueve la tarea de enviar documento para mañana', intentoProhibido: 'transferir_activo' },
-  { mensaje: 'agrega pendiente: enviar documento a Carlos, vence el viernes', intentoProhibido: 'enviar_mensaje' },
-  { mensaje: 'envía un briefing de ventas', intentoProhibido: 'resumen_rrhh' },
-  { mensaje: 'elimina la cita de Alejandra', intentoProhibido: 'reagendar_cita' },
-];
+function cargarCasos(): { deterministas: Caso[]; sinColision: CasoSinColision[] } {
+  // El cwd de vitest es nextjs_space, pero se contempla el caso de correr
+  // desde la raíz del monorepo (misma convención que las guardias de deploy).
+  for (const base of [process.cwd(), join(process.cwd(), 'nextjs_space')]) {
+    const ruta = join(base, 'scripts', 'smoke-clasificador.casos.json');
+    try {
+      return JSON.parse(readFileSync(ruta, 'utf8'));
+    } catch {
+      /* siguiente base */
+    }
+  }
+  throw new Error('No se encontró scripts/smoke-clasificador.casos.json');
+}
+
+const { deterministas: CASOS, sinColision: NO_COLISIONA } = cargarCasos();
 
 describe('ruta determinista del clasificador (sin LLM)', () => {
   const classifier = new IntentClassifierAgent() as any;
+
+  it('el archivo de casos compartido tiene contenido', () => {
+    // Sin esto, un JSON vacío dejaría las comprobaciones siguientes sin casos
+    // y la suite pasaría sin comprobar nada.
+    expect(CASOS.length).toBeGreaterThan(5);
+    expect(NO_COLISIONA.length).toBeGreaterThan(2);
+  });
 
   it.each(CASOS)('"$mensaje" → $intent', ({ mensaje, intent }) => {
     const det = classifier.detectIntentDeterministically(mensaje);
     expect(det, `"${mensaje}" no se reconoce sin LLM`).toBeTruthy();
     expect(det.intent).toBe(intent);
-  });
-
-  it('sigue siendo cancelar_cita cuando se pide cancelar', () => {
-    const det = classifier.detectIntentDeterministically('cancela la cita de Alejandra Velázquez');
-    expect(det?.intent).toBe('cancelar_cita');
   });
 
   it.each(NO_COLISIONA)('"$mensaje" no es $intentoProhibido', ({ mensaje, intentoProhibido }) => {
