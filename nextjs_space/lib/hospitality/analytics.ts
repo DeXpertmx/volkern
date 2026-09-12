@@ -62,13 +62,23 @@ function toFecha(ms: number): string {
   return new Date(ms).toISOString().slice(0, 10)
 }
 
-/** La reserva cubre la noche del día `dayStartMs` (§8: checkIn <= D < checkOut). */
+/**
+ * La reserva cubre la noche del día `dayStartMs` (§8: checkIn <= D < checkOut).
+ *
+ * Los dos extremos se normalizan al inicio del día antes de comparar, que es la
+ * misma convención que `reservationsOnDay` en `calendar.ts`. Comparar los
+ * instantes crudos dejaba fuera la primera noche de toda reserva cuyo check-in
+ * no fuera exactamente a medianoche (las manuales entran a las 15:00), así que
+ * el planning y las analíticas no coincidían en si esa noche estaba ocupada.
+ */
 export function coversNight(
   r: Pick<AnalyticsReservationInput, 'checkIn' | 'checkOut' | 'estado'>,
   dayStartMs: number,
 ): boolean {
   if (r.estado === 'cancelled' || r.estado === 'no_show') return false
-  return r.checkIn.getTime() <= dayStartMs && r.checkOut.getTime() > dayStartMs
+
+  const dia = startOfDayMs(new Date(dayStartMs))
+  return startOfDayMs(r.checkIn) <= dia && startOfDayMs(r.checkOut) > dia
 }
 
 /**
