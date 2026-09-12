@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
 import { nightsBetween } from '@/lib/hospitality/calendar';
+import { resumenDeReserva } from '@/lib/hospitality/compliance';
 
 /**
  * GET /api/hospitality/guests — huéspedes del tenant con su historial de
@@ -33,6 +34,25 @@ export async function GET(req: NextRequest) {
         contact: { select: { id: true, nombre: true, email: true, telefono: true } },
         property: { select: { id: true, nombre: true } },
         unit: { select: { id: true, nombre: true, codigo: true } },
+        // Registro de viajeros (solo lectura): el resumen lo calcula el dominio,
+        // la misma función que usan la bandeja y la ficha del planning. Los
+        // viajeros solo se leen para calcular el resumen y no salen crudos por
+        // aquí: el documento enmascarado lo sirve su propio endpoint.
+        travelers: {
+          select: {
+            nombre: true,
+            apellido1: true,
+            apellido2: true,
+            tipoDocumento: true,
+            numeroDocumento: true,
+            soporteDocumento: true,
+            fechaNacimiento: true,
+            nacionalidad: true,
+          },
+        },
+        compliance: {
+          select: { estadoReserva: true, estadoViajeros: true, enviadoEn: true, procesadoEn: true },
+        },
       },
       orderBy: [{ checkIn: 'desc' }],
     });
@@ -104,6 +124,18 @@ export async function GET(req: NextRequest) {
         specialRequests: r.specialRequests,
         propertyNombre: r.property?.nombre || null,
         unitNombre: r.unit?.nombre || null,
+        registro: (() => {
+          const { travelers, compliance } = r as any;
+          const resumen = resumenDeReserva(travelers ?? [], compliance ?? null);
+          return {
+            total: resumen.total,
+            registrados: resumen.registrados,
+            pendientes: resumen.pendientes,
+            estado: resumen.estado,
+            etiqueta: resumen.etiqueta,
+            listoParaEnviar: resumen.listoParaEnviar,
+          };
+        })(),
       });
     }
 

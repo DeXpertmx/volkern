@@ -27,6 +27,17 @@ export interface CalendarReservation {
   currency: string | null;
   specialRequests: string | null;
   externalBookingId: string;
+  /** Resumen del registro de viajeros (SES.HOSPEDAJES), si la API lo trae. */
+  registro?: {
+    total: number;
+    registrados: number;
+    pendientes: number;
+    estado: string;
+    etiqueta: string;
+    listoParaEnviar: boolean;
+  } | null;
+  /** Check-in del día siguiente: alimenta el aviso de datos pendientes. */
+  llegaManana?: boolean;
 }
 
 export interface CalendarUnit {
