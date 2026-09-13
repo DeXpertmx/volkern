@@ -9,6 +9,7 @@ import {
   ClipboardList,
   KeyRound,
   Loader2,
+  MessageCircle,
   Plus,
   RefreshCw,
   Send,
@@ -78,6 +79,10 @@ interface ViajeroPublico {
   esTitular: boolean;
   estado: string;
   documentoCompleto: boolean;
+  /** Seguimiento del enlace de WhatsApp (pedir/reenviar datos). */
+  enlaceEnviadoEn: string | null;
+  enlaceEnviados: number;
+  datosRecibidosEn: string | null;
 }
 
 interface Configuracion {
@@ -291,7 +296,11 @@ export default function RegistroDeViajerosPage() {
         toast.success(
           cuerpo.accion === 'enviar_reserva' || cuerpo.accion === 'enviar_viajeros'
             ? 'Comunicación enviada al Ministerio'
-            : 'Guardado'
+            : cuerpo.accion === 'pedir_datos_whatsapp'
+              ? datos.enviados === 1
+                ? 'Enlace de WhatsApp enviado al viajero'
+                : `Enlaces de WhatsApp enviados (${datos.enviados}/${datos.total})`
+              : 'Guardado'
         );
 
         await cargar();
@@ -715,6 +724,17 @@ export default function RegistroDeViajerosPage() {
                             {viajero.fechaNacimiento ? ` · ${fecha(viajero.fechaNacimiento)}` : ' · sin fecha de nacimiento'}
                             {viajero.nacionalidad ? ` · ${viajero.nacionalidad}` : ''}
                           </div>
+                          {viajero.datosRecibidosEn ? (
+                            <div className="text-xs font-medium text-emerald-600">
+                              Respondió por WhatsApp · {fechaHora(viajero.datosRecibidosEn)}
+                            </div>
+                          ) : viajero.enlaceEnviadoEn ? (
+                            <div className="text-xs text-amber-600">
+                              Enlace de WhatsApp enviado{viajero.enlaceEnviados > 1 ? ` (${viajero.enlaceEnviados} veces)` : ''} · sin respuesta · {fechaHora(viajero.enlaceEnviadoEn)}
+                            </div>
+                          ) : viajero.estado === 'datos_pendientes' ? (
+                            <div className="text-xs text-slate-400">Todavía no se le ha pedido por WhatsApp</div>
+                          ) : null}
                         </div>
                         <Badge
                           variant="outline"
@@ -723,6 +743,18 @@ export default function RegistroDeViajerosPage() {
                           {viajero.estado === 'datos_pendientes' ? 'Datos pendientes' : 'Listo'}
                         </Badge>
                         <div className="flex gap-1">
+                          {viajero.estado === 'datos_pendientes' && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              title={viajero.enlaceEnviadoEn ? 'Enviar de nuevo el enlace de WhatsApp al huésped' : 'Pedirle sus datos por WhatsApp con un enlace firmado'}
+                              disabled={trabajando}
+                              onClick={() => void accion(detalle.reserva.id, { accion: 'pedir_datos_whatsapp', viajeroId: viajero.id })}
+                            >
+                              <MessageCircle className="h-3.5 w-3.5" />
+                              {viajero.enlaceEnviadoEn ? 'Reenviar' : 'Pedir'}
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="ghost"

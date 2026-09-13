@@ -4,7 +4,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { verificarTokenEnlace } from '@/lib/hospitality/compliance-link';
 import { camposFaltantes } from '@/lib/hospitality/compliance';
-import { actualizarViajero, type EntradaViajero } from '@/lib/hospitality/compliance-store';
+import {
+  actualizarViajero,
+  registrarRespuestaEnlace,
+  type EntradaViajero,
+} from '@/lib/hospitality/compliance-store';
 
 /** Estados del parte de viajeros en los que ya no se puede escribir desde el enlace. */
 const PV_ENVIADOS = new Set(['enviado', 'completo', 'procesando']);
@@ -112,6 +116,9 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       'viajero-enlace-publico'
     );
     if (!actualizado) return NextResponse.json({ error: 'Este registro ya no existe' }, { status: 404 });
+
+    // Para la bandeja: el viajero respondió al enlace de WhatsApp.
+    await registrarRespuestaEnlace(viajero.id).catch(() => {});
 
     return NextResponse.json({ ok: true, estado: actualizado.estado });
   } catch (error) {

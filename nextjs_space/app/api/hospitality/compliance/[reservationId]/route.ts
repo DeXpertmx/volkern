@@ -20,6 +20,7 @@ import {
   eliminarViajero,
   enviarAlMinisterio,
   leerConfig,
+  registrarEnvioEnlace,
   type EntradaViajero,
 } from '@/lib/hospitality/compliance-store';
 
@@ -176,7 +177,8 @@ export async function POST(req: NextRequest, { params }: { params: { reservation
         const destino = await pedirDatosPorWhatsapp(
           tenantId,
           params.reservationId,
-          usuarioId
+          usuarioId,
+          cuerpo?.viajeroId as string | undefined
         );
         const status = destino.ok ? 200 : destino.motivo === 'whatsapp' ? 502 : 409;
         return NextResponse.json(destino, { status });
@@ -217,7 +219,8 @@ function validarViajero(entrada: EntradaViajero | undefined): string | null {
 async function pedirDatosPorWhatsapp(
   tenantId: string,
   reservationId: string,
-  usuarioId: string
+  usuarioId: string,
+  soloViajeroId?: string
 ): Promise<
   | { ok: true; enviados: number; sinTelefono: number; total: number }
   | { ok: false; motivo: 'sin_telefono' | 'whatsapp' | 'desconocido'; error: string; enviados?: number }
@@ -228,9 +231,23 @@ async function pedirDatosPorWhatsapp(
   const detalle = await detalleRegistro(tenantId, reservationId);
   if (!detalle) return { ok: false, motivo: 'desconocido', error: 'La reserva no existe en esta cuenta' };
 
-  const incompletos = detalle.reserva.travelers.filter((v) => v.estado === 'datos_pendientes');
-  if (incompletos.length === 0) {
-    return { ok: false, motivo: 'desconocido', error: 'No hay viajeros incompletos a quienes pedirles datos' };
+  // Reenvío a un viajero concreto, o petición a todos los incompletos.
+  let objetivo = detalle.reserva.travelers.filter((v) => v.estado === 'datos_pendientes');
+  if (soloViajeroId) {
+    const viajero = detalle.reserva.travelers.find((v) => v.id === soloViajeroId);
+    if (!viajero) {
+      return { ok: false, motivo: 'desconocido', error: 'Ese viajero no pertenece a esta reserva' };
+    }
+    objetivo = viajero.estado === 'datos_pendientes' ? [viajero] : [];
+  }
+  if (objetivo.length === 0) {
+    return {
+      ok: false,
+      motivo: 'desconocido',
+      error: soloViajeroId
+        ? 'Ese viajero ya tiene los datos completos: no hay nada que pedirle'
+        : 'No hay viajeros incompletos a quienes pedirles datos',
+    };
   }
 
   let telefono = guestTelefono(detalle.reserva.guestData);
@@ -249,7 +266,7 @@ async function pedirDatosPorWhatsapp(
   let enviados = 0;
   let ultimoError = '';
 
-  for (const viajero of incompletos) {
+  for (const viajero of objetivo) {
     let token: string;
     try {
       token = firmarTokenEnlace(viajero.id);
@@ -274,6 +291,8 @@ async function pedirDatosPorWhatsapp(
     const res = await sendWhatsAppMessage(telefono, mensaje, tenantId, true);
     if (res?.success) {
       enviados += 1;
+      // Seguimiento para la bandeja: cuándo se le pidió y cuántas veces.
+      await registrarEnvioEnlace(viajero.id).catch(() => {});
       await logAuditAction(
         usuarioId,
         tenantId,
@@ -290,5 +309,5 @@ async function pedirDatosPorWhatsapp(
   if (enviados === 0) {
     return { ok: false, motivo: 'whatsapp', error: ultimoError || 'No se pudo enviar el mensaje por WhatsApp' };
   }
-  return { ok: true, enviados, sinTelefono: 0, total: incompletos.length };
+  return { ok: true, enviados, sinTelefono: 0, total: objetivo.length };
 }
