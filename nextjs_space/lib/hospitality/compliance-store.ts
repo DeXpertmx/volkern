@@ -411,6 +411,9 @@ export interface FilaRegistro {
   listoParaEnviar: boolean;
   ultimoEnvio: Date | null;
   mensajeError: string | null;
+  /** Seguimiento del enlace de WhatsApp, para el aviso de sin respuesta. */
+  enlacesSinResponder: number;
+  ultimoEnlaceEnviadoEn: Date | null;
 }
 
 export interface FiltrosBandeja {
@@ -473,6 +476,16 @@ export async function bandejaDeRegistros(tenantId: string, filtros: FiltrosBande
       listoParaEnviar: resumen.listoParaEnviar,
       ultimoEnvio: reserva.compliance?.enviadoEn ?? null,
       mensajeError: reserva.compliance?.mensajeError ?? null,
+      // Enlaces pedidos por WhatsApp que siguen sin respuesta, y cuándo fue la
+      // última vez: alimenta el aviso de «más de 48 horas sin responder».
+      enlacesSinResponder: reserva.travelers.filter(
+        (v) => v.enlaceEnviadoEn && !v.datosRecibidosEn
+      ).length,
+      ultimoEnlaceEnviadoEn:
+        reserva.travelers
+          .filter((v) => v.enlaceEnviadoEn && !v.datosRecibidosEn)
+          .map((v) => v.enlaceEnviadoEn as Date)
+          .sort((a, b) => b.getTime() - a.getTime())[0] ?? null,
     };
   });
 
