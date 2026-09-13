@@ -86,12 +86,21 @@ export default async function PaginaViajero({
 
   const iso = viajero.fechaNacimiento ? new Date(viajero.fechaNacimiento).toISOString().slice(0, 10) : '';
 
+  // El enlace va firmado por viajero: el nombre ya viaja dentro. Si el registro
+  // lo trae, el formulario lo muestra bloqueado y el huésped solo completa
+  // documento y nacimiento (clave en el mensaje grupal, donde los enlaces se
+  // distinguen por persona).
+  const nombreCompleto = [viajero.nombre, viajero.apellido1, viajero.apellido2].filter(Boolean).join(' ').trim();
+  const nombrePrellenado = Boolean(viajero.nombre?.trim() && viajero.apellido1?.trim());
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
       <div className="w-full max-w-md">
         <ViajeroForm
           token={params.token}
           contexto={contexto}
+          nombreCompleto={nombreCompleto || null}
+          nombrePrellenado={nombrePrellenado}
           inicial={{
             nombre: viajero.nombre || '',
             apellido1: viajero.apellido1 || '',
