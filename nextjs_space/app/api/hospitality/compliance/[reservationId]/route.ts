@@ -5,6 +5,14 @@ import { authenticateRequest } from '@/lib/api-key-auth';
 import { logAuditAction } from '@/lib/permissions';
 import { viajeroPublico, ESTADOS_REGISTRO, FICHAS_ESTADO } from '@/lib/hospitality/compliance';
 import {
+  firmarTokenEnlace,
+  urlPedirDatos,
+  getEnlaceAppUrl,
+  EnlaceNoConfigurado,
+} from '@/lib/hospitality/compliance-link';
+import { sendWhatsAppMessage } from '@/lib/whatsapp';
+import { guestTelefono, guestNombre } from '@/lib/hospitality/comunicaciones';
+import {
   actualizarViajero,
   anularRegistro,
   crearViajero,
@@ -22,6 +30,7 @@ const ACCIONES = [
   'enviar_reserva',
   'enviar_viajeros',
   'anular',
+  'pedir_datos_whatsapp',
 ] as const;
 
 type Accion = (typeof ACCIONES)[number];
@@ -163,6 +172,16 @@ export async function POST(req: NextRequest, { params }: { params: { reservation
         return NextResponse.json(resultado);
       }
 
+      case 'pedir_datos_whatsapp': {
+        const destino = await pedirDatosPorWhatsapp(
+          tenantId,
+          params.reservationId,
+          usuarioId
+        );
+        const status = destino.ok ? 200 : destino.motivo === 'whatsapp' ? 502 : 409;
+        return NextResponse.json(destino, { status });
+      }
+
       case 'anular': {
         const anulado = await anularRegistro(tenantId, params.reservationId, usuarioId, cuerpo?.motivo);
         if (!anulado) return NextResponse.json({ error: 'La reserva no existe en esta cuenta' }, { status: 404 });
@@ -184,4 +203,92 @@ function validarViajero(entrada: EntradaViajero | undefined): string | null {
   if (!entrada.nombre?.trim()) return 'El nombre es obligatorio';
   if (!entrada.apellido1?.trim()) return 'El primer apellido es obligatorio';
   return null;
+}
+
+/**
+ * "Pedir por WhatsApp": mensaje al huésped con un enlace firmado donde completa
+ * él mismo sus datos obligatorios y, al guardarlos, queda declarado como
+ * viajero de la reserva.
+ *
+ * El enlace se firma por viajero (un mensaje por cada incompleto), porque el
+ * formulario escribe sobre ese viajero concreto. Si no hay teléfono, el 409 lo
+ * dice: la persona puede añadir el teléfono al huésped y reintentar.
+ */
+async function pedirDatosPorWhatsapp(
+  tenantId: string,
+  reservationId: string,
+  usuarioId: string
+): Promise<
+  | { ok: true; enviados: number; sinTelefono: number; total: number }
+  | { ok: false; motivo: 'sin_telefono' | 'whatsapp' | 'desconocido'; error: string; enviados?: number }
+> {
+  // Pide el detalle por la capa de datos (el viaje ya incluye el huésped y el
+  // contacto) y calcula el teléfono con la misma regla que las comunicaciones.
+  const { detalleRegistro } = await import('@/lib/hospitality/compliance-store');
+  const detalle = await detalleRegistro(tenantId, reservationId);
+  if (!detalle) return { ok: false, motivo: 'desconocido', error: 'La reserva no existe en esta cuenta' };
+
+  const incompletos = detalle.reserva.travelers.filter((v) => v.estado === 'datos_pendientes');
+  if (incompletos.length === 0) {
+    return { ok: false, motivo: 'desconocido', error: 'No hay viajeros incompletos a quienes pedirles datos' };
+  }
+
+  let telefono = guestTelefono(detalle.reserva.guestData);
+  if (!telefono && detalle.reserva.contact?.telefono) telefono = detalle.reserva.contact.telefono;
+  if (!telefono) {
+    return {
+      ok: false,
+      motivo: 'sin_telefono',
+      error: 'El huésped no tiene teléfono: añádeselo a la reserva o al contacto y vuelve a intentarlo',
+    };
+  }
+
+  const nombreHuesped = guestNombre(detalle.reserva.guestData) || detalle.reserva.contact?.nombre || '';
+  const unidad = detalle.reserva.unit?.nombre || '';
+  const appUrl = getEnlaceAppUrl();
+  let enviados = 0;
+  let ultimoError = '';
+
+  for (const viajero of incompletos) {
+    let token: string;
+    try {
+      token = firmarTokenEnlace(viajero.id);
+    } catch (error) {
+      if (error instanceof EnlaceNoConfigurado) {
+        return { ok: false, motivo: 'desconocido', error: 'El servidor no tiene secreto para firmar enlaces (TRAVELER_LINK_SECRET)' };
+      }
+      throw error;
+    }
+
+    const nombreViajero = [viajero.nombre, viajero.apellido1].filter(Boolean).join(' ').trim();
+    const esTitular = nombreHuesped && nombreViajero &&
+      nombreHuesped.toLowerCase().includes(nombreViajero.split(' ')[0].toLowerCase());
+    const mensaje = [
+      esTitular
+        ? `Hola ${nombreHuesped.split(' ')[0]}, tu reserva${unidad ? ` en ${unidad}` : ''} está confirmada.`
+        : `Hola, te escribimos por la reserva${unidad ? ` en ${unidad}` : ''} de ${nombreHuesped || 'tu grupo'}.`,
+      'La ley exige registrar los datos de cada viajero ante el Ministerio del Interior.',
+      `Completa aquí tus datos (tarda un minuto): ${urlPedirDatos(appUrl, token)}`,
+    ].join('\n');
+
+    const res = await sendWhatsAppMessage(telefono, mensaje, tenantId, true);
+    if (res?.success) {
+      enviados += 1;
+      await logAuditAction(
+        usuarioId,
+        tenantId,
+        'enviar',
+        'hospitality_traveler',
+        viajero.id,
+        `Solicitud de datos por WhatsApp para el viajero ${nombreViajero || viajero.id}`
+      ).catch(() => {});
+    } else {
+      ultimoError = res?.error || 'Error enviando WhatsApp';
+    }
+  }
+
+  if (enviados === 0) {
+    return { ok: false, motivo: 'whatsapp', error: ultimoError || 'No se pudo enviar el mensaje por WhatsApp' };
+  }
+  return { ok: true, enviados, sinTelefono: 0, total: incompletos.length };
 }

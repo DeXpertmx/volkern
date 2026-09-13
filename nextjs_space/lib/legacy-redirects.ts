@@ -25,7 +25,7 @@ export const TOP_LEVEL = new Set([
   'marketing-template-editor', 'member', 'neting', 'orden', 'p', 'payment', 'portal',
   'precios', 'privacy', 'reembolsos', 'register', 'resolve-payment', 'signup',
   'soluciones', 'tarjeta', 'template-editor', 'terms', 'test-post',
-  'verifactu', 'verify', 'webcreator', 'www', 'app',
+  'verifactu', 'verify', 'viajeros', 'webcreator', 'www', 'app',
 ])
 
 // Secciones que existían como copias legacy dentro de [tenant]/...

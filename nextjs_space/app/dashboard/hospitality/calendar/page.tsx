@@ -5,6 +5,12 @@ import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import {
   colorTipoBloqueo,
@@ -22,6 +28,7 @@ import {
   CalendarDays,
   User,
   UserPlus,
+  MessageCircle,
   UserRound,
   Phone,
   Mail,
@@ -87,6 +94,9 @@ interface ViajeroPublico {
   numeroDocumento: string;
   esTitular: boolean;
   estado: string;
+  /** ISO (lo propaga el spread del viajero) y `documentoCompleto` de `viajeroPublico`. */
+  documentoCompleto?: boolean;
+  fechaNacimiento?: string | null;
 }
 
 /** Respuesta de GET /api/hospitality/compliance/[reservationId]. */
@@ -107,6 +117,15 @@ interface DetalleRegistro {
     enviadoEn: string | null;
     mensajeError: string | null;
   } | null;
+}
+
+/** Formulario de edición de un viajero: solo lo que puede faltar. */
+interface FormViajero {
+  nombre: string;
+  apellido1: string;
+  tipoDocumento: string;
+  numeroDocumento: string;
+  fechaNacimiento: string;
 }
 
 interface RawReservation {
@@ -161,6 +180,8 @@ export default function HospitalityCalendar() {
     setRegDetalle(null);
     setRegExpandido(false);
     setRegForm(false);
+    setRegEditId(null);
+    setRegEdit(null);
   }, []);
   const [ops, setOps] = useState<any>(null);
   const [opsLoading, setOpsLoading] = useState(false);
@@ -189,6 +210,12 @@ export default function HospitalityCalendar() {
   const [regExpandido, setRegExpandido] = useState(false);
   const [regEnviando, setRegEnviando] = useState<'reserva' | 'viajeros' | null>(null);
   const [regForm, setRegForm] = useState(false);
+  // Edición de un viajero incompleto y retirada, sin salir del panel.
+  const [regEditId, setRegEditId] = useState<string | null>(null);
+  const [regEdit, setRegEdit] = useState<FormViajero | null>(null);
+  const [regEditGuardando, setRegEditGuardando] = useState(false);
+  const [regRetirandoId, setRegRetirandoId] = useState<string | null>(null);
+  const [regPidiendo, setRegPidiendo] = useState(false);
   const [regNuevo, setRegNuevo] = useState({ nombre: '', apellido1: '', tipoDocumento: '', numeroDocumento: '', fechaNacimiento: '' });
   const [regGuardando, setRegGuardando] = useState(false);
 
@@ -538,6 +565,110 @@ export default function HospitalityCalendar() {
       setRegGuardando(false);
     }
   }, [selected, regNuevo, leerRegistro, loadReservations]);
+
+  /** Edición inline de un viajero incompleto. Los campos de documento solo se
+   *  rellenan si el rol ve el documento completo: con la máscara no se puede
+   *  editar, y la API es un PATCH por campo (vacío borra), así que los que
+   *  estén vacíos no se envían y conservan su valor real. */
+  const abrirEdicionViajero = useCallback((v: ViajeroPublico) => {
+    setRegEditId(v.id);
+    setRegEdit({
+      nombre: v.nombre || '',
+      apellido1: v.apellido1 || '',
+      tipoDocumento: v.documentoCompleto ? v.tipoDocumento || '' : '',
+      numeroDocumento: v.documentoCompleto && v.numeroDocumento !== '—' ? v.numeroDocumento : '',
+      fechaNacimiento: v.fechaNacimiento ? String(v.fechaNacimiento).slice(0, 10) : '',
+    });
+  }, []);
+
+  const guardarEdicionViajero = useCallback(async () => {
+    if (!selected || !regEditId || !regEdit) return;
+    if (!regEdit.nombre.trim() || !regEdit.apellido1.trim()) {
+      toast.error('El nombre y el primer apellido son obligatorios');
+      return;
+    }
+    setRegEditGuardando(true);
+    try {
+      // PATCH por campo: solo lo que la persona escribió. Un campo vacío en la
+      // API significa borrar, así que los vacíos se omiten, no se envían.
+      const parche: Partial<FormViajero> = {};
+      if (regEdit.nombre.trim()) parche.nombre = regEdit.nombre.trim();
+      if (regEdit.apellido1.trim()) parche.apellido1 = regEdit.apellido1.trim();
+      if (regEdit.tipoDocumento.trim()) parche.tipoDocumento = regEdit.tipoDocumento.trim();
+      if (regEdit.numeroDocumento.trim()) parche.numeroDocumento = regEdit.numeroDocumento.trim();
+      if (regEdit.fechaNacimiento.trim()) parche.fechaNacimiento = regEdit.fechaNacimiento.trim();
+
+      const res = await fetch(`/api/hospitality/compliance/${selected.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accion: 'actualizar_viajero', viajeroId: regEditId, viajero: parche }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'No se pudo actualizar el viajero');
+      toast.success('Viajero actualizado');
+      setRegEditId(null);
+      setRegEdit(null);
+      const d = await leerRegistro(selected.id);
+      setRegDetalle(d);
+      // El estado del viajero pudo pasar a completo: refrescar el planning.
+      await loadReservations();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Error al actualizar el viajero');
+    } finally {
+      setRegEditGuardando(false);
+    }
+  }, [selected, regEditId, regEdit, leerRegistro, loadReservations]);
+
+  const retirarViajero = useCallback(async (v: ViajeroPublico) => {
+    if (!selected) return;
+    if (!window.confirm(`¿Retirar a ${v.nombre} ${v.apellido1} del registro de esta reserva?`)) return;
+    setRegRetirandoId(v.id);
+    try {
+      const res = await fetch(`/api/hospitality/compliance/${selected.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accion: 'eliminar_viajero', viajeroId: v.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'No se pudo retirar al viajero');
+      toast.success('Viajero retirado del registro');
+      const d = await leerRegistro(selected.id);
+      setRegDetalle(d);
+      await loadReservations();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Error al retirar al viajero');
+    } finally {
+      setRegRetirandoId(null);
+    }
+  }, [selected, leerRegistro, loadReservations]);
+
+  /** "Pedir por WhatsApp": mensaje al huésped con un enlace firmado donde él
+   *  mismo completa sus datos obligatorios y queda declarado como viajero. */
+  const pedirPorWhatsapp = useCallback(async () => {
+    if (!selected) return;
+    setRegPidiendo(true);
+    try {
+      const res = await fetch(`/api/hospitality/compliance/${selected.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accion: 'pedir_datos_whatsapp' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'No se pudo enviar el mensaje');
+      toast.success(
+        data.enviados === 1
+          ? 'Mensaje enviado al huésped con el enlace para completar sus datos'
+          : `Mensajes enviados (${data.enviados}/${data.total}) al huésped con los enlaces`
+      );
+      const d = await leerRegistro(selected.id);
+      setRegDetalle(d);
+      await loadReservations();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Error al enviar el mensaje');
+    } finally {
+      setRegPidiendo(false);
+    }
+  }, [selected, leerRegistro, loadReservations]);
 
   const enviarComunicacion = useCallback(async (tipo: 'reserva' | 'viajeros') => {
     if (!selected) return;
@@ -1063,9 +1194,29 @@ export default function HospitalityCalendar() {
                       {regCargando ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <UserRound className="h-4 w-4 mr-1" />}
                       Ver viajeros
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => setRegForm((v) => !v)}>
-                      <UserPlus className="h-4 w-4 mr-1" /> Añadir
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button size="sm" variant="outline" disabled={regPidiendo}>
+                          {regPidiendo ? (
+                            <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                          ) : (
+                            <UserPlus className="h-4 w-4 mr-1" />
+                          )}
+                          Añadir
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start">
+                        <DropdownMenuItem onClick={() => setRegForm(true)}>
+                          <UserPlus className="h-4 w-4 mr-2" /> Añadir en línea
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={pedirPorWhatsapp}
+                          title="Envía al huésped un enlace firmado para que complete él mismo sus datos"
+                        >
+                          <MessageCircle className="h-4 w-4 mr-2" /> Pedir por WhatsApp
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                     <Button
                       size="sm"
                       variant="outline"
@@ -1146,6 +1297,60 @@ export default function HospitalityCalendar() {
                       ) : regDetalle && regDetalle.viajeros.length > 0 ? (
                         regDetalle.viajeros.map((v) => {
                           const completo = v.estado !== 'datos_pendientes';
+                          if (regEditId === v.id && regEdit) {
+                            return (
+                              <div key={v.id} className="rounded border border-primary/40 bg-primary/5 px-2 py-2 space-y-2">
+                                <p className="text-xs font-semibold">Completar datos de {v.nombre}</p>
+                                <div className="grid grid-cols-2 gap-1.5">
+                                  <Input
+                                    placeholder="Nombre *"
+                                    value={regEdit.nombre}
+                                    onChange={(e) => setRegEdit({ ...regEdit, nombre: e.target.value })}
+                                    className="h-7 text-xs"
+                                  />
+                                  <Input
+                                    placeholder="Primer apellido *"
+                                    value={regEdit.apellido1}
+                                    onChange={(e) => setRegEdit({ ...regEdit, apellido1: e.target.value })}
+                                    className="h-7 text-xs"
+                                  />
+                                  <Input
+                                    placeholder="Tipo documento"
+                                    value={regEdit.tipoDocumento}
+                                    onChange={(e) => setRegEdit({ ...regEdit, tipoDocumento: e.target.value })}
+                                    className="h-7 text-xs"
+                                  />
+                                  <Input
+                                    placeholder="Nº documento"
+                                    value={regEdit.numeroDocumento}
+                                    onChange={(e) => setRegEdit({ ...regEdit, numeroDocumento: e.target.value })}
+                                    className="h-7 text-xs"
+                                  />
+                                  <Input
+                                    type="date"
+                                    title="Fecha de nacimiento"
+                                    value={regEdit.fechaNacimiento}
+                                    onChange={(e) => setRegEdit({ ...regEdit, fechaNacimiento: e.target.value })}
+                                    className="h-7 text-xs col-span-2"
+                                  />
+                                </div>
+                                {v.tipoDocumento && !v.documentoCompleto && (
+                                  <p className="text-[10px] text-muted-foreground">
+                                    Documento actual ({v.numeroDocumento}) solo visible enmascarado: si necesitas corregirlo, hazlo en la bandeja del registro con un rol con privilegio.
+                                  </p>
+                                )}
+                                <div className="flex justify-end gap-1.5">
+                                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setRegEditId(null); setRegEdit(null); }}>
+                                    Cancelar
+                                  </Button>
+                                  <Button size="sm" className="h-7 text-xs" disabled={regEditGuardando} onClick={guardarEdicionViajero}>
+                                    {regEditGuardando ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
+                                    Guardar
+                                  </Button>
+                                </div>
+                              </div>
+                            );
+                          }
                           return (
                             <div key={v.id} className="flex items-center justify-between gap-2 text-xs rounded border px-2 py-1.5">
                               <span className="truncate">
@@ -1153,8 +1358,29 @@ export default function HospitalityCalendar() {
                                 {v.esTitular && <span className="ml-1 text-[10px] font-semibold text-primary">titular</span>}
                                 <span className="ml-1.5 text-muted-foreground">{v.tipoDocumento || '—'} {v.numeroDocumento}</span>
                               </span>
-                              <span className="whitespace-nowrap" title={completo ? 'Datos completos' : 'Le faltan datos obligatorios'}>
-                                {completo ? '✅' : '🟡'}
+                              <span className="flex items-center gap-1 whitespace-nowrap">
+                                {!completo && (
+                                  <button
+                                    type="button"
+                                    title="Completar datos del viajero"
+                                    className="text-primary hover:underline font-medium"
+                                    onClick={() => abrirEdicionViajero(v)}
+                                  >
+                                    Completar
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  title={regRetirandoId === v.id ? 'Retirando…' : 'Retirar del registro'}
+                                  disabled={regRetirandoId === v.id}
+                                  className="text-muted-foreground hover:text-red-600 disabled:opacity-50"
+                                  onClick={() => retirarViajero(v)}
+                                >
+                                  {regRetirandoId === v.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
+                                </button>
+                                <span title={completo ? 'Datos completos' : 'Le faltan datos obligatorios'}>
+                                  {completo ? '✅' : '🟡'}
+                                </span>
                               </span>
                             </div>
                           );
