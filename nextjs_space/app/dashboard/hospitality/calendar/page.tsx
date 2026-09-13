@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import {
   colorTipoBloqueo,
@@ -20,6 +21,7 @@ import {
   Loader2,
   CalendarDays,
   User,
+  UserPlus,
   UserRound,
   Phone,
   Mail,
@@ -31,6 +33,7 @@ import {
   ExternalLink,
   CheckCircle2,
   XCircle,
+  Send,
   Sparkles,
   Wrench,
   AlertTriangle,
@@ -72,6 +75,38 @@ interface ManualBlock {
   motivo: string | null;
   estado: string;
   unit?: { id: string; nombre: string; codigo: string | null; propertyId: string };
+}
+
+/** Viajero tal como sale de la API del registro (documento ya enmascarado). */
+interface ViajeroPublico {
+  id: string;
+  nombre: string;
+  apellido1: string;
+  apellido2: string | null;
+  tipoDocumento: string | null;
+  numeroDocumento: string;
+  esTitular: boolean;
+  estado: string;
+}
+
+/** Respuesta de GET /api/hospitality/compliance/[reservationId]. */
+interface DetalleRegistro {
+  resumen: {
+    total: number;
+    registrados: number;
+    pendientes: number;
+    estado: EstadoRegistro;
+    etiqueta: string;
+    listoParaEnviar: boolean;
+  };
+  viajeros: ViajeroPublico[];
+  registro: {
+    estadoReserva: string | null;
+    estadoViajeros: string | null;
+    codigoComunicacion: string | null;
+    enviadoEn: string | null;
+    mensajeError: string | null;
+  } | null;
 }
 
 interface RawReservation {
@@ -118,6 +153,15 @@ export default function HospitalityCalendar() {
   const [rangeStart, setRangeStart] = useState<Date>(() => currentWeekRange().start);
   const [monthCursor, setMonthCursor] = useState<Date>(() => new Date());
   const [selected, setSelected] = useState<CalendarReservation | null>(null);
+
+  // Reset del panel de registro al abrir otra reserva: los datos del detalle
+  // pertenecen a la reserva anterior.
+  const abrirFicha = useCallback((r: CalendarReservation) => {
+    setSelected(r);
+    setRegDetalle(null);
+    setRegExpandido(false);
+    setRegForm(false);
+  }, []);
   const [ops, setOps] = useState<any>(null);
   const [opsLoading, setOpsLoading] = useState(false);
   const [checking, setChecking] = useState<{ id: string; tipo: string } | null>(null);
@@ -140,6 +184,13 @@ export default function HospitalityCalendar() {
   } | null>(null);
   const [blockSaving, setBlockSaving] = useState(false);
   const [avisoCerrado, setAvisoCerrado] = useState(false);
+  const [regDetalle, setRegDetalle] = useState<DetalleRegistro | null>(null);
+  const [regCargando, setRegCargando] = useState(false);
+  const [regExpandido, setRegExpandido] = useState(false);
+  const [regEnviando, setRegEnviando] = useState<'reserva' | 'viajeros' | null>(null);
+  const [regForm, setRegForm] = useState(false);
+  const [regNuevo, setRegNuevo] = useState({ nombre: '', apellido1: '', tipoDocumento: '', numeroDocumento: '', fechaNacimiento: '' });
+  const [regGuardando, setRegGuardando] = useState(false);
 
   // Llegadas de mañana con el registro de viajeros a medias: hay que recoger datos
   // hoy, porque mañana el huésped ya está en la puerta.
@@ -434,6 +485,82 @@ export default function HospitalityCalendar() {
     }
   };
 
+  // ── Registro de viajeros: detalle, alta rápida y envío, sin salir del panel ──
+  const leerRegistro = useCallback(async (reservationId: string): Promise<DetalleRegistro | null> => {
+    try {
+      const res = await fetch(`/api/hospitality/compliance/${reservationId}`);
+      if (!res.ok) throw new Error('No se pudo leer el registro de esta reserva');
+      return (await res.json()) as DetalleRegistro;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Error al leer el registro');
+      return null;
+    }
+  }, []);
+
+  const alternarViajeros = useCallback(async () => {
+    if (!selected) return;
+    const siguiente = !regExpandido;
+    setRegExpandido(siguiente);
+    if (siguiente && !regDetalle) {
+      setRegCargando(true);
+      const d = await leerRegistro(selected.id);
+      setRegDetalle(d);
+      setRegCargando(false);
+    }
+  }, [selected, regExpandido, regDetalle, leerRegistro]);
+
+  const guardarViajeroRapido = useCallback(async () => {
+    if (!selected) return;
+    if (!regNuevo.nombre.trim() || !regNuevo.apellido1.trim()) {
+      toast.error('El nombre y el primer apellido son obligatorios');
+      return;
+    }
+    setRegGuardando(true);
+    try {
+      const res = await fetch(`/api/hospitality/compliance/${selected.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accion: 'crear_viajero', viajero: regNuevo }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'No se pudo añadir el viajero');
+      toast.success('Viajero añadido');
+      setRegNuevo({ nombre: '', apellido1: '', tipoDocumento: '', numeroDocumento: '', fechaNacimiento: '' });
+      setRegForm(false);
+      const d = await leerRegistro(selected.id);
+      setRegDetalle(d);
+      // El resumen del listado cambia: refrescar el planning para que la ficha
+      // y el aviso de llegadas no enseñen números viejos.
+      await loadReservations();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Error al añadir el viajero');
+    } finally {
+      setRegGuardando(false);
+    }
+  }, [selected, regNuevo, leerRegistro, loadReservations]);
+
+  const enviarComunicacion = useCallback(async (tipo: 'reserva' | 'viajeros') => {
+    if (!selected) return;
+    setRegEnviando(tipo);
+    try {
+      const res = await fetch(`/api/hospitality/compliance/${selected.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accion: tipo === 'reserva' ? 'enviar_reserva' : 'enviar_viajeros' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.mensaje || data.error || 'No se pudo enviar la comunicación');
+      toast.success(data.mensaje || 'Comunicación enviada');
+      const d = await leerRegistro(selected.id);
+      setRegDetalle(d);
+      await loadReservations();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Error al enviar la comunicación');
+    } finally {
+      setRegEnviando(null);
+    }
+  }, [selected, leerRegistro, loadReservations]);
+
   const runCheck = async (r: CalendarReservation, tipo: 'checkin' | 'checkout') => {
     setChecking({ id: r.id, tipo });
     try {
@@ -719,7 +846,7 @@ export default function HospitalityCalendar() {
                         return (
                           <button
                             key={`${block.reservation.id}-${i}`}
-                            onClick={() => setSelected(block.reservation)}
+                            onClick={() => abrirFicha(block.reservation)}
                             className={`z-10 rounded-md px-2 py-1 text-left overflow-hidden shadow-sm hover:shadow-md hover:z-20 transition-all ${
                               isCancelled ? 'bg-slate-300 text-slate-600 opacity-70 line-through' : style.block
                             }`}
@@ -865,7 +992,7 @@ export default function HospitalityCalendar() {
           ops={ops}
           loading={opsLoading}
           onRefresh={loadOperations}
-          onSelectReservation={(r) => setSelected(r as any)}
+          onSelectReservation={(r) => abrirFicha(r as any)}
           onCheck={runCheck}
         />
       )}
@@ -913,7 +1040,7 @@ export default function HospitalityCalendar() {
 
               {/* Registro de viajeros (SES.HOSPEDAJES) */}
               {selected.registro && (
-                <div className="rounded-lg border p-3">
+                <div className="rounded-lg border p-3 space-y-2">
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
@@ -929,14 +1056,123 @@ export default function HospitalityCalendar() {
                       {FICHAS_ESTADO[selected.registro.estado as EstadoRegistro]?.etiqueta}
                     </span>
                   </div>
-                  {selected.registro.total > 0 && (
-                    <Link
-                      href="/dashboard/hospitality/viajeros"
-                      className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+
+                  {/* Acciones rápidas: sin salir del panel */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button size="sm" variant="outline" onClick={alternarViajeros}>
+                      {regCargando ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <UserRound className="h-4 w-4 mr-1" />}
+                      Ver viajeros
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setRegForm((v) => !v)}>
+                      <UserPlus className="h-4 w-4 mr-1" /> Añadir
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={regEnviando != null || !selected.registro.listoParaEnviar}
+                      title={selected.registro.listoParaEnviar ? 'Comunicar la reserva de hospedaje (RH) al Ministerio' : 'Faltan datos o credenciales para enviar'}
+                      onClick={() => enviarComunicacion('reserva')}
                     >
-                      Gestionar en el registro de viajeros
-                      <ExternalLink className="h-3 w-3" />
-                    </Link>
+                      {regEnviando === 'reserva' ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Send className="h-4 w-4 mr-1" />}
+                      Enviar RH
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={regEnviando != null || !selected.registro.listoParaEnviar}
+                      title={selected.registro.listoParaEnviar ? 'Comunicar el parte de viajeros (PV) al Ministerio' : 'Faltan datos o credenciales para enviar'}
+                      onClick={() => enviarComunicacion('viajeros')}
+                    >
+                      {regEnviando === 'viajeros' ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Send className="h-4 w-4 mr-1" />}
+                      Enviar PV
+                    </Button>
+                  </div>
+
+                  {regForm && (
+                    <div className="rounded-md border bg-muted/30 p-2.5 space-y-2">
+                      <p className="text-xs font-semibold">Nuevo viajero</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input
+                          placeholder="Nombre *"
+                          value={regNuevo.nombre}
+                          onChange={(e) => setRegNuevo({ ...regNuevo, nombre: e.target.value })}
+                          className="h-8 text-sm"
+                        />
+                        <Input
+                          placeholder="Primer apellido *"
+                          value={regNuevo.apellido1}
+                          onChange={(e) => setRegNuevo({ ...regNuevo, apellido1: e.target.value })}
+                          className="h-8 text-sm"
+                        />
+                        <Input
+                          placeholder="Tipo documento"
+                          value={regNuevo.tipoDocumento}
+                          onChange={(e) => setRegNuevo({ ...regNuevo, tipoDocumento: e.target.value })}
+                          className="h-8 text-sm"
+                        />
+                        <Input
+                          placeholder="Nº documento"
+                          value={regNuevo.numeroDocumento}
+                          onChange={(e) => setRegNuevo({ ...regNuevo, numeroDocumento: e.target.value })}
+                          className="h-8 text-sm"
+                        />
+                        <Input
+                          type="date"
+                          title="Fecha de nacimiento"
+                          value={regNuevo.fechaNacimiento}
+                          onChange={(e) => setRegNuevo({ ...regNuevo, fechaNacimiento: e.target.value })}
+                          className="h-8 text-sm col-span-2"
+                        />
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        El resto de datos que exige el Ministerio se completan en la bandeja del registro.
+                      </p>
+                      <div className="flex justify-end gap-2">
+                        <Button size="sm" variant="ghost" onClick={() => setRegForm(false)}>Cancelar</Button>
+                        <Button size="sm" disabled={regGuardando} onClick={guardarViajeroRapido}>
+                          {regGuardando ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                          Añadir viajero
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {regExpandido && (
+                    <div className="space-y-1.5">
+                      {regCargando ? (
+                        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Cargando viajeros…
+                        </p>
+                      ) : regDetalle && regDetalle.viajeros.length > 0 ? (
+                        regDetalle.viajeros.map((v) => {
+                          const completo = v.estado !== 'datos_pendientes';
+                          return (
+                            <div key={v.id} className="flex items-center justify-between gap-2 text-xs rounded border px-2 py-1.5">
+                              <span className="truncate">
+                                <span className="font-medium">{[v.nombre, v.apellido1].filter(Boolean).join(' ')}</span>
+                                {v.esTitular && <span className="ml-1 text-[10px] font-semibold text-primary">titular</span>}
+                                <span className="ml-1.5 text-muted-foreground">{v.tipoDocumento || '—'} {v.numeroDocumento}</span>
+                              </span>
+                              <span className="whitespace-nowrap" title={completo ? 'Datos completos' : 'Le faltan datos obligatorios'}>
+                                {completo ? '✅' : '🟡'}
+                              </span>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <p className="text-xs text-muted-foreground">Aún no hay viajeros declarados en esta reserva.</p>
+                      )}
+                      {regDetalle?.registro?.mensajeError && (
+                        <p className="text-[11px] text-red-600">Último error: {regDetalle.registro.mensajeError}</p>
+                      )}
+                      <Link
+                        href="/dashboard/hospitality/viajeros"
+                        className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                      >
+                        Gestionar en el registro de viajeros
+                        <ExternalLink className="h-3 w-3" />
+                      </Link>
+                    </div>
                   )}
                 </div>
               )}
