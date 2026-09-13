@@ -14,6 +14,10 @@ export interface PropsFormulario {
   token: string;
   /** Texto de contexto que llegó en la carga inicial (unidad, referencia). */
   contexto: string;
+  /** Nombre completo del viajero guardado en el registro (no viaja en el enlace). */
+  nombreCompleto: string | null;
+  /** true si nombre y primer apellido ya están guardados: se muestran bloqueados. */
+  nombrePrellenado: boolean;
   /** Valores ya presentes en el registro: se rellenan si el rol los sirve. */
   inicial: {
     nombre: string;
@@ -40,7 +44,14 @@ const etiquetas: Record<string, string> = {
   nacionalidad: 'Nacionalidad',
 };
 
-export default function ViajeroForm({ token, contexto, inicial, tiposConSoporte }: PropsFormulario) {
+export default function ViajeroForm({
+  token,
+  contexto,
+  nombreCompleto,
+  nombrePrellenado,
+  inicial,
+  tiposConSoporte,
+}: PropsFormulario) {
   const [datos, setDatos] = useState(inicial);
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState(false);
@@ -99,6 +110,17 @@ export default function ViajeroForm({ token, contexto, inicial, tiposConSoporte 
       <h1 className="text-lg font-semibold">Completa tus datos de viajero</h1>
       {contexto && <p className="mt-1 text-sm text-muted-foreground">{contexto}</p>}
 
+      {nombrePrellenado && nombreCompleto ? (
+        <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-900 dark:bg-emerald-950">
+          <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">
+            Formulario de {nombreCompleto}
+          </p>
+          <p className="mt-0.5 text-xs text-emerald-700/80 dark:text-emerald-300/80">
+            El nombre ya está registrado: solo tienes que completar documento y fecha de nacimiento.
+          </p>
+        </div>
+      ) : null}
+
       <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {(['nombre', 'apellido1', 'apellido2'] as const).map((campo) => (
           <label key={campo} className="block text-sm">
@@ -110,8 +132,11 @@ export default function ViajeroForm({ token, contexto, inicial, tiposConSoporte 
               type="text"
               autoComplete="off"
               value={datos[campo]}
+              readOnly={nombrePrellenado && campo !== 'apellido2'}
               onChange={(e) => actualizar(campo, e.target.value)}
-              className="mt-1 w-full rounded-md border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+              className={`mt-1 w-full rounded-md border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40 ${
+                nombrePrellenado && campo !== 'apellido2' ? 'opacity-70' : ''
+              }`}
             />
           </label>
         ))}
