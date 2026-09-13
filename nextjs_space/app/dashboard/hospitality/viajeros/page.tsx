@@ -190,12 +190,15 @@ export default function RegistroDeViajerosPage() {
   const [detalle, setDetalle] = useState<Detalle | null>(null);
   const [cargandoDetalle, setCargandoDetalle] = useState(false);
   const [trabajando, setTrabajando] = useState(false);
+  /** Fila cuya petición grupal de datos está en vuelo (spinner local por fila). */
+  const [pidiendoFila, setPidiendoFila] = useState<string | null>(null);
 
   const [formViajero, setFormViajero] = useState({ ...VIAJERO_VACIO });
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
 
   const [avisoCerrado, setAvisoCerrado] = useState(false);
+  const [aviso48Cerrado, setAviso48Cerrado] = useState(false);
   const [configAbierta, setConfigAbierta] = useState(false);
   const [formConfig, setFormConfig] = useState({
     activo: false,
@@ -320,9 +323,9 @@ export default function RegistroDeViajerosPage() {
           cuerpo.accion === 'enviar_reserva' || cuerpo.accion === 'enviar_viajeros'
             ? 'Comunicación enviada al Ministerio'
             : cuerpo.accion === 'pedir_datos_whatsapp'
-              ? datos.enviados === 1
+              ? datos.viajeros === 1
                 ? 'Enlace de WhatsApp enviado al viajero'
-                : `Enlaces de WhatsApp enviados (${datos.enviados}/${datos.total})`
+                : `Mensaje único enviado al huésped con los enlaces de ${datos.viajeros} viajeros`
               : 'Guardado'
         );
 
@@ -339,6 +342,20 @@ export default function RegistroDeViajerosPage() {
       }
     },
     [cargar, leerDetalle]
+  );
+
+  /**
+   * "Pedir todos": un WhatsApp al huésped con los enlaces firmados de todos los
+   * viajeros incompletos de la reserva, sin abrir la ficha.
+   */
+  const pedirTodos = useCallback(
+    async (reservationId: string) => {
+      setPidiendoFila(reservationId);
+      const ok = await accion(reservationId, { accion: 'pedir_datos_whatsapp' }, false);
+      setPidiendoFila(null);
+      return ok;
+    },
+    [accion]
   );
 
   const guardarViajero = useCallback(async () => {
@@ -649,6 +666,22 @@ export default function RegistroDeViajerosPage() {
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex justify-end gap-2">
+                              {fila.pendientes > 0 ? (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  title={`Un solo WhatsApp al huésped con los enlaces de los ${fila.pendientes} viajeros incompletos`}
+                                  disabled={trabajando || pidiendoFila === fila.reservationId}
+                                  onClick={() => void pedirTodos(fila.reservationId)}
+                                >
+                                  {pidiendoFila === fila.reservationId ? (
+                                    <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                                  ) : (
+                                    <MessageCircle className="mr-1 h-3.5 w-3.5" />
+                                  )}
+                                  Pedir todos
+                                </Button>
+                              ) : null}
                               <Button size="sm" variant="outline" onClick={() => void abrirDetalle(fila.reservationId)}>
                                 Ver ficha
                               </Button>

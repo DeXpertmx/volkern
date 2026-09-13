@@ -656,9 +656,9 @@ export default function HospitalityCalendar() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'No se pudo enviar el mensaje');
       toast.success(
-        data.enviados === 1
+        data.viajeros === 1
           ? 'Mensaje enviado al huésped con el enlace para completar sus datos'
-          : `Mensajes enviados (${data.enviados}/${data.total}) al huésped con los enlaces`
+          : `Mensaje enviado al huésped con los enlaces de ${data.viajeros} viajeros`
       );
       const d = await leerRegistro(selected.id);
       setRegDetalle(d);
