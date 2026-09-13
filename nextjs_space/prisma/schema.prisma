@@ -8541,8 +8541,12 @@ model HospitalityTraveler {
   fechaNacimiento  DateTime?
   nacionalidad     String?
   estado           String    @default("pendiente")
+  // Seguimiento del enlace de WhatsApp (pedir/reenviar datos al viajero).
+  enlaceEnviadoEn  DateTime?
+  enlaceEnviados   Int       @default(0)
+  datosRecibidosEn DateTime?
   fechaCreacion    DateTime  @default(now())
-  fechaEdicion     DateTime  @updatedAt
+  fechaEdicion     DateTime @updatedAt
   tenant           Tenant    @relation("HospitalityTravelers", fields: [tenantId], references: [id], onDelete: Cascade)
   reservation      HospitalityReservation @relation("HospitalityReservationTravelers", fields: [reservationId], references: [id], onDelete: Cascade)
 

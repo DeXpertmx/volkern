@@ -203,12 +203,32 @@ export interface ViajeroGuardado extends ViajeroMinimo {
   esTitular: boolean;
   orden: number;
   estado: string;
+  /** Seguimiento del enlace de WhatsApp (pedir/reenviar datos). */
+  enlaceEnviadoEn?: Date | null;
+  enlaceEnviados?: number;
+  datosRecibidosEn?: Date | null;
 }
 
 export async function listarViajeros(tenantId: string, reservationId: string): Promise<ViajeroGuardado[]> {
   return prisma.hospitalityTraveler.findMany({
     where: { tenantId, reservationId },
     orderBy: [{ esTitular: 'desc' }, { orden: 'asc' }, { fechaCreacion: 'asc' }],
+  });
+}
+
+/** Marcó el envío del enlace de WhatsApp a un viajero (primera vez o reenvío). */
+export async function registrarEnvioEnlace(viajeroId: string): Promise<void> {
+  await prisma.hospitalityTraveler.update({
+    where: { id: viajeroId },
+    data: { enlaceEnviadoEn: new Date(), enlaceEnviados: { increment: 1 } },
+  });
+}
+
+/** Marcó que el viajero respondió: completó sus datos en el formulario público. */
+export async function registrarRespuestaEnlace(viajeroId: string): Promise<void> {
+  await prisma.hospitalityTraveler.update({
+    where: { id: viajeroId },
+    data: { datosRecibidosEn: new Date() },
   });
 }
 
