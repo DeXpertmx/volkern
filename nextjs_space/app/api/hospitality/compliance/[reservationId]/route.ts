@@ -222,7 +222,7 @@ async function pedirDatosPorWhatsapp(
   usuarioId: string,
   soloViajeroId?: string
 ): Promise<
-  | { ok: true; enviados: number; sinTelefono: number; total: number }
+  | { ok: true; enviados: number; total: number; viajeros: number }
   | { ok: false; motivo: 'sin_telefono' | 'whatsapp' | 'desconocido'; error: string; enviados?: number }
 > {
   // Pide el detalle por la capa de datos (el viaje ya incluye el huésped y el
@@ -263,51 +263,67 @@ async function pedirDatosPorWhatsapp(
   const nombreHuesped = guestNombre(detalle.reserva.guestData) || detalle.reserva.contact?.nombre || '';
   const unidad = detalle.reserva.unit?.nombre || '';
   const appUrl = getEnlaceAppUrl();
-  let enviados = 0;
-  let ultimoError = '';
 
+  // Se firman todos los enlaces antes de enviar: si falta el secreto, no se
+  // manda un mensaje a medias.
+  const firmados: { viajero: (typeof objetivo)[number]; nombre: string; token: string }[] = [];
   for (const viajero of objetivo) {
-    let token: string;
     try {
-      token = firmarTokenEnlace(viajero.id);
+      firmados.push({
+        viajero,
+        nombre: [viajero.nombre, viajero.apellido1].filter(Boolean).join(' ').trim(),
+        token: firmarTokenEnlace(viajero.id),
+      });
     } catch (error) {
       if (error instanceof EnlaceNoConfigurado) {
         return { ok: false, motivo: 'desconocido', error: 'El servidor no tiene secreto para firmar enlaces (TRAVELER_LINK_SECRET)' };
       }
       throw error;
     }
-
-    const nombreViajero = [viajero.nombre, viajero.apellido1].filter(Boolean).join(' ').trim();
-    const esTitular = nombreHuesped && nombreViajero &&
-      nombreHuesped.toLowerCase().includes(nombreViajero.split(' ')[0].toLowerCase());
-    const mensaje = [
-      esTitular
-        ? `Hola ${nombreHuesped.split(' ')[0]}, tu reserva${unidad ? ` en ${unidad}` : ''} está confirmada.`
-        : `Hola, te escribimos por la reserva${unidad ? ` en ${unidad}` : ''} de ${nombreHuesped || 'tu grupo'}.`,
-      'La ley exige registrar los datos de cada viajero ante el Ministerio del Interior.',
-      `Completa aquí tus datos (tarda un minuto): ${urlPedirDatos(appUrl, token)}`,
-    ].join('\n');
-
-    const res = await sendWhatsAppMessage(telefono, mensaje, tenantId, true);
-    if (res?.success) {
-      enviados += 1;
-      // Seguimiento para la bandeja: cuándo se le pidió y cuántas veces.
-      await registrarEnvioEnlace(viajero.id).catch(() => {});
-      await logAuditAction(
-        usuarioId,
-        tenantId,
-        'enviar',
-        'hospitality_traveler',
-        viajero.id,
-        `Solicitud de datos por WhatsApp para el viajero ${nombreViajero || viajero.id}`
-      ).catch(() => {});
-    } else {
-      ultimoError = res?.error || 'Error enviando WhatsApp';
-    }
   }
 
-  if (enviados === 0) {
-    return { ok: false, motivo: 'whatsapp', error: ultimoError || 'No se pudo enviar el mensaje por WhatsApp' };
+  // Un solo WhatsApp por huésped: la reserva tiene un teléfono y todos los
+  // enlaces del grupo viajan en el mismo mensaje. El reenvío de un viajero
+  // concreto (soloViajeroId) ya llega aquí con un único objetivo y conserva su
+  // mensaje personalizado.
+  const hayTitular =
+    nombreHuesped &&
+    firmados.some(
+      (f) => f.nombre && nombreHuesped.toLowerCase().includes(f.nombre.split(' ')[0].toLowerCase())
+    );
+  const lineas = [
+    hayTitular
+      ? `Hola ${nombreHuesped.split(' ')[0]}, tu reserva${unidad ? ` en ${unidad}` : ''} está confirmada.`
+      : `Hola, te escribimos por la reserva${unidad ? ` en ${unidad}` : ''} de ${nombreHuesped || 'tu grupo'}.`,
+    firmados.length === 1
+      ? 'La ley exige registrar los datos de cada viajero ante el Ministerio del Interior.'
+      : 'La ley exige registrar los datos de cada viajero ante el Ministerio del Interior:',
+    ...(firmados.length === 1
+      ? [`Completa aquí tus datos (tarda un minuto): ${urlPedirDatos(appUrl, firmados[0].token)}`]
+      : firmados.map((f) => `• ${f.nombre || 'Viajero'}: ${urlPedirDatos(appUrl, f.token)}`)),
+  ];
+  if (firmados.length > 1) lineas.push('Completa cada enlace con tus datos (tarda un minuto).');
+
+  const res = await sendWhatsAppMessage(telefono, lineas.join('\n'), tenantId, true);
+  if (!res?.success) {
+    return { ok: false, motivo: 'whatsapp', error: res?.error || 'No se pudo enviar el mensaje por WhatsApp' };
   }
-  return { ok: true, enviados, sinTelefono: 0, total: objetivo.length };
+
+  // Seguimiento para la bandeja: cuándo se le pidió y cuántas veces. Solo se
+  // marca tras un envío real; la auditoría queda por viajero.
+  for (const f of firmados) {
+    await registrarEnvioEnlace(f.viajero.id).catch(() => {});
+    await logAuditAction(
+      usuarioId,
+      tenantId,
+      'enviar',
+      'hospitality_traveler',
+      f.viajero.id,
+      firmados.length > 1
+        ? `Incluido en la solicitud grupal de datos por WhatsApp (${firmados.length} viajeros)`
+        : `Solicitud de datos por WhatsApp para el viajero ${f.nombre || f.viajero.id}`
+    ).catch(() => {});
+  }
+
+  return { ok: true, enviados: 1, total: 1, viajeros: firmados.length };
 }
