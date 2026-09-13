@@ -64,6 +64,9 @@ interface FilaRegistro {
   listoParaEnviar: boolean;
   ultimoEnvio: string | null;
   mensajeError: string | null;
+  /** Seguimiento del enlace de WhatsApp, para el aviso de sin respuesta. */
+  enlacesSinResponder: number;
+  ultimoEnlaceEnviadoEn: string | null;
 }
 
 interface ViajeroPublico {
@@ -255,6 +258,26 @@ export default function RegistroDeViajerosPage() {
         iso(f.checkIn) === isoManana &&
         (f.estado === 'datos_pendientes' || f.estado === 'pendiente_envio')
     );
+  }, [filas]);
+
+  // Enlaces de WhatsApp enviados hace más de 48 horas y todavía sin respuesta:
+  // el mismo criterio que el aviso de llegadas (mismo tono, cerrable), para
+  // que el huésped no llegue a la puerta sin haber completado sus datos.
+  const UMBRAL_SIN_RESPUESTA_MS = 48 * 60 * 60 * 1000;
+  const enlacesSinResponder = useMemo(() => {
+    const ahora = Date.now();
+    return filas
+      .filter(
+        (f) =>
+          f.enlacesSinResponder > 0 &&
+          f.ultimoEnlaceEnviadoEn &&
+          ahora - new Date(f.ultimoEnlaceEnviadoEn).getTime() > UMBRAL_SIN_RESPUESTA_MS
+      )
+      .sort(
+        (a, b) =>
+          new Date(a.ultimoEnlaceEnviadoEn!).getTime() -
+          new Date(b.ultimoEnlaceEnviadoEn!).getTime()
+      );
   }, [filas]);
 
   const abrirDetalle = useCallback(async (reservationId: string) => {
@@ -475,6 +498,29 @@ export default function RegistroDeViajerosPage() {
               onClick={() => setAvisoCerrado(true)}
               className="p-1 rounded hover:bg-amber-100"
               aria-label="Cerrar aviso"
+            >
+              <XCircle className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+
+        {enlacesSinResponder.length > 0 && !aviso48Cerrado && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 shrink-0" />
+              <span>
+                <strong>
+                  {enlacesSinResponder.length} enlace{enlacesSinResponder.length !== 1 ? 's' : ''} de WhatsApp{' '}
+                  sin respuesta desde hace más de 48 horas
+                </strong>{' '}
+                ({enlacesSinResponder.map((f) => `${f.referencia}: ${f.enlacesSinResponder} viajero${f.enlacesSinResponder !== 1 ? 's' : ''}`).join('; ')}).{' '}
+                Reenvíalo desde el detalle de la reserva o pide los datos en el check-in.
+              </span>
+            </div>
+            <button
+              onClick={() => setAviso48Cerrado(true)}
+              className="p-1 rounded hover:bg-amber-100"
+              aria-label="Cerrar aviso de enlaces sin responder"
             >
               <XCircle className="h-4 w-4" />
             </button>
