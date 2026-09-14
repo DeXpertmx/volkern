@@ -124,6 +124,8 @@ describe('GET /api/hospitality/reservations — aviso de llegadas de mañana', (
     hoisted.prisma.hospitalityReservation.findMany.mockResolvedValue([
       reservaConRegistro(diaLocal(1), {
         travelers: [
+          // El domicilio es obligatorio desde que el parte de viajeros (PV) lo
+          // exige por persona: sin él estos viajeros contarían como incompletos.
           {
             id: 'v1',
             nombre: 'María',
@@ -132,6 +134,8 @@ describe('GET /api/hospitality/reservations — aviso de llegadas de mañana', (
             numeroDocumento: '12345678Z',
             soporteDocumento: 'S001',
             fechaNacimiento: new Date('1990-01-01'),
+            direccion: 'Calle Falsa 123',
+            codigoPostal: '41001',
           },
           {
             id: 'v2',
@@ -140,6 +144,8 @@ describe('GET /api/hospitality/reservations — aviso de llegadas de mañana', (
             tipoDocumento: 'PAS',
             numeroDocumento: 'X1234567',
             fechaNacimiento: new Date('1985-05-05'),
+            direccion: 'Avenida de la Constitución 5',
+            codigoPostal: '41001',
           },
         ],
         compliance: {
