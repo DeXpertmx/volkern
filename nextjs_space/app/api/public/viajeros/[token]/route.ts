@@ -20,6 +20,8 @@ const ETIQUETAS_CAMPO: Record<string, string> = {
   tipoDocumento: 'tipo de documento',
   numeroDocumento: 'número de documento',
   soporteDocumento: 'soporte del documento',
+  direccion: 'dirección (vía y número)',
+  codigoPostal: 'código postal',
 };
 
 /**
@@ -57,9 +59,15 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
         soporteDocumento: true,
         fechaNacimiento: true,
         nacionalidad: true,
+        direccion: true,
+        municipio: true,
+        codigoMunicipio: true,
+        codigoPostal: true,
+        paisDireccion: true,
         reservation: {
           select: {
             tenantId: true,
+            externalBookingId: true,
             compliance: { select: { estadoViajeros: true } },
           },
         },
@@ -90,6 +98,11 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       soporteDocumento: limpiar(cuerpo.soporteDocumento) ?? viajero.soporteDocumento,
       fechaNacimiento: limpiar(cuerpo.fechaNacimiento) ?? viajero.fechaNacimiento,
       nacionalidad: limpiar(cuerpo.nacionalidad) ?? viajero.nacionalidad,
+      direccion: limpiar(cuerpo.direccion) ?? viajero.direccion,
+      municipio: limpiar(cuerpo.municipio) ?? viajero.municipio,
+      codigoMunicipio: limpiar(cuerpo.codigoMunicipio) ?? viajero.codigoMunicipio,
+      codigoPostal: limpiar(cuerpo.codigoPostal) ?? viajero.codigoPostal,
+      paisDireccion: limpiar(cuerpo.paisDireccion) ?? viajero.paisDireccion,
     };
 
     const faltantes = camposFaltantes(fusionado);
@@ -99,6 +112,10 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     }
 
     // Solo lo que el viajero escribió de verdad se envía (PATCH por campo).
+    // La dirección entra por el mismo camino que el documento: es dato que el
+    // Ministerio exige, se guarda para comunicarla y no se vuelve a mostrar por
+    // esta vía pública (los campos fusionados que no escribió el viajero no se
+    // tocan; aquí solo se manda lo que él escribió).
     const entrada: Partial<EntradaViajero> = {};
     if (limpiar(cuerpo.nombre)) entrada.nombre = fusionado.nombre!;
     if (limpiar(cuerpo.apellido1)) entrada.apellido1 = fusionado.apellido1!;
@@ -108,6 +125,11 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     if (limpiar(cuerpo.soporteDocumento)) entrada.soporteDocumento = fusionado.soporteDocumento;
     if (limpiar(cuerpo.fechaNacimiento)) entrada.fechaNacimiento = fusionado.fechaNacimiento!;
     if (cuerpo.nacionalidad !== undefined) entrada.nacionalidad = fusionado.nacionalidad;
+    if (limpiar(cuerpo.direccion)) entrada.direccion = fusionado.direccion;
+    if (limpiar(cuerpo.municipio)) entrada.municipio = fusionado.municipio;
+    if (limpiar(cuerpo.codigoMunicipio)) entrada.codigoMunicipio = fusionado.codigoMunicipio;
+    if (limpiar(cuerpo.codigoPostal)) entrada.codigoPostal = fusionado.codigoPostal;
+    if (limpiar(cuerpo.paisDireccion)) entrada.paisDireccion = fusionado.paisDireccion;
 
     const actualizado = await actualizarViajero(
       viajero.tenantId,
@@ -119,6 +141,33 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
 
     // Para la bandeja: el viajero respondió al enlace de WhatsApp.
     await registrarRespuestaEnlace(viajero.id).catch(() => {});
+
+    // Auditoría al nivel de las acciones internas: quién (viajero identificado
+    // por el enlace firmado), qué campos tocó y desde dónde. Se registran los
+    // nombres de campo, no sus valores: el log de auditoría no pasa por el
+    // enmascaramiento de documentos que aplica la API interna.
+    //
+    // Se inserta directo (patrón de los crons) y SIN userId: AuditLog.userId es
+    // una FK real a User y un actor sintético la violaría en silencio; el actor
+    // se documenta en metadata. Mismo verbo y entidad que la edición interna
+    // del viajero ('editar' / 'hospitality_traveler').
+    await prisma.auditLog
+      .create({
+        data: {
+          tenantId: viajero.tenantId,
+          accion: 'editar',
+          entidad: 'hospitality_traveler',
+          entidadId: viajero.id,
+          descripcion: `El viajero completó sus datos desde el enlace firmado de la reserva ${viajero.reservation.externalBookingId}`,
+          metadata: {
+            actor: 'viajero-enlace-publico',
+            campos: Object.keys(entrada),
+          },
+          ipAddress: req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || undefined,
+          userAgent: req.headers.get('user-agent') || undefined,
+        },
+      })
+      .catch((error) => console.error('[Hospitality] Error auditando el alta pública del viajero:', error));
 
     return NextResponse.json({ ok: true, estado: actualizado.estado });
   } catch (error) {

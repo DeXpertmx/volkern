@@ -38,7 +38,9 @@ describe('el formulario público del viajero con nombre prellenado', () => {
     montar();
 
     expect(screen.getByText('Formulario de Lucía Mendoza')).toBeDefined();
-    expect(screen.getByText(/solo tienes que completar documento y fecha de nacimiento/i)).toBeDefined();
+    expect(
+      screen.getByText(/completa documento, fecha de nacimiento y tu domicilio/i)
+    ).toBeDefined();
 
     const nombre = screen.getByDisplayValue('Lucía') as HTMLInputElement;
     const apellido1 = screen.getByDisplayValue('Mendoza') as HTMLInputElement;

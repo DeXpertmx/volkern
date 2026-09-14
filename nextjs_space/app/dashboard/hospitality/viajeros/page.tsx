@@ -79,6 +79,11 @@ interface ViajeroPublico {
   soporteDocumento: string | null;
   fechaNacimiento: string | null;
   nacionalidad: string | null;
+  direccion: string | null;
+  municipio: string | null;
+  codigoMunicipio: string | null;
+  codigoPostal: string | null;
+  paisDireccion: string | null;
   esTitular: boolean;
   estado: string;
   documentoCompleto: boolean;
@@ -93,6 +98,8 @@ interface Configuracion {
   entorno: string;
   entidadNombre: string | null;
   entidadNif: string | null;
+  /** Código de arrendador de la entidad: lo asigna el Ministerio. */
+  codigoArrendador: string | null;
   tieneUsuario: boolean;
   tienePassword: boolean;
   tieneCertificado: boolean;
@@ -158,6 +165,11 @@ const VIAJERO_VACIO = {
   soporteDocumento: '',
   fechaNacimiento: '',
   nacionalidad: '',
+  direccion: '',
+  municipio: '',
+  codigoMunicipio: '',
+  codigoPostal: '',
+  paisDireccion: '',
 };
 
 const fecha = (valor: string | null) =>
@@ -205,6 +217,7 @@ export default function RegistroDeViajerosPage() {
     entorno: 'pruebas',
     entidadNombre: '',
     entidadNif: '',
+    codigoArrendador: '',
     usuario: '',
     password: '',
     certificado: '',
@@ -456,6 +469,7 @@ export default function RegistroDeViajerosPage() {
                   entorno: config?.entorno ?? 'pruebas',
                   entidadNombre: config?.entidadNombre ?? '',
                   entidadNif: config?.entidadNif ?? '',
+                  codigoArrendador: config?.codigoArrendador ?? '',
                   usuario: '',
                   password: '',
                   certificado: '',
@@ -474,11 +488,10 @@ export default function RegistroDeViajerosPage() {
             <CardContent className="flex gap-3 p-4 text-sm text-amber-900">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
               <div>
-                <p className="font-semibold">El envío al Ministerio está pendiente del esquema oficial</p>
+                <p className="font-semibold">El envío al Ministerio no está disponible en este momento</p>
                 <p className="mt-1 text-amber-800">
-                  Puedes dar de alta y revisar los viajeros y preparar la comunicación, pero el mensaje todavía no
-                  sale: falta el manual de alta de SES.HOSPEDAJES, que define el XML. Nada se envía a medias y no se
-                  registra en la bitácora lo que no se ha enviado.
+                  El servidor no tiene cargado el esquema oficial del interface v3.0.0 de SES.HOSPEDAJES. Nada se
+                  envía a medias y no se registra en la bitácora lo que no se ha enviado.
                 </p>
               </div>
             </CardContent>
@@ -850,6 +863,11 @@ export default function RegistroDeViajerosPage() {
                                   ? new Date(viajero.fechaNacimiento).toISOString().slice(0, 10)
                                   : '',
                                 nacionalidad: viajero.nacionalidad ?? '',
+                                direccion: viajero.direccion ?? '',
+                                municipio: viajero.municipio ?? '',
+                                codigoMunicipio: viajero.codigoMunicipio ?? '',
+                                codigoPostal: viajero.codigoPostal ?? '',
+                                paisDireccion: viajero.paisDireccion ?? '',
                               });
                               setMostrarFormulario(true);
                             }}
@@ -946,6 +964,41 @@ export default function RegistroDeViajerosPage() {
                         placeholder="ES"
                         value={formViajero.nacionalidad}
                         onChange={(e) => setFormViajero({ ...formViajero, nacionalidad: e.target.value })}
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs font-bold uppercase text-slate-400">Dirección (vía y número) *</Label>
+                      <Input
+                        className="mt-1"
+                        value={formViajero.direccion}
+                        onChange={(e) => setFormViajero({ ...formViajero, direccion: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-bold uppercase text-slate-400">Municipio</Label>
+                      <Input
+                        className="mt-1"
+                        value={formViajero.municipio}
+                        onChange={(e) => setFormViajero({ ...formViajero, municipio: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-bold uppercase text-slate-400">Código postal *</Label>
+                      <Input
+                        className="mt-1"
+                        value={formViajero.codigoPostal}
+                        onChange={(e) => setFormViajero({ ...formViajero, codigoPostal: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-bold uppercase text-slate-400">País (ISO)</Label>
+                      <Input
+                        className="mt-1"
+                        placeholder="ESP"
+                        maxLength={3}
+                        value={formViajero.paisDireccion}
+                        onChange={(e) => setFormViajero({ ...formViajero, paisDireccion: e.target.value })}
                       />
                     </div>
                   </div>
@@ -1077,6 +1130,21 @@ export default function RegistroDeViajerosPage() {
                   className="mt-1"
                   value={formConfig.entidadNif}
                   onChange={(e) => setFormConfig({ ...formConfig, entidadNif: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label
+                  className="text-xs font-bold uppercase text-slate-400"
+                  title="El código que el Ministerio asigna a la entidad al registrarla; encabeza cada comunicación"
+                >
+                  Código de arrendador {formConfig.codigoArrendador ? '' : '(lo da el alta de la entidad)'}
+                </Label>
+                <Input
+                  className="mt-1"
+                  maxLength={10}
+                  placeholder="0000000000"
+                  value={formConfig.codigoArrendador}
+                  onChange={(e) => setFormConfig({ ...formConfig, codigoArrendador: e.target.value })}
                 />
               </div>
               <div>

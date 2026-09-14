@@ -47,7 +47,7 @@ export async function PATCH(req: NextRequest, ctx: Params) {
     const data = await req.json();
     const {
       nombre, descripcion, codigo, zona, direccion, ciudad, estadoProvincia,
-      pais, cp, latitud, longitud, fotos, timezone, estado,
+      pais, cp, latitud, longitud, fotos, timezone, estado, sesHospedajes,
     } = data || {};
 
     const property = await prisma.hospitalityProperty.update({
@@ -67,6 +67,20 @@ export async function PATCH(req: NextRequest, ctx: Params) {
         ...(fotos !== undefined ? { fotos: Array.isArray(fotos) ? (fotos as Prisma.InputJsonValue[]) : Prisma.DbNull } : {}),
         ...(timezone !== undefined ? { timezone } : {}),
         ...(estado !== undefined ? { estado } : {}),
+        // Registro de viajeros: el código oficial del establecimiento ante
+        // SES.HOSPEDAJES (referencia externa; el Ministerio lo asigna al alta).
+        ...(sesHospedajes !== undefined
+          ? {
+              sesHospedajes:
+                sesHospedajes && typeof sesHospedajes === 'object'
+                  ? {
+                      codigo: String((sesHospedajes as Record<string, unknown>).codigo ?? '').trim() || null,
+                      codigoMunicipio:
+                        String((sesHospedajes as Record<string, unknown>).codigoMunicipio ?? '').trim() || null,
+                    }
+                  : Prisma.DbNull,
+            }
+          : {}),
       },
     });
 

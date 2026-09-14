@@ -22,9 +22,9 @@ import {
 import {
   ENDPOINTS,
   ESQUEMA_XML_DISPONIBLE,
-  EsquemaNoDisponibleError,
+  DatosInsuficientesError,
+  construirPeticionSes,
   cabeceraBasic,
-  construirXml,
   empaquetarComunicacion,
   enviarComunicacion,
   probarAlcance,
@@ -38,6 +38,10 @@ const VIAJERO_COMPLETO = {
   numeroDocumento: 'X1234567',
   fechaNacimiento: new Date('1990-04-12'),
   nacionalidad: 'ES',
+  // La dirección es obligatoria desde que el esquema v3.0.0 está implementado:
+  // el parte de viajeros la exige por persona.
+  direccion: 'Calle Falsa 123',
+  codigoPostal: '21710',
 };
 
 describe('el registro de viajeros tiene dos comunicaciones y un estado que las resume', () => {
@@ -89,14 +93,22 @@ describe('lo que le falta a un viajero para poder comunicarse', () => {
     expect(estadoDeViajero(sinFecha)).toBe('datos_pendientes');
   });
 
-  it('el documento y sus apellidos son obligatorios', () => {
+  it('el documento, su soporte y el domicilio son obligatorios', () => {
     const faltantes = camposFaltantes({ nombre: 'María', apellido1: '' });
-    expect(faltantes).toEqual(['apellido1', 'fechaNacimiento', 'tipoDocumento', 'numeroDocumento']);
+    expect(faltantes).toEqual([
+      'apellido1',
+      'fechaNacimiento',
+      'tipoDocumento',
+      'numeroDocumento',
+      'direccion',
+      'codigoPostal',
+    ]);
   });
 
-  it('DNI y NIE exigen número de soporte, el pasaporte no', () => {
+  it('DNI/NIF y NIE exigen número de soporte, el pasaporte no', () => {
     expect(camposFaltantes({ ...VIAJERO_COMPLETO, tipoDocumento: 'DNI' })).toEqual(['soporteDocumento']);
     expect(camposFaltantes({ ...VIAJERO_COMPLETO, tipoDocumento: 'DNI', soporteDocumento: '1234' })).toEqual([]);
+    expect(camposFaltantes({ ...VIAJERO_COMPLETO, tipoDocumento: 'NIF', soporteDocumento: '1234' })).toEqual([]);
     expect(camposFaltantes({ ...VIAJERO_COMPLETO, tipoDocumento: 'Pasaporte' })).toEqual([]);
   });
 
@@ -232,15 +244,11 @@ describe('el conector del Ministerio', () => {
     expect(cabecera.startsWith('Basic ')).toBe(true);
   });
 
-  it('el esquema del XML está declarado como pendiente, no inventado', () => {
-    expect(ESQUEMA_XML_DISPONIBLE).toBe(false);
-    expect(() => construirXml('viajeros', {})).toThrow(EsquemaNoDisponibleError);
-    try {
-      construirXml('reserva', {});
-    } catch (error) {
-      expect((error as EsquemaNoDisponibleError).pieza).toBe('esquema-xml');
-      expect((error as Error).message).toMatch(/esquema/i);
-    }
+  it('el esquema del interface v3.0.0 está implementado y declara lo que exige', () => {
+    expect(ESQUEMA_XML_DISPONIBLE).toBe(true);
+    // Sin código de arrendador no hay comunicación que construir: la cabecera
+    // del lote es obligatoria y es la primera pieza que se comprueba.
+    expect(() => construirPeticionSes('viajeros', { codigoArrendador: '' })).toThrow(DatosInsuficientesError);
   });
 
   it('empaqueta el XML en un ZIP en Base64', () => {
@@ -260,7 +268,7 @@ describe('el conector del Ministerio', () => {
     const respuesta = await enviarComunicacion({
       entorno: 'produccion',
       credenciales: { usuario: 'entidad-1', password: 'secreta' },
-      xml: '<comunicacion/>',
+      peticionSobre: '<soapenv:Envelope/>',
       fetchImpl: fetchFalso,
     });
 
@@ -271,8 +279,8 @@ describe('el conector del Ministerio', () => {
     expect((visto!.init.headers as Record<string, string>).Authorization).toBe(
       cabeceraBasic({ usuario: 'entidad-1', password: 'secreta' })
     );
-    const [archivo] = desempaquetarZipBase64(String(visto!.init.body));
-    expect(archivo.contenido.toString('utf8')).toBe('<comunicacion/>');
+    // Lo que viaja ahora es el sobre SOAP, no un ZIP desnudo.
+    expect(visto!.init.body).toBe('<soapenv:Envelope/>');
   });
 
   it('un rechazo del Ministerio se devuelve, no se lanza: hay que guardarlo', async () => {
