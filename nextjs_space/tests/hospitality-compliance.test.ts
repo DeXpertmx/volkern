@@ -29,6 +29,8 @@ import {
   enviarComunicacion,
   probarAlcance,
   urlDeComunicacion,
+  type PeticionHttp,
+  type TransporteSes,
 } from '../lib/hospitality/ses-hospedajes/connector';
 
 const VIAJERO_COMPLETO = {
@@ -259,42 +261,42 @@ describe('el conector del Ministerio', () => {
   });
 
   it('envía la comunicación con autorización y devuelve la respuesta tal cual', async () => {
-    let visto: { url: string; init: RequestInit } | null = null;
-    const fetchFalso = (async (url: string, init: RequestInit) => {
-      visto = { url, init };
+    let visto: PeticionHttp | null = null;
+    const transporteFalso: TransporteSes = async (peticion) => {
+      visto = peticion;
       return { ok: true, status: 200, text: async () => 'Comunicacion recibida correctamente' };
-    }) as unknown as typeof fetch;
+    };
 
     const respuesta = await enviarComunicacion({
       entorno: 'produccion',
       credenciales: { usuario: 'entidad-1', password: 'secreta' },
       peticionSobre: '<soapenv:Envelope/>',
-      fetchImpl: fetchFalso,
+      transporte: transporteFalso,
     });
 
     expect(respuesta.ok).toBe(true);
     expect(respuesta.status).toBe(200);
     expect(respuesta.cuerpo).toContain('recibida');
     expect(visto!.url).toBe(ENDPOINTS.produccion);
-    expect((visto!.init.headers as Record<string, string>).Authorization).toBe(
-      cabeceraBasic({ usuario: 'entidad-1', password: 'secreta' })
-    );
+    expect(visto!.headers.Authorization).toBe(cabeceraBasic({ usuario: 'entidad-1', password: 'secreta' }));
     // Lo que viaja ahora es el sobre SOAP, no un ZIP desnudo.
-    expect(visto!.init.body).toBe('<soapenv:Envelope/>');
+    expect(visto!.body).toBe('<soapenv:Envelope/>');
+    // Sin certificado instalado no hay TLS mutuo: solo la cabecera Basic.
+    expect(visto!.agente).toBeUndefined();
   });
 
   it('un rechazo del Ministerio se devuelve, no se lanza: hay que guardarlo', async () => {
-    const fetchFalso = (async () => ({
+    const transporteFalso: TransporteSes = async () => ({
       ok: false,
       status: 401,
       text: async () => 'No autorizado',
-    })) as unknown as typeof fetch;
+    });
 
     const respuesta = await enviarComunicacion({
       entorno: 'pruebas',
       credenciales: { usuario: 'x', password: 'y' },
-      xml: '<c/>',
-      fetchImpl: fetchFalso,
+      peticionSobre: '<soapenv:Envelope/>',
+      transporte: transporteFalso,
     });
 
     expect(respuesta.ok).toBe(false);
@@ -303,17 +305,24 @@ describe('el conector del Ministerio', () => {
   });
 
   it('distingue «el Ministerio no responde» de «mi comunicación está mal»', async () => {
-    const fetchCaido = (async () => {
+    const transporteCaido: TransporteSes = async () => {
       throw new Error('getaddrinfo ENOTFOUND hospedajes.ses.mir.es');
-    }) as unknown as typeof fetch;
+    };
 
-    const alcance = await probarAlcance('produccion', fetchCaido);
+    const alcance = await probarAlcance('produccion', { transporte: transporteCaido });
     expect(alcance.alcanzable).toBe(false);
     expect(alcance.entorno).toBe('produccion');
     expect(alcance.error).toMatch(/ENOTFOUND/);
+    // La prueba declara además si viajó el certificado de la entidad: sin él, el
+    // «no responde» y el «no me identifico» se confunden.
+    expect(alcance.certificadoPresentado).toBe(false);
 
-    const fetchVivo = (async () => ({ status: 405 })) as unknown as typeof fetch;
-    const vivo = await probarAlcance('produccion', fetchVivo);
+    const transporteVivo: TransporteSes = async () => ({
+      ok: false,
+      status: 405,
+      text: async () => '',
+    });
+    const vivo = await probarAlcance('produccion', { transporte: transporteVivo });
     expect(vivo.alcanzable).toBe(true);
     expect(vivo.status).toBe(405);
   });

@@ -16,8 +16,15 @@
  * SOAP 1.1 (`zip.ts` y `esquema.ts`). Autenticación: HTTP Basic sobre SSL, con
  * las credenciales de la entidad de CADA TENANT; viajan en la cabecera y nunca
  * se registran en logs ni en la bitácora.
+ *
+ * Además de la cabecera Basic, el TLS lleva presentado el certificado digital de la
+ * entidad (`certificado.ts`): sin él el Ministerio no sabe quién comunica, y el
+ * fallo que produce es un error de TLS opaco. Por eso el certificado se comprueba
+ * —vigencia incluida— antes de salir a la red.
  */
 
+import * as https from 'https';
+import { agenteTls, leerCertificado, type CertificadoEntidad } from './certificado';
 import { empaquetarZipBase64 } from './zip';
 import {
   aFechaHoraSes,
@@ -60,8 +67,10 @@ export function urlDeComunicacion(entorno: string | null | undefined): string {
 export interface CredencialesSes {
   usuario: string;
   password: string;
-  /** Credencial digital de la entidad, cifrada en reposo en la base de datos. */
+  /** Certificado digital de la entidad (PKCS#12 en Base64), cifrado en reposo. */
   certificado?: string | null;
+  /** Contraseña del PKCS#12, también cifrada en reposo. */
+  certificadoPassword?: string | null;
 }
 
 /**
@@ -323,13 +332,97 @@ export interface RespuestaSes {
   cuerpo: string;
 }
 
+export interface PeticionHttp {
+  url: string;
+  method: string;
+  headers: Record<string, string>;
+  body?: string;
+  /** Agente TLS con el certificado de cliente de la entidad, cuando lo tiene. */
+  agente?: https.Agent;
+  timeoutMs: number;
+}
+
+export interface RespuestaHttp {
+  status: number;
+  ok: boolean;
+  text(): Promise<string>;
+}
+
+/**
+ * Cómo se habla con el Ministerio.
+ *
+ * Es un parámetro y no un `fetch` global para que las pruebas puedan comprobar qué
+ * sale por la red sin abrir una conexión: es el único punto por el que viajan datos
+ * personales, y tiene que poder inspeccionarse.
+ */
+export type TransporteSes = (peticion: PeticionHttp) => Promise<RespuestaHttp>;
+
+/**
+ * Transporte real: el `https` del runtime, no `fetch`.
+ *
+ * Un TLS mutuo necesita un agente con la clave privada y el certificado de la
+ * entidad, y el `fetch` del runtime no acepta esa configuración. Es el mismo
+ * transporte que el módulo fiscal usa para la AEAT.
+ */
+export const transporteHttps: TransporteSes = ({ url, method, headers, body, agente, timeoutMs }) =>
+  new Promise((resolve, reject) => {
+    const destino = new URL(url);
+    const peticion = https.request(
+      {
+        hostname: destino.hostname,
+        port: destino.port || 443,
+        path: `${destino.pathname}${destino.search}`,
+        method,
+        headers,
+        agent: agente,
+        timeout: timeoutMs,
+      },
+      (respuesta) => {
+        const trozos: Buffer[] = [];
+        respuesta.on('data', (trozo) => trozos.push(Buffer.from(trozo)));
+        respuesta.on('end', () => {
+          const status = respuesta.statusCode ?? 0;
+          const cuerpo = Buffer.concat(trozos).toString('utf8');
+          resolve({ status, ok: status >= 200 && status < 300, text: async () => cuerpo });
+        });
+        respuesta.on('error', reject);
+      }
+    );
+
+    peticion.on('timeout', () => {
+      peticion.destroy(new Error('El Ministerio no respondió a tiempo'));
+    });
+    peticion.on('error', reject);
+    if (body) peticion.write(body);
+    peticion.end();
+  });
+
+/**
+ * El certificado de la entidad, listo para el TLS, o `null` si no tiene ninguno
+ * instalado.
+ *
+ * Se interpreta en cada envío y no se guarda en memoria entre peticiones: la
+ * vigencia de un certificado caduca solo, y un material cacheado seguiría
+ * presentándose después. Si el guardado ya no sirve, el error lo dice con su causa.
+ */
+export function certificadoDeCredenciales(credenciales: CredencialesSes): CertificadoEntidad | null {
+  if (!credenciales.certificado) return null;
+  return leerCertificado(credenciales.certificado, credenciales.certificadoPassword);
+}
+
+/** El agente TLS del tenant, si tiene certificado de entidad instalado. */
+export function agenteDeCredenciales(credenciales: CredencialesSes): https.Agent | undefined {
+  const certificado = certificadoDeCredenciales(credenciales);
+  return certificado ? agenteTls(certificado) : undefined;
+}
+
 export interface ParametrosEnvio {
   entorno: string | null | undefined;
   credenciales: CredencialesSes;
   /** El sobre SOAP ya construido (`construirPeticionSes().sobre`). */
   peticionSobre: string;
-  /** Inyectable para pruebas; por defecto el `fetch` del runtime. */
-  fetchImpl?: typeof fetch;
+  /** Inyectable para pruebas; por defecto el `https` del runtime. */
+  transporte?: TransporteSes;
   timeoutMs?: number;
 }
 
@@ -348,63 +441,62 @@ export async function enviarComunicacion({
   entorno,
   credenciales,
   peticionSobre,
-  fetchImpl,
+  transporte = transporteHttps,
   timeoutMs = 20_000,
 }: ParametrosEnvio): Promise<RespuestaSes> {
-  const enviar = fetchImpl ?? fetch;
-  const controlador = new AbortController();
-  const temporizador = setTimeout(() => controlador.abort(), timeoutMs);
+  // El certificado de la entidad se interpreta aquí dentro (dentro del propio
+  // transporte) para que un certificado caducado o ilegible salga como la causa
+  // exacta y no como un error de TLS sin explicación.
+  const respuesta = await transporte({
+    url: urlDeComunicacion(entorno),
+    method: 'POST',
+    headers: {
+      Authorization: cabeceraBasic(credenciales),
+      'Content-Type': 'application/xml; charset=utf-8',
+      Accept: 'application/soap+xml, application/xml, text/xml',
+    },
+    body: peticionSobre,
+    agente: agenteDeCredenciales(credenciales),
+    timeoutMs,
+  });
 
+  const cuerpo = await respuesta.text();
+
+  // El SOAP del Ministerio llega en el cuerpo; si se pudo leer, el código del lote
+  // y el de cada comunicación mandan sobre el HTTP para decidir si fue aceptado (un
+  // 200 con errores de lote NO es un envío válido).
+  let leida;
   try {
-    const respuesta = await enviar(urlDeComunicacion(entorno), {
-      method: 'POST',
-      headers: {
-        Authorization: cabeceraBasic(credenciales),
-        'Content-Type': 'application/xml; charset=utf-8',
-        Accept: 'application/soap+xml, application/xml, text/xml',
-      },
-      body: peticionSobre,
-      signal: controlador.signal,
-    });
+    leida = await leerRespuestaLote(cuerpo);
+  } catch {
+    leida = null;
+  }
 
-    const cuerpo = await respuesta.text();
-
-    // El SOAP del Ministerio llega en el cuerpo; si se pudo leer, el código del
-    // lote y el de cada comunicación mandan sobre el HTTP para decidir si fue
-    // aceptado (un 200 con errores de lote NO es un envío válido).
-    let leida;
-    try {
-      leida = await leerRespuestaLote(cuerpo);
-    } catch {
-      leida = null;
-    }
-
-    if (leida) {
-      const aceptada = leida.resultados.find((r) => r.codigoComunicacion);
-      const rechazada = leida.resultados.find((r) => r.tipoError != null || r.error != null);
-      return {
-        ok: respuesta.ok,
-        status: respuesta.status,
-        aceptado: leida.ok,
-        codigoEstado: leida.codigo,
-        descripcion: leida.descripcion,
-        lote: leida.lote,
-        codigo: leida.ok ? aceptada?.codigoComunicacion ?? leida.lote ?? undefined : undefined,
-        mensaje: rechazada?.error || leida.descripcion || undefined,
-        cuerpo,
-      };
-    }
-
-    // Sin SOAP legible (un error HTML de la pasarela, un texto): el HTTP manda.
+  if (leida) {
+    const aceptada = leida.resultados.find((r) => r.codigoComunicacion);
+    const rechazada = leida.resultados.find((r) => r.tipoError != null || r.error != null);
     return {
       ok: respuesta.ok,
       status: respuesta.status,
-      aceptado: respuesta.ok,
+      aceptado: leida.ok,
+      codigoEstado: leida.codigo,
+      descripcion: leida.descripcion,
+      lote: leida.lote,
+      codigo: leida.ok ? aceptada?.codigoComunicacion ?? leida.lote ?? undefined : undefined,
+      mensaje: rechazada?.error || leida.descripcion || undefined,
       cuerpo,
     };
-  } finally {
-    clearTimeout(temporizador);
   }
+
+  // Sin SOAP legible (un error HTML de la pasarela, un texto): el HTTP manda.
+  return {
+    ok: respuesta.ok,
+    status: respuesta.status,
+    aceptado: respuesta.ok,
+    cuerpo,
+  };
+  // Un fallo de transporte (sin respuesta) y un certificado que ya no sirve suben
+  // tal cual: la capa de datos los guarda con su causa exacta en la bitácora.
 }
 
 export interface AlcanceSes {
@@ -413,6 +505,18 @@ export interface AlcanceSes {
   url: string;
   status?: number;
   error?: string;
+  /** ¿Viajó el certificado de la entidad en el TLS de esta prueba? */
+  certificadoPresentado: boolean;
+  /** Si el certificado instalado no se pudo usar, por qué (contraseña, caducidad...). */
+  certificadoError?: string;
+}
+
+export interface OpcionesAlcance {
+  /** Inyectable para pruebas; por defecto el `https` del runtime. */
+  transporte?: TransporteSes;
+  /** Credenciales de la entidad, para probar el TLS CON su certificado. */
+  credenciales?: CredencialesSes | null;
+  timeoutMs?: number;
 }
 
 /**
@@ -427,26 +531,43 @@ export interface AlcanceSes {
  */
 export async function probarAlcance(
   entorno: string | null | undefined,
-  fetchImpl?: typeof fetch,
-  timeoutMs = 10_000
+  opciones: OpcionesAlcance = {}
 ): Promise<AlcanceSes> {
+  const { transporte = transporteHttps, credenciales = null, timeoutMs = 10_000 } = opciones;
   const elegido: EntornoSes = esEntornoSes(entorno) ? entorno : 'pruebas';
   const url = ENDPOINTS[elegido];
-  const enviar = fetchImpl ?? fetch;
-  const controlador = new AbortController();
-  const temporizador = setTimeout(() => controlador.abort(), timeoutMs);
 
+  // El certificado se interpreta antes de salir: si el que hay instalado ya no
+  // sirve, la prueba lo dice con su causa en lugar de parecer una caída de red.
+  let agente: https.Agent | undefined;
   try {
-    const respuesta = await enviar(url, { method: 'GET', signal: controlador.signal });
-    return { alcanzable: true, entorno: elegido, url, status: respuesta.status };
+    agente = credenciales ? agenteDeCredenciales(credenciales) : undefined;
   } catch (error) {
     return {
       alcanzable: false,
       entorno: elegido,
       url,
+      certificadoPresentado: false,
+      certificadoError: error instanceof Error ? error.message : 'El certificado instalado no se pudo usar',
+    };
+  }
+
+  try {
+    const respuesta = await transporte({ url, method: 'GET', headers: {}, agente, timeoutMs });
+    return {
+      alcanzable: true,
+      entorno: elegido,
+      url,
+      status: respuesta.status,
+      certificadoPresentado: Boolean(agente),
+    };
+  } catch (error) {
+    return {
+      alcanzable: false,
+      entorno: elegido,
+      url,
+      certificadoPresentado: Boolean(agente),
       error: error instanceof Error ? error.message : 'Error de red desconocido',
     };
-  } finally {
-    clearTimeout(temporizador);
   }
 }
