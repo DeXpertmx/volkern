@@ -8093,6 +8093,12 @@ model HospitalityProperty {
   latitud        Float?
   longitud       Float?
   fotos          Json?
+  /**
+   * Datos del establecimiento ante SES.HOSPEDAJES: el código oficial que el
+   * Ministerio asigna al darlo de alta (y, opcionalmente, su municipio INE).
+   * Es referencia externa, nunca identidad interna de Volkern.
+   */
+  sesHospedajes  Json?
   timezone       String    @default("America/Mexico_City")
   estado         String    @default("activa")
   fechaCreacion  DateTime  @default(now())
@@ -8508,6 +8514,11 @@ model HospitalityComplianceConfig {
   usuarioEnc     String?
   passwordEnc    String?
   certificadoEnc String? // Credencial digital / certificado de la entidad
+  /**
+   * Código de arrendador de la entidad: lo asigna el Ministerio en el registro
+   * (cabecera del lote SOAP, obligatoria para comunicar).
+   */
+  codigoArrendador String?
   estadoConexion String    @default("sin_configurar")
   ultimoEnvio    DateTime?
   ultimoCodigo   String?
@@ -8540,6 +8551,15 @@ model HospitalityTraveler {
   soporteDocumento String?
   fechaNacimiento  DateTime?
   nacionalidad     String?
+  /**
+   * Domicilio del viajero: el parte de viajeros (PV) lo exige por persona
+   * (vía, municipio y código postal, país ISO alfa-3 según el XSD).
+   */
+  direccion        String?
+  municipio        String?
+  codigoMunicipio  String?
+  codigoPostal     String?
+  paisDireccion    String?
   estado           String    @default("pendiente")
   // Seguimiento del enlace de WhatsApp (pedir/reenviar datos al viajero).
   enlaceEnviadoEn  DateTime?

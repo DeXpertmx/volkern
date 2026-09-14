@@ -106,12 +106,17 @@ export default async function PaginaViajero({
             apellido1: viajero.apellido1 || '',
             apellido2: viajero.apellido2 || '',
             // Los datos ya guardados NO se rellenan: el viajero los conoce y
-            // así nadie con el enlace ve un documento ajeno en pantalla.
+            // así nadie con el enlace ve un documento ajeno en pantalla. La
+            // dirección va por el mismo camino (también es dato identificativo).
             tipoDocumento: viajero.tipoDocumento || '',
             numeroDocumento: '',
             soporteDocumento: '',
             fechaNacimiento: iso,
             nacionalidad: viajero.nacionalidad || '',
+            direccion: '',
+            municipio: '',
+            codigoPostal: '',
+            paisDireccion: '',
           }}
           tiposConSoporte={TIPOS_DOCUMENTO_CON_SOPORTE}
         />

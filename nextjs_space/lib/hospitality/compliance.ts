@@ -132,8 +132,9 @@ export function permiteReenvio(estado: EstadoRegistro): boolean {
 /**
  * Campos que el Ministerio exige para comunicar a una persona.
  *
- * `nombre`, primer apellido y fecha de nacimiento son obligatorios siempre; el
- * documento también, porque identifica al viajero.
+ * `nombre`, primer apellido, fecha de nacimiento y documento son obligatorios
+ * siempre; el domicilio (vía y código postal, más municipio y país) también: el
+ * parte de viajeros no se construye sin él (`personaHospedajeType` del XSD).
  */
 export const CAMPOS_OBLIGATORIOS = [
   'nombre',
@@ -141,16 +142,17 @@ export const CAMPOS_OBLIGATORIOS = [
   'fechaNacimiento',
   'tipoDocumento',
   'numeroDocumento',
+  'direccion',
+  'codigoPostal',
 ] as const;
 
 /**
  * Tipos de documento que además exigen número de soporte.
  *
- * PENDIENTE DE CONFIRMAR contra el manual oficial: aquí solo están los dos que la
- * documentación nombra (DNI y NIE). El catálogo completo de tipos lo fija el
- * Ministerio y, cuando llegue, esta lista es lo único que cambia.
+ * Según el contrato oficial (interface v3.0.0): NIF y NIE llevan soporte; el
+ * pasaporte no. `DNI` es la grafía que la gente escribe y equivale a NIF.
  */
-export const TIPOS_DOCUMENTO_CON_SOPORTE: readonly string[] = ['DNI', 'NIE'];
+export const TIPOS_DOCUMENTO_CON_SOPORTE: readonly string[] = ['DNI', 'NIF', 'NIE'];
 
 /** Lo mínimo que hay que saber de un viajero para decidir su estado. */
 export interface ViajeroMinimo {
@@ -162,6 +164,12 @@ export interface ViajeroMinimo {
   soporteDocumento?: string | null;
   fechaNacimiento?: Date | string | null;
   nacionalidad?: string | null;
+  /** Domicilio: la vía y el código postal son obligatorios para el parte. */
+  direccion?: string | null;
+  municipio?: string | null;
+  codigoMunicipio?: string | null;
+  codigoPostal?: string | null;
+  paisDireccion?: string | null;
 }
 
 const tieneValor = (valor: unknown): boolean =>

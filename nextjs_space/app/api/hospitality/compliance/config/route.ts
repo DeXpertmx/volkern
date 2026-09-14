@@ -57,6 +57,7 @@ export async function PUT(req: NextRequest) {
         entorno: typeof cuerpo.entorno === 'string' ? cuerpo.entorno : undefined,
         entidadNombre: typeof cuerpo.entidadNombre === 'string' ? cuerpo.entidadNombre : undefined,
         entidadNif: typeof cuerpo.entidadNif === 'string' ? cuerpo.entidadNif : undefined,
+        codigoArrendador: typeof cuerpo.codigoArrendador === 'string' ? cuerpo.codigoArrendador : undefined,
         usuario: typeof cuerpo.usuario === 'string' ? cuerpo.usuario : undefined,
         password: typeof cuerpo.password === 'string' ? cuerpo.password : undefined,
         certificado: typeof cuerpo.certificado === 'string' ? cuerpo.certificado : undefined,

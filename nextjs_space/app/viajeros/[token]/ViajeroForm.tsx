@@ -28,6 +28,10 @@ export interface PropsFormulario {
     soporteDocumento: string;
     fechaNacimiento: string;
     nacionalidad: string;
+    direccion: string;
+    municipio: string;
+    codigoPostal: string;
+    paisDireccion: string;
   };
   /** Tipos de documento que exigen número de soporte (DNI/NIE hoy). */
   tiposConSoporte: readonly string[];
@@ -42,6 +46,10 @@ const etiquetas: Record<string, string> = {
   soporteDocumento: 'Soporte del documento',
   fechaNacimiento: 'Fecha de nacimiento',
   nacionalidad: 'Nacionalidad',
+  direccion: 'Dirección (vía y número)',
+  municipio: 'Municipio',
+  codigoPostal: 'Código postal',
+  paisDireccion: 'País de residencia',
 };
 
 export default function ViajeroForm({
@@ -63,7 +71,9 @@ export default function ViajeroForm({
     !datos.apellido1.trim() ||
     !datos.tipoDocumento.trim() ||
     !datos.numeroDocumento.trim() ||
-    !datos.fechaNacimiento;
+    !datos.fechaNacimiento ||
+    !datos.direccion.trim() ||
+    !datos.codigoPostal.trim();
 
   const actualizar = (campo: string, valor: string) => {
     setDatos((previo) => ({ ...previo, [campo]: valor }));
@@ -116,7 +126,7 @@ export default function ViajeroForm({
             Formulario de {nombreCompleto}
           </p>
           <p className="mt-0.5 text-xs text-emerald-700/80 dark:text-emerald-300/80">
-            El nombre ya está registrado: solo tienes que completar documento y fecha de nacimiento.
+            El nombre ya está registrado: completa documento, fecha de nacimiento y tu domicilio.
           </p>
         </div>
       ) : null}
@@ -207,6 +217,65 @@ export default function ViajeroForm({
             className="mt-1 w-full rounded-md border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
           />
         </label>
+      </div>
+
+      <div className="mt-5 border-t pt-4">
+        <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+          Domicilio (el registro oficial lo exige)
+        </p>
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <label className="block text-sm sm:col-span-2">
+            <span className="font-medium">
+              {etiquetas.direccion} <span className="text-red-500">*</span>
+            </span>
+            <input
+              type="text"
+              autoComplete="street-address"
+              value={datos.direccion}
+              onChange={(e) => actualizar('direccion', e.target.value)}
+              className="mt-1 w-full rounded-md border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="font-medium">{etiquetas.municipio}</span>
+            <input
+              type="text"
+              autoComplete="address-level2"
+              value={datos.municipio}
+              onChange={(e) => actualizar('municipio', e.target.value)}
+              className="mt-1 w-full rounded-md border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="font-medium">
+              {etiquetas.codigoPostal} <span className="text-red-500">*</span>
+            </span>
+            <input
+              type="text"
+              autoComplete="postal-code"
+              value={datos.codigoPostal}
+              onChange={(e) => actualizar('codigoPostal', e.target.value)}
+              className="mt-1 w-full rounded-md border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="font-medium">{etiquetas.paisDireccion}</span>
+            <select
+              value={datos.paisDireccion || 'ESP'}
+              onChange={(e) => actualizar('paisDireccion', e.target.value)}
+              className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+            >
+              <option value="ESP">España</option>
+              <option value="FRA">Francia</option>
+              <option value="PRT">Portugal</option>
+              <option value="DEU">Alemania</option>
+              <option value="GBR">Reino Unido</option>
+              <option value="ITA">Italia</option>
+              <option value="MAR">Marruecos</option>
+              <option value="OTRO">Otro</option>
+            </select>
+          </label>
+        </div>
       </div>
 
       {error && (

@@ -30,8 +30,8 @@ import {
   type ViajeroMinimo,
 } from './compliance';
 import {
-  EsquemaNoDisponibleError,
-  construirXml,
+  DatosInsuficientesError,
+  construirPeticionSes,
   enviarComunicacion,
   esEntornoSes,
   type CredencialesSes,
@@ -48,6 +48,8 @@ export interface RegistroConfig {
   entorno: string;
   entidadNombre: string | null;
   entidadNif: string | null;
+  /** Código de arrendador de la entidad: lo asigna el Ministerio (cabecera del lote). */
+  codigoArrendador: string | null;
   tieneUsuario: boolean;
   tienePassword: boolean;
   tieneCertificado: boolean;
@@ -62,6 +64,8 @@ export interface EntradaConfig {
   entorno?: string;
   entidadNombre?: string | null;
   entidadNif?: string | null;
+  /** Código de arrendador de la entidad ante el Ministerio (cabecera del lote SOAP). */
+  codigoArrendador?: string | null;
   usuario?: string | null;
   password?: string | null;
   certificado?: string | null;
@@ -75,6 +79,7 @@ function aConfigPublica(config: {
   entorno: string;
   entidadNombre: string | null;
   entidadNif: string | null;
+  codigoArrendador: string | null;
   usuarioEnc: string | null;
   passwordEnc: string | null;
   certificadoEnc: string | null;
@@ -90,6 +95,7 @@ function aConfigPublica(config: {
     entorno: config.entorno,
     entidadNombre: config.entidadNombre,
     entidadNif: config.entidadNif,
+    codigoArrendador: config.codigoArrendador,
     tieneUsuario: Boolean(config.usuarioEnc),
     tienePassword: Boolean(config.passwordEnc),
     tieneCertificado: Boolean(config.certificadoEnc),
@@ -124,6 +130,9 @@ export async function guardarConfig(
   if (entrada.entorno !== undefined) datos.entorno = esEntornoSes(entrada.entorno) ? entrada.entorno : 'pruebas';
   if (entrada.entidadNombre !== undefined) datos.entidadNombre = entrada.entidadNombre;
   if (entrada.entidadNif !== undefined) datos.entidadNif = entrada.entidadNif;
+  if (entrada.codigoArrendador !== undefined) {
+    datos.codigoArrendador = entrada.codigoArrendador?.trim() || null;
+  }
   if (entrada.usuario) datos.usuarioEnc = encrypt(entrada.usuario.trim());
   if (entrada.password) datos.passwordEnc = encrypt(entrada.password.trim());
   if (entrada.certificado) datos.certificadoEnc = encrypt(entrada.certificado.trim());
@@ -261,7 +270,17 @@ async function recalcularParteDeViajeros(
 async function reservaDelTenant(tenantId: string, reservationId: string) {
   return prisma.hospitalityReservation.findFirst({
     where: { id: reservationId, tenantId },
-    select: { id: true, externalBookingId: true, estado: true },
+    select: {
+      id: true,
+      externalBookingId: true,
+      estado: true,
+      // Lo que el mensaje al Ministerio necesita del contrato (fechas y
+      // establecimiento): viene con la reserva, no hace falta releerla.
+      checkIn: true,
+      checkOut: true,
+      bookedOn: true,
+      property: { select: { sesHospedajes: true } },
+    },
   });
 }
 
@@ -274,6 +293,12 @@ export interface EntradaViajero {
   soporteDocumento?: string | null;
   fechaNacimiento?: string | Date | null;
   nacionalidad?: string | null;
+  /** Domicilio del viajero: el parte de viajeros (PV) lo exige por persona. */
+  direccion?: string | null;
+  municipio?: string | null;
+  codigoMunicipio?: string | null;
+  codigoPostal?: string | null;
+  paisDireccion?: string | null;
   esTitular?: boolean;
   orden?: number;
 }
@@ -307,6 +332,11 @@ export async function crearViajero(
       soporteDocumento: entrada.soporteDocumento?.trim() || null,
       fechaNacimiento: normalizarFecha(entrada.fechaNacimiento),
       nacionalidad: entrada.nacionalidad?.trim()?.toUpperCase() || null,
+      direccion: entrada.direccion?.trim() || null,
+      municipio: entrada.municipio?.trim() || null,
+      codigoMunicipio: entrada.codigoMunicipio?.trim() || null,
+      codigoPostal: entrada.codigoPostal?.trim() || null,
+      paisDireccion: entrada.paisDireccion?.trim()?.toUpperCase() || null,
       estado: estadoDeViajero(entrada),
     },
   });
@@ -343,6 +373,11 @@ export async function actualizarViajero(
   if (entrada.numeroDocumento !== undefined) datos.numeroDocumento = entrada.numeroDocumento?.trim() || null;
   if (entrada.soporteDocumento !== undefined) datos.soporteDocumento = entrada.soporteDocumento?.trim() || null;
   if (entrada.nacionalidad !== undefined) datos.nacionalidad = entrada.nacionalidad?.trim()?.toUpperCase() || null;
+  if (entrada.direccion !== undefined) datos.direccion = entrada.direccion?.trim() || null;
+  if (entrada.municipio !== undefined) datos.municipio = entrada.municipio?.trim() || null;
+  if (entrada.codigoMunicipio !== undefined) datos.codigoMunicipio = entrada.codigoMunicipio?.trim() || null;
+  if (entrada.codigoPostal !== undefined) datos.codigoPostal = entrada.codigoPostal?.trim() || null;
+  if (entrada.paisDireccion !== undefined) datos.paisDireccion = entrada.paisDireccion?.trim()?.toUpperCase() || null;
   if (entrada.esTitular !== undefined) datos.esTitular = Boolean(entrada.esTitular);
   if (entrada.orden !== undefined) datos.orden = entrada.orden;
   if (entrada.fechaNacimiento !== undefined) datos.fechaNacimiento = normalizarFecha(entrada.fechaNacimiento);
@@ -535,20 +570,20 @@ export async function detalleRegistro(tenantId: string, reservationId: string) {
 
 export interface ResultadoEnvio {
   ok: boolean;
-  motivo?: 'esquema_no_disponible' | 'sin_configuracion' | 'sin_datos' | 'sin_reserva' | 'rechazado' | 'transporte';
+  motivo?: 'sin_configuracion' | 'sin_datos' | 'sin_reserva' | 'rechazado' | 'transporte';
   mensaje: string;
   estado?: number;
   codigo?: string;
 }
 
 /**
- * Envía una comunicación al Ministerio.
+ * Envía una comunicación al Ministerio (RH, PV o anulación).
  *
- * El orden importa y es el que evita los dos fallos caros: primero se comprueba que
- * haya con qué enviar (configuración y datos), y solo entonces se construye el
- * mensaje. Hoy `construirXml` choca con el esquema pendiente, así que el resultado
- * es un `esquema_no_disponible` explícito y **no se escribe ninguna comunicación**
- * en la bitácora: no se registra lo que no se envió.
+ * El orden importa y es el que evita los dos fallos caros: primero se comprueba
+ * que haya con qué enviar (configuración y datos) y solo entonces se construye el
+ * mensaje con el esquema oficial. Lo que el Ministerio responda —acepte o
+ * rechace— se escribe en la bitácora con su código y su causa; lo único que no se
+ * registra es lo que nunca llegó a salir.
  */
 export async function enviarAlMinisterio(
   tenantId: string,
@@ -568,6 +603,18 @@ export async function enviarAlMinisterio(
       mensaje: 'El registro de viajeros no está activo o la entidad no tiene credenciales guardadas',
     };
   }
+  if (!config.codigoArrendador?.trim()) {
+    return {
+      ok: false,
+      motivo: 'sin_configuracion',
+      mensaje: 'Falta el código de arrendador de la entidad en la configuración (lo asigna el Ministerio)',
+    };
+  }
+
+  // El establecimiento lo da la propiedad de la reserva: código oficial del
+  // alojamiento (sesHospedajes.codigo) tal como lo asignó el Ministerio.
+  const sesHospedajes = (reserva.property?.sesHospedajes ?? null) as Record<string, unknown> | null;
+  const codigoEstablecimiento = typeof sesHospedajes?.codigo === 'string' ? sesHospedajes.codigo.trim() : '';
 
   const viajeros = await listarViajeros(tenantId, reservationId);
   if (tipo === 'viajeros') {
@@ -583,13 +630,50 @@ export async function enviarAlMinisterio(
       };
     }
   }
+  if (tipo === 'reserva' && viajeros.length === 0) {
+    return {
+      ok: false,
+      motivo: 'sin_datos',
+      mensaje: 'La reserva no tiene ninguna persona que comunicar (titular o viajeros)',
+    };
+  }
 
-  let xml: string;
+  // Los códigos para anular salen de la bitácora: es el código que el Ministerio
+  // asignó cuando aceptó la comunicación que ahora se retira.
+  let codigosAnulacion: string[] = [];
+  if (tipo === 'anulacion') {
+    const registro = await prisma.hospitalityCompliance.findUnique({ where: { reservationId } });
+    codigosAnulacion = registro?.codigoComunicacion ? [registro.codigoComunicacion] : [];
+  }
+
+  let peticionSobre: string;
   try {
-    xml = construirXml(tipo, { reserva, viajeros });
+    const peticion = construirPeticionSes(tipo, {
+      reserva: {
+        referencia: reserva.externalBookingId,
+        checkIn: reserva.checkIn,
+        checkOut: reserva.checkOut,
+        bookedOn: reserva.bookedOn,
+      },
+      viajeros: viajeros as unknown as Array<Record<string, unknown>>,
+      codigoEstablecimiento,
+      codigoArrendador: config.codigoArrendador,
+      codigosAnulacion,
+    });
+    peticionSobre = peticion.sobre;
+    // El XML de la solicitud NO se persiste: lleva los documentos sin
+    // enmascarar, y la bitácora no es lugar para ellos. Lo que queda registrado
+    // es el lote, el código de comunicación y el error, que es lo que se audita.
   } catch (error) {
-    if (error instanceof EsquemaNoDisponibleError) {
-      return { ok: false, motivo: 'esquema_no_disponible', mensaje: error.message };
+    if (error instanceof DatosInsuficientesError) {
+      return {
+        ok: false,
+        motivo: 'sin_datos',
+        mensaje:
+          error.pieza === 'establecimiento'
+            ? 'La propiedad no tiene código de establecimiento del Ministerio: configúralo en la propiedad'
+            : error.message,
+      };
     }
     throw error;
   }
@@ -597,24 +681,28 @@ export async function enviarAlMinisterio(
   const campoEstado = tipo === 'reserva' ? 'estadoReserva' : 'estadoViajeros';
 
   try {
-    const respuesta = await enviarComunicacion({ entorno: config.entorno, credenciales, xml });
+    const respuesta = await enviarComunicacion({ entorno: config.entorno, credenciales, peticionSobre });
 
+    const aceptado = respuesta.aceptado && respuesta.ok;
     await prisma.hospitalityCompliance.upsert({
       where: { reservationId },
       create: {
         tenantId,
         reservationId,
-        [campoEstado]: respuesta.ok ? 'enviado' : 'error',
+        [campoEstado]: aceptado ? 'enviado' : 'error',
         enviadoEn: new Date(),
-        codigoError: respuesta.ok ? null : String(respuesta.status),
-        mensajeError: respuesta.ok ? null : respuesta.cuerpo.slice(0, 500),
+        loteId: respuesta.lote ?? null,
+        codigoComunicacion: respuesta.codigo ?? null,
+        codigoError: aceptado ? null : respuesta.codigoEstado != null ? String(respuesta.codigoEstado) : String(respuesta.status),
+        mensajeError: aceptado ? null : (respuesta.mensaje || respuesta.cuerpo).slice(0, 500),
       },
       update: {
-        [campoEstado]: respuesta.ok ? 'enviado' : 'error',
+        [campoEstado]: aceptado ? 'enviado' : 'error',
         enviadoEn: new Date(),
+        loteId: respuesta.lote ?? null,
         codigoComunicacion: respuesta.codigo ?? null,
-        codigoError: respuesta.ok ? null : String(respuesta.status),
-        mensajeError: respuesta.ok ? null : respuesta.cuerpo.slice(0, 500),
+        codigoError: aceptado ? null : respuesta.codigoEstado != null ? String(respuesta.codigoEstado) : String(respuesta.status),
+        mensajeError: aceptado ? null : (respuesta.mensaje || respuesta.cuerpo).slice(0, 500),
       },
     });
 
@@ -623,11 +711,11 @@ export async function enviarAlMinisterio(
         tenantId,
         reservationId,
         tipo,
-        estado: respuesta.ok ? 'enviado' : 'error',
+        estado: aceptado ? 'enviado' : 'error',
         codigoComunicacion: respuesta.codigo ?? null,
-        codigoError: respuesta.ok ? null : String(respuesta.status),
-        mensajeError: respuesta.ok ? null : respuesta.cuerpo.slice(0, 500),
-        detalle: `Comunicación ${tipo} al Ministerio (${config.entorno}) con ${viajeros.length} viajeros`,
+        codigoError: aceptado ? null : respuesta.codigoEstado != null ? String(respuesta.codigoEstado) : String(respuesta.status),
+        mensajeError: aceptado ? null : (respuesta.mensaje || respuesta.cuerpo).slice(0, 500),
+        detalle: `Comunicación ${tipo.toUpperCase()} al Ministerio (${config.entorno}) con ${viajeros.length} viajeros`,
         usuarioId,
       },
     });
@@ -636,8 +724,8 @@ export async function enviarAlMinisterio(
       where: { tenantId },
       data: {
         ultimoEnvio: new Date(),
-        ultimoCodigo: respuesta.codigo ?? String(respuesta.status),
-        ultimoError: respuesta.ok ? null : respuesta.cuerpo.slice(0, 300),
+        ultimoCodigo: respuesta.codigo ?? (respuesta.codigoEstado != null ? String(respuesta.codigoEstado) : String(respuesta.status)),
+        ultimoError: aceptado ? null : (respuesta.mensaje || respuesta.cuerpo).slice(0, 300),
       },
     });
 
@@ -647,15 +735,15 @@ export async function enviarAlMinisterio(
       'enviar',
       'hospitality_compliance',
       reservationId,
-      `Comunicación «${tipo}» de la reserva ${reserva.externalBookingId}: ${respuesta.ok ? 'aceptada' : `rechazada (${respuesta.status})`}`
+      `Comunicación «${tipo}» de la reserva ${reserva.externalBookingId}: ${aceptado ? `aceptada (lote ${respuesta.lote ?? 's/n'})` : `rechazada (${respuesta.mensaje || respuesta.status})`}`
     ).catch(() => {});
 
-    return respuesta.ok
-      ? { ok: true, mensaje: 'Comunicación enviada', estado: respuesta.status, codigo: respuesta.codigo }
+    return aceptado
+      ? { ok: true, mensaje: respuesta.descripcion || 'Comunicación enviada', estado: respuesta.status, codigo: respuesta.codigo }
       : {
           ok: false,
           motivo: 'rechazado',
-          mensaje: respuesta.cuerpo.slice(0, 500) || 'El Ministerio rechazó la comunicación',
+          mensaje: (respuesta.mensaje || respuesta.cuerpo).slice(0, 500) || 'El Ministerio rechazó la comunicación',
           estado: respuesta.status,
         };
   } catch (error) {
