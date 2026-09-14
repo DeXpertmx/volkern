@@ -565,7 +565,21 @@ export async function detalleRegistro(tenantId: string, reservationId: string) {
   if (!reserva) return null;
 
   const resumen = resumenDeReserva(reserva.travelers, reserva.compliance);
-  return { reserva, resumen };
+  return {
+    reserva: {
+      ...reserva,
+      // La completitud de un viajero se deriva de sus datos, no se lee de la
+      // columna: si el Ministerio endurece los campos obligatorios (como pasó al
+      // exigir el domicilio en el parte), la columna guardada se queda atrás y la
+      // ficha diría «listo» mientras la bandeja cuenta pendientes. La bandeja ya
+      // deriva; la ficha tiene que decir lo mismo, y sin escribir en una lectura.
+      travelers: reserva.travelers.map((viajero) => ({
+        ...viajero,
+        estado: estadoDeViajero(viajero),
+      })),
+    },
+    resumen,
+  };
 }
 
 export interface ResultadoEnvio {
