@@ -109,6 +109,14 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 
+# CA intermedia de FNMT (AC Componentes Informáticos): los endpoints de
+# SES.HOSPEDAJES (hospedajes.pre-ses.mir.es / hospedajes.ses.mir.es) no sirven
+# el intermedio en el handshake TLS y Node no lo trae en su store raíz.
+# NODE_EXTRA_CA_CERTS lo AÑADE al store de Node sin sustituirlo. Procedencia
+# y renovación: docker/ca/README.md
+COPY --from=builder /app/docker/ca/fnmt-ac-componentes-informaticos.pem /usr/local/share/volkern-ca/fnmt-ac-componentes-informaticos.pem
+ENV NODE_EXTRA_CA_CERTS=/usr/local/share/volkern-ca/fnmt-ac-componentes-informaticos.pem
+
 # Copiar Prisma schema (necesario para migrate en runtime)
 COPY --from=builder /app/prisma ./prisma
 # Copiar Prisma Client generado (Next.js standalone trace a veces no lo incluye)
