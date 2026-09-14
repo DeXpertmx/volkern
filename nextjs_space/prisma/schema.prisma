@@ -8513,7 +8513,22 @@ model HospitalityComplianceConfig {
   entidadNif     String?
   usuarioEnc     String?
   passwordEnc    String?
-  certificadoEnc String? // Credencial digital / certificado de la entidad
+  /**
+   * Certificado digital de la entidad (el .p12/.pfx de la FNMT) en Base64 y su
+   * contraseña, ambos cifrados en reposo. El certificado viaja presentado en el TLS
+   * de cada comunicación: es lo que le dice al Ministerio quién comunica.
+   */
+  certificadoEnc         String? @db.Text
+  certificadoPasswordEnc String?
+  /**
+   * Lo que el certificado dice de sí mismo, para que el administrador vea qué
+   * instaló sin volver a subirlo. Son datos públicos del certificado (no secretos).
+   */
+  certificadoTitular String?
+  certificadoNif     String?
+  certificadoEmisor  String?
+  certificadoHuella  String?
+  certificadoVence   DateTime?
   /**
    * Código de arrendador de la entidad: lo asigna el Ministerio en el registro
    * (cabecera del lote SOAP, obligatoria para comunicar).
