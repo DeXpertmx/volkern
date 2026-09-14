@@ -7,6 +7,7 @@ import {
   Building2,
   Check,
   ClipboardList,
+  FileUp,
   KeyRound,
   Loader2,
   MessageCircle,
@@ -14,6 +15,7 @@ import {
   RefreshCw,
   Send,
   Settings2,
+  ShieldCheck,
   Trash2,
   UserPlus,
   XCircle,
@@ -103,6 +105,17 @@ interface Configuracion {
   tieneUsuario: boolean;
   tienePassword: boolean;
   tieneCertificado: boolean;
+  /** ¿Está guardada la contraseña del .p12? Sin ella el certificado no se abre. */
+  tieneCertificadoPassword: boolean;
+  /** Datos públicos del certificado instalado: titular, NIF, huella y vencimiento. */
+  certificado: {
+    titular: string | null;
+    nif: string | null;
+    emisor: string | null;
+    huella: string | null;
+    vence: string | null;
+    caducado: boolean;
+  } | null;
   estadoConexion: string;
   ultimoEnvio: string | null;
   ultimoCodigo: string | null;
@@ -175,6 +188,14 @@ const VIAJERO_VACIO = {
 const fecha = (valor: string | null) =>
   valor ? new Date(valor).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
 
+/** Aviso de caducidad: los días que le quedan al certificado, si son pocos. */
+const diasParaCaducar = (valor: string | null): number | null => {
+  if (!valor) return null;
+  const vence = new Date(valor).getTime();
+  if (Number.isNaN(vence)) return null;
+  return Math.ceil((vence - Date.now()) / (24 * 60 * 60 * 1000));
+};
+
 const fechaHora = (valor: string | null) =>
   valor
     ? new Date(valor).toLocaleString('es-ES', {
@@ -221,6 +242,9 @@ export default function RegistroDeViajerosPage() {
     usuario: '',
     password: '',
     certificado: '',
+    certificadoPassword: '',
+    /** Solo para la interfaz: el nombre del fichero que se acaba de elegir. */
+    certificadoNombre: '',
   });
 
   const cargar = useCallback(async () => {
@@ -408,7 +432,14 @@ export default function RegistroDeViajerosPage() {
       if (!res.ok) throw new Error(datos.error || 'No se pudo guardar');
 
       setConfig(datos.configuracion);
-      setFormConfig((previo) => ({ ...previo, usuario: '', password: '', certificado: '' }));
+      setFormConfig((previo) => ({
+        ...previo,
+        usuario: '',
+        password: '',
+        certificado: '',
+        certificadoPassword: '',
+        certificadoNombre: '',
+      }));
       toast.success('Configuración guardada');
       setConfigAbierta(false);
       await cargar();
@@ -429,8 +460,15 @@ export default function RegistroDeViajerosPage() {
       });
       const datos = await res.json();
       const alcance = datos.alcance;
-      if (alcance?.alcanzable) {
-        toast.success(`El servicio responde (HTTP ${alcance.status}) en ${alcance.entorno}`);
+      // Si el certificado instalado ya no sirve, la prueba lo dice con su causa: es
+      // un problema de configuración, no de red, y confundirlos hace perder horas.
+      if (alcance?.certificadoError) {
+        toast.error(alcance.certificadoError);
+      } else if (alcance?.alcanzable) {
+        toast.success(
+          `El servicio responde (HTTP ${alcance.status}) en ${alcance.entorno}` +
+            (alcance.certificadoPresentado ? ' con el certificado de la entidad presentado' : '')
+        );
       } else {
         toast.error(`No se pudo alcanzar el servicio: ${alcance?.error || 'sin respuesta'}`);
       }
@@ -440,6 +478,38 @@ export default function RegistroDeViajerosPage() {
       setTrabajando(false);
     }
   }, [formConfig.entorno]);
+
+  /**
+   * Lee el fichero `.p12` que elige el administrador y lo deja en Base64 listo para
+   * guardar. Se lee aquí y no se sube aparte: el certificado viaja con el resto de
+   * la configuración, en una sola acción y con la misma comprobación de permisos.
+   */
+  const elegirCertificado = useCallback(async (fichero: File | null) => {
+    if (!fichero) return;
+    const extension = fichero.name.toLowerCase();
+    if (!extension.endsWith('.p12') && !extension.endsWith('.pfx')) {
+      toast.error('El certificado debe ser el fichero .p12 o .pfx de la entidad');
+      return;
+    }
+    if (fichero.size > 200 * 1024) {
+      toast.error('El fichero del certificado es demasiado grande para ser un .p12 de la entidad');
+      return;
+    }
+    try {
+      const lector = new FileReader();
+      const base64 = await new Promise<string>((resolve, reject) => {
+        lector.onload = () => {
+          const resultado = String(lector.result || '');
+          resolve(resultado.slice(resultado.indexOf(',') + 1));
+        };
+        lector.onerror = () => reject(new Error('No se pudo leer el fichero'));
+        lector.readAsDataURL(fichero);
+      });
+      setFormConfig((previo) => ({ ...previo, certificado: base64, certificadoNombre: fichero.name }));
+    } catch {
+      toast.error('No se pudo leer el fichero del certificado');
+    }
+  }, []);
 
   return (
     <div className="h-full overflow-y-auto bg-slate-50">
@@ -473,6 +543,8 @@ export default function RegistroDeViajerosPage() {
                   usuario: '',
                   password: '',
                   certificado: '',
+                  certificadoPassword: '',
+                  certificadoNombre: '',
                 });
                 setConfigAbierta(true);
               }}
@@ -1174,17 +1246,100 @@ export default function RegistroDeViajerosPage() {
               </div>
             </div>
 
-            <div>
-              <Label className="text-xs font-bold uppercase text-slate-400">
-                Credencial digital {config?.tieneCertificado ? '(guardada)' : ''}
+            <div className="rounded-lg border border-slate-200 bg-white p-3">
+              <Label className="flex items-center gap-2 text-xs font-bold uppercase text-slate-400">
+                <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                Certificado digital de la entidad {config?.tieneCertificado ? '(instalado)' : ''}
               </Label>
-              <Input
-                className="mt-1"
-                type="password"
-                autoComplete="off"
-                value={formConfig.certificado}
-                onChange={(e) => setFormConfig({ ...formConfig, certificado: e.target.value })}
-              />
+              <p className="mt-1 text-xs text-slate-500">
+                Es el .p12/.pfx de la FNMT con el que la entidad se identifica ante el Ministerio. Se guarda cifrado,
+                viaja presentado en cada comunicación y no se vuelve a mostrar.
+              </p>
+
+              {config?.certificado ? (
+                <div
+                  className={`mt-3 rounded-md border p-2 text-xs ${
+                    config.certificado.caducado
+                      ? 'border-red-200 bg-red-50 text-red-700'
+                      : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                  }`}
+                >
+                  <p className="flex items-center gap-1.5 font-semibold">
+                    {config.certificado.caducado ? (
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                    ) : (
+                      <ShieldCheck className="h-3.5 w-3.5" />
+                    )}
+                    {config.certificado.titular || 'Certificado instalado (sin datos legibles)'}
+                    {config.certificado.nif ? ` · ${config.certificado.nif}` : ''}
+                  </p>
+                  <p className="mt-1">
+                    {config.certificado.vence
+                      ? `${config.certificado.caducado ? 'Caducó' : 'Vigente hasta'} el ${fecha(
+                          config.certificado.vence
+                        )}`
+                      : 'Sin fecha de vencimiento registrada'}
+                    {config.certificado.emisor ? ` · ${config.certificado.emisor}` : ''}
+                  </p>
+                  {config.certificado.huella ? (
+                    <p className="mt-1 break-all font-mono text-[10px] text-current opacity-80">
+                      {config.certificado.huella}
+                    </p>
+                  ) : null}
+                  {config.certificado.caducado ? (
+                    <p className="mt-1">Instala el certificado renovado para poder comunicar.</p>
+                  ) : null}
+                  {/* Un certificado caduca sin avisar y el envío empieza a fallar
+                      justo cuando hay que comunicar una llegada: se avisa antes. */}
+                  {!config.certificado.caducado &&
+                  (diasParaCaducar(config.certificado.vence) ?? 999) <= 60 ? (
+                    <p className="mt-1 font-semibold">
+                      Caduca en {diasParaCaducar(config.certificado.vence)} días: pide el renovado a la FNMT antes de
+                      esa fecha.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <Label className="text-xs font-bold uppercase text-slate-400">Fichero (.p12 / .pfx)</Label>
+                  <label className="mt-1 flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-600 hover:border-emerald-400 hover:text-emerald-700">
+                    <FileUp className="h-4 w-4 shrink-0" />
+                    <span className="truncate">{formConfig.certificadoNombre || 'Elegir el fichero…'}</span>
+                    <input
+                      type="file"
+                      accept=".p12,.pfx,application/x-pkcs12"
+                      className="sr-only"
+                      onChange={(e) => void elegirCertificado(e.target.files?.[0] ?? null)}
+                    />
+                  </label>
+                </div>
+                <div>
+                  <Label
+                    htmlFor="certificado-password"
+                    className="text-xs font-bold uppercase text-slate-400"
+                  >
+                    Contraseña del certificado {config?.tieneCertificadoPassword ? '(guardada)' : ''}
+                  </Label>
+                  <Input
+                    id="certificado-password"
+                    className="mt-1"
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder={config?.tieneCertificadoPassword ? '••••••••' : ''}
+                    value={formConfig.certificadoPassword}
+                    onChange={(e) => setFormConfig({ ...formConfig, certificadoPassword: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              {formConfig.certificado ? (
+                <p className="mt-2 text-xs text-emerald-700">
+                  Se comprobará y se instalará al guardar: si la contraseña no lo abre o el certificado ya caducó, se
+                  dirá sin guardarlo.
+                </p>
+              ) : null}
             </div>
 
             {config?.ultimoError ? (

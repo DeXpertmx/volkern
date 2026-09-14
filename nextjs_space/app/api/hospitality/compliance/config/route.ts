@@ -2,8 +2,14 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/api-key-auth';
-import { borrarCredenciales, guardarConfig, leerConfig } from '@/lib/hospitality/compliance-store';
-import { probarAlcance, ENDPOINTS, ENTORNOS, ESQUEMA_XML_DISPONIBLE } from '@/lib/hospitality/ses-hospedajes/connector';
+import {
+  borrarCredenciales,
+  guardarConfig,
+  leerConfig,
+  probarServicioDelMinisterio,
+} from '@/lib/hospitality/compliance-store';
+import { CertificadoInvalidoError } from '@/lib/hospitality/ses-hospedajes/certificado';
+import { ENDPOINTS, ENTORNOS, ESQUEMA_XML_DISPONIBLE } from '@/lib/hospitality/ses-hospedajes/connector';
 
 // GET /api/hospitality/compliance/config — la configuración de la entidad.
 //
@@ -33,6 +39,11 @@ export async function GET(req: NextRequest) {
 // Las credenciales son POR TENANT porque cada cuenta se registra como entidad ante
 // el Ministerio. Solo se sobrescriben si llegan en el cuerpo, para poder cambiar el
 // entorno sin volver a teclear la contraseña.
+//
+// El certificado de la entidad llega como el fichero `.p12` en Base64 más su
+// contraseña, y se valida antes de guardarlo: si la contraseña no lo abre o ya está
+// caducado, la respuesta lo dice (400) en lugar de aceptarlo y fallar en el primer
+// envío real.
 export async function PUT(req: NextRequest) {
   try {
     const auth = await authenticateRequest(req);
@@ -61,12 +72,17 @@ export async function PUT(req: NextRequest) {
         usuario: typeof cuerpo.usuario === 'string' ? cuerpo.usuario : undefined,
         password: typeof cuerpo.password === 'string' ? cuerpo.password : undefined,
         certificado: typeof cuerpo.certificado === 'string' ? cuerpo.certificado : undefined,
+        certificadoPassword:
+          typeof cuerpo.certificadoPassword === 'string' ? cuerpo.certificadoPassword : undefined,
       },
       auth.user?.id ?? auth.apiKey?.id ?? 'sistema'
     );
 
     return NextResponse.json({ ok: true, configuracion: config });
   } catch (error) {
+    if (error instanceof CertificadoInvalidoError) {
+      return NextResponse.json({ error: error.message, causa: error.causa }, { status: 400 });
+    }
     console.error('[Hospitality] Error al guardar la configuración del registro de viajeros:', error);
     return NextResponse.json({ error: 'No se pudo guardar la configuración' }, { status: 500 });
   }
@@ -103,6 +119,11 @@ export async function DELETE(req: NextRequest) {
 // ninguna comunicación: la validación de credenciales exige el esquema oficial y
 // llegar hasta aquí solo separa «el Ministerio no me responde» de «mi mensaje está
 // mal», que son los dos fallos que se confunden.
+//
+// La prueba presenta el certificado de la entidad cuando está instalado, porque un
+// TLS mutuo que no lo lleva falla aunque el servicio esté vivo, y esa diferencia es
+// la que el administrador necesita ver: si el certificado no se pudo usar, la
+// respuesta lo dice en `certificadoError`.
 export async function POST(req: NextRequest) {
   try {
     const auth = await authenticateRequest(req);
@@ -112,7 +133,7 @@ export async function POST(req: NextRequest) {
     const config = await leerConfig(auth.tenant!.id);
     const entorno = typeof cuerpo?.entorno === 'string' ? cuerpo.entorno : config?.entorno;
 
-    const alcance = await probarAlcance(entorno);
+    const alcance = await probarServicioDelMinisterio(auth.tenant!.id, entorno);
     return NextResponse.json({ ok: alcance.alcanzable, alcance });
   } catch (error) {
     console.error('[Hospitality] Error al probar el alcance del servicio del Ministerio:', error);

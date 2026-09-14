@@ -30,12 +30,19 @@ import {
   type ViajeroMinimo,
 } from './compliance';
 import {
+  CertificadoInvalidoError,
+  leerCertificado,
+  metadatosParaGuardar,
+} from './ses-hospedajes/certificado';
+import {
   DatosInsuficientesError,
   construirPeticionSes,
   enviarComunicacion,
   esEntornoSes,
+  probarAlcance,
   type CredencialesSes,
   type TipoComunicacion,
+  type TransporteSes,
 } from './ses-hospedajes/connector';
 
 /** Estados en los que una acción del usuario todavía tiene algo que hacer. */
@@ -53,6 +60,20 @@ export interface RegistroConfig {
   tieneUsuario: boolean;
   tienePassword: boolean;
   tieneCertificado: boolean;
+  /** ¿Está guardada la contraseña del .p12? Sin ella el certificado no se puede abrir. */
+  tieneCertificadoPassword: boolean;
+  /**
+   * Datos públicos del certificado instalado, para que la configuración enseñe qué
+   * hay puesto. Nunca incluye el fichero ni su contraseña.
+   */
+  certificado: {
+    titular: string | null;
+    nif: string | null;
+    emisor: string | null;
+    huella: string | null;
+    vence: Date | null;
+    caducado: boolean;
+  } | null;
   estadoConexion: string;
   ultimoEnvio: Date | null;
   ultimoCodigo: string | null;
@@ -68,7 +89,10 @@ export interface EntradaConfig {
   codigoArrendador?: string | null;
   usuario?: string | null;
   password?: string | null;
+  /** El .p12/.pfx de la entidad en Base64, tal como lo sube la configuración. */
   certificado?: string | null;
+  /** Contraseña del .p12: sin ella el certificado no se puede abrir. */
+  certificadoPassword?: string | null;
 }
 
 /** La configuración sin secretos: es lo único que puede salir hacia la interfaz. */
@@ -83,11 +107,18 @@ function aConfigPublica(config: {
   usuarioEnc: string | null;
   passwordEnc: string | null;
   certificadoEnc: string | null;
+  certificadoPasswordEnc?: string | null;
+  certificadoTitular?: string | null;
+  certificadoNif?: string | null;
+  certificadoEmisor?: string | null;
+  certificadoHuella?: string | null;
+  certificadoVence?: Date | null;
   estadoConexion: string;
   ultimoEnvio: Date | null;
   ultimoCodigo: string | null;
   ultimoError: string | null;
 }): RegistroConfig {
+  const vence = config.certificadoVence ?? null;
   return {
     id: config.id,
     tenantId: config.tenantId,
@@ -99,6 +130,17 @@ function aConfigPublica(config: {
     tieneUsuario: Boolean(config.usuarioEnc),
     tienePassword: Boolean(config.passwordEnc),
     tieneCertificado: Boolean(config.certificadoEnc),
+    tieneCertificadoPassword: Boolean(config.certificadoPasswordEnc),
+    certificado: config.certificadoEnc
+      ? {
+          titular: config.certificadoTitular ?? null,
+          nif: config.certificadoNif ?? null,
+          emisor: config.certificadoEmisor ?? null,
+          huella: config.certificadoHuella ?? null,
+          vence,
+          caducado: vence ? vence.getTime() < Date.now() : false,
+        }
+      : null,
     estadoConexion: config.estadoConexion,
     ultimoEnvio: config.ultimoEnvio,
     ultimoCodigo: config.ultimoCodigo,
@@ -117,6 +159,11 @@ export async function leerConfig(tenantId: string): Promise<RegistroConfig | nul
  * Los campos de credencial solo se sobrescriben **cuando llegan**: así se puede
  * cambiar el entorno o el nombre de la entidad sin volver a teclear la contraseña,
  * y guardar sin usuario no borra el que ya había.
+ *
+ * El certificado se comprueba ANTES de guardarlo: es el único dato de la
+ * configuración que, si está mal, no se descubre hasta el primer envío real, y
+ * entonces el fallo es un error de TLS que no dice nada. Un .p12 con la contraseña
+ * equivocada, sin clave privada o caducado se rechaza aquí, con su causa.
  */
 export async function guardarConfig(
   tenantId: string,
@@ -135,7 +182,32 @@ export async function guardarConfig(
   }
   if (entrada.usuario) datos.usuarioEnc = encrypt(entrada.usuario.trim());
   if (entrada.password) datos.passwordEnc = encrypt(entrada.password.trim());
-  if (entrada.certificado) datos.certificadoEnc = encrypt(entrada.certificado.trim());
+
+  const certificadoNuevo = typeof entrada.certificado === 'string' ? entrada.certificado.trim() : '';
+  const passwordCertificado =
+    entrada.certificadoPassword !== undefined ? (entrada.certificadoPassword?.trim() ?? '') : undefined;
+  const tocaElCertificado = Boolean(certificadoNuevo) || passwordCertificado !== undefined;
+
+  if (tocaElCertificado) {
+    // El fichero puede venir en esta misma petición o estar ya guardado (cuando lo
+    // único que se cambia es su contraseña). En el segundo caso se revalida el que
+    // había, para no dejar en la base un certificado que no se puede abrir.
+    const base64 = certificadoNuevo || decrypt(antes?.certificadoEnc ?? '');
+    if (base64) {
+      const contraseña =
+        passwordCertificado ?? (antes?.certificadoPasswordEnc ? decrypt(antes.certificadoPasswordEnc) : '');
+      const certificado = leerCertificado(base64, contraseña);
+      if (certificadoNuevo) datos.certificadoEnc = encrypt(base64);
+      datos.certificadoPasswordEnc = contraseña ? encrypt(contraseña) : null;
+      Object.assign(datos, {
+        certificadoTitular: certificado.metadatos.titular,
+        certificadoNif: certificado.metadatos.nif,
+        certificadoEmisor: certificado.metadatos.emisor,
+        certificadoHuella: certificado.metadatos.huella,
+        certificadoVence: certificado.metadatos.hasta,
+      });
+    }
+  }
 
   const tieneUsuario = Boolean(datos.usuarioEnc) || Boolean(antes?.usuarioEnc);
   const tienePassword = Boolean(datos.passwordEnc) || Boolean(antes?.passwordEnc);
@@ -153,7 +225,7 @@ export async function guardarConfig(
     'editar',
     'hospitality_compliance_config',
     guardado.id,
-    `Configuración del registro de viajeros actualizada (entorno ${guardado.entorno}${entrada.password || entrada.certificado ? ', credenciales renovadas' : ''})`
+    `Configuración del registro de viajeros actualizada (entorno ${guardado.entorno}${entrada.password || entrada.certificado ? ', credenciales renovadas' : ''}${entrada.certificado ? ', certificado de la entidad instalado' : ''})`
   ).catch(() => {});
 
   return aConfigPublica(guardado);
@@ -170,6 +242,12 @@ export async function borrarCredenciales(tenantId: string, usuarioId: string): P
       usuarioEnc: null,
       passwordEnc: null,
       certificadoEnc: null,
+      certificadoPasswordEnc: null,
+      certificadoTitular: null,
+      certificadoNif: null,
+      certificadoEmisor: null,
+      certificadoHuella: null,
+      certificadoVence: null,
       estadoConexion: 'sin_configurar',
     },
   });
@@ -190,7 +268,10 @@ export async function borrarCredenciales(tenantId: string, usuarioId: string): P
  * Credenciales descifradas del tenant, solo para uso interno del conector.
  *
  * Devuelve `null` si falta cualquiera de las dos partes: media credencial no es una
- * credencial, y salir a la red con ella solo produce un 401 que confunde.
+ * credencial, y salir a la red con ella solo produce un 401 que confunde. El
+ * certificado se añade cuando está instalado; su ausencia no bloquea la llamada
+ * (la cabecera Basic sigue siendo la autenticación), pero su presencia es lo que el
+ * Ministerio necesita para saber quién comunica.
  */
 export async function credencialesDeTenant(tenantId: string): Promise<CredencialesSes | null> {
   const config = await prisma.hospitalityComplianceConfig.findUnique({ where: { tenantId } });
@@ -201,10 +282,37 @@ export async function credencialesDeTenant(tenantId: string): Promise<Credencial
       usuario: decrypt(config.usuarioEnc),
       password: decrypt(config.passwordEnc),
       certificado: config.certificadoEnc ? decrypt(config.certificadoEnc) : null,
+      certificadoPassword: config.certificadoPasswordEnc ? decrypt(config.certificadoPasswordEnc) : null,
     };
   } catch {
     return null;
   }
+}
+
+/**
+ * Prueba el alcance del servicio del Ministerio.
+ *
+ * Viaja con el certificado de la entidad cuando lo tiene instalado: una prueba que
+ * no lo presentara diría «el servicio responde» mientras el envío real falla en el
+ * TLS, que es exactamente la confusión que esto evita.
+ */
+export async function probarServicioDelMinisterio(
+  tenantId: string,
+  entorno?: string | null,
+  /** Inyectable para pruebas; por defecto el `https` del runtime. */
+  transporte?: TransporteSes
+) {
+  const config = await prisma.hospitalityComplianceConfig.findUnique({ where: { tenantId } });
+  let credenciales: CredencialesSes | null = null;
+  if (config?.certificadoEnc) {
+    credenciales = {
+      usuario: config.usuarioEnc ? decrypt(config.usuarioEnc) : '',
+      password: config.passwordEnc ? decrypt(config.passwordEnc) : '',
+      certificado: decrypt(config.certificadoEnc),
+      certificadoPassword: config.certificadoPasswordEnc ? decrypt(config.certificadoPasswordEnc) : null,
+    };
+  }
+  return probarAlcance(entorno ?? config?.entorno, { credenciales, transporte });
 }
 
 export interface ViajeroGuardado extends ViajeroMinimo {
@@ -761,6 +869,16 @@ export async function enviarAlMinisterio(
           estado: respuesta.status,
         };
   } catch (error) {
+    // Un certificado que ya no sirve (caducado, contraseña cambiada, fichero sin
+    // clave) no es un fallo de red: es configuración, y se dice así para que el
+    // administrador sepa qué arreglar. Queda además en el último error de la
+    // configuración, que es donde la sección lo enseña.
+    if (error instanceof CertificadoInvalidoError) {
+      await prisma.hospitalityComplianceConfig
+        .update({ where: { tenantId }, data: { ultimoError: error.message.slice(0, 300) } })
+        .catch(() => {});
+      return { ok: false, motivo: 'sin_configuracion', mensaje: error.message };
+    }
     const mensaje = error instanceof Error ? error.message : 'Error de red desconocido';
     return { ok: false, motivo: 'transporte', mensaje };
   }
