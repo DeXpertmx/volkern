@@ -192,6 +192,21 @@ export function estadoDeViajero(viajero: ViajeroMinimo): EstadoRegistro {
   return camposFaltantes(viajero).length === 0 ? 'pendiente_envio' : 'datos_pendientes';
 }
 
+/**
+ * A qué viajeros hay que pedirles los datos por WhatsApp: los que siguen
+ * incompletos **según sus datos**.
+ *
+ * Por qué no se lee la columna `estado`. La columna guarda una foto del momento en
+ * que se escribió, y la lista de campos obligatorios cambia: cuando el Ministerio
+ * pasó a exigir el domicilio en el parte, los viajeros ya «completos» se quedaron
+ * con su `pendiente_envio` guardado. Seleccionar por esa columna hacía que el
+ * botón se negara a pedir datos («no hay viajeros incompletos») justo a los que la
+ * bandeja marcaba en amarillo. La completitud se deriva siempre de los datos.
+ */
+export function viajerosAQuienesPedirDatos<T extends ViajeroMinimo>(viajeros: T[]): T[] {
+  return viajeros.filter((viajero) => estadoDeViajero(viajero) === 'datos_pendientes');
+}
+
 /** El registro de una reserva, tal como lo devuelve la base de datos. */
 export interface RegistroReserva {
   estadoReserva?: string | null;
@@ -228,9 +243,13 @@ export interface ResumenRegistro {
  *   • **Viajeros (PV)** — aquí sí hay datos que recoger: sin viajeros declarados, o
  *     con alguno incompleto, el estado es `datos_pendientes`.
  *
- * Y el estado guardado manda sobre el derivado: si el Ministerio ya aceptó el parte
- * de viajeros, la pantalla no puede decir que falta gente porque después se haya
- * editado un nombre. Quien reconcilia eso es la capa de datos, al escribir.
+ * Y del lado de los viajeros, el estado guardado manda **solo si representa algo que
+ * ya ocurrió**: si el Ministerio ya aceptó el parte, la pantalla no puede decir que
+ * falta gente porque después se haya editado un nombre. Un estado guardado que solo
+ * describe completitud (`datos_pendientes`, `pendiente_envio`) no tiene ningún hecho
+ * detrás y cede ante los datos: es la foto del día en que se escribió, y la lista de
+ * campos obligatorios cambia. Sin esa distinción la misma fila de la bandeja decía
+ * «3 pendientes» en la etiqueta y «Pendiente de envío» en la insignia.
  */
 export function resumenDeReserva(
   viajeros: ViajeroMinimo[],
@@ -245,7 +264,7 @@ export function resumenDeReserva(
 
   const estado = estadoAgregado(
     normalizarEstado(registro?.estadoReserva, 'pendiente_envio'),
-    normalizarEstado(registro?.estadoViajeros, derivadoViajeros)
+    estadoViajerosVigente(registro?.estadoViajeros, derivadoViajeros)
   );
 
   const partes = [`${total} ${total === 1 ? 'viajero' : 'viajeros'}`];
@@ -260,6 +279,26 @@ export function resumenDeReserva(
     etiqueta: partes.join(' · '),
     listoParaEnviar: total > 0 && pendientes === 0 && permiteReenvio(estado),
   };
+}
+
+/**
+ * Estados que solo describen completitud, sin ningún hecho externo detrás.
+ *
+ * No se guardan: se derivan de los datos. Guardarlos es lo que permitió que la
+ * columna dijera «listo» mientras los datos decían «falta el domicilio».
+ */
+const ESTADOS_SOLO_DATOS: readonly EstadoRegistro[] = ['datos_pendientes', 'pendiente_envio'];
+
+/**
+ * El estado de los viajeros que se enseña: el guardado si representa una
+ * comunicación que de verdad ocurrió, y si no el derivado de los datos.
+ */
+export function estadoViajerosVigente(
+  guardado: string | null | undefined,
+  derivado: EstadoRegistro
+): EstadoRegistro {
+  const normalizado = normalizarEstado(guardado, derivado);
+  return ESTADOS_SOLO_DATOS.includes(normalizado) ? derivado : normalizado;
 }
 
 /** Convierte lo que venga de la base de datos en un estado conocido. */

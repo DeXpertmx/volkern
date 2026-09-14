@@ -3,7 +3,12 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/api-key-auth';
 import { logAuditAction } from '@/lib/permissions';
-import { viajeroPublico, ESTADOS_REGISTRO, FICHAS_ESTADO } from '@/lib/hospitality/compliance';
+import {
+  viajeroPublico,
+  ESTADOS_REGISTRO,
+  FICHAS_ESTADO,
+  viajerosAQuienesPedirDatos,
+} from '@/lib/hospitality/compliance';
 import {
   firmarTokenEnlace,
   urlPedirDatos,
@@ -232,13 +237,18 @@ async function pedirDatosPorWhatsapp(
   if (!detalle) return { ok: false, motivo: 'desconocido', error: 'La reserva no existe en esta cuenta' };
 
   // Reenvío a un viajero concreto, o petición a todos los incompletos.
-  let objetivo = detalle.reserva.travelers.filter((v) => v.estado === 'datos_pendientes');
+  //
+  // A quién se le pide se decide por lo que le falta en los datos, no por la
+  // columna guardada: si el Ministerio endurece los campos obligatorios, la
+  // columna se queda atrás y el botón se negaría a pedir datos a quien la bandeja
+  // marca en amarillo («no hay viajeros incompletos» con tres pendientes).
+  let objetivo = viajerosAQuienesPedirDatos(detalle.reserva.travelers);
   if (soloViajeroId) {
     const viajero = detalle.reserva.travelers.find((v) => v.id === soloViajeroId);
     if (!viajero) {
       return { ok: false, motivo: 'desconocido', error: 'Ese viajero no pertenece a esta reserva' };
     }
-    objetivo = viajero.estado === 'datos_pendientes' ? [viajero] : [];
+    objetivo = viajerosAQuienesPedirDatos([viajero]);
   }
   if (objetivo.length === 0) {
     return {
