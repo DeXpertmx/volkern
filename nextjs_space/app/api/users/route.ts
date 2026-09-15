@@ -109,13 +109,39 @@ export const POST = withTenantAuth(async (req, auth) => {
     }
 
     const body = await req.json();
-    const { name, email, roleId, telefono, timezone, department, isDepartmentAdmin } = body;
+    const { name, email, roleId, telefono, timezone, department, isDepartmentAdmin, contactId } = body;
 
     if (!name || !email) {
       return NextResponse.json(
         { error: 'Nombre y email son requeridos' },
         { status: 400 }
       );
+    }
+
+    // `contactId` convierte la cuenta en el acceso de un huésped: el usuario pasa
+    // a ver únicamente las reservas de ese contacto. Crearlo no es «invitar al
+    // equipo», es repartir el acceso al alojamiento, así que pide la llave que
+    // reparte los roles de Hospitality y no la de invitar.
+    let contactoVinculado: string | undefined;
+    if (contactId) {
+      if (!hasPermission(currentUser as any, 'equipo', 'roles')) {
+        return NextResponse.json(
+          {
+            error: 'Solo quien administra los roles de Hospitality puede crear un acceso de huésped',
+            permisoRequerido: 'equipo.roles',
+          },
+          { status: 403 }
+        );
+      }
+
+      const contacto = await prisma.contact.findFirst({
+        where: { id: String(contactId), tenantId },
+        select: { id: true },
+      });
+      if (!contacto) {
+        return NextResponse.json({ error: 'El contacto no existe en esta cuenta' }, { status: 404 });
+      }
+      contactoVinculado = contacto.id;
     }
 
     // Lógica de Auto-Rol por Departamento
@@ -195,6 +221,8 @@ export const POST = withTenantAuth(async (req, auth) => {
         invitadoPor: currentUser.id,
         tokenInvitacion: inviteToken,
         fechaInvitacion: new Date(),
+        // Vacío para un miembro del equipo; el contacto, para un acceso de huésped.
+        contactId: contactoVinculado,
         employee: {
           create: {
             fullName: name,

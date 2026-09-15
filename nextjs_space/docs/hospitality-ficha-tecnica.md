@@ -103,7 +103,7 @@ la clave interna.
 
 ## 3. Capa de aplicación
 
-### Rutas API (40 en `/api/hospitality` + 5 en `/api/admin/conectividad` + 3 de cron + 5 públicas)
+### Rutas API (41 en `/api/hospitality` + 5 en `/api/admin/conectividad` + 3 de cron + 5 públicas)
 
 | Dominio | Rutas |
 | --- | --- |
@@ -209,6 +209,15 @@ no `reservas.ver`. Si compartieran capacidad, dar acceso a un huésped sería ab
 reservas de toda la cuenta y lo único que lo evitaría sería un filtro que la siguiente ruta
 puede olvidar. El filtro por `User.contactId` entra en la consulta, y la reserva de otro
 contacto responde 404 igual que una inexistente. Sin vínculo: cero reservas, nunca todas.
+
+El vínculo se pone desde la propia pantalla (**Huéspedes con acceso**, en Equipo y roles):
+listar quién tiene el rol, vincular con un contacto, desvincular y dar de alta la cuenta. El
+alta reutiliza `POST /api/users` con su invitación, sus límites de plan y su auditoría —no hay
+un segundo camino para crear usuarios— y añade `contactId`, que pide la capacidad
+`equipo.roles` y no la de invitar: convertir una cuenta en el acceso de un huésped es repartir
+el acceso al alojamiento. El vínculo (`/api/hospitality/accesos-huesped`) comprueba tenant en
+las dos direcciones y exige que el usuario tenga el rol Huésped, porque para cualquier otro el
+vínculo no cambiaría nada y haría creer que sí.
 
 ### Tests
 Los archivos bajo `tests/` con prefijo `hospitality-`, `ses-` o `viajero-` (motor de
