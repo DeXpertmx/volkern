@@ -200,9 +200,11 @@ del vocabulario no se renombran —hay textos y reglas que los nombran— pero s
 sí se ajustan desde la matriz.
 
 Al convertir los privilegios por nombre en permisos, ningún rol pierde lo que tenía:
-`scripts/rollout-hospitality-roles.ts` (idempotente, solo aditivo) copia a permisos lo que
-hasta ahora se concedía por el nombre del rol, con las reglas y sus pruebas en
-`lib/hospitality/roles-rollout.ts`.
+`scripts/rollout-roles.ts` (idempotente, solo aditivo) copia a permisos lo que hasta ahora se
+concedía por el nombre del rol, con las reglas y sus pruebas en
+`lib/hospitality/roles-rollout.ts` (capacidades del módulo) y `lib/roles-rollout.ts`
+(plataforma: la llave `configuracion.gestionar` para los roles que administraban por
+llamarse «Admin»).
 
 El **rol Huésped no es el rol de reservas recortado**: tiene `hospitality_misreservas.ver`,
 no `reservas.ver`. Si compartieran capacidad, dar acceso a un huésped sería abrirle las
@@ -237,6 +239,28 @@ dashboard se dibuja fuera de `<AccionHospitality>`, pruebas de que el componente
 acción cuando el rol no la tiene, y las del catálogo de roles: qué concede cada uno, que las
 capacidades privilegiadas no viajen en el retrollenado, la herencia de privilegios, la
 fusión al aplicar y el escaneo de decisiones por nombre de rol.
+
+### La misma regla fuera del módulo
+Los roles del producto hicieron evidente un defecto que no era exclusivo de Hospitality: la
+etiqueta del rol como credencial. Fuera del módulo quedaban tres puertas que concedían por
+nombre, y ya no queda ninguna:
+
+| Puerta | Antes | Ahora |
+|---|---|---|
+| Modo de compliance de la cuenta (`PATCH /api/tenant/compliance-mode`) | «Admin» o «Administrador» | `configuracion.gestionar` |
+| Marca de la cuenta (`PUT /api/whitelabel`) | «Admin» o «Administrador» | `configuracion.gestionar` |
+| Cockpit financiero consolidado (`validateFinancialSecurity`) | lista `SUPERADMIN/ADMIN/OWNER/FINANCE_ADMIN` | `configuracion.gestionar` |
+
+El resumen ejecutivo de la cuenta es parte de administrarla, así que comparte llave con el
+resto de la configuración; el día que exista un permiso financiero propio, es una línea.
+Superadmin no pasa por el permiso, pasa por su bypass, que sigue viviendo en un solo sitio.
+
+`tests/rolename-authorization-guard.test.ts` recorre el código real de `lib/`, `app/api/` y
+`components/` y falla si vuelve a aparecer una comparación contra el nombre de un rol de
+cliente o una lista `ROLES_CON_*`. Sus excepciones están enumeradas una a una con el motivo,
+una de ellas por línea —la deuda heredada del CRM, donde «Sales Agent» y «Support» solo ven
+sus propios leads y todavía no existe el permiso que lo exprese—, de modo que mover esa
+línea hace que la guardia vuelva a avisar en vez de quedarse dormida.
 
 ---
 
