@@ -58,7 +58,10 @@ export async function GET(req: NextRequest, { params }: { params: { reservationI
     const detalle = await detalleRegistro(tenantId, params.reservationId);
     if (!detalle) return NextResponse.json({ error: 'La reserva no existe en esta cuenta' }, { status: 404 });
 
-    const rol = auth.user?.role?.nombre ?? null;
+    // El rol entero, no su nombre: el privilegio del documento completo se
+    // resuelve por capacidad. Pasar el nombre obligaba a enmascarar por lista de
+    // nombres, y eso no se puede administrar desde la matriz de roles.
+    const rol = auth.user?.role ?? null;
 
     if (auth.user?.id) {
       await logAuditAction(
@@ -140,7 +143,7 @@ export async function POST(req: NextRequest, { params }: { params: { reservation
         if (faltante) return NextResponse.json({ error: faltante }, { status: 400 });
 
         const viajero = await crearViajero(tenantId, params.reservationId, entrada!, usuarioId);
-        return NextResponse.json({ ok: true, viajero: viajeroPublico(viajero, { rol: auth.user?.role?.nombre }) });
+        return NextResponse.json({ ok: true, viajero: viajeroPublico(viajero, { rol: auth.user?.role }) });
       }
 
       case 'actualizar_viajero': {
@@ -153,7 +156,7 @@ export async function POST(req: NextRequest, { params }: { params: { reservation
         const viajero = await actualizarViajero(tenantId, viajeroId, entrada, usuarioId);
         if (!viajero) return NextResponse.json({ error: 'El viajero no existe en esta cuenta' }, { status: 404 });
 
-        return NextResponse.json({ ok: true, viajero: viajeroPublico(viajero, { rol: auth.user?.role?.nombre }) });
+        return NextResponse.json({ ok: true, viajero: viajeroPublico(viajero, { rol: auth.user?.role }) });
       }
 
       case 'eliminar_viajero': {

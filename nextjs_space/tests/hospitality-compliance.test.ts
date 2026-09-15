@@ -33,6 +33,14 @@ import {
   type TransporteSes,
 } from '../lib/hospitality/ses-hospedajes/connector';
 
+/**
+ * Un rol de mentira con los permisos que se quieran. El nombre no importa —
+ * precisamente eso es lo que este archivo comprueba.
+ */
+function rolCon(permisos: Record<string, unknown>) {
+  return { id: 'rol-test', nombre: 'Rol de prueba', permisos };
+}
+
 const VIAJERO_COMPLETO = {
   nombre: 'María',
   apellido1: 'García',
@@ -162,28 +170,50 @@ describe('un documento nunca se enseña completo sin privilegio', () => {
     expect(enmascararDocumento(null)).toBe('—');
   });
 
-  it('solo la administración de la cuenta ve el documento entero', () => {
-    expect(puedeVerDocumentoCompleto('Admin')).toBe(true);
-    expect(puedeVerDocumentoCompleto('Superadmin')).toBe(true);
-    expect(puedeVerDocumentoCompleto('Sales Agent')).toBe(false);
+  it('el privilegio lo concede el permiso, no el nombre del rol', () => {
+    const conPrivilegio = rolCon({ hospitality_reservas: { documento_completo: true } });
+    const sinPrivilegio = rolCon({ hospitality_reservas: { ver: true, editar: true } });
+
+    expect(puedeVerDocumentoCompleto(conPrivilegio)).toBe(true);
+    expect(puedeVerDocumentoCompleto(sinPrivilegio)).toBe(false);
     expect(puedeVerDocumentoCompleto(null)).toBe(false);
+  });
+
+  it('llamarse Admin ya no basta, y llamarse distinto ya no estorba', () => {
+    // El cambio, en una prueba: antes esto era una lista de nombres, así que un
+    // rol nuevo no podía recibir el privilegio y renombrar «Admin» lo quitaba.
+    expect(puedeVerDocumentoCompleto({ id: 'r', nombre: 'Admin', permisos: { hospitality_reservas: { ver: true } } })).toBe(false);
+    expect(
+      puedeVerDocumentoCompleto({
+        id: 'r',
+        nombre: 'Anfitrión',
+        permisos: { hospitality_reservas: { documento_completo: true } },
+      })
+    ).toBe(true);
   });
 
   it('el viajero de la API sale enmascarado, y completo solo para quien puede', () => {
     const viajero = { id: 'v1', ...VIAJERO_COMPLETO };
 
-    const comercial = viajeroPublico(viajero, { rol: 'Sales Agent' });
+    const comercial = viajeroPublico(viajero, { rol: rolCon({ hospitality_reservas: { ver: true } }) });
     expect(comercial.numeroDocumento).toBe('•••••567');
     expect(comercial.documentoCompleto).toBe(false);
 
-    const admin = viajeroPublico(viajero, { rol: 'Admin' });
-    expect(admin.numeroDocumento).toBe('X1234567');
-    expect(admin.documentoCompleto).toBe(true);
+    const anfitrion = viajeroPublico(viajero, {
+      rol: rolCon({ hospitality_reservas: { documento_completo: true } }),
+    });
+    expect(anfitrion.numeroDocumento).toBe('X1234567');
+    expect(anfitrion.documentoCompleto).toBe(true);
+
+    // Sin rol, sin privilegio: ni siquiera hay que acordarse de pasar nada.
+    expect(viajeroPublico(viajero).documentoCompleto).toBe(false);
   });
 
   it('el soporte del documento también se enmascara', () => {
     const viajero = { id: 'v1', ...VIAJERO_COMPLETO, tipoDocumento: 'DNI', soporteDocumento: '99887766' };
-    expect(viajeroPublico(viajero, { rol: 'Sales Agent' }).soporteDocumento).toBe('•••••766');
+    expect(
+      viajeroPublico(viajero, { rol: rolCon({ hospitality_reservas: { ver: true } }) }).soporteDocumento
+    ).toBe('•••••766');
     expect(viajeroPublico(viajero).soporteDocumento).toBe('•••••766');
   });
 });

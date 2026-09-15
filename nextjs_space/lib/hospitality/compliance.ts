@@ -21,6 +21,7 @@
  * lo que la documentación ya nombra, y las constantes que dependen del manual van
  * marcadas como pendientes de confirmar, no inventadas.
  */
+import { puedePorRol, type RolConPermisos } from './capacidades';
 
 /** Los estados del registro, tal como los ve el propietario. */
 export const ESTADOS_REGISTRO = [
@@ -322,16 +323,16 @@ export function enmascararDocumento(numero: string | null | undefined): string {
 }
 
 /**
- * Roles que pueden ver un documento completo.
+ * ¿Puede quien pregunta ver un documento completo?
  *
  * La regla del plan maestro es que los datos personales no se enseñen de más, así
- * que el privilegio es explícito y corto: solo la administración de la cuenta. El
- * resto ve el documento enmascarado, también en la ficha de la reserva.
+ * que el privilegio es explícito, corto y **se concede**: hasta ahora se decidía
+ * por el nombre del rol, así que un rol nuevo jamás podía recibirlo y renombrar
+ * «Admin» a «Anfitrión» habría dejado a la cuenta sin ver sus propios documentos.
+ * Ahora lo decide la capacidad, que es una casilla de la matriz de roles.
  */
-export const ROLES_CON_DOCUMENTO_COMPLETO: readonly string[] = ['Superadmin', 'Admin'];
-
-export function puedeVerDocumentoCompleto(rol: string | null | undefined): boolean {
-  return ROLES_CON_DOCUMENTO_COMPLETO.includes((rol || '').trim());
+export function puedeVerDocumentoCompleto(rol: RolConPermisos | null | undefined): boolean {
+  return puedePorRol(rol, 'viajeros.documento_completo');
 }
 
 /**
@@ -344,7 +345,7 @@ export function puedeVerDocumentoCompleto(rol: string | null | undefined): boole
  */
 export function viajeroPublico<T extends ViajeroMinimo & { id: string }>(
   viajero: T,
-  opciones: { rol?: string | null } = {}
+  opciones: { rol?: RolConPermisos | null } = {}
 ): Omit<T, 'numeroDocumento' | 'soporteDocumento'> & {
   numeroDocumento: string;
   soporteDocumento: string | null;
