@@ -23,7 +23,7 @@ export const TOP_LEVEL = new Set([
   'compliance-pro', 'contrato', 'cotizacion', 'dashboard', 'delete-data',
   'docs', 'ecosistema', 'embed', 'estudiante', 'firma', 'login', 'marketing',
   'marketing-template-editor', 'member', 'neting', 'orden', 'p', 'payment', 'portal',
-  'precios', 'privacy', 'reembolsos', 'register', 'resolve-payment', 'signup',
+  'precios', 'privacy', 'reembolsos', 'register', 'reservar', 'resolve-payment', 'signup',
   'soluciones', 'tarjeta', 'template-editor', 'terms', 'test-post',
   'verifactu', 'verify', 'viajeros', 'webcreator', 'www', 'app',
 ])
