@@ -189,7 +189,7 @@ export async function validateApiKey(
           select: { id: true, nombre: true, slug: true, subdomain: true, plan: true, accountType: true, parentId: true, moneda: true }
         },
         user: {
-          select: { id: true, name: true, email: true, tenantId: true, roleId: true, role: true }
+          select: { id: true, name: true, email: true, tenantId: true, roleId: true, contactId: true, role: true }
         }
       }
     });
@@ -295,6 +295,9 @@ export async function authenticateRequest(
           email: true,
           tenantId: true,
           roleId: true,
+          // El contacto al que está vinculado el usuario, si es el huésped de una
+          // reserva: es lo que filtra la vista del rol Huésped.
+          contactId: true,
           role: { select: { id: true, nombre: true, permisos: true } },
           tenant: { select: { id: true, nombre: true, slug: true, subdomain: true, plan: true, accountType: true, moneda: true } }
         }

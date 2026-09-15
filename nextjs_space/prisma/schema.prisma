@@ -48,6 +48,10 @@ model User {
   fechaInvitacion         DateTime?
   invitadoPor             String?
   roleId                  String?
+  // Vínculo con el contacto del CRM cuando este usuario ES el huésped de una
+  // reserva (rol Huésped). El módulo filtra por él: sin vínculo no ve ninguna,
+  // y nunca las de la cuenta entera.
+  contactId               String?
   telefono                String?
   tenantId                String?
   timezone                String                     @default("America/Mexico_City")
@@ -77,6 +81,7 @@ model User {
   tareasAsignadas         Task[]                     @relation("TaskAssignee")
   role                    Role?                      @relation(fields: [roleId], references: [id])
   tenant                  Tenant?                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contacto                Contact?                   @relation("UserContacto", fields: [contactId], references: [id], onDelete: SetNull)
   whatsappInstances       UserWhatsAppInstance[]     @relation("UserWhatsAppInstances")
   agent_skill_logs        agent_skill_logs[]
   apiKeys                 ApiKey[]
@@ -121,6 +126,7 @@ model User {
 
   @@index([tenantId])
   @@index([roleId])
+  @@index([contactId])
   @@index([email])
   @@index([estado])
   @@unique([tenantId, bookingSlug])
@@ -829,6 +835,7 @@ model Contact {
   oportunidadesSeguro            OportunidadComercial[]            @relation("OportunidadCliente")
   siniestrosCliente              Siniestro[]                       @relation("SiniestroCliente")
   hospitalityReservations        HospitalityReservation[]          @relation("HospitalityReservationContact")
+  usuarios                       User[]                            @relation("UserContacto")
 
   @@index([tenantId])
   @@index([email])
