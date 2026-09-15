@@ -1,7 +1,7 @@
 # Volkern Hospitality — Ficha técnica del módulo
 
 **Documento de inventario y estado real**
-Fecha: 2026-09-15 · Rama: `master` · Última migración aplicada: 77/77
+Fecha: 2026-09-15 · Rama: `master` · Migraciones aplicadas en producción: 78
 Fuentes: esquema de Prisma, rutas de `app/api`, páginas de `app/dashboard`, módulos de
 `lib/hospitality`, y consulta de solo lectura a la base de producción.
 
@@ -27,6 +27,7 @@ Módulo de plan: `hospitality` (`lib/plans.ts`), cuenta requerida: `BUSINESS`.
 | 7 | Reservas | `/dashboard/hospitality/reservas` | existe |
 | 8 | Registro de viajeros | `/dashboard/hospitality/viajeros` | existe |
 | 9 | Tarifas | `/dashboard/hospitality/tarifas` | existe |
+| 9b | Booking Engine | `/dashboard/hospitality/booking-engine` | existe (página pública en `/reservar/<slug>`) |
 | 10 | Huéspedes | `/dashboard/hospitality/huespedes` | existe |
 | 11 | Comunicaciones | `/dashboard/hospitality/comunicaciones` | existe |
 | 12 | Automatizaciones | `/dashboard/hospitality/automatizaciones` | existe |
@@ -37,12 +38,13 @@ Check-in/out, mantenimiento y la configuración de conectividad son **funcionali
 de estas áreas**, no entradas de menú propias (decisión registrada en
 `hospitality-booking-payments-plan.md` §1).
 
-> **No existe sección "Booking Engine".** Es la única de las 14 declaradas en el plan de
-> FASE 3 que todavía no tiene ruta ni página (ver §11).
+> Las 14 secciones del plan de FASE 3 tienen ya ruta y página: la última en llegar fue
+> **Booking Engine**, que además publica una página pública por tenant (`/reservar/<slug>`) y
+> un widget embebible.
 
 ---
 
-## 2. Modelos de datos (19 modelos, 19 tablas)
+## 2. Modelos de datos (20 modelos, 20 tablas)
 
 Todos cuelgan de `Tenant` con `onDelete: Cascade`. Los identificadores externos nunca son
 la clave interna.
@@ -84,6 +86,11 @@ la clave interna.
 | `HospitalityComplianceConfig` | `hospitality_compliance_config` | Configuración del registro: entorno, `codigoArrendador`, credenciales y **certificado digital de la entidad** (`.p12` + contraseña, ambos cifrados) |
 | `HospitalityComplianceEvent` | `hospitality_compliance_events` | Traza de cada envío/anulación |
 
+### Reserva directa (FASE 3.D)
+| Modelo | Tabla | Para qué |
+| --- | --- | --- |
+| `HospitalityBookingConfig` | `hospitality_booking_config` | Política del canal directo: `slug` público (único en la plataforma), propiedades publicadas, divisa publicada, política de cancelación, anticipo, tarifa de limpieza y si se exige pago online. Nada de disponibilidad ni de reservas |
+
 ### Conectividad
 | Modelo | Tabla | Para qué |
 | --- | --- | --- |
@@ -94,7 +101,7 @@ la clave interna.
 
 ## 3. Capa de aplicación
 
-### Rutas API (38 en `/api/hospitality` + 5 en `/api/admin/conectividad` + 3 de cron + 1 pública)
+### Rutas API (39 en `/api/hospitality` + 5 en `/api/admin/conectividad` + 3 de cron + 5 públicas)
 
 | Dominio | Rutas |
 | --- | --- |
@@ -110,9 +117,10 @@ la clave interna.
 | Registro de viajeros | `compliance`, `compliance/[reservationId]`, `compliance/config` |
 | Onboarding | `onboarding`, `onboarding/catalogo`, `onboarding/mapping`, `onboarding/probar`, `onboarding/activar` |
 | Conectividad | `sync` (push manual), **`webhook/reservations`** |
+| Booking Engine | `booking` (configuración de la reserva directa) |
 | Admin conectividad | `/api/admin/conectividad` (+ `test`, `propiedades`, `reconciliar`, `sync-logs`) |
 | Crons | `/api/cron/hospitality-checkin-due`, `/api/cron/hospitality-reconcile`, `/api/cron/hospitality-review-request` |
-| Público | `/api/public/viajeros/[token]` (formulario del viajero con enlace firmado) |
+| Público | `/api/public/viajeros/[token]` (formulario del viajero con enlace firmado); `/api/public/booking/[slug]` (+ `cotizar`, `reservar`) |
 
 ### Módulos puros (`lib/hospitality/`)
 
@@ -121,24 +129,42 @@ la clave interna.
 `connectivity.ts` (adapter de la capa de conectividad), `reconciliation.ts`,
 `operations.ts` (check-in/out, limpieza, mantenimiento), `finance.ts` + `finance-summary.ts` +
 `money-query.ts` (dinero), `reportes.ts`, `analytics.ts`, `events.ts` +
-`automation-bridge.ts` (EventBus → Automation Engine), `comunicaciones.ts`, `onboarding.ts` +
+`automation-bridge.ts` (EventBus → Automation Engine), `comunicaciones.ts`, `pricing.ts` +
+`booking-engine.ts` + `booking-config.ts` + `booking-public.ts` + `booking-link.ts` +
+`booking-payments.ts` + `signed-link.ts` (reserva directa), `permissions.ts` (permisos por
+acción), `onboarding.ts` +
 `onboarding-status.ts`, `compliance.ts` + `compliance-store.ts` + `compliance-link.ts`,
 `block-types.ts`, `ses-hospedajes/` (`certificado.ts`, `connector.ts`, `esquema.ts`, `zip.ts`).
 
-### Autenticación y aislamiento
+### Autenticación, permisos y aislamiento
 Todas las rutas usan `authenticateRequest()` (`lib/api-key-auth.ts`): sesión NextAuth **o**
 clave de API, con `tenant` resuelto y validación de subdominio. El aislamiento por `tenantId`
 está cubierto por `tests/hospitality-crud-isolation.test.ts`.
 
-**Hueco real frente al plan maestro §27:** no hay comprobación de permisos **por acción**
-(ver / crear / modificar / cancelar reservas, gestionar limpieza, configurar integraciones…).
-El rol y sus `permisos` se cargan en la sesión, pero ninguna ruta de Hospitality los evalúa.
-El control actual es de sesión + tenant + módulo del plan.
+Además, **cada método exige permiso por acción** (§27). `lib/hospitality/permissions.ts`
+traduce la capacidad del producto (`reservas.cancelar`, `operaciones.gestionar`,
+`mantenimiento.gestionar`, `integraciones.gestionar`…) al par módulo + acción del sistema
+de permisos de la plataforma, y las rutas llaman a `exigirPermisoHospitality()`. Sin permiso
+la respuesta es **403 con la causa** (`permisoRequerido: 'hospitality_reservas.cancelar'`),
+antes de tocar la base.
+
+Siete módulos de Hospitality, concedibles desde Equipo → Roles y permisos:
+`hospitality_reservas` (ver / crear / editar / **cancelar**), `hospitality_operaciones`,
+`hospitality_mantenimiento`, `hospitality_integraciones`, `hospitality_finanzas`,
+`hospitality_comunicaciones` y `hospitality_automatizaciones`. La única ruta exenta es el
+**webhook del proveedor**, que llega con Basic Auth y no con usuario de Volkern.
+
+Al empezar a comprobar, los roles existentes no tenían claves de Hospitality: el script
+idempotente `scripts/backfill-hospitality-permissions.ts` les concede el conjunto completo
+(lo que ya ejercían de hecho) para que nadie pierda acceso, y el administrador recorta
+después. Queda pendiente ocultar en la interfaz las acciones que el rol no puede hacer.
 
 ### Tests
-57 archivos bajo `tests/` con prefijo `hospitality-`, `ses-` o `viajero-` (motor de
-disponibilidad con guardia, calendario, reservas, finanzas, reportes, conectividad,
-reconciliación, automatizaciones, viajeros, certificado y CLI de la interfaz del planning).
+48 archivos bajo `tests/` con prefijo `hospitality-`, `ses-` o `viajero-` (motor de
+disponibilidad con guardia, calendario, reservas, finanzas, reportes, reserva directa,
+conectividad, reconciliación, automatizaciones, viajeros, certificado y CLI del planning),
+más tres de permisos: catálogo y resolución, guardia que falla si una ruta deja de exigir
+capacidad y pruebas de ruta con el 403 real.
 
 ---
 
@@ -270,25 +296,59 @@ editable desde el planning.
 
 ---
 
-## 8. Flujo E — Reserva directa (Booking Engine) — **NO IMPLEMENTADO**
+## 8. Flujo E — Reserva directa (Booking Engine)
 
-Diseño aprobado y registrado en `docs/hospitality-booking-payments-plan.md` (FASE 3.D y 3.C):
+Diseño aprobado en `docs/hospitality-booking-payments-plan.md` (FASE 3.D y 3.C) e implementado:
 
 ```
-Landing del cliente / widget embebible
-   → fechas → huéspedes → disponibilidad (Availability Engine central)
-   → precio → datos del huésped → pago (cuenta del tenant) → reserva
-   → MISMO Reservation Engine que las de OTA
-   → disponibilidad → CRM → planning → operaciones → automatizaciones → finanzas
+Landing del cliente / widget embebible  (/reservar/<slug>  ·  /embed/reservar/<slug>)
+   │
+   ├─ 1. Fechas y huéspedes            POST /api/public/booking/<slug>/cotizar
+   │        └→ Availability Engine central: unidades libres del rango
+   │           (reservas activas + bloqueos, la misma regla para todos)
+   │
+   ├─ 2. Unidad y precio               módulo puro de tarificación
+   │        └→ tarifa del plan activo (o base) × noches + limpieza,
+   │           anticipo y saldo; restricciones del plan respetadas
+   │
+   ├─ 3. Datos y reserva               POST /api/public/booking/<slug>/reservar
+   │        └→ crearReservaDirecta()  = MISMO Reservation Engine que las de OTA
+   │           · bloqueo de fila de la unidad + recomprobación (no se vende dos veces)
+   │           · huésped al CRM con upsertGuest (el mismo del webhook)
+   │           · líneas de desglose: alojamiento + limpieza
+   │           · eventBus reservation.created → automatizaciones
+   │           · comunicación de confirmación (solo si queda confirmada)
+   │           · push de disponibilidad a los canales
+   │
+   └─ 4. Pago (si el alojamiento lo exige)
+            └→ sesión de cobro CONTRA LA CUENTA DEL TENANT
+               · webhook único de la plataforma → HospitalityPayment (pagado)
+                 → reserva pending → confirmed → confirmación al huésped
 ```
 
-Reglas no negociables ya escritas en el plan: el Booking Engine **no** tiene motor propio,
-**un solo** origen de disponibilidad, y **Stripe Connect** (Express) para que el dinero
-llegue a la cuenta del tenant y no a la de Volkern.
+Reglas no negociables del plan, todas cumplidas: el Booking Engine **no** tiene motor propio,
+**un solo** origen de disponibilidad, y el dinero llega a la cuenta del tenant y no a la de
+Volkern (Volkern no retiene fondos). Los ids de la reserva directa son internos: el enlace de
+confirmación va firmado con HMAC, así que nadie lee una reserva ajena probando identificadores.
 
-Estado real: no existe ruta pública de reserva de Hospitality, ni configuración, ni embeds.
-`app/booking/[slug]` y `app/embed/booking` son de Real Estate (agenda citas con agentes),
-no reutilizables para reservar unidades.
+Estado real hoy: **ningún tenant tiene cuenta de cobro conectada** (0 filas en
+`hospitality_payment_accounts`), así que en la práctica la reserva directa funciona sin pago
+online —la cobra el alojamiento— y exigirlo está implementado pero rechaza la reserva con una
+causa clara hasta que la cuenta esté habilitada.
+
+**Verificado en producción el 2026-09-15** con la página del tenant Demo Real Estate
+(`/reservar/volkern-demo`, publica Villa Mar Azul): cotización de 3 noches que respeta el plan
+de tarifa (2.890/noche + 60 de limpieza = 8.730 €), reserva creada por el mismo motor
+(`Directa`, huésped al CRM, líneas que cuadran con el encabezado, importe en la divisa del
+tenant), **idempotencia** del formulario (mismo `solicitudId` → una sola reserva), **rechazo de
+doble venta** (409 al repetir unidad y fechas), enlace de confirmación firmado que se rechaza
+al alterar la firma, y **push real a la capa de conectividad** (`inventory` e
+`inventory_restrictions` en éxito, HTTP 200) para bloquear las fechas en los canales. Con
+`requierePagoOnline` activo y sin cuenta conectada, la API responde **503 con la causa** y no
+crea nada.
+
+`app/booking/[slug]` y `app/embed/booking` siguen siendo de Real Estate (agenda citas con
+agentes) y no se reutilizaron, tal y como decidió la FASE 3.
 
 ---
 
@@ -351,8 +411,7 @@ comunicaciones siguen en `pendiente`; **nada se ha enviado nunca al Ministerio**
 | # | Qué falta | Dónde está especificado |
 | --- | --- | --- |
 | 4 | **Stripe Connect (Express)** por tenant: alta KYC, cobro de la reserva directa, conciliación. Modelo `HospitalityPaymentAccount` creado, **0 código que lo use**; hoy los pagos se registran a mano (`POST .../payments`) | FASE 3.C |
-| 5 | **Booking Engine**: sección de configuración, previsualización, página pública, embeds, reserva pública con precio y pago | FASE 3.D |
-| 6 | **Precio de la reserva directa**: cálculo de noches × tarifa, extras, anticipo y política de cancelación | FASE 3.D |
+| 5 | **Cuenta de cobro (Stripe Connect)**: el alta KYC del tenant y el estado de la cuenta. El cobro ya está implementado y el estado se consulta en vivo, pero **ningún tenant tiene cuenta conectada**: mientras no la haya, exigir pago online rechaza la reserva en vez de dejar una que nadie puede pagar | FASE 3.C |
 | 7 | **Fetch Inventory y Fetch Rates**: la reconciliación solo compara reservas; no detecta divergencias de disponibilidad ni de tarifas entre Volkern y los canales | Plan maestro §14 |
 | 8 | **Reintentos controlados de push**: hoy un fallo se registra y no se reintenta (§30 lo permite, pero no hay estrategia por tipo de error) | §30 |
 
@@ -360,7 +419,7 @@ comunicaciones siguen en `pendiente`; **nada se ha enviado nunca al Ministerio**
 
 | # | Qué falta |
 | --- | --- |
-| 9 | **Permisos por acción (§27)**: ninguna ruta de Hospitality evalúa los permisos del rol |
+| 9 | **Permisos por acción en la interfaz**: el backend ya valida cada acción, pero el dashboard sigue mostrando botones (cancelar, cobrar, editar) a quien recibirá 403 |
 | 10 | **Exportación a PDF en Reportes**: hoy solo CSV |
 | 11 | **Sección técnica de Integraciones** dentro de Volkern: la observabilidad (último webhook, último push, último error) existe en `/api/admin/conectividad`, pero el plan la pide como vista administrativa del producto con estado **por propiedad** |
 | 12 | **Datos operativos de la demo**: 0 bloqueos, 0 tareas de limpieza y 0 incidencias en producción. Operaciones y el ciclo de limpieza no tienen nada que mostrar en una demo |
@@ -390,7 +449,7 @@ pricing dinámico, revenue management, POS, contabilidad hotelera completa, app 
 | Reconciliaciones | 8 ✓ / 2 ✗ (la última, hoy 07:00) |
 | Bloqueos / limpiezas / incidencias | 0 / 0 / 0 |
 | Pagos registrados / líneas de desglose | 4 / 10 |
-| Cuentas de cobro (Stripe) | 0 |
+| Cuentas de cobro (Stripe) | 0 → el cobro online de la reserva directa no se puede usar todavía |
 | Viajeros / comunicaciones al Ministerio | 5 (todos `datos_pendientes`) / 2 (ambas en `pendiente`, nunca enviadas) |
 | Configuración del registro | 0 filas (sin `codigoArrendador` ni certificado todavía) |
 | Plantillas de comunicación | confirmación, pre-llegada, check-in, post-salida y reseña por WhatsApp **activas**; reseña por email inactiva |
@@ -411,4 +470,5 @@ los 2 de reconciliación son del mismo día; desde entonces todo lo registrado e
 | Un solo motor de disponibilidad | cumplido, con guardia de tests |
 | El desglose cuadra: líneas = bruto = neto + comisiones | cumplido |
 | Aislamiento multi-tenant | cumplido, con tests |
-| La reserva directa del cliente llega al mismo motor y el dinero al tenant | **pendiente** (FASE 3.C y 3.D) |
+| La reserva directa del cliente llega al mismo motor | cumplido (entra por `crearReservaDirecta`, con evento, comunicación y push) |
+| El dinero de una reserva directa llega a la cuenta del tenant | implementado y sin verificar en vivo: **no hay ninguna cuenta conectada** |
