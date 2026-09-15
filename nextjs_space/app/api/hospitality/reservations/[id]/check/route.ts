@@ -15,7 +15,9 @@ export async function POST(req: NextRequest, ctx: Params) {
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
-    const sinPermiso = exigirPermisoHospitality(auth, 'operaciones.gestionar');
+    // Entregar las llaves tiene su propia llave: quien limpia una unidad no es,
+    // por eso, quien recibe al huésped.
+    const sinPermiso = exigirPermisoHospitality(auth, 'operaciones.checkin');
     if (sinPermiso) return sinPermiso;
 
     const { id } = await ctx.params;

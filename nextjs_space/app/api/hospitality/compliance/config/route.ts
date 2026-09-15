@@ -47,23 +47,22 @@ export async function GET(req: NextRequest) {
 // contraseña, y se valida antes de guardarlo: si la contraseña no lo abre o ya está
 // caducado, la respuesta lo dice (400) en lugar de aceptarlo y fallar en el primer
 // envío real.
+//
+// Quién puede hacerlo lo decide `integraciones.administrar`, no el nombre del rol:
+// configurar un canal de distribución y firmar ante el Ministerio en nombre del
+// propietario son dos actos distintos, y ahora son dos llaves distintas. Un rol
+// nuevo —el Anfitrión del catálogo, o uno hecho a medida— recibe este privilegio
+// concediéndolo, en lugar de tener que llamarse `Admin`.
 export async function PUT(req: NextRequest) {
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
-    const sinPermiso = exigirPermisoHospitality(auth, 'integraciones.gestionar');
+    const sinPermiso = exigirPermisoHospitality(auth, 'integraciones.administrar');
     if (sinPermiso) return sinPermiso;
 
     const cuerpo = await req.json().catch(() => null);
     if (!cuerpo || typeof cuerpo !== 'object') {
       return NextResponse.json({ error: 'Cuerpo inválido' }, { status: 400 });
-    }
-
-    if (auth.user?.role?.nombre && !['Superadmin', 'Admin'].includes(auth.user.role.nombre)) {
-      return NextResponse.json(
-        { error: 'Solo la administración de la cuenta puede cambiar las credenciales' },
-        { status: 403 }
-      );
     }
 
     const config = await guardarConfig(
@@ -94,19 +93,16 @@ export async function PUT(req: NextRequest) {
 }
 
 // DELETE /api/hospitality/compliance/config — retirar las credenciales guardadas.
+//
+// Retirar es tan delicado como instalar: quien pueda dejarse fuera el certificado
+// de la entidad se queda sin poder comunicar al Ministerio. La misma llave para
+// las dos cosas.
 export async function DELETE(req: NextRequest) {
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
-    const sinPermiso = exigirPermisoHospitality(auth, 'integraciones.gestionar');
+    const sinPermiso = exigirPermisoHospitality(auth, 'integraciones.administrar');
     if (sinPermiso) return sinPermiso;
-
-    if (auth.user?.role?.nombre && !['Superadmin', 'Admin'].includes(auth.user.role.nombre)) {
-      return NextResponse.json(
-        { error: 'Solo la administración de la cuenta puede retirar las credenciales' },
-        { status: 403 }
-      );
-    }
 
     const config = await borrarCredenciales(
       auth.tenant!.id,
