@@ -45,6 +45,12 @@ export interface ApiKeyAuthResult {
     email: string;
     tenantId: string | null;
     roleId: string | null;
+    /**
+     * El contacto del CRM al que está vinculado el usuario, cuando es el huésped
+     * de una reserva (`rol Huésped`, §20). Es lo que decide qué reservas ve: sin
+     * él, «solo lo mío» no tiene sujeto y no se ve ninguna.
+     */
+    contactId?: string | null;
     role?: {
       id: string;
       nombre: string;
@@ -235,6 +241,9 @@ export async function validateApiKey(
         email: dbApiKey.user.email,
         tenantId: dbApiKey.user.tenantId,
         roleId: dbApiKey.user.roleId,
+        // Sin esto, el rol Huésped no sabe de qué contacto es y no ve ninguna
+        // reserva: el ámbito `propias` se resuelve con este campo.
+        contactId: dbApiKey.user.contactId,
         role: dbApiKey.user.role,
         accountType: dbApiKey.tenant.accountType,
         parentId: dbApiKey.tenant.parentId
@@ -338,6 +347,9 @@ export async function authenticateRequest(
           email: user.email,
           tenantId: user.tenantId,
           roleId: user.roleId,
+          // El vínculo con el contacto del CRM viaja con el usuario: es lo que
+          // convierte el rol Huésped en «ve solo las reservas de este huésped».
+          contactId: user.contactId,
           role: user.role,
           accountType: user.tenant.accountType
         },
@@ -380,6 +392,7 @@ export async function authenticateRequest(
           let userData: {
             id: string; name: string | null; email: string;
             tenantId: string | null; roleId: string | null;
+            contactId?: string | null;
             role?: { id: string; nombre: string; permisos?: unknown } | null;
           } | null = null;
 
@@ -395,6 +408,8 @@ export async function authenticateRequest(
               email: customerUser.email,
               tenantId: customerUser.tenantId,
               roleId: null,
+              // Un cliente de la app móvil no es el huésped de una reserva.
+              contactId: null,
               role: { id: '', nombre: customerUser.role, permisos: null }
             };
           } else {
@@ -402,6 +417,7 @@ export async function authenticateRequest(
               where: { id: decoded.uid },
               select: {
                 id: true, name: true, email: true, tenantId: true, roleId: true,
+                contactId: true,
                 role: { select: { id: true, nombre: true, permisos: true } }
               }
             });
@@ -428,6 +444,7 @@ export async function authenticateRequest(
               email: userData.email,
               tenantId: userData.tenantId,
               roleId: userData.roleId,
+              contactId: userData.contactId ?? null,
               role: userData.role,
               accountType: tenant.accountType
             },
