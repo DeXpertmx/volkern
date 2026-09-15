@@ -51,6 +51,11 @@ export function capacidadesQueHereda(
   permisos: Permisos | null | undefined,
   nombreRol?: string | null
 ): CapacidadHospitality[] {
+  // Superadmin pasa cualquier comprobación por su propio bypass, así que copiarle
+  // claves no le daría nada: solo escribiría en el rol más privilegiado de la
+  // plataforma sin motivo. No se toca.
+  if ((nombreRol || '').trim() === 'Superadmin') return [];
+
   const heredadas: CapacidadHospitality[] = [];
 
   if ((nombreRol || '').trim() === 'Admin') {
