@@ -128,6 +128,10 @@ export default function HospitalityReservasPage() {
   const { puede } = useCapacidadesHospitality();
   const [loading, setLoading] = useState(true);
   const [reservas, setReservas] = useState<Reservation[]>([]);
+  // Lo que la API dice cuando no hay nada que enseñar por una razón que no es
+  // «no hay reservas»: hoy, el huésped cuyo usuario aún no está vinculado a su
+  // contacto. Sin esto vería una lista vacía y creería que no tiene reservas.
+  const [avisoReservas, setAvisoReservas] = useState<string | null>(null);
   const [properties, setProperties] = useState<Property[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   // Moneda de reporte del tenant, tal como la devuelve la API.
@@ -169,6 +173,7 @@ export default function HospitalityReservasPage() {
       if (rRes.ok) {
         const d = await rRes.json();
         setReservas(d.reservations || []);
+        setAvisoReservas(typeof d.aviso === 'string' ? d.aviso : null);
         if (d.moneda) setMonedaTenant(d.moneda);
       }
       if (pRes.ok) {
@@ -377,7 +382,7 @@ export default function HospitalityReservasPage() {
             <CalendarX2 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <p className="text-lg font-semibold">Sin reservas</p>
             <p className="text-sm text-muted-foreground mb-4">
-              No hay reservas que coincidan con los filtros
+              {avisoReservas ?? 'No hay reservas que coincidan con los filtros'}
             </p>
             <AccionHospitality capacidad="reservas.crear">
               <Button onClick={abrirNueva}>
