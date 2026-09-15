@@ -92,7 +92,7 @@ jobs:
             fi
           done
 
-      - name: Run integration & deploy guards (scopes, webhooks, UI stubs, deploy scripts, clasificador, dinero)
+      - name: Run integration & deploy guards (scopes, webhooks, UI stubs, deploy scripts, clasificador, dinero, base de datos)
         # Guardias de integración, ejecutadas explícitamente (y antes de la suite
         # completa) para que corran en cada push aunque algún día se filtre la
         # invocación principal de vitest:
@@ -113,7 +113,10 @@ jobs:
         #     contener un código de divisa o un formato de dinero; el resto escribe
         #     los importes con `formatearImporte` (Hospitality ya sin deuda, el resto
         #     con inventario que solo puede bajar)
-        run: npx vitest run tests/api-key-scopes.test.ts tests/outgoing-webhook-events-guard.test.ts tests/client-catalog-stubs-guard.test.ts tests/deploy-docker-templates-guard.test.ts tests/deploy-scripts-syntax-guard.test.ts tests/intent-determinista-guard.test.ts tests/moneda-plataforma-guard.test.ts
+        #   - guardia-base-datos-produccion: la suite se detiene si DATABASE_URL apunta
+        #     a la base de producción (el 11-ago-2026 una tanda de tests dejó 9 tenants
+        #     y 14 claves de prueba dentro de la base real)
+        run: npx vitest run tests/api-key-scopes.test.ts tests/outgoing-webhook-events-guard.test.ts tests/client-catalog-stubs-guard.test.ts tests/deploy-docker-templates-guard.test.ts tests/deploy-scripts-syntax-guard.test.ts tests/intent-determinista-guard.test.ts tests/moneda-plataforma-guard.test.ts tests/guardia-base-datos-produccion.test.ts
 
       - name: Run unit tests
         run: npx vitest run
