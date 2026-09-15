@@ -33,10 +33,12 @@ Módulo de plan: `hospitality` (`lib/plans.ts`), cuenta requerida: `BUSINESS`.
 | 12 | Automatizaciones | `/dashboard/hospitality/automatizaciones` | existe |
 | 13 | Finanzas | `/dashboard/hospitality/finanzas` | existe |
 | 14 | Reportes | `/dashboard/hospitality/reportes` | existe |
+| 15 | Equipo y roles | `/dashboard/hospitality/roles` | existe |
 
 Check-in/out, mantenimiento y la configuración de conectividad son **funcionalidades dentro
 de estas áreas**, no entradas de menú propias (decisión registrada en
-`hospitality-booking-payments-plan.md` §1).
+`hospitality-booking-payments-plan.md` §1). **Equipo y roles** sí es una entrada: no es una
+función de ninguna otra área, es la decisión de quién hace qué, que no pertenece a ninguna.
 
 > Las 14 secciones del plan de FASE 3 tienen ya ruta y página: la última en llegar fue
 > **Booking Engine**, que además publica una página pública por tenant (`/reservar/<slug>`) y
@@ -44,7 +46,7 @@ de estas áreas**, no entradas de menú propias (decisión registrada en
 
 ---
 
-## 2. Modelos de datos (20 modelos, 20 tablas)
+## 2. Modelos de datos (20 modelos, 20 tablas, más `User.contactId`)
 
 Todos cuelgan de `Tenant` con `onDelete: Cascade`. Los identificadores externos nunca son
 la clave interna.
@@ -101,7 +103,7 @@ la clave interna.
 
 ## 3. Capa de aplicación
 
-### Rutas API (39 en `/api/hospitality` + 5 en `/api/admin/conectividad` + 3 de cron + 5 públicas)
+### Rutas API (40 en `/api/hospitality` + 5 en `/api/admin/conectividad` + 3 de cron + 5 públicas)
 
 | Dominio | Rutas |
 | --- | --- |
@@ -148,23 +150,76 @@ de permisos de la plataforma, y las rutas llaman a `exigirPermisoHospitality()`.
 la respuesta es **403 con la causa** (`permisoRequerido: 'hospitality_reservas.cancelar'`),
 antes de tocar la base.
 
-Siete módulos de Hospitality, concedibles desde Equipo → Roles y permisos:
-`hospitality_reservas` (ver / crear / editar / **cancelar**), `hospitality_operaciones`,
-`hospitality_mantenimiento`, `hospitality_integraciones`, `hospitality_finanzas`,
-`hospitality_comunicaciones` y `hospitality_automatizaciones`. La única ruta exenta es el
-**webhook del proveedor**, que llega con Basic Auth y no con usuario de Volkern.
+Ocho módulos de Hospitality, concedibles desde Equipo → Roles y permisos:
+`hospitality_reservas` (ver / crear / editar / **cancelar** / **documento_completo**),
+`hospitality_operaciones` (ver / gestionar / **checkin**), `hospitality_mantenimiento`,
+`hospitality_integraciones` (ver / gestionar / **administrar**), `hospitality_finanzas`,
+`hospitality_comunicaciones`, `hospitality_automatizaciones` y
+`hospitality_misreservas` (la puerta del huésped). La única ruta exenta es el **webhook del
+proveedor**, que llega con Basic Auth y no con usuario de Volkern.
+
+**Ninguna puerta se decide por el nombre del rol.** Había dos que sí —instalar el
+certificado de la entidad y ver los documentos sin enmascarar se concedían a quien se
+llamara «Admin»—, y eso tenía dos consecuencias: un rol nuevo no podía recibirlas por mucho
+que el administrador las concediera, y renombrar «Admin» habría dejado a la cuenta sin
+firmar ante el Ministerio. Ahora son capacidades (`integraciones.administrar` y
+`viajeros.documento_completo`), con un test que recorre `lib/hospitality` y
+`app/api/hospitality` y falla si vuelve a aparecer una decisión por nombre.
 
 Al empezar a comprobar, los roles existentes no tenían claves de Hospitality: el script
 idempotente `scripts/backfill-hospitality-permissions.ts` les concede el conjunto completo
 (lo que ya ejercían de hecho) para que nadie pierda acceso, y el administrador recorta
-después. Queda pendiente ocultar en la interfaz las acciones que el rol no puede hacer.
+después.
+
+La interfaz decide con **la misma regla**: `lib/permissions-core.ts` contiene la regla sin
+acceso a datos, `lib/hospitality/capacidades.ts` traduce capacidad → módulo + acción y
+`puedePorRol()` la resuelve. El navegador la usa a través de
+`hooks/use-capacidades-hospitality.ts` (lee el rol de `/api/users/me` una sola vez y lo
+cachea) y ninguna acción de escritura del dashboard se dibuja fuera de
+`<AccionHospitality capacidad="…">`, que la oculta cuando el rol no la tiene. Ocultar y no
+deshabilitar: un botón gris permanente no explica nada, y para saber qué falta está el 403,
+que nombra el permiso exacto.
+
+### Roles del producto
+El módulo tiene su propio vocabulario, definido una sola vez en `lib/hospitality/roles.ts`
+y aplicable desde **Hospitality → Equipo y roles**:
+
+| Rol | Qué es |
+| --- | --- |
+| **Anfitrión** | Administra la propiedad entera, incluido su certificado y quién entra al módulo |
+| **Agente** | La empresa administradora: opera, cobra y resuelve; no firma ni reparte permisos |
+| **Mantenimiento** | Incidencias y el día de la propiedad para poder entrar a trabajar |
+| **Limpieza** | Llegadas, salidas y marcar limpiezas. No entrega llaves, no ve documentos ni dinero |
+| **Huésped** | El cliente: solo las reservas de su contacto. Sin vínculo, ninguna |
+
+Aplicar el catálogo **solo añade** lo que falte (nunca retira, así que repetirlo no puede
+dejar a nadie sin acceso); recortar es `restablecer`, y se pide a propósito. Repartir
+permisos de Hospitality es la capacidad `equipo.roles`, no «editar el equipo»: un rol que
+toca Hospitality no lo cambia, ni lo renombra, ni lo borra quien no la tenga. Los nombres
+del vocabulario no se renombran —hay textos y reglas que los nombran— pero sus capacidades
+sí se ajustan desde la matriz.
+
+Al convertir los privilegios por nombre en permisos, ningún rol pierde lo que tenía:
+`scripts/rollout-hospitality-roles.ts` (idempotente, solo aditivo) copia a permisos lo que
+hasta ahora se concedía por el nombre del rol, con las reglas y sus pruebas en
+`lib/hospitality/roles-rollout.ts`.
+
+El **rol Huésped no es el rol de reservas recortado**: tiene `hospitality_misreservas.ver`,
+no `reservas.ver`. Si compartieran capacidad, dar acceso a un huésped sería abrirle las
+reservas de toda la cuenta y lo único que lo evitaría sería un filtro que la siguiente ruta
+puede olvidar. El filtro por `User.contactId` entra en la consulta, y la reserva de otro
+contacto responde 404 igual que una inexistente. Sin vínculo: cero reservas, nunca todas.
 
 ### Tests
-48 archivos bajo `tests/` con prefijo `hospitality-`, `ses-` o `viajero-` (motor de
+Los archivos bajo `tests/` con prefijo `hospitality-`, `ses-` o `viajero-` (motor de
 disponibilidad con guardia, calendario, reservas, finanzas, reportes, reserva directa,
 conectividad, reconciliación, automatizaciones, viajeros, certificado y CLI del planning),
-más tres de permisos: catálogo y resolución, guardia que falla si una ruta deja de exigir
-capacidad y pruebas de ruta con el 403 real.
+más los de permisos: catálogo y resolución, guardia que falla si una ruta deja de exigir
+capacidad, pruebas de ruta con el 403 real, guardia de que ninguna acción que escribe del
+dashboard se dibuja fuera de `<AccionHospitality>`, pruebas de que el componente oculta la
+acción cuando el rol no la tiene, y las del catálogo de roles: qué concede cada uno, que las
+capacidades privilegiadas no viajen en el retrollenado, la herencia de privilegios, la
+fusión al aplicar y el escaneo de decisiones por nombre de rol.
 
 ---
 
@@ -419,7 +474,7 @@ comunicaciones siguen en `pendiente`; **nada se ha enviado nunca al Ministerio**
 
 | # | Qué falta |
 | --- | --- |
-| 9 | **Permisos por acción en la interfaz**: el backend ya valida cada acción, pero el dashboard sigue mostrando botones (cancelar, cobrar, editar) a quien recibirá 403 |
+| 9 | **El rol se resuelve una vez por carga**: el hook cachea la respuesta de `/api/users/me`, así que un cambio de permisos hecho mientras alguien tiene la pestaña abierta no se refleja hasta que recarga (el backend, en cambio, decide en cada petición) |
 | 10 | **Exportación a PDF en Reportes**: hoy solo CSV |
 | 11 | **Sección técnica de Integraciones** dentro de Volkern: la observabilidad (último webhook, último push, último error) existe en `/api/admin/conectividad`, pero el plan la pide como vista administrativa del producto con estado **por propiedad** |
 | 12 | **Datos operativos de la demo**: 0 bloqueos, 0 tareas de limpieza y 0 incidencias en producción. Operaciones y el ciclo de limpieza no tienen nada que mostrar en una demo |
