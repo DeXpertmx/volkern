@@ -7,6 +7,7 @@ import { withTenantAuth } from '@/lib/api-key-auth';
 import { hasPermission, logAuditAction } from '@/lib/permissions';
 import { validateLimit } from '@/lib/limits';
 import { incrementUsage } from '@/lib/subscription';
+import { ROL_HOSPITALITY_POR_NOMBRE } from '@/lib/hospitality/roles';
 import bcrypt from 'bcryptjs';
 
 // GET /api/users - Listar usuarios del tenant (Identidad Global - Control Plane)
@@ -97,11 +98,6 @@ export const POST = withTenantAuth(async (req, auth) => {
     const tenantId = auth.tenant!.id;
     const currentUser = auth.user!;
 
-    // Verificar permiso
-    if (!hasPermission(currentUser as any, 'equipo', 'invitar')) {
-      return NextResponse.json({ error: 'Sin permiso para invitar usuarios' }, { status: 403 });
-    }
-
     // Validar límite de usuarios (ahora consulta la DB Global)
     const limitCheck = await validateLimit(tenantId, 'users');
     if (!limitCheck.allowed) {
@@ -118,11 +114,24 @@ export const POST = withTenantAuth(async (req, auth) => {
       );
     }
 
+    // Dar acceso a un huésped no es invitar al equipo, y por eso no pide la
+    // misma llave: pide la que reparte los roles de Hospitality (`equipo.roles`),
+    // que es la del Anfitrión. Sin esta distinción, un Anfitrión —que administra
+    // el alojamiento pero no la plantilla— no podría dar de alta a su huésped, y
+    // el rol Huésped seguiría siendo una promesa que nadie puede cumplir.
+    const esAccesoHuesped = !!contactId;
+
+    if (!esAccesoHuesped && !hasPermission(currentUser as any, 'equipo', 'invitar')) {
+      return NextResponse.json({ error: 'Sin permiso para invitar usuarios' }, { status: 403 });
+    }
+
     // `contactId` convierte la cuenta en el acceso de un huésped: el usuario pasa
-    // a ver únicamente las reservas de ese contacto. Crearlo no es «invitar al
-    // equipo», es repartir el acceso al alojamiento, así que pide la llave que
-    // reparte los roles de Hospitality y no la de invitar.
+    // a ver únicamente las reservas de ese contacto.
     let contactoVinculado: string | undefined;
+
+    // Lógica de Auto-Rol por Departamento
+    let effectiveRoleId = roleId;
+
     if (contactId) {
       if (!hasPermission(currentUser as any, 'equipo', 'roles')) {
         return NextResponse.json(
@@ -142,12 +151,32 @@ export const POST = withTenantAuth(async (req, auth) => {
         return NextResponse.json({ error: 'El contacto no existe en esta cuenta' }, { status: 404 });
       }
       contactoVinculado = contacto.id;
-    }
 
-    // Lógica de Auto-Rol por Departamento
-    let effectiveRoleId = roleId;
-    
-    if (!effectiveRoleId && department) {
+      // Un acceso de huésped es una cuenta con el rol Huésped, y ninguna otra.
+      // `equipo.roles` es la llave de Hospitality: sin esta comprobación, quien
+      // la tuviera podría usar esta puerta para fabricar un administrador de la
+      // cuenta entera pasando un `contactId`.
+      const rolHuesped = await prisma.role.findFirst({
+        where: { tenantId, nombre: ROL_HOSPITALITY_POR_NOMBRE['Huésped'].nombre },
+        select: { id: true },
+      });
+      if (!rolHuesped) {
+        return NextResponse.json(
+          {
+            error:
+              'Todavía no existe el rol Huésped en esta cuenta: aplica el catálogo de roles de Hospitality primero',
+          },
+          { status: 409 }
+        );
+      }
+      if (effectiveRoleId && effectiveRoleId !== rolHuesped.id) {
+        return NextResponse.json(
+          { error: 'Un acceso de huésped solo puede tener el rol Huésped' },
+          { status: 400 }
+        );
+      }
+      effectiveRoleId = rolHuesped.id;
+    } else if (!effectiveRoleId && department) {
       const roleName = isDepartmentAdmin ? `Director de ${department}` : `Operador de ${department}`;
       
       // Buscar si el rol ya existe para este tenant
