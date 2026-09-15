@@ -202,6 +202,17 @@ describe('el paso que hereda los privilegios que se tenían por nombre', () => {
     expect(capacidadesQueHereda({ hospitality_reservas: { ver: true } }, 'Anfitrión')).toEqual([]);
   });
 
+  it('no escribe nada en Superadmin, que ya pasa cualquier comprobación', () => {
+    // Copiarle claves no le daría nada y tocaría el rol más privilegiado de la
+    // plataforma sin motivo.
+    expect(
+      capacidadesQueHereda(
+        { equipo: { editar: true }, hospitality_operaciones: { gestionar: true } },
+        'Superadmin'
+      )
+    ).toEqual([]);
+  });
+
   it('quien podía limpiar hereda el check-in, que pedía el mismo permiso', () => {
     expect(capacidadesQueHereda({ hospitality_operaciones: { gestionar: true } })).toContain(
       'operaciones.checkin'
