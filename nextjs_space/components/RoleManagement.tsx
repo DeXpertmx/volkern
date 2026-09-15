@@ -46,6 +46,10 @@ const MODULES = [
   { id: 'hospitality_finanzas', name: 'Hospitality · Finanzas y reportes', icon: 'Receipt' },
   { id: 'hospitality_comunicaciones', name: 'Hospitality · Comunicaciones al huésped', icon: 'Send' },
   { id: 'hospitality_automatizaciones', name: 'Hospitality · Automatizaciones', icon: 'Zap' },
+  // El huésped no ve el módulo de reservas recortado: ve el suyo. Es un módulo
+  // aparte para que conceder «ver reservas» —las de la cuenta entera— nunca sea
+  // el camino para dar acceso a un huésped.
+  { id: 'hospitality_misreservas', name: 'Hospitality · Sus reservas (rol Huésped)', icon: 'User' },
 ]
 
 const ACTIONS = [
@@ -58,6 +62,14 @@ const ACTIONS = [
   { id: 'eliminar', name: 'Eliminar' },
   { id: 'exportar', name: 'Exportar' },
   { id: 'gestionar', name: 'Gestionar' },
+  // Entregar las llaves no es limpiar la habitación, configurar un canal no es
+  // firmar en nombre del propietario, ni repartir permisos es gestionar el
+  // equipo. Cada una de estas es su propia casilla, con su propio nombre, para
+  // que el Anfitrión pueda concederla sin tener que conceder lo de al lado.
+  { id: 'checkin', name: 'Check-in' },
+  { id: 'administrar', name: 'Administrar' },
+  { id: 'documento_completo', name: 'Ver documentos' },
+  { id: 'roles', name: 'Roles' },
 ]
 
 

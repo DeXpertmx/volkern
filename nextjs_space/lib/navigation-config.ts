@@ -286,7 +286,8 @@ export const HUBS: HubConfig[] = [
       '/dashboard/hospitality/automatizaciones',
       '/dashboard/hospitality/onboarding',
       '/dashboard/hospitality/finanzas',
-      '/dashboard/hospitality/reportes'
+      '/dashboard/hospitality/reportes',
+      '/dashboard/hospitality/roles'
     ],
     items: [
       { name: 'Inicio', href: '/dashboard/hospitality', icon: Home, planModule: 'hospitality', description: 'Propiedades, unidades y resumen del módulo' },
@@ -304,6 +305,7 @@ export const HUBS: HubConfig[] = [
       { name: 'Automatizaciones', href: '/dashboard/hospitality/automatizaciones', icon: Zap, planModule: 'hospitality', description: 'Reglas sobre el Automation Engine: eventos → tareas, limpiezas y mensajes' },
       { name: 'Finanzas', href: '/dashboard/hospitality/finanzas', icon: Wallet, planModule: 'hospitality', description: 'Cobros, comisiones, bruto, neto y margen por reserva y por canal' },
       { name: 'Reportes', href: '/dashboard/hospitality/reportes', icon: BarChart3, planModule: 'hospitality', description: 'Ocupación, ADR, RevPAR, mix de canales y resultado por propiedad' },
+      { name: 'Equipo y roles', href: '/dashboard/hospitality/roles', icon: UserCog, planModule: 'hospitality', description: 'Anfitrión, Agente, Mantenimiento, Limpieza y Huésped: quién hace qué en la propiedad' },
     ]
   },
   {
