@@ -356,6 +356,43 @@ export function monedaEscritura(...valores: Array<string | null | undefined>): s
 }
 
 /**
+ * Divisas cuya unidad mínima es la unidad entera, sin céntimos.
+ *
+ * Es un hecho de cada divisa —el yen no se divide en centésimas— y no una
+ * decisión del cobro, así que vive aquí y no en la pasarela: quien cobra pide a
+ * este módulo cuántas unidades tiene que enviar en vez de multiplicar por cien a
+ * mano. Multiplicar a ciegas cobra cien veces de más en yenes, y ese error solo
+ * se ve cuando llega el primer cliente japonés.
+ */
+const MONEDAS_SIN_DECIMALES = new Set(['JPY', 'CLP', 'KRW', 'VND', 'ISK', 'PYG', 'XOF', 'XAF']);
+
+/** ¿La divisa se cobra en unidades enteras? */
+export function monedaSinDecimales(codigo: string | null | undefined): boolean {
+  return MONEDAS_SIN_DECIMALES.has((codigo || '').trim().toUpperCase());
+}
+
+/**
+ * Importe en la unidad mínima de la divisa, que es como lo piden las pasarelas
+ * de pago: `1235.40` → `123540`. En una divisa sin decimales, `1235` → `1235`.
+ */
+export function importeEnUnidadMinima(valor: number, codigo: string | null | undefined): number {
+  if (!Number.isFinite(valor)) return 0;
+  return monedaSinDecimales(codigo) ? Math.round(valor) : Math.round(valor * 100);
+}
+
+/**
+ * Vuelta atrás de `importeEnUnidadMinima`: de la unidad mínima al importe.
+ *
+ * La usan los webhooks de pago, que reciben lo cobrado en unidades mínimas: sin
+ * esto, un cobro de 1.235,40 se registraría como 123.540 y el informe financiero
+ * diría que ese alojamiento facturó cien veces más.
+ */
+export function importeDesdeUnidadMinima(valor: number, codigo: string | null | undefined): number {
+  if (!Number.isFinite(valor)) return 0;
+  return monedaSinDecimales(codigo) ? Math.round(valor) : Math.round(valor) / 100;
+}
+
+/**
  * Número con la convención de la plataforma, sin símbolo de divisa.
  *
  * Existe para los contadores y las magnitudes que **no son dinero** —número de

@@ -124,7 +124,13 @@ export async function resolveMapping(payload: WebhookReservationPayload) {
  */
 export async function upsertGuest(
   tenantId: string,
-  payload: WebhookReservationPayload
+  payload: WebhookReservationPayload,
+  /**
+   * Cliente de Prisma sobre el que escribir. El Booking Engine pasa el de su
+   * transacción para que el huésped y su reserva se escriban juntos: si la
+   * reserva no llega a crearse, no queda un contacto suelto en el CRM.
+   */
+  cliente: typeof prisma = prisma
 ): Promise<string | null> {
   const g = payload.guest;
   const roomGuestName = firstRoom(payload)?.guestName;
@@ -141,18 +147,18 @@ export async function upsertGuest(
   // Buscar contacto existente del tenant por email o teléfono.
   let contact = null;
   if (email) {
-    contact = await prisma.contact.findFirst({
+    contact = await cliente.contact.findFirst({
       where: { tenantId, email },
     });
   }
   if (!contact && telefono) {
-    contact = await prisma.contact.findFirst({
+    contact = await cliente.contact.findFirst({
       where: { tenantId, telefono },
     });
   }
 
   if (contact) {
-    return prisma.contact
+    return cliente.contact
       .update({
         where: { id: contact.id },
         data: {
@@ -166,7 +172,7 @@ export async function upsertGuest(
       .then((c) => c.id);
   }
 
-  return prisma.contact
+  return cliente.contact
     .create({
       data: {
         tenantId,
