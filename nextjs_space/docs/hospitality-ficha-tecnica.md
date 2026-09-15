@@ -203,8 +203,20 @@ Al convertir los privilegios por nombre en permisos, ningún rol pierde lo que t
 `scripts/rollout-roles.ts` (idempotente, solo aditivo) copia a permisos lo que hasta ahora se
 concedía por el nombre del rol, con las reglas y sus pruebas en
 `lib/hospitality/roles-rollout.ts` (capacidades del módulo) y `lib/roles-rollout.ts`
-(plataforma: la llave `configuracion.gestionar` para los roles que administraban por
-llamarse «Admin»).
+(plataforma), que hereda dos cosas de naturaleza distinta:
+
+- **Acceso.** `configuracion.gestionar` para los roles que administraban por llamarse «Admin»
+  (modo de compliance, marca blanca y cockpit financiero consolidado).
+- **Alcance.** `leads.ver_todos` para los roles que veían el pipeline entero; el alcance de
+  los datos no se hereda por llamarse «Admin», se hereda por haberlo tenido. Antes el
+  pipeline se recortaba a quien se llamara «Sales Agent» o «Support», así que su etiqueta era
+  la credencial: renombrarlos concedía los leads de toda la cuenta y crear otro rol con ese
+  nombre los recortaba sin que nadie lo pidiera. Ahora `leads.ver` abre el pipeline y
+  `leads.ver_todos` decide si se ve entero o solo lo asignado a uno mismo.
+
+Esa última conversión cierra el alcance de `tests/rolename-authorization-guard.test.ts`: la
+guardia recorre `lib/`, `app/api/` y `components/` y **ya no necesita ninguna excepción por
+línea**, porque la última —la del CRM— es un permiso.
 
 El **rol Huésped no es el rol de reservas recortado**: tiene `hospitality_misreservas.ver`,
 no `reservas.ver`. Si compartieran capacidad, dar acceso a un huésped sería abrirle las
