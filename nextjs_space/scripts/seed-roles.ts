@@ -32,8 +32,11 @@ const ROLE_PERMISSIONS = {
     pages: { ver: true, crear: true, editar: true, eliminar: true, publicar: true, gestionar: true },
     whitelabel: { ver: true, editar: true, gestionar: true },
   },
+  // El alcance del pipeline es una llave aparte (`leads.ver_todos`): Admin ve
+  // todo el pipeline de la cuenta, y quien no la lleve verá solo sus leads
+  // asignados —el caso de «Sales Agent» y «Support», que no la llevan—.
   Admin: {
-    leads: { ver: true, crear: true, editar: true, eliminar: true, asignar: true, exportar: true },
+    leads: { ver: true, crear: true, editar: true, eliminar: true, asignar: true, exportar: true, ver_todos: true },
     citas: { ver: true, crear: true, editar: true, eliminar: true, gestionar: true, exportar: true },
     pipeline: { ver: true, crear: true, editar: true, eliminar: true, gestionar: true, exportar: true },
     contactos: { ver: true, crear: true, editar: true, eliminar: true, exportar: true },
