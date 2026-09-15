@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { AccionHospitality } from '@/components/hospitality/AccionHospitality';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -942,14 +943,16 @@ export default function HospitalityCalendar() {
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
                           <span className="text-xs text-muted-foreground">{layoutBlocks.length} res.</span>
-                          <button
-                            type="button"
-                            title="Bloquear fechas de esta unidad"
-                            onClick={() => openBlockForm(unit)}
-                            className="rounded p-1 text-muted-foreground hover:bg-amber-100 hover:text-amber-700"
-                          >
-                            <Ban className="h-3.5 w-3.5" />
-                          </button>
+                          <AccionHospitality capacidad="reservas.crear">
+                            <button
+                              type="button"
+                              title="Bloquear fechas de esta unidad"
+                              onClick={() => openBlockForm(unit)}
+                              className="rounded p-1 text-muted-foreground hover:bg-amber-100 hover:text-amber-700"
+                            >
+                              <Ban className="h-3.5 w-3.5" />
+                            </button>
+                          </AccionHospitality>
                         </div>
                       </div>
                       {days.map((d) => (
@@ -1008,6 +1011,7 @@ export default function HospitalityCalendar() {
                         const endCol = end < 0 ? days.length : end;
                         if (endCol <= 0 || startCol >= days.length || endCol <= startCol) return null;
                         return (
+                          <AccionHospitality capacidad="reservas.editar">
                           <button
                             key={`block-${block.id}`}
                             type="button"
@@ -1034,6 +1038,7 @@ export default function HospitalityCalendar() {
                               </span>
                             </div>
                           </button>
+                          </AccionHospitality>
                         );
                       })}
                     </div>
@@ -1194,6 +1199,7 @@ export default function HospitalityCalendar() {
                       {regCargando ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <UserRound className="h-4 w-4 mr-1" />}
                       Ver viajeros
                     </Button>
+                    <AccionHospitality capacidad="reservas.editar">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button size="sm" variant="outline" disabled={regPidiendo}>
@@ -1217,6 +1223,8 @@ export default function HospitalityCalendar() {
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
+                    </AccionHospitality>
+                    <AccionHospitality capacidad="comunicaciones.enviar">
                     <Button
                       size="sm"
                       variant="outline"
@@ -1237,6 +1245,7 @@ export default function HospitalityCalendar() {
                       {regEnviando === 'viajeros' ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Send className="h-4 w-4 mr-1" />}
                       Enviar PV
                     </Button>
+                    </AccionHospitality>
                   </div>
 
                   {regForm && (
@@ -1280,10 +1289,12 @@ export default function HospitalityCalendar() {
                       </p>
                       <div className="flex justify-end gap-2">
                         <Button size="sm" variant="ghost" onClick={() => setRegForm(false)}>Cancelar</Button>
-                        <Button size="sm" disabled={regGuardando} onClick={guardarViajeroRapido}>
-                          {regGuardando ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-                          Añadir viajero
-                        </Button>
+                        <AccionHospitality capacidad="reservas.editar">
+                          <Button size="sm" disabled={regGuardando} onClick={guardarViajeroRapido}>
+                            {regGuardando ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                            Añadir viajero
+                          </Button>
+                        </AccionHospitality>
                       </div>
                     </div>
                   )}
@@ -1343,10 +1354,12 @@ export default function HospitalityCalendar() {
                                   <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setRegEditId(null); setRegEdit(null); }}>
                                     Cancelar
                                   </Button>
-                                  <Button size="sm" className="h-7 text-xs" disabled={regEditGuardando} onClick={guardarEdicionViajero}>
-                                    {regEditGuardando ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
-                                    Guardar
-                                  </Button>
+                                  <AccionHospitality capacidad="reservas.editar">
+                                    <Button size="sm" className="h-7 text-xs" disabled={regEditGuardando} onClick={guardarEdicionViajero}>
+                                      {regEditGuardando ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
+                                      Guardar
+                                    </Button>
+                                  </AccionHospitality>
                                 </div>
                               </div>
                             );
@@ -1360,24 +1373,28 @@ export default function HospitalityCalendar() {
                               </span>
                               <span className="flex items-center gap-1 whitespace-nowrap">
                                 {!completo && (
+                                  <AccionHospitality capacidad="reservas.editar">
+                                    <button
+                                      type="button"
+                                      title="Completar datos del viajero"
+                                      className="text-primary hover:underline font-medium"
+                                      onClick={() => abrirEdicionViajero(v)}
+                                    >
+                                      Completar
+                                    </button>
+                                  </AccionHospitality>
+                                )}
+                                <AccionHospitality capacidad="reservas.editar">
                                   <button
                                     type="button"
-                                    title="Completar datos del viajero"
-                                    className="text-primary hover:underline font-medium"
-                                    onClick={() => abrirEdicionViajero(v)}
+                                    title={regRetirandoId === v.id ? 'Retirando…' : 'Retirar del registro'}
+                                    disabled={regRetirandoId === v.id}
+                                    className="text-muted-foreground hover:text-red-600 disabled:opacity-50"
+                                    onClick={() => retirarViajero(v)}
                                   >
-                                    Completar
+                                    {regRetirandoId === v.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
                                   </button>
-                                )}
-                                <button
-                                  type="button"
-                                  title={regRetirandoId === v.id ? 'Retirando…' : 'Retirar del registro'}
-                                  disabled={regRetirandoId === v.id}
-                                  className="text-muted-foreground hover:text-red-600 disabled:opacity-50"
-                                  onClick={() => retirarViajero(v)}
-                                >
-                                  {regRetirandoId === v.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
-                                </button>
+                                </AccionHospitality>
                                 <span title={completo ? 'Datos completos' : 'Le faltan datos obligatorios'}>
                                   {completo ? '✅' : '🟡'}
                                 </span>
@@ -1448,6 +1465,7 @@ export default function HospitalityCalendar() {
 
               {/* Acciones operativas (§18) */}
               {selected.estado === 'confirmed' && (
+                <AccionHospitality capacidad="operaciones.checkin">
                 <div className="space-y-2">
                   <Button
                     className="w-full"
@@ -1475,8 +1493,10 @@ export default function HospitalityCalendar() {
                     Registrar check-out
                   </Button>
                 </div>
+                </AccionHospitality>
               )}
               {selected.estado === 'checked_in' && (
+                <AccionHospitality capacidad="operaciones.checkin">
                 <Button
                   className="w-full"
                   disabled={checking?.id === selected.id}
@@ -1489,6 +1509,7 @@ export default function HospitalityCalendar() {
                   )}
                   Registrar check-out · limpieza automática
                 </Button>
+                </AccionHospitality>
               )}
 
               {/* Tareas desde la reserva */}
@@ -1498,6 +1519,7 @@ export default function HospitalityCalendar() {
                     Tareas
                   </p>
                   <div className="grid grid-cols-2 gap-2">
+                    <AccionHospitality capacidad="operaciones.gestionar">
                     <Button
                       variant="outline"
                       size="sm"
@@ -1506,6 +1528,8 @@ export default function HospitalityCalendar() {
                       <Sparkles className="h-3.5 w-3.5 mr-1" />
                       Limpieza
                     </Button>
+                    </AccionHospitality>
+                    <AccionHospitality capacidad="mantenimiento.gestionar">
                     <Button
                       variant="outline"
                       size="sm"
@@ -1514,6 +1538,7 @@ export default function HospitalityCalendar() {
                       <Wrench className="h-3.5 w-3.5 mr-1" />
                       Mantenimiento
                     </Button>
+                    </AccionHospitality>
                   </div>
                 </div>
               )}
@@ -1596,10 +1621,12 @@ export default function HospitalityCalendar() {
                 <Button variant="outline" size="sm" onClick={() => setTaskForm(null)}>
                   Cancelar
                 </Button>
-                <Button size="sm" onClick={createTaskFromReservation} disabled={taskSaving}>
-                  {taskSaving && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
-                  Crear
-                </Button>
+                <AccionHospitality capacidad={taskForm?.tipo === 'maintenance' ? 'mantenimiento.gestionar' : 'operaciones.gestionar'}>
+                  <Button size="sm" onClick={createTaskFromReservation} disabled={taskSaving}>
+                    {taskSaving && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
+                    Crear
+                  </Button>
+                </AccionHospitality>
               </div>
             </div>
           )}
@@ -1682,10 +1709,12 @@ export default function HospitalityCalendar() {
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setBlockForm(null)}>Cancelar</Button>
-              <Button type="button" onClick={createBlock} disabled={blockSaving}>
-                {blockSaving && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
-                Crear bloqueo
-              </Button>
+              <AccionHospitality capacidad="reservas.crear">
+                <Button type="button" onClick={createBlock} disabled={blockSaving}>
+                  {blockSaving && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+                  Crear bloqueo
+                </Button>
+              </AccionHospitality>
             </div>
           </div>
         </div>
@@ -1951,9 +1980,11 @@ function OperationsBoard({ ops, loading, onRefresh, onSelectReservation, onCheck
           <CardTitle className="text-sm flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-primary" /> Limpieza ({ops.limpieza?.length || 0})
           </CardTitle>
-          <Button size="sm" variant="outline" onClick={() => setNewTask({ open: true, tipo: 'cleaning' })}>
-            <Plus className="h-3.5 w-3.5 mr-1" /> Nueva
-          </Button>
+          <AccionHospitality capacidad="operaciones.gestionar">
+            <Button size="sm" variant="outline" onClick={() => setNewTask({ open: true, tipo: 'cleaning' })}>
+              <Plus className="h-3.5 w-3.5 mr-1" /> Nueva
+            </Button>
+          </AccionHospitality>
         </CardHeader>
         <CardContent className="space-y-2">
           {ops.limpieza?.length === 0 && (
@@ -1973,13 +2004,17 @@ function OperationsBoard({ ops, loading, onRefresh, onSelectReservation, onCheck
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 {t.estado !== 'completed' ? (
+                  <AccionHospitality capacidad="operaciones.gestionar">
                   <Button size="sm" variant="outline" onClick={() => changeTask('cleaning', t.id, 'completed')}>
                     Completar
                   </Button>
+                  </AccionHospitality>
                 ) : null}
+                <AccionHospitality capacidad="operaciones.gestionar">
                 <Button size="icon" variant="ghost" onClick={() => deleteTask('cleaning', t.id)}>
                   <Trash2 className="h-4 w-4 text-muted-foreground" />
                 </Button>
+                </AccionHospitality>
               </div>
             </div>
           ))}
@@ -1992,9 +2027,11 @@ function OperationsBoard({ ops, loading, onRefresh, onSelectReservation, onCheck
           <CardTitle className="text-sm flex items-center gap-2">
             <Wrench className="h-4 w-4 text-primary" /> Mantenimiento ({ops.mantenimiento?.length || 0})
           </CardTitle>
-          <Button size="sm" variant="outline" onClick={() => setNewTask({ open: true, tipo: 'maintenance' })}>
-            <Plus className="h-3.5 w-3.5 mr-1" /> Nueva
-          </Button>
+          <AccionHospitality capacidad="mantenimiento.gestionar">
+            <Button size="sm" variant="outline" onClick={() => setNewTask({ open: true, tipo: 'maintenance' })}>
+              <Plus className="h-3.5 w-3.5 mr-1" /> Nueva
+            </Button>
+          </AccionHospitality>
         </CardHeader>
         <CardContent className="space-y-2">
           {ops.mantenimiento?.length === 0 && (
@@ -2020,18 +2057,24 @@ function OperationsBoard({ ops, loading, onRefresh, onSelectReservation, onCheck
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 {t.estado === 'abierta' ? (
-                  <Button size="sm" variant="outline" onClick={() => changeTask('maintenance', t.id, 'en_proceso')}>
+                  <AccionHospitality capacidad="mantenimiento.gestionar">
+                <Button size="sm" variant="outline" onClick={() => changeTask('maintenance', t.id, 'en_proceso')}>
                     Iniciar
                   </Button>
+                  </AccionHospitality>
                 ) : null}
                 {t.estado === 'en_proceso' ? (
+                  <AccionHospitality capacidad="mantenimiento.gestionar">
                   <Button size="sm" variant="outline" onClick={() => changeTask('maintenance', t.id, 'resuelta')}>
                     Resolver
                   </Button>
+                  </AccionHospitality>
                 ) : null}
+                <AccionHospitality capacidad="mantenimiento.gestionar">
                 <Button size="icon" variant="ghost" onClick={() => deleteTask('maintenance', t.id)}>
                   <Trash2 className="h-4 w-4 text-muted-foreground" />
                 </Button>
+                </AccionHospitality>
               </div>
             </div>
           ))}
@@ -2129,10 +2172,12 @@ function OperationsBoard({ ops, loading, onRefresh, onSelectReservation, onCheck
               <Button variant="outline" size="sm" onClick={() => setNewTask({ open: false, tipo: 'cleaning' })}>
                 Cancelar
               </Button>
-              <Button size="sm" onClick={createTask} disabled={saving}>
-                {saving && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
-                Crear
-              </Button>
+              <AccionHospitality capacidad={newTask.tipo === 'maintenance' ? 'mantenimiento.gestionar' : 'operaciones.gestionar'}>
+                <Button size="sm" onClick={createTask} disabled={saving}>
+                  {saving && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
+                  Crear
+                </Button>
+              </AccionHospitality>
             </div>
           </div>
         </div>

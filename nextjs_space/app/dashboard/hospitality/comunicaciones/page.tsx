@@ -35,6 +35,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { AccionHospitality } from '@/components/hospitality/AccionHospitality';
 
 interface Plantilla {
   id: string;
@@ -322,9 +323,11 @@ export default function HospitalityComunicacionesPage() {
                       <p className="text-xs text-muted-foreground mt-0.5">{ev.desc}</p>
                     </div>
                   </div>
-                  <Button size="sm" variant="outline" onClick={() => openNew(ev.id)}>
-                    <Plus className="h-4 w-4 mr-1" /> Nueva
-                  </Button>
+                  <AccionHospitality capacidad="comunicaciones.gestionar">
+                    <Button size="sm" variant="outline" onClick={() => openNew(ev.id)}>
+                      <Plus className="h-4 w-4 mr-1" /> Nueva
+                    </Button>
+                  </AccionHospitality>
                 </div>
               </CardHeader>
               <CardContent className="space-y-2">
@@ -343,18 +346,22 @@ export default function HospitalityComunicacionesPage() {
                           </Badge>
                         </div>
                         <div className="flex items-center gap-1">
-                          <Button size="icon" variant="ghost" className="h-7 w-7" title="Enviar prueba" onClick={() => { setTestTarget(p); setTestDest(''); setTestResult(null); }}>
-                            <Send className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button size="icon" variant="ghost" className="h-7 w-7" title="Editar" onClick={() => openEdit(p)}>
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button size="icon" variant="ghost" className="h-7 w-7" title={p.activo ? 'Desactivar' : 'Activar'} onClick={() => toggleActivo(p)}>
-                            {p.activo ? <Power className="h-3.5 w-3.5" /> : <PowerOff className="h-3.5 w-3.5" />}
-                          </Button>
-                          <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" title="Eliminar" onClick={() => setDeleteTarget(p)}>
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                          <AccionHospitality capacidad="comunicaciones.enviar">
+                            <Button size="icon" variant="ghost" className="h-7 w-7" title="Enviar prueba" onClick={() => { setTestTarget(p); setTestDest(''); setTestResult(null); }}>
+                              <Send className="h-3.5 w-3.5" />
+                            </Button>
+                          </AccionHospitality>
+                          <AccionHospitality capacidad="comunicaciones.gestionar">
+                            <Button size="icon" variant="ghost" className="h-7 w-7" title="Editar" onClick={() => openEdit(p)}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7" title={p.activo ? 'Desactivar' : 'Activar'} onClick={() => toggleActivo(p)}>
+                              {p.activo ? <Power className="h-3.5 w-3.5" /> : <PowerOff className="h-3.5 w-3.5" />}
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" title="Eliminar" onClick={() => setDeleteTarget(p)}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </AccionHospitality>
                         </div>
                       </div>
                       <p className="text-xs text-muted-foreground line-clamp-2 whitespace-pre-line">
@@ -442,10 +449,12 @@ export default function HospitalityComunicacionesPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={save} disabled={saving}>
-              {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {editing ? 'Guardar cambios' : 'Crear plantilla'}
-            </Button>
+            <AccionHospitality capacidad="comunicaciones.gestionar">
+              <Button onClick={save} disabled={saving}>
+                {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                {editing ? 'Guardar cambios' : 'Crear plantilla'}
+              </Button>
+            </AccionHospitality>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -462,7 +471,9 @@ export default function HospitalityComunicacionesPage() {
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancelar</Button>
-            <Button variant="destructive" onClick={confirmDelete}>Eliminar</Button>
+            <AccionHospitality capacidad="comunicaciones.gestionar">
+              <Button variant="destructive" onClick={confirmDelete}>Eliminar</Button>
+            </AccionHospitality>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -497,10 +508,12 @@ export default function HospitalityComunicacionesPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setTestTarget(null)}>Cerrar</Button>
-            <Button onClick={sendTest} disabled={testSending}>
-              {testSending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Enviar prueba
-            </Button>
+            <AccionHospitality capacidad="comunicaciones.enviar">
+              <Button onClick={sendTest} disabled={testSending}>
+                {testSending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Enviar prueba
+              </Button>
+            </AccionHospitality>
           </DialogFooter>
         </DialogContent>
       </Dialog>

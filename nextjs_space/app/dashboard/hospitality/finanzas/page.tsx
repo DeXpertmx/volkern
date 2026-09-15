@@ -32,6 +32,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { AccionHospitality } from '@/components/hospitality/AccionHospitality';
 import { formatearImporte } from '@/lib/moneda';
 
 // ─── Tipos de la API ────────────────────────────────────────────────────────
@@ -224,10 +225,12 @@ export default function HospitalityFinanzasPage() {
             {cargando ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             <span className="ml-2">Actualizar</span>
           </Button>
+          <AccionHospitality capacidad="finanzas.exportar">
           <Button variant="outline" size="sm" onClick={exportar} disabled={!datos}>
             <Download className="h-4 w-4" />
             <span className="ml-2">Exportar CSV</span>
           </Button>
+          </AccionHospitality>
         </div>
       </div>
 
@@ -816,6 +819,7 @@ function FichaReservaDialog({
                         <td className="py-2 text-right">{importe(linea.importeUnitario, linea.moneda)}</td>
                         <td className="py-2 text-right font-medium">{importe(linea.importeTotal, linea.moneda)}</td>
                         <td className="py-2 text-right">
+                          <AccionHospitality capacidad="finanzas.gestionar">
                           <Button
                             variant="ghost"
                             size="sm"
@@ -825,6 +829,7 @@ function FichaReservaDialog({
                           >
                             <Trash2 className="h-4 w-4 text-red-500" />
                           </Button>
+                          </AccionHospitality>
                         </td>
                       </tr>
                     ))}
@@ -874,9 +879,11 @@ function FichaReservaDialog({
                     placeholder="60"
                   />
                 </div>
-                <Button onClick={agregarLinea} disabled={guardando}>
-                  <Plus className="h-4 w-4 mr-1" /> Añadir
-                </Button>
+                <AccionHospitality capacidad="finanzas.gestionar">
+                  <Button onClick={agregarLinea} disabled={guardando}>
+                    <Plus className="h-4 w-4 mr-1" /> Añadir
+                  </Button>
+                </AccionHospitality>
               </div>
             </div>
 
@@ -915,6 +922,7 @@ function FichaReservaDialog({
                         </td>
                         <td className="py-2 text-right whitespace-nowrap">
                           {pago.estado !== 'reembolsado' && (
+                            <AccionHospitality capacidad="finanzas.gestionar">
                             <Button
                               variant="ghost"
                               size="sm"
@@ -924,7 +932,9 @@ function FichaReservaDialog({
                             >
                               <Banknote className="h-4 w-4 text-amber-600" />
                             </Button>
+                            </AccionHospitality>
                           )}
+                          <AccionHospitality capacidad="finanzas.gestionar">
                           <Button
                             variant="ghost"
                             size="sm"
@@ -934,6 +944,7 @@ function FichaReservaDialog({
                           >
                             <Trash2 className="h-4 w-4 text-red-500" />
                           </Button>
+                          </AccionHospitality>
                         </td>
                       </tr>
                     ))}
@@ -974,9 +985,11 @@ function FichaReservaDialog({
                     placeholder="Opcional"
                   />
                 </div>
-                <Button onClick={registrarPago} disabled={guardando}>
-                  <Plus className="h-4 w-4 mr-1" /> Registrar pago
-                </Button>
+                <AccionHospitality capacidad="finanzas.gestionar">
+                  <Button onClick={registrarPago} disabled={guardando}>
+                    <Plus className="h-4 w-4 mr-1" /> Registrar pago
+                  </Button>
+                </AccionHospitality>
               </div>
             </div>
           </div>

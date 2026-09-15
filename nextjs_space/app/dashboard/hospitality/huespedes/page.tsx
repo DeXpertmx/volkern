@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { AccionHospitality } from '@/components/hospitality/AccionHospitality';
 import { channelStyle, statusLabel } from '@/lib/hospitality/calendar';
 import { formatearImporte, monedaEfectiva } from '@/lib/moneda';
 
@@ -398,17 +399,19 @@ export default function HospitalityHuespedesPage() {
                       <UserRound className="h-3 w-3 mr-1" /> Ver en Contactos
                     </Button>
                   ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 px-2 text-[11px] text-primary"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setLinkTarget(g);
-                      }}
-                    >
-                      <Link2 className="h-3 w-3 mr-1" /> Vincular
-                    </Button>
+                    <AccionHospitality capacidad="reservas.editar">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 px-2 text-[11px] text-primary"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLinkTarget(g);
+                        }}
+                      >
+                        <Link2 className="h-3 w-3 mr-1" /> Vincular
+                      </Button>
+                    </AccionHospitality>
                   )}
                 </div>
               </CardContent>
@@ -448,9 +451,11 @@ export default function HospitalityHuespedesPage() {
                     <UserRound className="h-4 w-4 mr-1.5" /> Ver en Contactos
                   </Button>
                 ) : (
-                  <Button size="sm" onClick={() => { setLinkTarget(selected); setSelected(null); }}>
-                    <Link2 className="h-4 w-4 mr-1.5" /> Vincular a contacto del CRM
-                  </Button>
+                  <AccionHospitality capacidad="reservas.editar">
+                    <Button size="sm" onClick={() => { setLinkTarget(selected); setSelected(null); }}>
+                      <Link2 className="h-4 w-4 mr-1.5" /> Vincular a contacto del CRM
+                    </Button>
+                  </AccionHospitality>
                 )}
               </div>
 
@@ -559,20 +564,22 @@ export default function HospitalityHuespedesPage() {
                   className="pl-10"
                 />
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={creatingContact}
-                onClick={crearContactoNuevo}
-                title="Crea un contacto en el CRM con los datos del huésped y lo vincula"
-              >
-                {creatingContact ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <UserPlus className="h-4 w-4 mr-1" />
-                )}
-                {creatingContact ? '' : 'Crear contacto nuevo'}
-              </Button>
+              <AccionHospitality capacidad="reservas.editar">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={creatingContact}
+                  onClick={crearContactoNuevo}
+                  title="Crea un contacto en el CRM con los datos del huésped y lo vincula"
+                >
+                  {creatingContact ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <UserPlus className="h-4 w-4 mr-1" />
+                  )}
+                  {creatingContact ? '' : 'Crear contacto nuevo'}
+                </Button>
+              </AccionHospitality>
             </div>
 
             <div className="max-h-72 overflow-y-auto space-y-2">
@@ -597,6 +604,7 @@ export default function HospitalityHuespedesPage() {
                           {[c.email, c.telefono].filter(Boolean).join(' · ') || 'Sin datos de contacto'}
                         </p>
                       </div>
+                      <AccionHospitality capacidad="reservas.editar">
                       <Button
                         size="sm"
                         disabled={linkingId === c.id}
@@ -609,6 +617,7 @@ export default function HospitalityHuespedesPage() {
                         )}
                         {linkingId === c.id ? '' : 'Vincular'}
                       </Button>
+                      </AccionHospitality>
                     </CardContent>
                   </Card>
                 ))

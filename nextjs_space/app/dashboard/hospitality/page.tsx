@@ -34,6 +34,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AccionHospitality } from '@/components/hospitality/AccionHospitality';
 
 interface Property {
   id: string;
@@ -405,13 +406,21 @@ export default function HospitalityPage() {
               />
             </div>
             {tab === 'propiedades' ? (
-              <Button onClick={openNewProperty}>
-                <Plus className="h-4 w-4 mr-2" /> Nueva Propiedad
-              </Button>
+              <AccionHospitality capacidad="reservas.crear">
+                <AccionHospitality capacidad="reservas.crear">
+                  <Button onClick={openNewProperty}>
+                    <Plus className="h-4 w-4 mr-2" /> Nueva Propiedad
+                  </Button>
+                </AccionHospitality>
+              </AccionHospitality>
             ) : (
-              <Button onClick={openNewUnit} disabled={properties.length === 0}>
-                <Plus className="h-4 w-4 mr-2" /> Nueva Unidad
-              </Button>
+              <AccionHospitality capacidad="reservas.crear">
+                <AccionHospitality capacidad="reservas.crear">
+                  <Button onClick={openNewUnit} disabled={properties.length === 0}>
+                    <Plus className="h-4 w-4 mr-2" /> Nueva Unidad
+                  </Button>
+                </AccionHospitality>
+              </AccionHospitality>
             )}
           </div>
         </div>
@@ -425,9 +434,11 @@ export default function HospitalityPage() {
                 <p className="text-sm text-muted-foreground mb-4">
                   Crea tu primera propiedad para empezar a gestionar unidades y reservas
                 </p>
-                <Button onClick={openNewProperty}>
-                  <Plus className="h-4 w-4 mr-2" /> Nueva Propiedad
-                </Button>
+                <AccionHospitality capacidad="reservas.crear">
+                  <Button onClick={openNewProperty}>
+                    <Plus className="h-4 w-4 mr-2" /> Nueva Propiedad
+                  </Button>
+                </AccionHospitality>
               </CardContent>
             </Card>
           ) : (
@@ -480,22 +491,26 @@ export default function HospitalityPage() {
                       </span>
                     </div>
                     <div className="flex flex-wrap gap-2 pt-2 border-t">
-                      <Button variant="outline" size="sm" onClick={() => openEditProperty(p)}>
-                        <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
-                      </Button>
+                      <AccionHospitality capacidad="reservas.editar">
+                        <Button variant="outline" size="sm" onClick={() => openEditProperty(p)}>
+                          <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
+                        </Button>
+                      </AccionHospitality>
                       <Button variant="outline" size="sm" asChild>
                         <Link href={`/dashboard/hospitality/onboarding?propertyId=${p.id}`}>
                           <Rocket className="h-3.5 w-3.5 mr-1" /> Puesta en marcha
                         </Link>
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-destructive hover:text-destructive"
-                        onClick={() => setDeleteTarget({ kind: 'property', id: p.id, nombre: p.nombre })}
-                      >
-                        <Trash2 className="h-3.5 w-3.5 mr-1" /> Eliminar
-                      </Button>
+                      <AccionHospitality capacidad="reservas.editar">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => setDeleteTarget({ kind: 'property', id: p.id, nombre: p.nombre })}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-1" /> Eliminar
+                        </Button>
+                      </AccionHospitality>
                     </div>
                   </CardContent>
                 </Card>
@@ -515,9 +530,11 @@ export default function HospitalityPage() {
                     ? 'Primero crea una propiedad, luego añade unidades alojativas'
                     : 'Añade unidades alojativas a tus propiedades'}
                 </p>
-                <Button onClick={openNewUnit} disabled={properties.length === 0}>
-                  <Plus className="h-4 w-4 mr-2" /> Nueva Unidad
-                </Button>
+                <AccionHospitality capacidad="reservas.crear">
+                  <Button onClick={openNewUnit} disabled={properties.length === 0}>
+                    <Plus className="h-4 w-4 mr-2" /> Nueva Unidad
+                  </Button>
+                </AccionHospitality>
               </CardContent>
             </Card>
           ) : (
@@ -572,17 +589,21 @@ export default function HospitalityPage() {
                       </div>
                     )}
                     <div className="flex gap-2 pt-2 border-t">
-                      <Button variant="outline" size="sm" onClick={() => openEditUnit(u)}>
-                        <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-destructive hover:text-destructive"
-                        onClick={() => setDeleteTarget({ kind: 'unit', id: u.id, nombre: u.nombre })}
-                      >
-                        <Trash2 className="h-3.5 w-3.5 mr-1" /> Eliminar
-                      </Button>
+                      <AccionHospitality capacidad="reservas.editar">
+                        <Button variant="outline" size="sm" onClick={() => openEditUnit(u)}>
+                          <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
+                        </Button>
+                      </AccionHospitality>
+                      <AccionHospitality capacidad="reservas.editar">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => setDeleteTarget({ kind: 'unit', id: u.id, nombre: u.nombre })}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-1" /> Eliminar
+                        </Button>
+                      </AccionHospitality>
                     </div>
                   </CardContent>
                 </Card>
@@ -769,10 +790,12 @@ export default function HospitalityPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPropertyDialog({ open: false, editing: null })}>Cancelar</Button>
+            <AccionHospitality capacidad={propertyDialog.editing ? 'reservas.editar' : 'reservas.crear'}>
             <Button onClick={saveProperty} disabled={saving}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
               Guardar
             </Button>
+            </AccionHospitality>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -918,10 +941,12 @@ export default function HospitalityPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setUnitDialog({ open: false, editing: null })}>Cancelar</Button>
+            <AccionHospitality capacidad={unitDialog.editing ? 'reservas.editar' : 'reservas.crear'}>
             <Button onClick={saveUnit} disabled={saving}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
               Guardar
             </Button>
+            </AccionHospitality>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -947,10 +972,12 @@ export default function HospitalityPage() {
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancelar</Button>
-            <Button variant="destructive" onClick={confirmDelete}>
-              <Trash2 className="h-4 w-4 mr-2" />
-              Sí, eliminar
-            </Button>
+            <AccionHospitality capacidad="reservas.editar">
+              <Button variant="destructive" onClick={confirmDelete}>
+                <Trash2 className="h-4 w-4 mr-2" />
+                Sí, eliminar
+              </Button>
+            </AccionHospitality>
           </DialogFooter>
         </DialogContent>
       </Dialog>
