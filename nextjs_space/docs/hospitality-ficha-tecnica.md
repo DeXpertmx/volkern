@@ -215,9 +215,17 @@ listar quién tiene el rol, vincular con un contacto, desvincular y dar de alta 
 alta reutiliza `POST /api/users` con su invitación, sus límites de plan y su auditoría —no hay
 un segundo camino para crear usuarios— y añade `contactId`, que pide la capacidad
 `equipo.roles` y no la de invitar: convertir una cuenta en el acceso de un huésped es repartir
-el acceso al alojamiento. El vínculo (`/api/hospitality/accesos-huesped`) comprueba tenant en
-las dos direcciones y exige que el usuario tenga el rol Huésped, porque para cualquier otro el
-vínculo no cambiaría nada y haría creer que sí.
+el acceso al alojamiento. Por eso mismo, un acceso de huésped nace **con el rol Huésped y con
+ningún otro**: sin esa comprobación, la llave del alojamiento serviría para fabricar un
+administrador de la cuenta entera pasando un `contactId`. El vínculo
+(`/api/hospitality/accesos-huesped`) comprueba tenant en las dos direcciones y exige que el
+usuario tenga el rol Huésped, porque para cualquier otro el vínculo no cambiaría nada y haría
+creer que sí.
+
+El vínculo tiene que **viajar con el usuario autenticado**: `alcanceDeReservas` decide con
+`User.contactId`, así que la autenticación lo devuelve en las dos formas de entrar (sesión y
+API key). No es un detalle de implementación: cuando se quedaba por el camino, el huésped
+entraba a ver cero reservas, sin error y sin poder distinguirlo de no tener estancias.
 
 ### Tests
 Los archivos bajo `tests/` con prefijo `hospitality-`, `ses-` o `viajero-` (motor de
