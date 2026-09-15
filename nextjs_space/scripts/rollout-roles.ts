@@ -9,7 +9,10 @@
  *     llamara «Admin» o «Administrador». Ahora lo concede
  *     `configuracion.gestionar`; sin copiar el privilegio, el administrador de
  *     una cuenta se queda de un día para otro con un 403 en su propio cockpit.
- *     Reglas en `lib/roles-rollout.ts`.
+ *     Y el pipeline de leads se veía entero salvo para «Sales Agent» y
+ *     «Support»; ahora lo concede `leads.ver_todos`, así que a todo rol que
+ *     entraba al pipeline y no se llamaba así se le copia la llave, o pasaría
+ *     a ver solo sus leads asignados. Reglas en `lib/roles-rollout.ts`.
  *  2. **Hospitality.** Las credenciales del registro de viajeros (el
  *     certificado de la entidad) y los documentos sin enmascarar dejaban de
  *     concederse por el nombre «Admin» para pasar a ser capacidades. Además el
