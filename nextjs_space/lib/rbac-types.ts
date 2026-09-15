@@ -296,6 +296,10 @@ export const ALL_PERMISSIONS: Permission[] = [
   'responder',
   'invitar',
   'cancelar',
+  // Alcance, no acceso: «ver» abre el módulo y «ver_todos» concede verlo
+  // entero. Sin ella solo se ve lo propio, que es el caso del pipeline de
+  // leads para un comercial.
+  'ver_todos',
   // Acciones que existen porque dos trabajos distintos no deben compartir llave:
   // entregar las llaves no es limpiar, firmar ante el Ministerio no es configurar
   // un canal, ver el pasaporte no es ver la reserva, y repartir permisos no es
@@ -324,6 +328,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   responder: 'Responder',
   invitar: 'Invitar',
   cancelar: 'Cancelar',
+  ver_todos: 'Ver todo',
   checkin: 'Check-in',
   administrar: 'Administrar',
   documento_completo: 'Ver documentos',

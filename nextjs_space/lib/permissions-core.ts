@@ -71,6 +71,11 @@ export type PermissionAction =
   // historial y sus pagos. Confundirlas haría que quien puede borrar borre
   // sin dejar rastro, y que quien solo corrige una reserva pueda anularla.
   | 'cancelar'
+  // Alcance, no acceso: `ver` abre un módulo, `ver_todos` decide si además se
+  // ve todo lo de la cuenta o solo lo propio. Sin ella, un comercial entra al
+  // pipeline y ve los leads que tiene asignados. Está separada de `ver` porque
+  // conceder el módulo no debería conceder los datos de los demás.
+  | 'ver_todos'
   // Entregar las llaves no es limpiar la habitación, ni configurar un canal es
   // firmar en nombre del propietario, ni ver una reserva es ver el pasaporte
   // del huésped. Cada una de estas acciones se concede por separado.
@@ -278,15 +283,34 @@ export function canAssignLeads(user: UserWithRole | null): boolean {
 }
 
 /**
- * Verifica si un usuario solo puede ver sus propios leads
+ * La llave del alcance completo del pipeline.
+ *
+ * Se declara aquí, y no suelta en cada sitio, porque la lee la regla de alcance
+ * (`canOnlySeeOwnLeads`) y la reparte el paso de herencia
+ * (`lib/roles-rollout.ts`): si una de las dos cambiara de acción, la herencia
+ * copiaría una llave que nadie lee y el alcance se recortaría sin avisar.
+ */
+export const PERMISO_PIPELINE_COMPLETO = { modulo: 'leads', accion: 'ver_todos' } as const;
+
+/**
+ * Verifica si un usuario solo puede ver sus propios leads.
+ *
+ * El alcance es un permiso, no un nombre: `leads.ver` abre el pipeline y
+ * `leads.ver_todos` concede verlo entero; sin esa segunda llave, quien entra ve
+ * solo lo que tiene asignado. Antes esto se decidía por el nombre del rol
+ * («Sales Agent», «Support»), así que renombrar el rol concedía o retiraba el
+ * alcance sin que nadie lo hubiera pedido, y cualquier rol nuevo creado con esa
+ * etiqueta heredaba la restricción.
+ *
+ * Devuelve `true` cuando no hay usuario o no hay rol: ante la duda, el alcance
+ * recortado. La ruta que la usa ya exige `leads.ver` por separado.
  */
 export function canOnlySeeOwnLeads(user: UserWithRole | null): boolean {
-  if (!user || !user.role) {
-    return true;
-  }
-
-  // Sales Agent y Support solo ven sus propios leads
-  return user.role.nombre === 'Sales Agent' || user.role.nombre === 'Support';
+  return !hasPermission(
+    user,
+    PERMISO_PIPELINE_COMPLETO.modulo,
+    PERMISO_PIPELINE_COMPLETO.accion
+  );
 }
 
 /**

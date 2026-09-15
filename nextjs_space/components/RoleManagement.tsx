@@ -54,6 +54,12 @@ const MODULES = [
 
 const ACTIONS = [
   { id: 'ver', name: 'Ver' },
+  // Alcance, no acceso: «Ver» abre el módulo y «Ver todo» decide si además se
+  // ve lo de toda la cuenta o solo lo propio. Hoy solo lo lee el pipeline de
+  // leads —sin esta casilla, quien entra al pipeline ve sus leads asignados—,
+  // pero se concede por módulo como cualquier otra, para no tener dos
+  // mecanismos de permisos en la misma matriz.
+  { id: 'ver_todos', name: 'Ver todo (alcance completo)' },
   { id: 'crear', name: 'Crear' },
   { id: 'editar', name: 'Editar' },
   // Cancelar no es eliminar: la reserva cancelada sigue existiendo con su
