@@ -3,7 +3,11 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
-import { exigirPermisoHospitality, capacidadDeCambioDeReserva } from '@/lib/hospitality/permissions';
+import {
+  exigirPermisoHospitality,
+  capacidadDeCambioDeReserva,
+  alcanceDeReservas,
+} from '@/lib/hospitality/permissions';
 import { logAuditAction } from '@/lib/permissions';
 import { dispatchConnectivityPush } from '@/lib/hospitality/sync';
 
@@ -19,12 +23,26 @@ export async function GET(_req: NextRequest, ctx: Params) {
     const auth = await authenticateRequest(_req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
 
-    const sinPermiso = exigirPermisoHospitality(auth, 'reservas.ver');
-    if (sinPermiso) return sinPermiso;
+    // Un huésped solo abre SU reserva: el alcance entra en la consulta, así que
+    // la reserva de otro contacto responde 404 igual que una inexistente. No se
+    // puede distinguir "no es tuya" de "no existe", que es lo correcto cuando el
+    // que pregunta no tiene por qué saber que existe.
+    const alcance = alcanceDeReservas(auth);
+    if (alcance.tipo === 'ninguno') return exigirPermisoHospitality(auth, 'reservas.ver');
 
     const { id } = await ctx.params;
+    if (alcance.tipo === 'propias' && !alcance.contactId) {
+      return NextResponse.json({ error: 'Reserva no encontrada' }, { status: 404 });
+    }
+
+    const reservaDonde: { id: string; tenantId: string; contactId?: string } = {
+      id,
+      tenantId: auth.tenant!.id,
+    };
+    if (alcance.tipo === 'propias') reservaDonde.contactId = alcance.contactId!;
+
     const reservation = await prisma.hospitalityReservation.findFirst({
-      where: { id, tenantId: auth.tenant!.id },
+      where: reservaDonde,
       include: {
         unit: { select: { id: true, nombre: true, codigo: true } },
         property: { select: { id: true, nombre: true } },

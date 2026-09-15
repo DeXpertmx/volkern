@@ -4,7 +4,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
-import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
+import {
+  exigirPermisoHospitality,
+  alcanceDeReservas,
+  AVISO_SIN_VINCULO,
+} from '@/lib/hospitality/permissions';
 import { monedaEscritura } from '@/lib/moneda';
 import { logAuditAction } from '@/lib/permissions';
 import { dispatchConnectivityPush } from '@/lib/hospitality/sync';
@@ -21,8 +25,17 @@ export async function GET(req: NextRequest) {
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
-    const sinPermiso = exigirPermisoHospitality(auth, 'reservas.ver');
-    if (sinPermiso) return sinPermiso;
+    // Quién mira decide qué se ve: la cuenta entera, solo lo del huésped, o nada.
+    const alcance = alcanceDeReservas(auth);
+    if (alcance.tipo === 'ninguno') return exigirPermisoHospitality(auth, 'reservas.ver');
+    if (alcance.tipo === 'propias' && !alcance.contactId) {
+      // Huésped sin vínculo: ninguna reserva, y dicho en voz alta.
+      return NextResponse.json({
+        reservations: [],
+        moneda: auth.tenant!.moneda ?? null,
+        aviso: AVISO_SIN_VINCULO,
+      });
+    }
 
     const { searchParams } = new URL(req.url);
     const propertyId = searchParams.get('propertyId');
@@ -35,6 +48,7 @@ export async function GET(req: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get('limit') || '500') || 500, 1000);
 
     const where: any = { tenantId: auth.tenant!.id };
+    if (alcance.tipo === 'propias') where.contactId = alcance.contactId;
     if (propertyId) where.propertyId = propertyId;
     if (unitId) where.unitId = unitId;
 
