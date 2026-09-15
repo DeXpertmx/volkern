@@ -510,8 +510,9 @@ model Tenant {
   hospitalityCommunicationTemplates HospitalityCommunicationTemplate[] @relation("HospitalityCommunicationTemplates")
   hospitalityComplianceConfigs   HospitalityComplianceConfig[]     @relation("HospitalityComplianceConfigs")
   hospitalityTravelers           HospitalityTraveler[]             @relation("HospitalityTravelers")
-  hospitalityCompliances         HospitalityCompliance[]           @relation("HospitalityCompliances")
+  hospitalityCompliances         HospitalityCompliance[]          @relation("HospitalityCompliances")
   hospitalityComplianceEvents    HospitalityComplianceEvent[]      @relation("HospitalityComplianceEvents")
+  hospitalityBookingConfig       HospitalityBookingConfig?         @relation("HospitalityBookingConfig")
   automationActionExecutions    AutomationActionExecution[]        @relation("AutomationActionExecutions")
 }
 
@@ -8467,6 +8468,49 @@ model HospitalityPaymentAccount {
   @@unique([tenantId, provider])
   @@index([tenantId])
   @@map("hospitality_payment_accounts")
+}
+
+// ─── Booking Engine (FASE 3.D) ───────────────────────────────────────────────
+// Configuración de la reserva directa del tenant: qué propiedades publica, con
+// qué política, qué anticipo pide y con qué divisa publica sus precios.
+//
+// El Booking Engine NO tiene motor propio (reglas 1 y 2 de la FASE 3): la
+// disponibilidad sale del Availability Engine y la reserva entra por el mismo
+// Reservation Engine que las de canal. Aquí solo vive lo que es política del
+// canal directo, nunca un cálculo de disponibilidad ni una escritura paralela
+// de reservas.
+model HospitalityBookingConfig {
+  id                    String   @id @default(cuid())
+  tenantId              String   @unique
+  // Segmento público de la URL (/reservar/<slug>): identifica al tenant ante
+  // cualquiera. Único en toda la plataforma, no solo dentro del tenant.
+  slug                  String   @unique
+  titulo                String?
+  descripcion           String?
+  emailContacto         String?
+  telefonoContacto      String?
+  // Divisa con la que se publican los precios. Nulo = la del tenant
+  // (`Tenant.moneda`), que es la fuente autoritativa: el valor por defecto del
+  // esquema nunca decide aquí (regla del módulo único de dinero).
+  moneda                String?
+  politicaCancelacion   String?
+  // Anticipo a cobrar en el momento de reservar, en porcentaje del total.
+  // 0 = sin anticipo.
+  anticipoPorcentaje    Int       @default(0)
+  // Tarifa de limpieza por estancia del canal directo. Nula = no se cobra:
+  // null es "no aplica", no un cero que parecería una decisión de negocio.
+  tarifaLimpieza        Float?
+  // Si se exige cobro online para confirmar. En falso, la reserva entra como
+  // pendiente y el alojamiento cobra por su cuenta.
+  requierePagoOnline    Boolean  @default(false)
+  // Propiedades publicadas en la página pública. Vacío = no hay nada publicado.
+  propiedadesPublicadas String[] @default([])
+  activo                Boolean  @default(true)
+  fechaCreacion         DateTime @default(now())
+  fechaEdicion          DateTime @updatedAt
+  tenant                Tenant   @relation("HospitalityBookingConfig", fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("hospitality_booking_config")
 }
 
 // Plantilla de comunicación automática para Hospitality (plan maestro §21).
