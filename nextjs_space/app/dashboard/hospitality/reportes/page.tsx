@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { AccionHospitality } from '@/components/hospitality/AccionHospitality';
 import { formatearImporte } from '@/lib/moneda';
 
 // ─── Tipos ──────────────────────────────────────────────────────────────────
@@ -193,10 +194,12 @@ export default function HospitalityReportesPage() {
             {cargando ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             <span className="ml-2">Actualizar</span>
           </Button>
-          <Button variant="outline" size="sm" onClick={exportar} disabled={!datos}>
-            <Download className="h-4 w-4" />
-            <span className="ml-2">Exportar</span>
-          </Button>
+          <AccionHospitality capacidad="finanzas.exportar">
+            <Button variant="outline" size="sm" onClick={exportar} disabled={!datos}>
+              <Download className="h-4 w-4" />
+              <span className="ml-2">Exportar</span>
+            </Button>
+          </AccionHospitality>
         </div>
       </div>
 

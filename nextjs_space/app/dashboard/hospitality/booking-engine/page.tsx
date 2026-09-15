@@ -33,6 +33,7 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { AccionHospitality } from '@/components/hospitality/AccionHospitality';
 import { formatearImporte, MONEDAS_SELECCIONABLES, nombreMoneda } from '@/lib/moneda';
 
 interface PropiedadConfig {
@@ -202,10 +203,12 @@ export default function BookingEnginePage() {
               Ver página pública
             </a>
           </Button>
-          <Button onClick={guardar} disabled={guardando || !slug}>
-            {guardando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-            Guardar
-          </Button>
+          <AccionHospitality capacidad="integraciones.gestionar">
+            <Button onClick={guardar} disabled={guardando || !slug}>
+              {guardando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+              Guardar
+            </Button>
+          </AccionHospitality>
         </div>
       </header>
 

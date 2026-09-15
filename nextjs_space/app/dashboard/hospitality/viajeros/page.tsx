@@ -40,6 +40,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { AccionHospitality } from '@/components/hospitality/AccionHospitality';
 
 interface FichaEstado {
   valor: string;
@@ -577,9 +578,11 @@ export default function RegistroDeViajerosPage() {
                 <KeyRound className="h-5 w-5" />
                 <span>Esta cuenta aún no tiene credenciales de entidad guardadas.</span>
               </div>
-              <Button size="sm" variant="outline" onClick={() => setConfigAbierta(true)}>
-                Configurar credenciales
-              </Button>
+              <AccionHospitality capacidad="integraciones.gestionar">
+                <Button size="sm" variant="outline" onClick={() => setConfigAbierta(true)}>
+                  Configurar credenciales
+                </Button>
+              </AccionHospitality>
             </CardContent>
           </Card>
         ) : null}
@@ -752,32 +755,36 @@ export default function RegistroDeViajerosPage() {
                           <td className="px-4 py-3">
                             <div className="flex justify-end gap-2">
                               {fila.pendientes > 0 ? (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  title={`Un solo WhatsApp al huésped con los enlaces de los ${fila.pendientes} viajeros incompletos`}
-                                  disabled={trabajando || pidiendoFila === fila.reservationId}
-                                  onClick={() => void pedirTodos(fila.reservationId)}
-                                >
-                                  {pidiendoFila === fila.reservationId ? (
-                                    <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                                  ) : (
-                                    <MessageCircle className="mr-1 h-3.5 w-3.5" />
-                                  )}
-                                  Pedir todos
-                                </Button>
+                                <AccionHospitality capacidad="reservas.editar">
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    title={`Un solo WhatsApp al huésped con los enlaces de los ${fila.pendientes} viajeros incompletos`}
+                                    disabled={trabajando || pidiendoFila === fila.reservationId}
+                                    onClick={() => void pedirTodos(fila.reservationId)}
+                                  >
+                                    {pidiendoFila === fila.reservationId ? (
+                                      <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                                    ) : (
+                                      <MessageCircle className="mr-1 h-3.5 w-3.5" />
+                                    )}
+                                    Pedir todos
+                                  </Button>
+                                </AccionHospitality>
                               ) : null}
                               <Button size="sm" variant="outline" onClick={() => void abrirDetalle(fila.reservationId)}>
                                 Ver ficha
                               </Button>
-                              <Button
-                                size="sm"
-                                disabled={!fila.listoParaEnviar || trabajando}
-                                onClick={() => void accion(fila.reservationId, { accion: 'enviar_viajeros' })}
-                              >
-                                <Send className="mr-1 h-3.5 w-3.5" />
-                                Enviar
-                              </Button>
+                              <AccionHospitality capacidad="reservas.editar">
+                                <Button
+                                  size="sm"
+                                  disabled={!fila.listoParaEnviar || trabajando}
+                                  onClick={() => void accion(fila.reservationId, { accion: 'enviar_viajeros' })}
+                                >
+                                  <Send className="mr-1 h-3.5 w-3.5" />
+                                  Enviar
+                                </Button>
+                              </AccionHospitality>
                             </div>
                           </td>
                         </tr>
@@ -824,23 +831,25 @@ export default function RegistroDeViajerosPage() {
                   </Badge>
                 ) : null}
                 <div className="ml-auto flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={trabajando}
-                    onClick={() => void accion(detalle.reserva.id, { accion: 'enviar_reserva' })}
-                  >
-                    <Send className="mr-1 h-3.5 w-3.5" />
-                    Enviar reserva
-                  </Button>
-                  <Button
-                    size="sm"
-                    disabled={trabajando || !detalle.resumen.listoParaEnviar}
-                    onClick={() => void accion(detalle.reserva.id, { accion: 'enviar_viajeros' })}
-                  >
-                    <Send className="mr-1 h-3.5 w-3.5" />
-                    Enviar viajeros
-                  </Button>
+                  <AccionHospitality capacidad="reservas.editar">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={trabajando}
+                      onClick={() => void accion(detalle.reserva.id, { accion: 'enviar_reserva' })}
+                    >
+                      <Send className="mr-1 h-3.5 w-3.5" />
+                      Enviar reserva
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={trabajando || !detalle.resumen.listoParaEnviar}
+                      onClick={() => void accion(detalle.reserva.id, { accion: 'enviar_viajeros' })}
+                    >
+                      <Send className="mr-1 h-3.5 w-3.5" />
+                      Enviar viajeros
+                    </Button>
+                  </AccionHospitality>
                 </div>
               </div>
 
@@ -854,18 +863,20 @@ export default function RegistroDeViajerosPage() {
               <div>
                 <div className="mb-2 flex items-center justify-between">
                   <h3 className="text-sm font-bold text-slate-700">Viajeros ({detalle.viajeros.length})</h3>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setEditandoId(null);
-                      setFormViajero({ ...VIAJERO_VACIO });
-                      setMostrarFormulario(true);
-                    }}
-                  >
-                    <UserPlus className="mr-1 h-3.5 w-3.5" />
-                    Añadir viajero
-                  </Button>
+                  <AccionHospitality capacidad="reservas.editar">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setEditandoId(null);
+                        setFormViajero({ ...VIAJERO_VACIO });
+                        setMostrarFormulario(true);
+                      }}
+                    >
+                      <UserPlus className="mr-1 h-3.5 w-3.5" />
+                      Añadir viajero
+                    </Button>
+                  </AccionHospitality>
                 </div>
 
                 {detalle.viajeros.length === 0 ? (
@@ -906,6 +917,7 @@ export default function RegistroDeViajerosPage() {
                         >
                           {viajero.estado === 'datos_pendientes' ? 'Datos pendientes' : 'Listo'}
                         </Badge>
+                        <AccionHospitality capacidad="reservas.editar">
                         <div className="flex gap-1">
                           {viajero.estado === 'datos_pendientes' && (
                             <Button
@@ -959,6 +971,7 @@ export default function RegistroDeViajerosPage() {
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>
+                        </AccionHospitality>
                       </li>
                     ))}
                   </ul>
@@ -1085,16 +1098,20 @@ export default function RegistroDeViajerosPage() {
                     >
                       Cancelar
                     </Button>
-                    <Button onClick={() => void guardarViajero()} disabled={trabajando}>
-                      {trabajando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
-                      Guardar viajero
-                    </Button>
+                    <AccionHospitality capacidad="reservas.editar">
+                      <Button onClick={() => void guardarViajero()} disabled={trabajando}>
+                        {trabajando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+                        Guardar viajero
+                      </Button>
+                    </AccionHospitality>
                   </div>
                 </div>
               ) : (
-                <Button size="sm" variant="ghost" onClick={() => setMostrarFormulario(true)}>
-                  <Plus className="mr-1 h-3.5 w-3.5" /> Añadir un viajero
-                </Button>
+                <AccionHospitality capacidad="reservas.editar">
+                  <Button size="sm" variant="ghost" onClick={() => setMostrarFormulario(true)}>
+                    <Plus className="mr-1 h-3.5 w-3.5" /> Añadir un viajero
+                  </Button>
+                </AccionHospitality>
               )}
 
               {detalle.eventos.length > 0 ? (
@@ -1124,18 +1141,20 @@ export default function RegistroDeViajerosPage() {
               ) : null}
 
               <DialogFooter className="flex flex-wrap justify-between gap-2">
-                <Button
-                  variant="outline"
-                  className="text-red-600"
-                  disabled={trabajando}
-                  onClick={() => {
-                    if (!confirm('¿Anular el registro de viajeros de esta reserva?')) return;
-                    void accion(detalle.reserva.id, { accion: 'anular', motivo: 'Anulado desde la ficha' });
-                  }}
-                >
-                  <XCircle className="mr-1 h-3.5 w-3.5" />
-                  Anular registro
-                </Button>
+                <AccionHospitality capacidad="reservas.editar">
+                  <Button
+                    variant="outline"
+                    className="text-red-600"
+                    disabled={trabajando}
+                    onClick={() => {
+                      if (!confirm('¿Anular el registro de viajeros de esta reserva?')) return;
+                      void accion(detalle.reserva.id, { accion: 'anular', motivo: 'Anulado desde la ficha' });
+                    }}
+                  >
+                    <XCircle className="mr-1 h-3.5 w-3.5" />
+                    Anular registro
+                  </Button>
+                </AccionHospitality>
                 <Button variant="ghost" onClick={() => setDetalle(null)}>
                   Cerrar
                 </Button>
@@ -1350,33 +1369,35 @@ export default function RegistroDeViajerosPage() {
           </div>
 
           <DialogFooter className="flex flex-wrap justify-between gap-2">
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => void probarConexion()} disabled={trabajando}>
-                Probar conexión
-              </Button>
-              {config?.tieneUsuario ? (
-                <Button
-                  variant="outline"
-                  className="text-red-600"
-                  disabled={trabajando}
-                  onClick={async () => {
-                    const res = await fetch('/api/hospitality/compliance/config', { method: 'DELETE' });
-                    if (res.ok) {
-                      toast.success('Credenciales retiradas');
-                      await cargar();
-                    } else {
-                      toast.error('No se pudieron retirar las credenciales');
-                    }
-                  }}
-                >
-                  Retirar credenciales
+            <AccionHospitality capacidad="integraciones.gestionar">
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => void probarConexion()} disabled={trabajando}>
+                  Probar conexión
                 </Button>
-              ) : null}
-            </div>
-            <Button onClick={() => void guardarConfiguracion()} disabled={trabajando}>
-              {trabajando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Guardar
-            </Button>
+                {config?.tieneUsuario ? (
+                  <Button
+                    variant="outline"
+                    className="text-red-600"
+                    disabled={trabajando}
+                    onClick={async () => {
+                      const res = await fetch('/api/hospitality/compliance/config', { method: 'DELETE' });
+                      if (res.ok) {
+                        toast.success('Credenciales retiradas');
+                        await cargar();
+                      } else {
+                        toast.error('No se pudieron retirar las credenciales');
+                      }
+                    }}
+                  >
+                    Retirar credenciales
+                  </Button>
+                ) : null}
+              </div>
+              <Button onClick={() => void guardarConfiguracion()} disabled={trabajando}>
+                {trabajando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Guardar
+              </Button>
+            </AccionHospitality>
           </DialogFooter>
         </DialogContent>
       </Dialog>

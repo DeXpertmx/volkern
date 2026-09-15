@@ -1,204 +1,30 @@
 /**
- * Capacidades de Hospitality → permisos por acción del rol (§27 del plan maestro).
+ * Guardia de permisos de Hospitality en la API (§27 del plan maestro).
  *
- * El módulo del plan (`Tenant.enabledModules`) dice si la cuenta tiene
- * Hospitality contratado; no dice quién puede hacer qué dentro. Eso lo decide
- * el rol, y hasta ahora ninguna ruta lo comprobaba: cualquier usuario del
- * tenant podía cancelar una reserva o ver los ingresos. Aquí vive la
- * traducción entre lo que la API ofrece y lo que el rol concede.
- *
- * Las capacidades se nombran como las nombra el producto (reservas, limpieza,
- * mantenimiento, integraciones, finanzas) y cada una apunta a un par
- * módulo + acción del sistema de permisos que ya existe en la plataforma. No
- * hay un segundo sistema de permisos: se reutiliza `hasPermission`, con sus
- * reglas de Superadmin y del wildcard `{ all: true }`.
- *
- * Regla de oro de este archivo: **si falta el permiso, se deniega**. Un rol
- * sin claves de Hospitality no puede nada; el acceso de los roles que ya
- * existían se conservó con un retrollenado explícito, no con un "si no hay
- * claves, dejo pasar".
+ * Las capacidades y la regla que las resuelve viven en
+ * `lib/hospitality/capacidades.ts` y se reexportan aquí, así que los imports
+ * existentes siguen funcionando. Lo que queda en este archivo es la parte que
+ * responde HTTP: el 403 con la causa.
  */
 import { NextResponse } from 'next/server';
-import {
-  hasPermission,
-  type PermissionAction,
-  type PermissionModule,
-  type UserWithRole,
-} from '@/lib/permissions';
+import type { UserWithRole } from '@/lib/permissions-core';
 import type { ApiKeyAuthResult } from '@/lib/api-key-auth';
+import { CAPACIDADES_HOSPITALITY, puedePorRol, type CapacidadHospitality } from './capacidades';
 
-/**
- * Capacidades de Hospitality. El nombre es `área.acción` para que el mensaje
- * de error diga algo útil sin tener que consultar el código.
- */
-export type CapacidadHospitality =
-  // Reservas y todo lo que las hace posibles: planning, bloqueos, propiedades,
-  // unidades, tarifas, huéspedes y el registro de viajeros de la reserva.
-  | 'reservas.ver'
-  | 'reservas.crear'
-  | 'reservas.editar'
-  | 'reservas.cancelar'
-  // Limpieza y check-in/check-out: el trabajo del día en la propiedad.
-  | 'operaciones.ver'
-  | 'operaciones.gestionar'
-  // Incidencias y mantenimiento de unidades.
-  | 'mantenimiento.ver'
-  | 'mantenimiento.gestionar'
-  // Conectividad: canales, mapping, sync, reconciliación y onboarding.
-  | 'integraciones.ver'
-  | 'integraciones.gestionar'
-  // Dinero.
-  | 'finanzas.ver'
-  | 'finanzas.gestionar'
-  | 'finanzas.exportar'
-  // Comunicaciones al huésped y automatizaciones de Hospitality. Tienen módulo
-  // propio en vez de reutilizar `mensajes` y `automatizaciones` de la
-  // plataforma: son las plantillas y los flujos del alojamiento, y concederlos
-  // no debería conceder también las campañas de marketing.
-  | 'comunicaciones.ver'
-  | 'comunicaciones.gestionar'
-  | 'comunicaciones.enviar'
-  | 'automatizaciones.ver'
-  | 'automatizaciones.gestionar';
-
-export interface DefinicionCapacidad {
-  /** Módulo del sistema de permisos que la concede. */
-  modulo: PermissionModule;
-  /** Acción del módulo que la concede. */
-  accion: PermissionAction;
-  /** Cómo se llama la capacidad en la interfaz y en los mensajes. */
-  etiqueta: string;
-}
-
-export const CAPACIDADES_HOSPITALITY: Record<CapacidadHospitality, DefinicionCapacidad> = {
-  'reservas.ver': {
-    modulo: 'hospitality_reservas',
-    accion: 'ver',
-    etiqueta: 'ver reservas, planning y bloqueos',
-  },
-  'reservas.crear': {
-    modulo: 'hospitality_reservas',
-    accion: 'crear',
-    etiqueta: 'crear reservas, propiedades, unidades, tarifas y huéspedes',
-  },
-  'reservas.editar': {
-    modulo: 'hospitality_reservas',
-    accion: 'editar',
-    etiqueta: 'modificar reservas, bloqueos, propiedades, unidades, tarifas y viajeros',
-  },
-  'reservas.cancelar': {
-    modulo: 'hospitality_reservas',
-    accion: 'cancelar',
-    etiqueta: 'cancelar reservas',
-  },
-  'operaciones.ver': {
-    modulo: 'hospitality_operaciones',
-    accion: 'ver',
-    etiqueta: 'ver limpieza, llegadas y salidas del día',
-  },
-  'operaciones.gestionar': {
-    modulo: 'hospitality_operaciones',
-    accion: 'gestionar',
-    etiqueta: 'gestionar limpieza y check-in/check-out',
-  },
-  'mantenimiento.ver': {
-    modulo: 'hospitality_mantenimiento',
-    accion: 'ver',
-    etiqueta: 'ver incidencias y mantenimiento',
-  },
-  'mantenimiento.gestionar': {
-    modulo: 'hospitality_mantenimiento',
-    accion: 'gestionar',
-    etiqueta: 'gestionar incidencias y mantenimiento',
-  },
-  'integraciones.ver': {
-    modulo: 'hospitality_integraciones',
-    accion: 'ver',
-    etiqueta: 'ver la conectividad y el estado de sincronización',
-  },
-  'integraciones.gestionar': {
-    modulo: 'hospitality_integraciones',
-    accion: 'gestionar',
-    etiqueta: 'configurar canales, mapping, sincronización y reconciliación',
-  },
-  'finanzas.ver': {
-    modulo: 'hospitality_finanzas',
-    accion: 'ver',
-    etiqueta: 'ver finanzas, reportes y los indicadores de ingresos',
-  },
-  'finanzas.gestionar': {
-    modulo: 'hospitality_finanzas',
-    accion: 'gestionar',
-    etiqueta: 'registrar cobros y líneas de importe',
-  },
-  'finanzas.exportar': {
-    modulo: 'hospitality_finanzas',
-    accion: 'exportar',
-    etiqueta: 'exportar reportes',
-  },
-  'comunicaciones.ver': {
-    modulo: 'hospitality_comunicaciones',
-    accion: 'ver',
-    etiqueta: 'ver las plantillas de comunicación',
-  },
-  'comunicaciones.gestionar': {
-    modulo: 'hospitality_comunicaciones',
-    accion: 'editar',
-    etiqueta: 'editar las plantillas de comunicación',
-  },
-  'comunicaciones.enviar': {
-    modulo: 'hospitality_comunicaciones',
-    accion: 'enviar',
-    etiqueta: 'enviar mensajes a huéspedes',
-  },
-  'automatizaciones.ver': {
-    modulo: 'hospitality_automatizaciones',
-    accion: 'ver',
-    etiqueta: 'ver las automatizaciones de Hospitality',
-  },
-  'automatizaciones.gestionar': {
-    modulo: 'hospitality_automatizaciones',
-    accion: 'gestionar',
-    etiqueta: 'crear y ejecutar automatizaciones de Hospitality',
-  },
-};
-
-/**
- * Permisos que un rol necesita para no perder nada de lo que hoy puede hacer en
- * Hospitality. Lo usa el retrollenado `scripts/hospitality-permissions-backfill.mjs`:
- * hasta ahora ninguna ruta comprobaba el rol, así que el acceso de los roles
- * existentes era, de hecho, completo. Al volver a comprobarlo, se les concede
- * explícitamente y el administrador decide después qué recortar.
- */
-export const PERMISOS_HOSPITALITY_COMPLETOS: Record<string, Record<string, boolean>> = {
-  hospitality_reservas: { ver: true, crear: true, editar: true, cancelar: true },
-  hospitality_operaciones: { ver: true, gestionar: true },
-  hospitality_mantenimiento: { ver: true, gestionar: true },
-  hospitality_integraciones: { ver: true, gestionar: true },
-  hospitality_finanzas: { ver: true, gestionar: true, exportar: true },
-  hospitality_comunicaciones: { ver: true, editar: true, enviar: true },
-  hospitality_automatizaciones: { ver: true, gestionar: true },
-};
-
-/** Todas las capacidades, para inventarios, guardias y documentos. */
-export const TODAS_LAS_CAPACIDADES = Object.keys(
-  CAPACIDADES_HOSPITALITY
-) as CapacidadHospitality[];
+export * from './capacidades';
 
 /**
  * ¿Puede esta sesión ejercer la capacidad? Sin rol, sin permiso.
+ *
+ * Delega en la misma regla que usa la interfaz (`puedePorRol`): si alguna vez
+ * cambia, cambia para las dos.
  */
 export function puedeEnHospitality(
   auth: Pick<ApiKeyAuthResult, 'user'>,
   capacidad: CapacidadHospitality
 ): boolean {
-  const definicion = CAPACIDADES_HOSPITALITY[capacidad];
-  if (!definicion) return false;
-  return hasPermission(
-    (auth.user as UserWithRole | undefined) ?? null,
-    definicion.modulo,
-    definicion.accion
-  );
+  const rol = (auth.user as UserWithRole | undefined)?.role ?? null;
+  return puedePorRol(rol, capacidad);
 }
 
 /**
@@ -260,3 +86,44 @@ export function capacidadDeCambioDeReserva(
   }
   return 'reservas.editar';
 }
+
+/**
+ * Qué reservas puede ver esta sesión.
+ *
+ * Tres respuestas y ninguna ambigüedad:
+ *
+ *  - `tenant`: el rol ve las reservas de la cuenta (el trabajo normal).
+ *  - `propias`: el rol es el del huésped. Solo las reservas del contacto al que
+ *    está vinculado el usuario.
+ *  - `ninguno`: no tiene ni una cosa ni la otra. La ruta responde 403 con el
+ *    permiso exacto que falta.
+ *
+ * La distinción es **capacidad**, no filtro: si `reservas.ver` y la vista del
+ * huésped fueran el mismo permiso, no habría manera de dar acceso a un huésped
+ * sin abrirle la cuenta entera. Y sin vínculo con un contacto, `propias`
+ * devuelve cero reservas —nunca todas—, que es el lado seguro del error.
+ */
+export type AlcanceDeReservas =
+  | { tipo: 'tenant' }
+  | { tipo: 'propias'; contactId: string | null }
+  | { tipo: 'ninguno' };
+
+export function alcanceDeReservas(
+  auth: Pick<ApiKeyAuthResult, 'user'>
+): AlcanceDeReservas {
+  if (puedeEnHospitality(auth, 'reservas.ver')) return { tipo: 'tenant' };
+
+  if (puedeEnHospitality(auth, 'reservas.propias')) {
+    const contactId = (auth.user as { contactId?: string | null } | undefined)?.contactId ?? null;
+    return { tipo: 'propias', contactId };
+  }
+
+  return { tipo: 'ninguno' };
+}
+
+/**
+ * Lo que se le dice a un huésped cuyo usuario no está vinculado a ningún
+ * contacto. No es un error suyo ni una pantalla en blanco sin explicación.
+ */
+export const AVISO_SIN_VINCULO =
+  'Tu usuario todavía no está vinculado a un huésped: pídeselo al Anfitrión de la propiedad.';

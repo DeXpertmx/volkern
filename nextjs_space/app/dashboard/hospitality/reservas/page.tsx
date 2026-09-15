@@ -28,6 +28,8 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { AccionHospitality } from '@/components/hospitality/AccionHospitality';
+import { useCapacidadesHospitality } from '@/hooks/use-capacidades-hospitality';
 
 interface Reservation {
   id: string;
@@ -123,6 +125,7 @@ const EMPTY_FORM = {
 };
 
 export default function HospitalityReservasPage() {
+  const { puede } = useCapacidadesHospitality();
   const [loading, setLoading] = useState(true);
   const [reservas, setReservas] = useState<Reservation[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
@@ -305,9 +308,11 @@ export default function HospitalityReservasPage() {
             {totalIngresos > 0 ? formatearImporte(totalIngresos, monedaLista, 0) : '—'}
           </p>
         </div>
-        <Button onClick={abrirNueva}>
-          <Plus className="h-4 w-4 mr-2" /> Nueva Reserva
-        </Button>
+        <AccionHospitality capacidad="reservas.crear">
+          <Button onClick={abrirNueva}>
+            <Plus className="h-4 w-4 mr-2" /> Nueva Reserva
+          </Button>
+        </AccionHospitality>
       </div>
 
       {/* Filtros */}
@@ -374,9 +379,11 @@ export default function HospitalityReservasPage() {
             <p className="text-sm text-muted-foreground mb-4">
               No hay reservas que coincidan con los filtros
             </p>
-            <Button onClick={abrirNueva}>
-              <Plus className="h-4 w-4 mr-2" /> Crear la primera reserva
-            </Button>
+            <AccionHospitality capacidad="reservas.crear">
+              <Button onClick={abrirNueva}>
+                <Plus className="h-4 w-4 mr-2" /> Crear la primera reserva
+              </Button>
+            </AccionHospitality>
           </CardContent>
         </Card>
       ) : (
@@ -444,22 +451,31 @@ export default function HospitalityReservasPage() {
                           </Badge>
                         </td>
                         <td className="p-3 text-right whitespace-nowrap">
-                          <Select
-                            value={r.estado}
-                            onValueChange={(v) => cambiarEstadoRapido(r, v)}
-                          >
-                            <SelectTrigger className="h-8 w-[130px] inline-flex mr-1" title="Cambiar estado">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {ESTADOS.filter((e) => e.value !== r.estado).map((e) => (
-                                <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Button variant="ghost" size="sm" onClick={() => abrirEditar(r)} title="Editar">
-                            <Pencil className="h-4 w-4" />
-                          </Button>
+                          {puede('reservas.editar') && (
+                            <Select
+                              value={r.estado}
+                              onValueChange={(v) => cambiarEstadoRapido(r, v)}
+                            >
+                              <SelectTrigger className="h-8 w-[130px] inline-flex mr-1" title="Cambiar estado">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {/* Cancelar no es editar: el estado se ofrece a quien
+                                    puede cambiar la reserva, y anularla solo a quien
+                                    puede cancelarla. */}
+                                {ESTADOS.filter(
+                                  (e) => e.value !== r.estado && (e.value !== 'cancelled' || puede('reservas.cancelar'))
+                                ).map((e) => (
+                                  <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                          <AccionHospitality capacidad="reservas.editar">
+                            <Button variant="ghost" size="sm" onClick={() => abrirEditar(r)} title="Editar">
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          </AccionHospitality>
                         </td>
                       </tr>
                     );
@@ -589,10 +605,12 @@ export default function HospitalityReservasPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setFormOpen(false); setEditing(null); }}>Cancelar</Button>
-            <Button onClick={guardar} disabled={saving}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-              {editing ? 'Guardar cambios' : 'Crear reserva'}
-            </Button>
+            <AccionHospitality capacidad={editing ? 'reservas.editar' : 'reservas.crear'}>
+              <Button onClick={guardar} disabled={saving}>
+                {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                {editing ? 'Guardar cambios' : 'Crear reserva'}
+              </Button>
+            </AccionHospitality>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -27,6 +27,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AccionHospitality } from '@/components/hospitality/AccionHospitality';
 import { formatearImporte, monedaEfectiva, MONEDAS_SELECCIONABLES } from '@/lib/moneda';
 
 interface Property {
@@ -352,13 +353,17 @@ export default function HospitalityTarifasPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={syncManual} disabled={syncing}>
-            {syncing ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <RefreshCcw className="h-4 w-4 mr-1" />}
-            Sincronizar tarifas
-          </Button>
-          <Button onClick={openNew} disabled={filteredUnits.length === 0}>
-            <Plus className="h-4 w-4 mr-2" /> Nuevo Plan
-          </Button>
+          <AccionHospitality capacidad="integraciones.gestionar">
+            <Button variant="outline" onClick={syncManual} disabled={syncing}>
+              {syncing ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <RefreshCcw className="h-4 w-4 mr-1" />}
+              Sincronizar tarifas
+            </Button>
+          </AccionHospitality>
+          <AccionHospitality capacidad="reservas.crear">
+            <Button onClick={openNew} disabled={filteredUnits.length === 0}>
+              <Plus className="h-4 w-4 mr-2" /> Nuevo Plan
+            </Button>
+          </AccionHospitality>
         </div>
       </div>
 
@@ -414,7 +419,9 @@ export default function HospitalityTarifasPage() {
                 : 'Crea un plan de tarifa para una unidad. Si no defines planes, se usará la tarifa base de la unidad.'}
             </p>
             {filteredUnits.length > 0 && (
-              <Button onClick={openNew}><Plus className="h-4 w-4 mr-2" /> Nuevo Plan</Button>
+              <AccionHospitality capacidad="reservas.crear">
+                <Button onClick={openNew}><Plus className="h-4 w-4 mr-2" /> Nuevo Plan</Button>
+              </AccionHospitality>
             )}
           </CardContent>
         </Card>
@@ -466,20 +473,26 @@ export default function HospitalityTarifasPage() {
                 </div>
 
                 <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="sm" onClick={() => duplicar(p)} title="Duplicar plan">
-                    <Copy className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => openEdit(p)}>
-                    <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-destructive hover:text-destructive"
-                    onClick={() => setDeleteTarget(p)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5 mr-1" /> Eliminar
-                  </Button>
+                  <AccionHospitality capacidad="reservas.crear">
+                    <Button variant="ghost" size="sm" onClick={() => duplicar(p)} title="Duplicar plan">
+                      <Copy className="h-3.5 w-3.5" />
+                    </Button>
+                  </AccionHospitality>
+                  <AccionHospitality capacidad="reservas.editar">
+                    <Button variant="outline" size="sm" onClick={() => openEdit(p)}>
+                      <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
+                    </Button>
+                  </AccionHospitality>
+                  <AccionHospitality capacidad="reservas.editar">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => setDeleteTarget(p)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-1" /> Eliminar
+                    </Button>
+                  </AccionHospitality>
                 </div>
               </CardContent>
             </Card>
@@ -673,10 +686,12 @@ export default function HospitalityTarifasPage() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
+            <AccionHospitality capacidad={editing ? 'reservas.editar' : 'reservas.crear'}>
             <Button onClick={save} disabled={saving}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
               Guardar
             </Button>
+            </AccionHospitality>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -696,9 +711,11 @@ export default function HospitalityTarifasPage() {
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancelar</Button>
-            <Button variant="destructive" onClick={confirmDelete}>
-              <Trash2 className="h-4 w-4 mr-2" /> Sí, eliminar
-            </Button>
+            <AccionHospitality capacidad="reservas.editar">
+              <Button variant="destructive" onClick={confirmDelete}>
+                <Trash2 className="h-4 w-4 mr-2" /> Sí, eliminar
+              </Button>
+            </AccionHospitality>
           </DialogFooter>
         </DialogContent>
       </Dialog>

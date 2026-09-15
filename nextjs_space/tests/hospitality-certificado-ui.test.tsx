@@ -51,8 +51,17 @@ const { toastError, toastSuccess } = vi.hoisted(() => ({
 vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: toastError } }));
 
 import BandejaPage from '@/app/dashboard/hospitality/viajeros/page';
+import { olvidarRolCacheado } from '@/hooks/use-capacidades-hospitality';
 
 const DIA = 24 * 60 * 60 * 1000;
+
+/**
+ * El rol con el que se prueba la pantalla. Ahora que la interfaz esconde las
+ * acciones que el rol no tiene, la prueba tiene que decir con qué rol entra el
+ * usuario: si no, se probaría la pantalla de alguien sin permisos y el
+ * certificado no se podría ni subir.
+ */
+const ROL_CON_PERMISO = { id: 'rol-test', nombre: 'Admin', permisos: { all: true } };
 
 function configuracion(extra: Record<string, unknown> = {}) {
   return {
@@ -76,11 +85,20 @@ function configuracion(extra: Record<string, unknown> = {}) {
 }
 
 /** Lo que responde la API de la bandeja en el montaje de la página. */
-function mockApi(opciones: { configuracion?: unknown; respuestaPut?: unknown } = {}) {
+function mockApi(
+  opciones: { configuracion?: unknown; respuestaPut?: unknown; rol?: unknown } = {}
+) {
   const envios: Array<{ url: string; method: string; cuerpo: any }> = [];
 
   mockFetch.mockImplementation((url: string, init?: RequestInit) => {
     const metodo = init?.method ?? 'GET';
+    if (String(url).includes('/api/users/me')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ role: opciones.rol === undefined ? ROL_CON_PERMISO : opciones.rol }),
+      });
+    }
     if (String(url).includes('/api/hospitality/compliance')) {
       envios.push({
         url: String(url),
@@ -136,6 +154,8 @@ beforeEach(() => {
   mockFetch.mockReset();
   toastError.mockReset();
   toastSuccess.mockReset();
+  // El rol se cachea en el módulo para no pedirlo en cada componente.
+  olvidarRolCacheado();
 });
 
 afterEach(() => {
@@ -239,6 +259,13 @@ describe('el certificado se instala desde la configuración del registro de viaj
   it('si el certificado no abre con su contraseña, la causa se enseña tal cual', async () => {
     mockApi();
     mockFetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (String(url).includes('/api/users/me')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ role: ROL_CON_PERMISO }),
+        });
+      }
       if (String(url).includes('/api/hospitality/compliance')) {
         const metodo = init?.method ?? 'GET';
         if (metodo === 'PUT') {
@@ -296,5 +323,21 @@ describe('el certificado se instala desde la configuración del registro de viaj
     await waitFor(() => expect(toastError).toHaveBeenCalled());
     expect(String(toastError.mock.calls[0][0])).toMatch(/\.p12 o \.pfx/i);
     expect(envios.some((e) => e.method === 'PUT')).toBe(false);
+  });
+
+  it('un rol sin permiso de configurar canales no puede tocar las credenciales', async () => {
+    // La configuración de la entidad es conectividad, no registro: quien solo
+    // gestiona viajeros no instala el certificado ni guarda credenciales.
+    mockApi({
+      rol: {
+        id: 'rol-viajeros',
+        nombre: 'Recepción',
+        permisos: { hospitality_reservas: { ver: true, editar: true } },
+      },
+    });
+    await abrirConfiguracion();
+
+    expect(screen.queryByRole('button', { name: /^guardar$/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /probar conexión/i })).toBeNull();
   });
 });

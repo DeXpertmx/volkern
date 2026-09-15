@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   CAPACIDADES_HOSPITALITY,
+  CAPACIDADES_PRIVILEGIADAS,
   PERMISOS_HOSPITALITY_COMPLETOS,
   TODAS_LAS_CAPACIDADES,
   capacidadDeCambioDeReserva,
@@ -72,22 +73,45 @@ describe('catálogo de capacidades', () => {
   it('los módulos de Hospitality se conceden por separado', () => {
     // Si compartieran módulo, conceder limpieza concedería reservas.
     const modulos = new Set(TODAS_LAS_CAPACIDADES.map((c) => CAPACIDADES_HOSPITALITY[c].modulo));
-    expect(modulos.size).toBeGreaterThanOrEqual(7);
+    expect(modulos.size).toBeGreaterThanOrEqual(8);
     for (const modulo of modulos) {
-      expect(modulo.startsWith('hospitality_')).toBe(true);
+      // `roles.gestionar` es la excepción y es deliberada: repartir los permisos
+      // del alojamiento es un acto sobre el equipo de la cuenta, y ahí vive el
+      // módulo `equipo` desde mucho antes de que existiera Hospitality.
+      const deHospitality = modulo.startsWith('hospitality_');
+      expect(
+        deHospitality || modulo === 'equipo',
+        `${modulo} no es un módulo de Hospitality ni el de equipo`
+      ).toBe(true);
     }
   });
 
-  it('el conjunto completo cubre todas las capacidades (retrollenado sin huecos)', () => {
+  it('el conjunto completo cubre todo lo que no es privilegio (retrollenado sin huecos)', () => {
     // El retrollenado de scripts/backfill-hospitality-permissions.ts concede
     // PERMISOS_HOSPITALITY_COMPLETOS. Si una capacidad nueva no estuviera ahí,
     // los roles existentes la perderían en silencio al desplegar.
     for (const capacidad of TODAS_LAS_CAPACIDADES) {
+      const definicion = CAPACIDADES_HOSPITALITY[capacidad];
+      if (definicion.privilegiada) continue;
+      expect(
+        PERMISOS_HOSPITALITY_COMPLETOS[definicion.modulo]?.[definicion.accion],
+        `${capacidad} (${definicion.modulo}.${definicion.accion}) no está en el conjunto del retrollenado`
+      ).toBe(true);
+    }
+  });
+
+  it('el retrollenado no reparte las capacidades privilegiadas', () => {
+    // Este es el corazón del diseño: instalar el certificado de la entidad, ver
+    // los documentos sin enmascarar, entrar como huésped y repartir permisos no
+    // se conceden "por venir en el lote". Si alguna de estas apareciera en el
+    // conjunto completo, cualquier retrollenado la repartiría sin preguntar.
+    expect(CAPACIDADES_PRIVILEGIADAS.length).toBeGreaterThanOrEqual(4);
+    for (const capacidad of CAPACIDADES_PRIVILEGIADAS) {
       const { modulo, accion } = CAPACIDADES_HOSPITALITY[capacidad];
       expect(
-        PERMISOS_HOSPITALITY_COMPLETOS[modulo]?.[accion],
-        `${capacidad} (${modulo}.${accion}) no está en el conjunto del retrollenado`
-      ).toBe(true);
+        PERMISOS_HOSPITALITY_COMPLETOS[modulo]?.[accion] ?? false,
+        `${capacidad} no puede viajar en el conjunto del retrollenado`
+      ).toBe(false);
     }
   });
 
@@ -229,15 +253,22 @@ describe('retrollenado de los roles que ya existían', () => {
     expect(original).not.toBe(fusionado);
   });
 
-  it('deja el rol pudiendo todo lo que la API de Hospitality exige', () => {
+  it('deja el rol pudiendo todo lo que la API de Hospitality exige, salvo los privilegios', () => {
     const fusionado = conPermisosHospitality({ leads: { ver: true } });
     const auth = sesion(fusionado);
 
     for (const capacidad of TODAS_LAS_CAPACIDADES) {
+      if (CAPACIDADES_HOSPITALITY[capacidad].privilegiada) continue;
       expect(
         puedeEnHospitality(auth, capacidad),
         `tras el retrollenado, ${capacidad} sigue sin concederse`
       ).toBe(true);
+    }
+
+    // Y los privilegios siguen sin concederse: el retrollenado no es una llave
+    // maestra, es la forma de no quitarle a nadie lo que ya tenía.
+    for (const capacidad of CAPACIDADES_PRIVILEGIADAS) {
+      expect(puedeEnHospitality(auth, capacidad)).toBe(false);
     }
   });
 

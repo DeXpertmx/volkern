@@ -275,6 +275,7 @@ export const ALL_MODULES: RBACModule[] = [
   'hospitality_finanzas',
   'hospitality_comunicaciones',
   'hospitality_automatizaciones',
+  'hospitality_misreservas',
 ];
 
 /**
@@ -295,6 +296,14 @@ export const ALL_PERMISSIONS: Permission[] = [
   'responder',
   'invitar',
   'cancelar',
+  // Acciones que existen porque dos trabajos distintos no deben compartir llave:
+  // entregar las llaves no es limpiar, firmar ante el Ministerio no es configurar
+  // un canal, ver el pasaporte no es ver la reserva, y repartir permisos no es
+  // gestionar el equipo.
+  'checkin',
+  'administrar',
+  'documento_completo',
+  'roles',
 ];
 
 /**
@@ -315,6 +324,10 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   responder: 'Responder',
   invitar: 'Invitar',
   cancelar: 'Cancelar',
+  checkin: 'Check-in',
+  administrar: 'Administrar',
+  documento_completo: 'Ver documentos',
+  roles: 'Roles',
 };
 
 /**
@@ -342,6 +355,7 @@ export const MODULE_LABELS: Record<RBACModule, string> = {
   hospitality_finanzas: 'Hospitality · Finanzas y reportes',
   hospitality_comunicaciones: 'Hospitality · Comunicaciones al huésped',
   hospitality_automatizaciones: 'Hospitality · Automatizaciones',
+  hospitality_misreservas: 'Hospitality · Sus reservas (rol Huésped)',
 };
 
 /**

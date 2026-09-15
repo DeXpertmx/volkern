@@ -23,6 +23,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AccionHospitality } from '@/components/hospitality/AccionHospitality';
 import {
   Select,
   SelectContent,
@@ -422,10 +423,12 @@ export default function HospitalityOnboardingPage() {
         />
       </div>
       <div className="sm:col-span-2">
-        <Button onClick={crearPropiedad} disabled={busy !== null}>
-          {busy === 'propiedad' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-          Crear propiedad y continuar
-        </Button>
+        <AccionHospitality capacidad="reservas.crear">
+          <Button onClick={crearPropiedad} disabled={busy !== null}>
+            {busy === 'propiedad' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+            Crear propiedad y continuar
+          </Button>
+        </AccionHospitality>
       </div>
     </div>
   );
@@ -612,10 +615,12 @@ export default function HospitalityOnboardingPage() {
                   />
                 </div>
                 <div className="sm:col-span-3">
-                  <Button onClick={crearUnidad} disabled={busy !== null} variant="secondary">
-                    {busy === 'unidad' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-                    Añadir unidad
-                  </Button>
+                  <AccionHospitality capacidad="reservas.crear">
+                    <Button onClick={crearUnidad} disabled={busy !== null} variant="secondary">
+                      {busy === 'unidad' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+                      Añadir unidad
+                    </Button>
+                  </AccionHospitality>
                 </div>
               </div>
             </div>
@@ -681,10 +686,12 @@ export default function HospitalityOnboardingPage() {
                     placeholder="El código que asigna el proveedor al onboarding"
                   />
                 </div>
-                <Button onClick={() => cargarCatalogo(false)} disabled={busy !== null || !hotelCodeInput.trim()}>
-                  {busy === 'catalogo' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-                  Obtener catálogo
-                </Button>
+                <AccionHospitality capacidad="integraciones.gestionar">
+                  <Button onClick={() => cargarCatalogo(false)} disabled={busy !== null || !hotelCodeInput.trim()}>
+                    {busy === 'catalogo' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                    Obtener catálogo
+                  </Button>
+                </AccionHospitality>
               </div>
 
               {catalogoError && (
@@ -777,10 +784,12 @@ export default function HospitalityOnboardingPage() {
                       </div>
                     ))}
                   </div>
-                  <Button onClick={guardarMapping} disabled={busy !== null}>
-                    {busy === 'mapping' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Link2 className="mr-2 h-4 w-4" />}
-                    Guardar vínculos
-                  </Button>
+                  <AccionHospitality capacidad="integraciones.gestionar">
+                    <Button onClick={guardarMapping} disabled={busy !== null}>
+                      {busy === 'mapping' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Link2 className="mr-2 h-4 w-4" />}
+                      Guardar vínculos
+                    </Button>
+                  </AccionHospitality>
                 </>
               )}
             </div>
@@ -846,10 +855,12 @@ export default function HospitalityOnboardingPage() {
                   </AlertDescription>
                 </Alert>
               ) : (
-                <Button onClick={activar} disabled={busy !== null || !snapshot.puedeActivar.ok}>
-                  {busy === 'activar' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Rocket className="mr-2 h-4 w-4" />}
-                  Activar propiedad
-                </Button>
+                <AccionHospitality capacidad="integraciones.gestionar">
+                  <Button onClick={activar} disabled={busy !== null || !snapshot.puedeActivar.ok}>
+                    {busy === 'activar' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Rocket className="mr-2 h-4 w-4" />}
+                    Activar propiedad
+                  </Button>
+                </AccionHospitality>
               )}
             </div>
           </PasoCard>
@@ -917,10 +928,12 @@ function PruebaBloque({
   return (
     <div className="space-y-3">
       <p className="text-sm text-slate-600">{descripcion}</p>
-      <Button onClick={onEjecutar} disabled={deshabilitado} variant="secondary">
-        {enCurso ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-        {boton}
-      </Button>
+      <AccionHospitality capacidad="integraciones.gestionar">
+        <Button onClick={onEjecutar} disabled={deshabilitado} variant="secondary">
+          {enCurso ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+          {boton}
+        </Button>
+      </AccionHospitality>
       {resultado && (
         <Alert variant={resultado.ok ? 'default' : 'destructive'}>
           <AlertDescription className="flex items-center gap-2">
