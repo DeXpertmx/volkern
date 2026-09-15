@@ -214,10 +214,23 @@ describe('el paso que hereda los privilegios que se tenían por nombre', () => {
   });
 
   it('quien podía limpiar hereda el check-in, que pedía el mismo permiso', () => {
-    expect(capacidadesQueHereda({ hospitality_operaciones: { gestionar: true } })).toContain(
+    expect(capacidadesQueHereda({ hospitality_operaciones: { gestionar: true } }, 'Turno de tarde')).toContain(
       'operaciones.checkin'
     );
-    expect(capacidadesQueHereda({ hospitality_operaciones: { ver: true } })).toEqual([]);
+    expect(capacidadesQueHereda({ hospitality_operaciones: { ver: true } }, 'Turno de tarde')).toEqual([]);
+  });
+
+  it('pero no se le hereda a los roles del catálogo, que ya dicen lo que pueden', () => {
+    // Limpieza tiene `hospitality_operaciones.gestionar` —marca limpiezas— y su
+    // definición dice que no entrega llaves. Heredarle el check-in por el
+    // permiso viejo sería concederle una puerta que nadie le dio, y justo en el
+    // rol cuyo nombre promete lo contrario.
+    expect(
+      capacidadesQueHereda({ hospitality_operaciones: { ver: true, gestionar: true } }, 'Limpieza')
+    ).toEqual([]);
+    expect(
+      capacidadesQueHereda({ hospitality_operaciones: { ver: true, gestionar: true } }, 'Mantenimiento')
+    ).toEqual([]);
   });
 
   it('quien editaba el equipo hereda la llave de los roles', () => {

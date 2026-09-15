@@ -20,6 +20,7 @@ import {
   CAPACIDADES_HOSPITALITY,
   type CapacidadHospitality,
 } from './capacidades';
+import { esNombreDeRolHospitality } from './roles';
 
 export type Permisos = Record<string, unknown>;
 
@@ -43,7 +44,11 @@ function tiene(permisos: Permisos | null | undefined, modulo: string, accion: st
  *    deje de depender de cómo se llame el rol — y para que un rol nuevo pueda
  *    recibirlo.
  *  - **Quien podía gestionar la limpieza.** El check-in pedía el mismo permiso
- *    que limpiar. Al separarlos, quien lo tenía se queda con los dos.
+ *    que limpiar. Al separarlos, quien lo tenía se queda con los dos. Esta
+ *    regla **no** se aplica a los roles del catálogo: Limpieza nace ya después
+ *    de la separación y dice en `roles.ts` lo que puede —marcar limpiezas, no
+ *    entregar llaves—, así que heredarle el check-in sería contradecir su
+ *    propia definición y dar a quien limpia una puerta que nadie le concedió.
  *  - **Quien podía editar el equipo.** Los roles colgaban de `equipo.editar` y
  *    `equipo.eliminar`; ahora los de Hospitality tienen su propia llave.
  */
@@ -62,7 +67,10 @@ export function capacidadesQueHereda(
     heredadas.push('integraciones.administrar', 'viajeros.documento_completo');
   }
 
-  if (tiene(permisos, 'hospitality_operaciones', 'gestionar')) {
+  if (
+    !esNombreDeRolHospitality(nombreRol) &&
+    tiene(permisos, 'hospitality_operaciones', 'gestionar')
+  ) {
     heredadas.push('operaciones.checkin');
   }
 
