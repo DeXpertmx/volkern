@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/api-key-auth';
+import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
 import {
   borrarCredenciales,
   guardarConfig,
@@ -20,6 +21,8 @@ export async function GET(req: NextRequest) {
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    const sinPermiso = exigirPermisoHospitality(auth, 'integraciones.ver');
+    if (sinPermiso) return sinPermiso;
 
     const config = await leerConfig(auth.tenant!.id);
     return NextResponse.json({
@@ -48,6 +51,8 @@ export async function PUT(req: NextRequest) {
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    const sinPermiso = exigirPermisoHospitality(auth, 'integraciones.gestionar');
+    if (sinPermiso) return sinPermiso;
 
     const cuerpo = await req.json().catch(() => null);
     if (!cuerpo || typeof cuerpo !== 'object') {
@@ -93,6 +98,8 @@ export async function DELETE(req: NextRequest) {
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    const sinPermiso = exigirPermisoHospitality(auth, 'integraciones.gestionar');
+    if (sinPermiso) return sinPermiso;
 
     if (auth.user?.role?.nombre && !['Superadmin', 'Admin'].includes(auth.user.role.nombre)) {
       return NextResponse.json(
@@ -128,6 +135,8 @@ export async function POST(req: NextRequest) {
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    const sinPermiso = exigirPermisoHospitality(auth, 'integraciones.gestionar');
+    if (sinPermiso) return sinPermiso;
 
     const cuerpo = await req.json().catch(() => null);
     const config = await leerConfig(auth.tenant!.id);

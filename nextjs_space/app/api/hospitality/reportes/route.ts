@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
+import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
 import { cargarDatosFinancieros, resolverRango } from '@/lib/hospitality/money-query';
 import {
   csvCanales,
@@ -32,11 +33,21 @@ export async function GET(req: NextRequest) {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
 
+    const sinPermiso = exigirPermisoHospitality(auth, 'finanzas.ver');
+    if (sinPermiso) return sinPermiso;
+
     const { searchParams } = new URL(req.url);
     const { desde, hasta } = resolverRango(searchParams);
     const propertyId = searchParams.get('propertyId');
     const formato = (searchParams.get('formato') || searchParams.get('format') || '').toLowerCase();
     const seccion = (searchParams.get('seccion') || 'propiedades').toLowerCase();
+
+    // Ver los reportes no es sacarlos del sistema: exportar es una capacidad
+    // aparte, porque un archivo sale del control de Volkern.
+    if (formato === 'csv') {
+      const sinPermisoExportar = exigirPermisoHospitality(auth, 'finanzas.exportar');
+      if (sinPermisoExportar) return sinPermisoExportar;
+    }
 
     const tenantId = auth.tenant!.id;
 

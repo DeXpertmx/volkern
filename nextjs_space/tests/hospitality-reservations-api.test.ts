@@ -26,7 +26,12 @@ vi.mock('@/lib/db', () => ({ prisma }));
 vi.mock('@/lib/api-key-auth', () => ({
   authenticateRequest: (...a: any[]) => mockAuth(...a),
 }));
-vi.mock('@/lib/permissions', () => ({ logAuditAction: mockAudit }));
+vi.mock('@/lib/permissions', async () => ({
+  // La ruta comprueba permisos: se conserva el `hasPermission` real y solo se
+  // sustituye la auditoría, que es lo que estas pruebas quieren aislar.
+  ...(await vi.importActual<typeof import('@/lib/permissions')>('@/lib/permissions')),
+  logAuditAction: mockAudit
+}));
 vi.mock('@/lib/hospitality/sync', () => ({
   dispatchConnectivityPush: mockDispatch,
 }));
@@ -41,7 +46,7 @@ function buildReq(method: string, body?: any, url = 'https://volkern.app/api/hos
   }) as any;
 }
 
-const AUTH_OK = { valid: true, tenant: { id: 't1', moneda: 'EUR' }, user: { id: 'u1' } };
+const AUTH_OK = { valid: true, tenant: { id: 't1', moneda: 'EUR' }, user: { id: 'u1', role: { id: 'role_admin', nombre: 'Admin', permisos: { all: true } } } };
 
 describe('GET /api/hospitality/reservations (filtros)', () => {
   beforeEach(() => {
@@ -225,7 +230,7 @@ describe('POST /api/hospitality/reservations (alta manual)', () => {
 
     it('sin moneda en el tenant conserva el valor del esquema como última red', async () => {
       // La columna no admite nulos: aquí sí es preferible 'MXN' a una cadena vacía.
-      mockAuth.mockResolvedValue({ valid: true, tenant: { id: 't1' }, user: { id: 'u1' } });
+      mockAuth.mockResolvedValue({ valid: true, tenant: { id: 't1' }, user: { id: 'u1', role: { id: 'role_admin', nombre: 'Admin', permisos: { all: true } } } });
       const { moneda, ...sinMoneda } = VALID_BODY;
       await POST(buildReq('POST', sinMoneda));
 

@@ -26,7 +26,7 @@ vi.mock('@/lib/hospitality/sync', () => ({
 import { GET as GETPlans, POST as POSTPlans } from '../app/api/hospitality/rateplans/route';
 import { PATCH as PATCHPlan, DELETE as DELETPlan } from '../app/api/hospitality/rateplans/[id]/route';
 
-const AUTH_OK = { valid: true, tenant: { id: 't1' }, user: { id: 'u1' } };
+const AUTH_OK = { valid: true, tenant: { id: 't1' }, user: { id: 'u1', role: { id: 'role_admin', nombre: 'Admin', permisos: { all: true } } } };
 
 function buildReq(body?: any, url = 'https://volkern.app/api/hospitality/rateplans') {
   return new Request(url, {

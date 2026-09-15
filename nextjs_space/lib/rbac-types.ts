@@ -247,6 +247,7 @@ export const DEFAULT_MODULE_PERMISSIONS: RBACModulePermissions = {
   enviar: false,
   responder: false,
   invitar: false,
+  cancelar: false,
 };
 
 /**
@@ -267,6 +268,13 @@ export const ALL_MODULES: RBACModule[] = [
   'whitelabel',
   'telefonia',
   'pages',
+  'hospitality_reservas',
+  'hospitality_operaciones',
+  'hospitality_mantenimiento',
+  'hospitality_integraciones',
+  'hospitality_finanzas',
+  'hospitality_comunicaciones',
+  'hospitality_automatizaciones',
 ];
 
 /**
@@ -286,6 +294,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   'enviar',
   'responder',
   'invitar',
+  'cancelar',
 ];
 
 /**
@@ -305,6 +314,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   enviar: 'Enviar',
   responder: 'Responder',
   invitar: 'Invitar',
+  cancelar: 'Cancelar',
 };
 
 /**
@@ -325,6 +335,13 @@ export const MODULE_LABELS: Record<RBACModule, string> = {
   whitelabel: 'White Label',
   telefonia: 'Telefonía',
   pages: 'Páginas',
+  hospitality_reservas: 'Hospitality · Reservas y planning',
+  hospitality_operaciones: 'Hospitality · Operaciones (limpieza y check-in/out)',
+  hospitality_mantenimiento: 'Hospitality · Mantenimiento',
+  hospitality_integraciones: 'Hospitality · Integraciones y conectividad',
+  hospitality_finanzas: 'Hospitality · Finanzas y reportes',
+  hospitality_comunicaciones: 'Hospitality · Comunicaciones al huésped',
+  hospitality_automatizaciones: 'Hospitality · Automatizaciones',
 };
 
 /**

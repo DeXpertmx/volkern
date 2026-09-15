@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/api-key-auth';
+import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
 import { logAuditAction } from '@/lib/permissions';
 import {
   viajeroPublico,
@@ -50,6 +51,8 @@ export async function GET(req: NextRequest, { params }: { params: { reservationI
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    const sinPermiso = exigirPermisoHospitality(auth, 'reservas.ver');
+    if (sinPermiso) return sinPermiso;
 
     const tenantId = auth.tenant!.id;
     const detalle = await detalleRegistro(tenantId, params.reservationId);
@@ -115,6 +118,8 @@ export async function POST(req: NextRequest, { params }: { params: { reservation
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    const sinPermiso = exigirPermisoHospitality(auth, 'reservas.editar');
+    if (sinPermiso) return sinPermiso;
 
     const tenantId = auth.tenant!.id;
     const usuarioId = auth.user?.id ?? auth.apiKey?.id ?? 'sistema';

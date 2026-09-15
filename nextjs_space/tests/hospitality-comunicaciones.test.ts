@@ -37,7 +37,7 @@ import { GET as GETPlantillas, POST as POSTPlantillas } from '../app/api/hospita
 import { PATCH as PATCHPlantilla, DELETE as DELETPlantilla } from '../app/api/hospitality/comunicaciones/[id]/route';
 import { POST as POSTPrueba } from '../app/api/hospitality/comunicaciones/[id]/enviar-prueba/route';
 
-const AUTH_OK = { valid: true, tenant: { id: 't1' }, user: { id: 'u1' } };
+const AUTH_OK = { valid: true, tenant: { id: 't1' }, user: { id: 'u1', role: { id: 'role_admin', nombre: 'Admin', permisos: { all: true } } } };
 
 function buildReq(body?: any, url = 'https://volkern.app/api/hospitality/comunicaciones') {
   return new Request(url, {

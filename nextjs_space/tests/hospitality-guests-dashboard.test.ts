@@ -27,7 +27,7 @@ vi.mock('@/lib/api-key-auth', () => ({
 import { GET as GETGuests } from '../app/api/hospitality/guests/route';
 import { GET as GETDashboard } from '../app/api/hospitality/dashboard/route';
 
-const AUTH_OK = { valid: true, tenant: { id: 't1' }, user: { id: 'u1' } };
+const AUTH_OK = { valid: true, tenant: { id: 't1' }, user: { id: 'u1', role: { id: 'role_admin', nombre: 'Admin', permisos: { all: true } } } };
 
 function buildReq(url = 'https://volkern.app/api/hospitality/guests') {
   return new Request(url) as any;

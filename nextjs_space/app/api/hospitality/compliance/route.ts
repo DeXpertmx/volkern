@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/api-key-auth';
+import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
 import { bandejaDeRegistros, leerConfig } from '@/lib/hospitality/compliance-store';
 import { ESTADOS_REGISTRO, FICHAS_ESTADO, type EstadoRegistro } from '@/lib/hospitality/compliance';
 import { ENTORNOS, ESQUEMA_XML_DISPONIBLE, ENDPOINTS } from '@/lib/hospitality/ses-hospedajes/connector';
@@ -16,6 +17,8 @@ export async function GET(req: NextRequest) {
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    const sinPermiso = exigirPermisoHospitality(auth, 'reservas.ver');
+    if (sinPermiso) return sinPermiso;
 
     const tenantId = auth.tenant!.id;
     const { searchParams } = new URL(req.url);
