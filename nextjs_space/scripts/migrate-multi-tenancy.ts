@@ -33,7 +33,9 @@ const ROLE_PERMISSIONS = {
     pages: { ver: true, crear: true, editar: true, eliminar: true, publicar: true },
   },
   Admin: {
-    leads: { ver: true, crear: true, editar: true, eliminar: true, asignar: true, exportar: true },
+    // `leads.ver_todos` es el alcance del pipeline: sin ella solo se ven los
+    // leads asignados a uno mismo («Sales Agent» y «Support» no la llevan).
+    leads: { ver: true, crear: true, editar: true, eliminar: true, asignar: true, exportar: true, ver_todos: true },
     citas: { ver: true, crear: true, editar: true, eliminar: true, gestionar: true },
     estudiantes: { ver: true, crear: true, editar: true, eliminar: true, inscribir: true },
     cursos: { ver: true, crear: true, editar: true, eliminar: true, publicar: true },
