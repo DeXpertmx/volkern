@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { verifyFinancialIntegrity, reportSecurityIncident } from './integrity-service';
 import { prisma } from '@/lib/db';
+import { hasPermisoDeRol } from '@/lib/permissions-core';
 
 /**
  * Escudo Financiero (Finance Guard)
@@ -8,16 +9,20 @@ import { prisma } from '@/lib/db';
  */
 
 /**
- * Roles con acceso a los datos financieros consolidados.
+ * Quién ve el cockpit financiero consolidado de la cuenta.
  *
- * Los nombres son los que la plataforma usa de verdad (`Role.nombre`: Superadmin,
- * Admin, Sales Agent). El guard nació comparando contra 'OWNER' y 'FINANCE_ADMIN'
- * -nombres que ningún rol de la base tiene-, así que o dejaba fuera a todo el
- * mundo o, como el rol llega como objeto y no como cadena, reventaba con un 500
- * antes de decidir. Se conservan los dos nombres originales para no romper a
- * quien los use.
+ * Lo decide el permiso `configuracion.gestionar` —el de administrar la cuenta—
+ * y no el nombre del rol. Antes era una lista de nombres ('SUPERADMIN',
+ * 'ADMIN', 'OWNER', 'FINANCE_ADMIN'): el propietario de la cuenta perdía el
+ * acceso en cuanto su rol se llamaba distinto, y cualquier rol bautizado
+ * «Admin» lo ganaba sin que nadie se lo hubiera concedido. El resumen
+ * ejecutivo de la cuenta es parte de administrarla, así que comparte llave con
+ * el resto de la configuración; cuando exista un permiso financiero propio,
+ * esta es la única línea que cambia.
  */
-export const ROLES_CON_ACCESO_FINANCIERO = ['SUPERADMIN', 'ADMIN', 'OWNER', 'FINANCE_ADMIN'];
+function puedeVerFinanzasConsolidadas(rol: RolRecibido): boolean {
+  return hasPermisoDeRol(rol as never, 'configuracion', 'gestionar');
+}
 
 /** Rol en cualquiera de las formas en que llega: cadena, objeto `Role` o nada. */
 export type RolRecibido =
@@ -40,8 +45,8 @@ export function nombreDeRol(rol: RolRecibido): string {
 }
 
 export async function validateFinancialSecurity(tenantId: string, user: { id: string, role: RolRecibido, email: string }) {
-  // 1. Validación de Rol Jerárquico
-  if (!ROLES_CON_ACCESO_FINANCIERO.includes(nombreDeRol(user.role).toUpperCase())) {
+  // 1. Autorización por permiso, no por el nombre del rol
+  if (!puedeVerFinanzasConsolidadas(user.role)) {
      await reportSecurityIncident({
         tenantId,
         type: 'UNAUTHORIZED_ACCESS_ATTEMPT',

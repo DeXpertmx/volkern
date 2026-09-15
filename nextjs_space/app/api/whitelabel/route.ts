@@ -6,6 +6,7 @@ import { uploadPublicFile } from '@/lib/s3'
 import { getPlanConfig } from '@/lib/plans'
 import { withTenantAuth } from '@/lib/api-key-auth'
 import { getEffectiveBranding, clearBrandingCache } from '@/lib/branding'
+import { hasPermission } from '@/lib/permissions'
 
 /**
  * GET - Obtener configuración de whitelabel
@@ -111,6 +112,20 @@ export const PUT = withTenantAuth(async (request, auth) => {
 
     const tenantId = auth.tenant!.id;
     const userRole = (auth.user as any)?.role?.nombre;
+
+    // Escribir la marca de la cuenta es administrarla: lo decide el permiso
+    // `configuracion.gestionar`, no el nombre del rol ni la autenticación a
+    // secas. Antes cualquier usuario del tenant podía reescribir el branding
+    // con solo pasar el control del plan.
+    if (!hasPermission(auth.user as never, 'configuracion', 'gestionar')) {
+      return NextResponse.json(
+        {
+          error: 'Solo quien administra la configuración de la cuenta puede cambiar la marca',
+          permisoRequerido: 'configuracion.gestionar',
+        },
+        { status: 403 }
+      );
+    }
 
     // Solo admin de tenant o Superadmin pueden actualizar whitelabel
     const tenant = await prisma.tenant.findUnique({

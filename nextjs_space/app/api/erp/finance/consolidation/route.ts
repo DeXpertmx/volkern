@@ -25,8 +25,9 @@ import { validateFinancialSecurity } from '@/lib/security/finance-guard';
  * `?months=N` sí llega a la skill: la ruta le pasaba `period`, que el wrapper
  * ignora, de modo que un año entero se respondía como el mes en curso.
  *
- * Nota sobre permisos: la puerta financiera exige rol de administración
- * (Superadmin/Admin). Los roles llegan como objeto `Role`, no como cadena.
+ * Nota sobre permisos: la puerta financiera exige administrar la cuenta
+ * (`configuracion.gestionar`), no un nombre de rol. Los roles llegan como
+ * objeto `Role`, no como cadena.
  */
 export const GET = withTenantAuth(async (request, auth) => {
   try {

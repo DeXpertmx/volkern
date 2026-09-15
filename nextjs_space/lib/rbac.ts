@@ -422,19 +422,6 @@ class RBACService {
   }
 
   /**
-   * Check if user can assign to themselves only (limited access)
-   * @returns true if user should only see their own records
-   */
-  hasLimitedAccess(): boolean {
-    if (!this.context.user || !this.context.user.role) {
-      return true;
-    }
-
-    const roleName = this.context.user.role.nombre;
-    return roleName === 'Sales Agent' || roleName === 'Support';
-  }
-
-  /**
    * Get all modules the user can view
    * @returns Array of modules the user can access
    */
