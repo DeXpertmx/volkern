@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
+import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
 import { formatearImporte, primeraMoneda } from '@/lib/moneda';
 import {
   buildContextoPlantilla,
@@ -19,6 +20,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    const sinPermiso = exigirPermisoHospitality(auth, 'comunicaciones.enviar');
+    if (sinPermiso) return sinPermiso;
 
     const { id } = await params;
     const tenantId = auth.tenant!.id;

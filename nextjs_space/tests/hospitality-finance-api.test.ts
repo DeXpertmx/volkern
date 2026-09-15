@@ -36,7 +36,12 @@ vi.mock('@/lib/db', () => ({
   },
 }));
 vi.mock('@/lib/api-key-auth', () => ({ authenticateRequest: mocks.authenticateRequest }));
-vi.mock('@/lib/permissions', () => ({ logAuditAction: mocks.logAuditAction }));
+vi.mock('@/lib/permissions', async () => ({
+  // La ruta comprueba permisos: se conserva el `hasPermission` real y solo se
+  // sustituye la auditoría, que es lo que estas pruebas quieren aislar.
+  ...(await vi.importActual<typeof import('@/lib/permissions')>('@/lib/permissions')),
+  logAuditAction: mocks.logAuditAction
+}));
 
 import { GET as finanzasGET } from '@/app/api/hospitality/finanzas/route';
 import { GET as reportesGET } from '@/app/api/hospitality/reportes/route';
@@ -52,7 +57,7 @@ import {
 } from '@/app/api/hospitality/reservations/[id]/payments/[paymentId]/route';
 
 // El tenant trae su moneda de reporte: es la fuente autoritativa del respaldo.
-const auth = { valid: true, tenant: { id: 'tenant_a', moneda: 'EUR' }, user: { id: 'user_a' } };
+const auth = { valid: true, tenant: { id: 'tenant_a', moneda: 'EUR' }, user: { id: 'user_a', role: { id: 'role_admin', nombre: 'Admin', permisos: { all: true } } } };
 
 const request = (method: string, body?: unknown, url = 'http://test.local/api/hospitality') =>
   new Request(url, {
@@ -239,7 +244,7 @@ describe('la moneda sale del dato, no del valor por defecto del esquema', () => 
     mocks.authenticateRequest.mockResolvedValue({
       valid: true,
       tenant: { id: 'tenant_sin_moneda' },
-      user: { id: 'user_a' },
+      user: { id: 'user_a', role: { id: 'role_admin', nombre: 'Admin', permisos: { all: true } } },
     });
     mocks.hospitalityReservation.findMany.mockResolvedValue([]);
 

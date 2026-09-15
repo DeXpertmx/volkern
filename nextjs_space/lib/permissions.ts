@@ -23,7 +23,18 @@ export type PermissionModule =
   | 'equipo' 
   | 'whitelabel' 
   | 'telefonia'
-  | 'pages';
+  | 'pages'
+  // Hospitality: capacidades del módulo de alojamiento. Están separadas en
+  // cuatro áreas porque son cuatro trabajos distintos en una propiedad real
+  // (quien recibe reservas no es necesariamente quien limpia, ni quien
+  // configura los canales, ni quien ve el dinero).
+  | 'hospitality_reservas'
+  | 'hospitality_operaciones'
+  | 'hospitality_mantenimiento'
+  | 'hospitality_integraciones'
+  | 'hospitality_finanzas'
+  | 'hospitality_comunicaciones'
+  | 'hospitality_automatizaciones';
 
 export type PermissionAction = 
   | 'ver' 
@@ -38,7 +49,11 @@ export type PermissionAction =
   | 'activar' 
   | 'enviar' 
   | 'responder' 
-  | 'invitar';
+  | 'invitar'
+  // Cancelar no es eliminar: la reserva cancelada sigue existiendo, con su
+  // historial y sus pagos. Confundirlas haría que quien puede borrar borre
+  // sin dejar rastro, y que quien solo corrige una reserva pueda anularla.
+  | 'cancelar';
 
 export interface ModulePermissions {
   [action: string]: boolean;
@@ -61,6 +76,13 @@ export const ALL_PERMISSION_MODULES: PermissionModule[] = [
   'whitelabel',
   'telefonia',
   'pages',
+  'hospitality_reservas',
+  'hospitality_operaciones',
+  'hospitality_mantenimiento',
+  'hospitality_integraciones',
+  'hospitality_finanzas',
+  'hospitality_comunicaciones',
+  'hospitality_automatizaciones',
 ];
 
 export interface RolePermissions {

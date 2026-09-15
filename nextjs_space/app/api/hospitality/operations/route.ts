@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
+import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
 import { startOfDay, toIsoDate } from '@/lib/hospitality/calendar';
 
 // GET /api/hospitality/operations — Operations Board (plan maestro §19)
@@ -11,6 +12,8 @@ export async function GET(req: NextRequest) {
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    const sinPermiso = exigirPermisoHospitality(auth, 'operaciones.ver');
+    if (sinPermiso) return sinPermiso;
 
     const tenantId = auth.tenant!.id;
     const today = startOfDay(new Date());

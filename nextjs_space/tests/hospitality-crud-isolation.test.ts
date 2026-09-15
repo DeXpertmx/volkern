@@ -24,7 +24,10 @@ vi.mock('@/lib/db', () => ({
   },
 }));
 
-vi.mock('@/lib/permissions', () => ({
+vi.mock('@/lib/permissions', async () => ({
+  // La ruta comprueba permisos: se conserva el `hasPermission` real y solo se
+  // sustituye la auditoría, que es lo que estas pruebas quieren aislar.
+  ...(await vi.importActual<typeof import('@/lib/permissions')>('@/lib/permissions')),
   logAuditAction: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -32,7 +35,7 @@ vi.mock('@/lib/api-key-auth', () => ({
   authenticateRequest: vi.fn().mockResolvedValue({
     valid: true,
     tenant: { id: 'tenant_a' },
-    user: { id: 'user_1' },
+    user: { id: 'user_1', role: { id: 'role_admin', nombre: 'Admin', permisos: { all: true } } },
   }),
 }));
 

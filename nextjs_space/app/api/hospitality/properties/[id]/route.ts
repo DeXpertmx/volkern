@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
+import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
 import { logAuditAction } from '@/lib/permissions';
 
 interface Params {
@@ -22,6 +23,8 @@ export async function GET(_req: NextRequest, ctx: Params) {
   try {
     const auth = await authenticateRequest(_req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    const sinPermiso = exigirPermisoHospitality(auth, 'reservas.ver');
+    if (sinPermiso) return sinPermiso;
 
     const { id } = await ctx.params;
     const property = await getProperty(auth.tenant!.id, id);
@@ -39,6 +42,8 @@ export async function PATCH(req: NextRequest, ctx: Params) {
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    const sinPermiso = exigirPermisoHospitality(auth, 'reservas.editar');
+    if (sinPermiso) return sinPermiso;
 
     const { id } = await ctx.params;
     const existing = await getProperty(auth.tenant!.id, id);
@@ -105,6 +110,8 @@ export async function DELETE(req: NextRequest, ctx: Params) {
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    const sinPermiso = exigirPermisoHospitality(auth, 'reservas.editar');
+    if (sinPermiso) return sinPermiso;
 
     const { id } = await ctx.params;
     const existing = await getProperty(auth.tenant!.id, id);

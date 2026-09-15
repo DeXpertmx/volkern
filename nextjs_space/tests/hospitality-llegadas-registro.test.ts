@@ -29,7 +29,7 @@ import { GET } from '../app/api/hospitality/reservations/route';
 const AUTH_OK = {
   valid: true,
   tenant: { id: 't1', moneda: 'EUR' },
-  user: { id: 'u1' },
+  user: { id: 'u1', role: { id: 'role_admin', nombre: 'Admin', permisos: { all: true } } },
 } as never;
 
 function reservaConRegistro(checkIn: Date, registro: Record<string, unknown>) {

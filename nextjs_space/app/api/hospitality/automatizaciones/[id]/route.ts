@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
+import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
 import { HOSPITALITY_TRIGGERS, HOSPITALITY_ACTION_TYPES } from '../route';
 
 /** PATCH /api/hospitality/automatizaciones/[id] — editar/activar/desactivar. */
@@ -10,6 +11,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    const sinPermiso = exigirPermisoHospitality(auth, 'automatizaciones.gestionar');
+    if (sinPermiso) return sinPermiso;
 
     const { id } = await params;
     const tenantId = auth.tenant!.id;
@@ -62,6 +65,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    const sinPermiso = exigirPermisoHospitality(auth, 'automatizaciones.gestionar');
+    if (sinPermiso) return sinPermiso;
 
     const { id } = await params;
     const tenantId = auth.tenant!.id;

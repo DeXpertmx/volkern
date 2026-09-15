@@ -17,7 +17,12 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/db', () => ({ default: mocks, prisma: mocks }));
 vi.mock('@/lib/api-key-auth', () => ({ authenticateRequest: mocks.authenticateRequest }));
-vi.mock('@/lib/permissions', () => ({ logAuditAction: mocks.logAuditAction }));
+vi.mock('@/lib/permissions', async () => ({
+  // La ruta comprueba permisos: se conserva el `hasPermission` real y solo se
+  // sustituye la auditoría, que es lo que estas pruebas quieren aislar.
+  ...(await vi.importActual<typeof import('@/lib/permissions')>('@/lib/permissions')),
+  logAuditAction: mocks.logAuditAction
+}));
 
 const { GET } = await import('@/app/api/hospitality/onboarding/route');
 const { POST: activar } = await import('@/app/api/hospitality/onboarding/activar/route');
@@ -57,7 +62,7 @@ function reqConBody(body: unknown, url = 'https://volkern.app/api/hospitality/on
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.authenticateRequest.mockResolvedValue({ valid: true, tenant: { id: 't1' }, user: { id: 'u1' } });
+  mocks.authenticateRequest.mockResolvedValue({ valid: true, tenant: { id: 't1' }, user: { id: 'u1', role: { id: 'role_admin', nombre: 'Admin', permisos: { all: true } } } });
   mocks.hospitalityProperty.findFirst.mockResolvedValue(PROPIEDAD);
   mocks.hospitalityProperty.findMany.mockResolvedValue([PROPIEDAD]);
   mocks.hospitalityProperty.update.mockResolvedValue({ ...PROPIEDAD, estado: 'conectada' });

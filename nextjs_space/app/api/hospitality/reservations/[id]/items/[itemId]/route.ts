@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
+import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
 import { logAuditAction } from '@/lib/permissions';
 import { lineaParaGuardar } from '@/lib/hospitality/finance-summary';
 
@@ -17,6 +18,8 @@ export async function PATCH(req: NextRequest, ctx: Params) {
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    const sinPermiso = exigirPermisoHospitality(auth, 'finanzas.gestionar');
+    if (sinPermiso) return sinPermiso;
 
     const { id, itemId } = await ctx.params;
     const existente = await prisma.hospitalityReservationItem.findFirst({
@@ -80,6 +83,8 @@ export async function DELETE(req: NextRequest, ctx: Params) {
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    const sinPermiso = exigirPermisoHospitality(auth, 'finanzas.gestionar');
+    if (sinPermiso) return sinPermiso;
 
     const { id, itemId } = await ctx.params;
     const existente = await prisma.hospitalityReservationItem.findFirst({
