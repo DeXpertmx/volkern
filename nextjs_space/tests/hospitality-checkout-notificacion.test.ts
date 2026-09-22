@@ -22,7 +22,7 @@ vi.mock('@/lib/services/push-notification', () => ({
   sendPushNotification: mocks.sendPushNotification,
 }));
 
-const { notificarCambioSalidaAnticipada } = await import('@/lib/hospitality/checkout');
+const { notificarCambioSalidaAnticipada } = await import('@/lib/hospitality/checkout-avisos');
 
 const AVISO_OK = {
   tenantId: 't1',

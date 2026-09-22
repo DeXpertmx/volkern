@@ -9,8 +9,8 @@ import { esPoliticaNoShow } from '@/lib/hospitality/no-show';
 import {
   esPoliticaSalidaAnticipada,
   politicaSalidaAnticipadaEfectiva,
-  notificarCambioSalidaAnticipada,
 } from '@/lib/hospitality/checkout';
+import { notificarCambioSalidaAnticipada } from '@/lib/hospitality/checkout-avisos';
 import { esHoldHorasValidas } from '@/lib/hospitality/holds';
 
 interface Params {
