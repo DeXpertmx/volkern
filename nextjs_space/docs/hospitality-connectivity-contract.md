@@ -33,6 +33,49 @@
 - Los pushes son **UPSERT**: reenviar un valor para un rango sobrescribe.
 - `modify` es **estado completo nuevo** (reemplaza, no mezcla parcialmente).
 - El webhook debe ser **idempotente por `bookingId`** (entregas duplicadas posibles).
+- La **unidad** se resuelve por `rooms[0].roomCode`; `rateplanCode` solo desempata.
+  Un `roomCode` sin vínculo **no se adivina**: se rechaza y se audita (salvo que
+  el vínculo sea inequívoco, ver "Resolución asistida").
+- **Una reserva por booking**: un payload con más de un elemento en `rooms` no
+  se registra ni parcialmente — se rechaza con evento claro en el panel de
+  incidencias (tipo `multi_habitacion`) y el operador decide si partirlo. Un
+  `cancel` nunca se rechaza por esto: cancela por `bookingId` y las `rooms`
+  sobran. Registra solo la primera habitación sería perder las demás en
+  silencio; meter todas en una unidad sería un overbooking.
+- **Partida manual del booking multi-habitación**: desde el panel de
+  incidencias, el operador asigna una unidad a cada habitación y registra el
+  booking como N reservas separadas (`POST
+  /api/hospitality/incidencias/registrar-partida`). Cada parte deriva su
+  `externalBookingId` como `bookingId#n` (`BKG-1#2` = segunda habitación de
+  `BKG-1`), así que:
+  - es idempotente por parte: repetir la llamada, o registrar en varias
+    pasadas, no duplica nada — lo ya registrado responde `duplicado`;
+  - es all-or-nothing: si alguna parte no cabe en su unidad (choque de
+    disponibilidad en las fechas o capacidad publicada), no se crea NINGUNA;
+  - las unidades las elige el operador y deben ser distintas entre sí y de una
+    sola propiedad del tenant;
+  - el evento del incidente queda `procesado` solo cuando TODAS las
+    habitaciones del booking tienen su parte registrada; mientras falte alguna
+    el grupo sigue visible con las habitaciones restantes;
+  - un `cancel` posterior del booking completo cancela todas sus partes vivas
+    (localizadas por el prefijo `bookingId#`); un booking cuyo id empiece igual
+    (`BKG-1` vs `BKG-11`) nunca se cruza porque el prefijo es exacto.
+- **El no-show libera la unidad.** Marcar `no_show` (hoy, `PATCH` del operador)
+  devuelve la habitación al inventario vendible —todas sus noches— y el
+  siguiente push la anuncia como disponible. El no-show no ocupa: es un hecho
+  **de cobro**, no de inventario (una habitación que nadie usó es revendible).
+  La regla la aplica el motor de disponibilidad (`lib/hospitality/availability.ts`
+  vía `aportaProduccion`, `lib/hospitality/estados.ts`), la misma que usan el
+  planning y el Booking Engine. Es reversible: volver a `confirmed` restaura el
+  bloqueo y se vuelve a empujar. Detalle en `hospitality-booking-payments-plan.md` §0.
+  - *Vía entrante:* el webhook también acepta `action: "no_show"` — el
+    proveedor reporta que el huésped no se presentó y el motor marca el estado
+    (idempotente: solo desde `pending`/`confirmed`/`checked_in`, nunca toca una
+    ya operada) y **emite la penalización con el mismo emisor del operador**
+    (regla 8: política de la propiedad, sin doble cargo de canal externo, y un
+    fallo del emisor nunca revierte el estado). Si el proveedor no lo empuja,
+    lo marca el operador con el `PATCH`. `Mark No Show` (tabla de endpoints más
+    abajo) es saliente, nuestro hacia el proveedor.
 - Los campos de huésped son **opcionales**: no rechazar ni fallar si faltan.
 - `specialRequests` se guarda como **texto libre**, no se parsea a estructura.
 - No inventar endpoints, campos, partners ni esquemas de auth.
@@ -64,7 +107,7 @@ https://live.aiosell.com/api/v2/cm
 | Rate Push | POST | `/update-rates/{pms}` | Tarifas por (room, rateplan, fecha); los rangos se expanden a tarifas diarias. |
 | Inventory Restrictions Push | POST | `/update/{pms}` | Restricciones a nivel de tipo de habitación (min stay, etc.). |
 | Rate Restrictions Push | POST | `/update-rates/{pms}` | Restricciones por (room, rateplan). |
-| Mark No Show | POST | `/marknoshow/{pms}` | Marcar no-show (solo booking.com y gommt). |
+| Mark No Show | POST | `/marknoshow/{pms}` | Marcar no-show **en el canal** (solo booking.com y gommt). Saliente: no libera la unidad en el PMS por sí solo — eso lo hace marcar `no_show` aquí. |
 | Fetch Inventory | POST | `/data/{pms}` | Consultar inventario. `type` en el body decide el dataset. |
 | Fetch Rates | POST | `/data/{pms}` | Consultar tarifas (room, rateplan, date). |
 | Fetch Reservations | POST | `/data/{pms}` | Consultar reservas (mismo payload que el webhook Book). |
@@ -162,22 +205,348 @@ diferenciados por el campo `action`.
 }
 ```
 
+### Resolución de propiedad y unidad
+
+`hotelCode`, `rooms[0].roomCode` y `rooms[0].rateplanCode` se traducen a la
+propiedad y la unidad internas con los vínculos de conectividad
+(`connectivity_mappings` con `estado: activo`). El orden de decisión es:
+
+1. **Propiedad** — mappings activos con `externalPropertyId = hotelCode`. Si no
+   hay ninguno, no hay resolución: la reserva no se crea.
+2. **Unidad** — gana el mapping cuyo `externalUnitCode` coincide con
+   `rooms[0].roomCode`. La comparación ignora mayúsculas y espacios
+   (`"  Executive "` ≡ `executive`). Si ningún mapping fija ese roomCode se
+   aceptan los mappings que **no restringen unidad** (`externalUnitCode` vacío),
+   es decir los vínculos a nivel de propiedad (habitaciones de unidad única o
+   vínculos creados antes de registrar el roomCode).
+3. **Tarifa** — `rooms[0].rateplanCode` desempata entre varios candidatos:
+   primero el mapping que coincide en `externalRatePlanCode`, si no el que no
+   restringe tarifa, y si no el más antiguo (orden estable por fecha de
+   creación). Un rateplan **desconocido no bloquea** la reserva mientras el
+   roomCode resuelva.
+
+| Caso del payload | Resultado |
+| --- | --- |
+| `roomCode` con vínculo (con o sin rateplan) | Reserva en la unidad del vínculo. |
+| Varios vínculos con el mismo `roomCode` | Gana el desempate por `rateplanCode`. |
+| `rateplanCode` desconocido, `roomCode` con vínculo | Reserva en la unidad del roomCode. |
+| `roomCode` sin vínculo, con vínculo a nivel de propiedad | Se usa ese vínculo (y su unidad, si la define). |
+| `rooms` ausente o vacío | Se resuelve la propiedad y el vínculo a nivel de propiedad. |
+| `roomCode` sin vínculo de unidad **ni** de propiedad | **Se rechaza**: ver abajo. |
+
+**`roomCode` sin mapping (guardia).** El PMS no adivina la habitación ni crea
+la reserva en otra unidad. Responde `ok: false` con el mensaje
+`Sin mapping de unidad para hotelCode {hotelCode} y roomCode {roomCode} (rateplan {rateplanCode})`,
+no crea reserva ni huésped, y deja el evento bruto con estado `sin_mapping`
+para corregir el vínculo. La reconciliación periódica cuenta el mismo caso como
+divergencia en lugar de importarlo a una unidad arbitraria.
+
+**Resolución asistida.** Para no perder una reserva por un vínculo que faltaba,
+la plataforma puede crearlo a partir del catálogo de `property_details`: el
+`roomCode` del incidente debe existir en el catálogo y el destino se aplica solo
+cuando es inequívoco. Se decide en este orden, y gana la primera regla que
+identifique **una sola** unidad:
+
+1. el **código** de la unidad coincide exactamente con el `roomCode`;
+2. el **nombre** de la unidad coincide exactamente con el de la habitación;
+3. la **ocupación** del catálogo (`min_occ`/`max_occ` frente a la capacidad de la
+   unidad) deja una única unidad libre compatible;
+4. los **huéspedes reales** de la reserva (`rooms[0].occupancy.adults` +
+   `.children`) desempatan: una única unidad libre con esa **capacidad exacta**, o
+   una única con capacidad para alojarlos (la más ajustada, y solo si no hay
+   empate de capacidad);
+5. solo queda **una unidad libre** compatible en la propiedad.
+
+La ocupación solo decide cuando **descarta** alguna unidad libre: si todas las
+libres encajan con el rango publicado, no aporta información y manda la regla de
+siempre. Y si el rango publicado deja fuera a todas las libres, **no se vincula
+ninguna** — una unidad de 8 huéspedes no es "lo más parecido" a una habitación de
+2, es un error de configuración que el operador tiene que ver. Los candidatos de
+la propuesta vienen marcados con su capacidad y con si admiten esa ocupación.
+
+La ocupación real de la reserva es la segunda capa, y existe porque el rango del
+**tipo** de habitación muchas veces no distingue: un tipo de 1-6 huéspedes admite
+de todo, y una reserva de 2 no es lo mismo que el máximo del tipo. Los huéspedes
+reales solo entran en juego cuando el rango **ya no decidió**, y con las mismas
+garantías: solo eligen cuando descartan alguna candidata (o cuando una unidad
+tiene la capacidad exacta y ninguna otra la comparte), y si ninguna unidad libre
+puede alojarlos **no se vincula nada** (motivo `sin_capacidad_suficiente`, que
+viaja al incidente). El rango publicado del tipo sigue mandando: una reserva de 1
+huésped no rescata una unidad que el tipo rechaza. Un payload que no publica
+`occupancy` (o que la publica a ceros) no aporta nada: no se inventa la
+ocupación, y la decisión es exactamente la de antes. La unidad no publica
+`capacidad` tampoco descarta nada — "no consta" no es "no cabe".
+
+**Niños pequeños (bebés en cuna).** El payload solo dice cuántos niños vienen,
+no cuántos años tienen, y una cuna no ocupa plaza. Cuando el canal publica las
+edades (campos no documentados como `childrenAges` en `rooms[0].occupancy`, se
+leen sin creérselo del todo), los menores de `HOSPITALITY_EDAD_NINO_UMBRAL` años
+(por defecto **4**) no cuentan contra la capacidad de la unidad. Es conservador:
+si el canal no publica edades, cada niño cuenta como huésped; y un umbral de `0`
+devuelve la regla a "todos cuentan". Es una política de la plataforma, no un dato
+del proveedor, por eso es configurable y por eso vive documentada aquí.
+
+El total de huéspedes (`total`) y el motivo quedan en el `metadata` del vínculo
+(`ocupacionReserva`) y en el log de sincronización, y la ocupación del grupo de
+incidencias se lee del payload más reciente que la publique, para que el operador
+sepa con cuántos huéspedes se decidió.
+
+En cualquier otro caso se muestra la propuesta con sus candidatos y decide una
+persona. El rateplan del vínculo es el que envió el canal si el catálogo lo
+admite para esa habitación.
+
+Ocurre en dos momentos:
+
+1. **Al recibir la reserva.** Si el webhook no encuentra vínculo para la
+   habitación, intenta crearlo antes de rechazar: cuando la coincidencia es
+   inequívoca la reserva se registra en esa misma petición.
+2. **A petición del operador**, desde el panel de incidencias ("Vincular
+   automáticamente").
+
+Cada vínculo automático guarda por qué se creó en su propio `metadata` (origen,
+motivo, `bookingId` y canal) y deja una entrada en el log de sincronización con
+`tipo: mapping_automatico`. Además, cuando lo crea el webhook —nadie lo pidió—
+se avisa por notificación a los administradores del tenant, con el motivo y un
+enlace al panel de incidencias de esa propiedad; en el wizard de puesta en
+marcha esos vínculos aparecen marcados como "Vínculo automático" para poder
+revisarlos. Un vínculo queda como revisado cuando alguien guarda los vínculos en
+ese paso; mientras siga sin confirmarse, un recordatorio periódico (cada 3 días
+como máximo, o antes si aparecen vínculos nuevos) vuelve a avisar en vez de
+darse por hecho. El del webhook se puede desactivar con `HOSPITALITY_AUTO_MAPPING=off`
+sin afectar al resto del flujo.
+
+**Deshacer un vínculo automático.** Si la unidad elegida por el sistema no es la
+correcta, el operador la deshace desde el propio paso 6 del wizard (botón
+"Deshacer" junto al badge). El vínculo **no se borra**: se apaga
+(`estado: inactivo`) y queda marcado en su `metadata` como deshecho por una
+persona, con quién y cuándo. De ahí salen tres consecuencias:
+
+- la unidad **vuelve a quedar libre** y la habitación sin vínculo, así que la
+  resolución del webhook la trata como cualquier `roomCode` sin mapping;
+- el sistema **no vuelve a crear ese vínculo solo** para esa habitación, ni
+  siquiera al recibir otra reserva: se rechaza con motivo `rechazado_por_operador`
+  y el incidente indica que se asigne a mano;
+- si el operador vuelve a asignar la habitación a mano en el paso 6, el vínculo
+  se reactiva (UPSERT por `provider + hotelCode + roomCode`) y la marca de
+  rechazo desaparece: la decisión más reciente manda.
+
+Deshacer **no toca las reservas ya registradas**: las que están en esa unidad
+siguen ahí. Antes de confirmar, el panel lista las reservas vivas de la unidad
+(`GET mapping/deshacer`, solo lectura) para que el operador sepa qué va a dejar
+huérfano; al deshacer, el mismo listado vuelve en la respuesta con acción de
+**reasignación**: cada reserva se mueve a otra unidad desde el propio diálogo
+(validando disponibilidad), o se deja donde está si el operador prefiere. Nadie
+mueve una reserva sin que una persona lo decida.
+
+> El wizard de onboarding crea un vínculo por unidad usando `externalUnitCode =
+> roomCode` y `externalRatePlanCode = rateplanCode` de `property_details`, que
+> son exactamente los códigos que el proveedor devuelve luego en el webhook.
+
 ### Payloads de Modify y Cancel
 
 - **Modify**: mismo shape que Book pero representa el **estado completo nuevo**.
-  El PMS debe reemplazar el estado anterior, no fusionar parcialmente.
+  El PMS debe reemplazar el estado anterior, no mezcla parcialmente.
 - **Cancel**: payload reducido que identifica la reserva (`hotelCode`, `bookingId`,
   `cmBookingId`, `action: "cancel"`) para localizarla y cancelarla.
 
+### Barrido de cancels perdidos (reconciliación diaria)
+
+El webhook es la vía rápida, pero no es fiable al 100%: si el proveedor entrega
+un `cancel` y el PMS responde error (o no responde), la reserva queda **activa en
+el PMS y cancelada en el canal** — un hotel vendido dos veces. Contra eso existe
+el barrido `lib/cron/hospitality-reconcile.ts`, programado a diario (04:15, con
+`GET /api/cron/hospitality-reconcile` como disparador manual con
+`Authorization: Bearer ${CRON_SECRET}`):
+
+1. consulta al proveedor las reservas de los próximos 30 días por cada propiedad
+   con conectividad activa (`fetchReservations`);
+2. aplica los `cancel` explícitos que el webhook se perdió (y los book/modify
+   divergentes, por el mismo camino idempotente del webhook);
+3. **detecta cancels perdidos sin cancel explícito**: cada reserva interna activa
+   (`pending`/`confirmed`/`checked_in`, rango vigente) que el proveedor ya no
+   reporta queda registrada como **divergencia** en `HospitalitySyncLog`
+   (tipo `reconciliacion`, con el recuento en `responseBody`).
+
+Política conservadora: el cron **nunca cancela solo** (`cancelarAusentes` va
+siempre en `false`); la divergencia es la señal y la cancelación, decisión de
+una persona que mira fechas e importes antes de tocar una reserva. Los logs de
+reconciliación alimentan el "último fetch" del panel de admin de conectividad y
+quedan excluidos del "último push", que es de canales.
+
+#### Revisión de divergencias en el panel de admin
+
+Cada divergencia se guarda **con su lista concreta de reservas** en
+`responseBody.ausentes` del log de reconciliación (no solo el recuento): id de
+reserva, booking, canal, fechas, unidad y nº de huéspedes. El panel de admin de
+conectividad (`/admin/conectividad`) la muestra en la tarjeta "Divergencias de
+Reconciliación" vía `GET /api/admin/conectividad/divergencias`, que agrupa por
+reserva (aunque varios barridos la mencionen, indicando en cuántos apareció) y
+anota el estado **actual** de la reserva en el PMS: una ya cancelada o cerrada
+no se ofrece para acción.
+
+Para cancelar una reserva revisada, `POST
+/api/admin/conectividad/divergencias` con `{ reservationId, syncLogId }`:
+
+1. verifica que el log todavía lista la reserva como ausente y que sigue activa
+   en el PMS (409 en caso contrario);
+2. **re-verifica contra el proveedor** haciendo un fetch del rango de la
+   reserva: si vuelve a aparecer reportada, la divergencia era ruido
+   transitorio del fetch y **no se cancela nada** — se pide re-ejecutar la
+   reconciliación. Un cancel explícito en esa respuesta no cuenta como
+   reaparición. Si el fetch falla, la revisión humana ya hecha manda y se
+   cancela (un error puntual del proveedor no debe dejar la unidad vendida dos
+   veces);
+3. cancela con `processCancel` usando el tenant del log (nunca un tenant del
+   cliente), deja traza en el audit log y notifica al desarrollador
+   (acción sensible).
+
+La cancelación vía panel es siempre manual e individual: no existe botón de
+"cancelar todas" ni automatización sobre este flujo.
+
+#### Diagnóstico de la causa en el panel (`/admin/conectividad`)
+
+El badge de estado nombra la **causa del último fallo de la capa** — no solo
+«error» — derivada del último `HospitalitySyncLog` fallido de conectividad
+(pushes de inventario/tarifas y reconciliación; los tipos de otras superficies
+que comparten la tabla se excluyen):
+
+| Causa | Se deriva de | Qué hacer |
+|---|---|---|
+| **Credenciales rechazadas** | HTTP 401/403 del servicio | Revisar o rotar credenciales en el panel; confirmar con el proveedor que no las haya revocado |
+| **Sin respuesta del servicio** | HTTP 5xx, o sin código HTTP con indicio de red/timeout (`timeout`, `ECONNRESET`, `socket hang up`…) | Reintentar más tarde; si persiste, avisar al proveedor |
+| **Error** | Otro caso (4xx de datos, fallo del proveedor sin código…) | Revisar el detalle en el historial de sincronización |
+
+La regla vive en el módulo puro `lib/hospitality/conectividad-causa.ts`
+(`causaDeFalloConectividad`) y produce el diagnóstico en los dos sitios que lo
+muestran: el badge global (alimentado por `ultimoFallo` en
+`getConnectivityPublic`) y la columna de errores de la tabla por propiedad
+(`causaUltimoError` de `GET /api/admin/conectividad/propiedades`). Si la
+consulta de diagnóstico falla, degrada a null sin romper el estado del panel.
+El diagnóstico usa solo campos acotados (`httpStatus`, `errorMensaje`,
+`fechaCreacion`) — la capa de secretos no cambia: `getConnectivityPublic`
+sigue devolviendo marcadores de presencia, nunca valores.
+
+Los cuerpos de error del proveedor también pasan por saneo: el módulo puro
+`lib/hospitality/conectividad-secreto.ts` (`sanitizarRespuestaExterna`)
+redacta cualquier valor bajo claves sensibles (`authorization`, `token`,
+`api_key`, `password`, `cookie`…), oculta credenciales `Basic`/`Bearer`
+incrustadas en strings y acota cadenas (4000) y profundidad (8). Se aplica en
+la fuente — `readBody` (pushes, `fetchReservations`) y la sonda de
+`testConnectivityConnection` — de modo que el diálogo de prueba, el
+historial de sync-logs, el `responseBody` y el onboarding reciben cuerpos ya
+redactados; el diálogo del panel re-aplica el saneo al renderizar (defensa
+en profundidad) por si un cuerpo viejo llegara sin redactar.
+
+Nota: el verde no garantiza credenciales válidas — el estado solo cambia cuando
+fluye tráfico o hay una verificación activa. Para esa verificación hay dos
+caminos: el botón «Probar» (bajo demanda, llama a `property_details`) y el
+**health-check diario** (cron `Hospitality Conectividad Health Check`, 05:00),
+que usa la MISMA sonda con el hotel sandbox, mueve el estado con las mismas
+reglas y deja la marca `ultimaVerificacion` que muestra el panel («Última
+verificación: hace …»). Disparo manual: `GET
+/api/cron/hospitality-connectivity-health` con `CRON_SECRET` (respuesta 200
+siempre, con `ok` en el body — un fallo de la capa es un resultado del sondeo,
+no un error del endpoint). Cada sondeo queda auditado en `AuditLog` (acción
+`conectividad_health_check`, `tenantId` null: la fila es global) y jamás en
+`HospitalitySyncLog` — el diagnóstico del badge filtra por tipos de tráfico, y
+un fallo del propio sondeo no puede aparecer como «Credenciales rechazadas».
+Sin configuración, el health-check es un no-op razonado: no llama a nada.
+
+### Reenvío desde el panel de incidencias según la acción
+
+El reenvío de un evento guardado en `sin_mapping` respeta la `action` que trae el
+evento, no asume que todo es un `book`:
+
+- **book / modify**: exigen que la habitación tenga vínculo activo (la misma
+  guardia del webhook), porque pueden **crear** la reserva. Un `modify` de una
+  reserva que nunca llegó equivale a un `book`, y por eso no se exceptúa.
+- **cancel**: se aplica aunque la habitación siga sin vínculo: cancelar no crea
+  nada, así que la reserva se localiza por `bookingId` + canal **dentro del
+  tenant del operador** y se pasa a `cancelled`. Si la reserva no existe, se
+  reporta el error sin tocar nada.
+
+El listado de incidencias acompaña la regla: un grupo de `cancel` con la reserva
+ya registrada y viva ofrece el reenvío aunque la unidad no tenga mapping (y no
+cuenta como "pendiente de vincular", porque no se puede vincular un cancel); si
+la reserva ya está cancelada el grupo se da por resuelto; y si la reserva nunca
+llegó, el grupo se queda a la vista sin ofrecer reenvío — registrar primero el
+`book` con el vínculo correcto es decisión del operador, no un efecto lateral.
+
+### Visibilidad de los no-shows reportados por el canal
+
+El mismo panel tiene un filtro **No-shows** junto al de vínculos: lista los
+`action: "no_show"` que el webhook entrante procesó (una fila por reserva; los
+reintentos del canal no duplican), con referencia, unidad, huésped, estancia,
+cuándo se reportó y **el importe emitido de cada penalización** — y si ya está
+facturada por el ERP. Un no-show sin cargo se muestra como tal: pasó por la
+política de la propiedad (por ejemplo «ninguna») o el canal externo cobra el
+suyo. Es lectura del mismo `HospitalityWebhookEvent` ya auditado; no añade
+estados ni módulos nuevos.
+
+### Ciclo completo de un no_show entrante: respuestas y reintentos
+
+Lo que responde `POST /api/hospitality/webhook/reservations` a un
+`action: "no_show"`, y qué debe hacer el proveedor en cada caso:
+
+| HTTP | Body | Cuándo | Qué debe hacer el proveedor |
+|------|------|--------|------------------------------|
+| **200** | `{ success: true, status: "actualizada", reservationId, penalizacion }` | La reserva existía y estaba viva (`pending`/`confirmed`/`checked_in`): queda `no_show`. `penalizacion` trae `{ emitida, importe, motivo }` — `emitida: true` con el importe del cargo, o `emitida: false` con el motivo (`canal_del_proveedor`, `politica_ninguna`, `sin_importe`…). | Nada. No reenviar el evento. |
+| **200** | `{ success: true, status: "actualizada", reservationId, penalizacion: null }` | La reserva ya estaba `no_show` (o `checked_out`/`cancelled`): **idempotente**, no se toca ni re-emite cargo. | Nada. El reintento nunca duplica: el estado manda. |
+| **404** | `{ success: false, error: "Reserva no encontrada para marcar no_show" }` | El `bookingId` no existe (o nunca llegó un `book`). | Reintentar con **backoff** (p. ej. 1 min → 5 min → 1 h) hasta **24 h**: si el `book` original se perdió o llegó tarde, puede estar aún en camino. Si sigue 404, escalar al operador — un `no_show` sin reserva aquí es señal de que falta el `book`, no de que falte el no-show. **No** reenviar el `no_show` como `book`: el motor no lo creará. |
+| **401** | `{ success: false, error: "No autorizado" }` | Credenciales Basic incorrectas. | Detener reintentos: reintroducir no cambia nada. Revisar credenciales. |
+| **400** | `{ success: false, error }` | Payload inválido (falta `hotelCode`/`bookingId`/`channel`/`rooms`, acción desconocida, multi-habitación). | Detener reintentos: es un defecto del payload, no transitorio. Corregir y enviar de nuevo solo si se corrige el payload. |
+| **503** | `{ success: false, error: "Conectividad no configurada" }` | El receptor aún no tiene credenciales cargadas. | Reintentar con backoff: es transitorio del lado del receptor. |
+| **500** | `{ success: false, error: "Error interno" }` | Fallo no esperado del receptor. | Reintentar con backoff; el evento queda auditado aunque el reintento duplique nada (todo el ciclo es idempotente). |
+
+**No existe 409 en este ciclo, a propósito.** Un `no_show` nunca choca con el
+estado de la reserva: si ya estaba marcada responde 200 idempotente y si no
+eviste, se marca. La guardia de disponibilidad rechaza `book`/`modify` con
+409 — **si el canal la recibe debe corregir su inventario, no reintentar el
+mismo evento** (reintroducir reproduciría el rechazo). Un `cancel` de una
+reserva inexistente también responde 404, con el mismo tratamiento de
+reintento limitado que el `no_show`.
+
+La penalización viaja en la respuesta 200 pero **no es acuse de cobro**: la
+cobra el hotel con su propia política (primera noche por defecto), la factura
+por su ERP y puede tardar. Si el canal necesita conciliarla, es el flujo de
+`Mark No Show`/reportes el que la publica — nunca un reintento del webhook.
+
+**La política viaja también en el HTTP.** Las respuestas reintentables llevan
+la cabecera `Retry-After` (segundos, el mínimo de espera antes del primer
+reintento): **300** en un 404 y **60** en un 503 o un 500. El backoff sigue
+escalando a partir de ese mínimo (en el 404: 5 min → 1 h… hasta el límite de
+24 h). Las respuestas **no** reintentables (200, 401, 400) no la llevan: su
+ausencia es parte del contrato. Guardia:
+`tests/hospitality-webhook-reservations-route.test.ts`.
+
+> **Para el equipo que implementa el emisor del proveedor** existe una guía de
+> integración con esta tabla en formato práctico (cola, backoff, checklist):
+> [`hospitality-webhook-emisor-guia.md`](./hospitality-webhook-emisor-guia.md).
+
 ## Guardrails antes de enviar código a producción
 
-- [ ] Todas las URLs de endpoints coinciden con la tabla byte a byte.
+> **Cómo ejecutar este checklist contra el PMS real:** el procedimiento paso a
+> paso con etapas, responsable y verificación (acuerdo, alta del proveedor,
+> ensayo controlado, corte a producción y rollback) vive en
+> [`hospitality-go-live-pms-guia.md`](./hospitality-go-live-pms-guia.md).
+
+- [ ] Todas las URLs de los endpoints coinciden con la tabla byte a byte.
 - [ ] Slug del PMS sustituido en `/update/{pms}`, `/update-rates/{pms}`, `/data/{pms}`.
 - [ ] Fechas `YYYY-MM-DD`, timestamps `YYYY-MM-DD HH:MM:SS`.
 - [ ] Campos de restricción opcionales enviados como `null`, no omitidos.
 - [ ] `Content-Type: application/json` en cada petición.
 - [ ] `success` de la respuesta verificado; `message` expuesto en fallos.
+- [ ] Todo cuerpo externo mostrado o persistido pasa por
+      `sanitizarRespuestaExterna` (redacción de `Authorization`/API keys
+      reflejadas por el proveedor, cadenas y profundidad acotadas).
+      La redacción ocurre en la fuente (`readBody` y la sonda de
+      `connectivity.ts`), con segunda capa en el diálogo del panel.
 - [ ] Webhook idempotente por `bookingId`.
+- [ ] `roomCode` y `rateplanCode` del payload son los de `property_details`, y
+      cada uno tiene su vínculo activo (la unidad se resuelve por `roomCode`).
+- [ ] Un vínculo deshecho por un operador no se recrea solo y deja la unidad libre.
+- [ ] La capacidad de cada unidad cae dentro del `min_occ`/`max_occ` de la
+      habitación que representa (si el catálogo los publica).
 - [ ] `modify` tratado como reemplazo completo, no patch.
 - [ ] Campos de huésped opcionales: sin crash ni rechazo si faltan.
 - [ ] `specialRequests` como texto libre.

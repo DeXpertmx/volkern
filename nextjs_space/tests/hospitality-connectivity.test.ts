@@ -6,6 +6,7 @@ const hoisted = vi.hoisted(() => ({
   findUnique: vi.fn(),
   upsert: vi.fn(),
   update: vi.fn(),
+  syncLogFindFirst: vi.fn(),
 }));
 
 vi.mock('@/lib/db', () => ({
@@ -14,6 +15,9 @@ vi.mock('@/lib/db', () => ({
       findUnique: hoisted.findUnique,
       upsert: hoisted.upsert,
       update: hoisted.update,
+    },
+    hospitalitySyncLog: {
+      findFirst: hoisted.syncLogFindFirst,
     },
   },
 }));
@@ -52,6 +56,7 @@ function filaConfigurada() {
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.CONNECTIVITY_BASE_URL = 'https://live.example.internal';
+  hoisted.syncLogFindFirst.mockResolvedValue(null);
 });
 
 describe('Hospitality — capa de conectividad', () => {
@@ -85,6 +90,83 @@ describe('Hospitality — capa de conectividad', () => {
     expect(pub.configurado).toBe(false);
     expect(pub.estado).toBe('sin_configurar');
     expect(pub.tieneCredenciales).toBe(false);
+    expect(pub.ultimaVerificacion).toBeNull();
+    // Sin configuración no hay diagnóstico: ni siquiera consulta el historial.
+    expect(hoisted.syncLogFindFirst).not.toHaveBeenCalled();
+  });
+
+  it('getConnectivityPublic expone la marca de última verificación (health-check / Probar)', async () => {
+    const marca = new Date('2026-09-20T05:00:00Z');
+    hoisted.findUnique.mockResolvedValue({ ...filaConfigurada(), ultimaVerificacion: marca });
+
+    const pub = await getConnectivityPublic();
+    expect(pub.ultimaVerificacion).toEqual(marca);
+  });
+
+  it('getConnectivityPublic tolera filas sin marca de verificación (null, no undefined)', async () => {
+    hoisted.findUnique.mockResolvedValue(filaConfigurada());
+
+    const pub = await getConnectivityPublic();
+    expect(pub.ultimaVerificacion).toBeNull();
+  });
+
+  describe('getConnectivityPublic — último fallo para el diagnóstico del panel', () => {
+    it('consulta el último SyncLog fallido filtrando por tipos de la capa y lo expone', async () => {
+      hoisted.findUnique.mockResolvedValue(filaConfigurada());
+      const fallo = {
+        httpStatus: 401,
+        errorMensaje: 'HTTP 401 del proveedor',
+        fechaCreacion: new Date('2026-09-19T09:00:00Z'),
+      };
+      hoisted.syncLogFindFirst.mockResolvedValue(fallo);
+
+      const pub = await getConnectivityPublic();
+
+      expect(pub.ultimoFallo).toEqual(fallo);
+      // El filtro es el del módulo de causas: solo tráfico de conectividad,
+      // solo errores, el más reciente primero.
+      const args = hoisted.syncLogFindFirst.mock.calls[0][0];
+      expect(args.where.estado).toBe('error');
+      expect(args.where.tipo.in).toContain('inventory');
+      expect(args.where.tipo.in).toContain('reconciliacion');
+      expect(args.orderBy).toEqual({ fechaCreacion: 'desc' });
+      // Solo campos de diagnóstico — nunca payloads.
+      expect(Object.keys(args.select).sort()).toEqual(['errorMensaje', 'fechaCreacion', 'httpStatus']);
+    });
+
+    it('sin fallos previos → ultimoFallo null (el badge no inventa causas)', async () => {
+      hoisted.findUnique.mockResolvedValue(filaConfigurada());
+      hoisted.syncLogFindFirst.mockResolvedValue(null);
+
+      const pub = await getConnectivityPublic();
+      expect(pub.ultimoFallo).toBeNull();
+    });
+
+    it('si la consulta de diagnóstico falla, degrada a null sin romper el estado', async () => {
+      hoisted.findUnique.mockResolvedValue(filaConfigurada());
+      hoisted.syncLogFindFirst.mockRejectedValue(new Error('BD caída'));
+
+      const pub = await getConnectivityPublic();
+      expect(pub.configurado).toBe(true);
+      expect(pub.ultimoFallo).toBeNull();
+    });
+
+    it('el diagnóstico nunca añade secretos a la respuesta pública', async () => {
+      hoisted.findUnique.mockResolvedValue(filaConfigurada());
+      hoisted.syncLogFindFirst.mockResolvedValue({
+        httpStatus: 401,
+        errorMensaje: `rechazado para ${SECRETO_USER}`,
+        fechaCreacion: new Date(),
+      });
+
+      const pub = await getConnectivityPublic();
+      // El mensaje de error del proveedor puede citar el usuario — la capa
+      // pública no lo devuelve en crudo: solo select acotado (httpStatus,
+      // errorMensaje y fecha sin secretos estructurales). El secreto del
+      // proveedor jamás aparece porque no se lee de esta tabla.
+      expect(JSON.stringify(pub)).not.toContain(SECRETO_PARTNER);
+      expect(JSON.stringify(pub)).not.toContain(SECRETO_PASS);
+    });
   });
 
   it('getConnectivityCredentials descifra los secretos correctamente', async () => {

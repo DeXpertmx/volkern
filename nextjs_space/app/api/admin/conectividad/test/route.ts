@@ -34,11 +34,13 @@ export async function POST(request: NextRequest) {
 
     const result = await testConnectivityConnection(hotelCode);
 
-    // Actualizar estado de conectividad según el resultado
+    // Actualizar estado de conectividad según el resultado. «Probar» es una
+    // verificación activa de la capa: deja la misma marca que el health-check
+    // diario (ultimaVerificacion), que es lo que ve el panel.
     if (result.ok) {
-      await updateConnectivityStatus({ estado: 'conectado', resetErrores: true });
+      await updateConnectivityStatus({ estado: 'conectado', resetErrores: true, ultimaVerificacion: new Date() });
     } else {
-      await updateConnectivityStatus({ estado: 'error', error: true });
+      await updateConnectivityStatus({ estado: 'error', error: true, ultimaVerificacion: new Date() });
     }
 
     // Notificar internamente solo cuando falla (diagnóstico)

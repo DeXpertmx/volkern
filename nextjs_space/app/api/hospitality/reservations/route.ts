@@ -7,8 +7,10 @@ import { authenticateRequest } from '@/lib/api-key-auth';
 import { logAuditAction } from '@/lib/permissions';
 import { dispatchConnectivityPush } from '@/lib/hospitality/sync';
 import { unitOccupiedOnDay, type ActiveReservationSpan } from '@/lib/hospitality/availability';
+import { toIsoDate, ventanaDeDiaLocal } from '@/lib/hospitality/calendar';
+import { esEstadoValido, esMovimientoDelDia, estadosSinMovimiento } from '@/lib/hospitality/estados';
+import { partesDeViajerosPorReserva } from '@/lib/hospitality/registro-viajeros-service';
 
-const ESTADOS_VALIDOS = ['pending', 'confirmed', 'cancelled', 'checked_in', 'checked_out', 'no_show'];
 const CANALES_COMUNES = ['Airbnb', 'Booking.com', 'Expedia', 'Directa', 'Volkern'];
 
 // GET /api/hospitality/reservations — listar reservas del tenant
@@ -20,42 +22,8 @@ export async function GET(req: NextRequest) {
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
 
     const { searchParams } = new URL(req.url);
-    const propertyId = searchParams.get('propertyId');
-    const unitId = searchParams.get('unitId');
-    const estadoParam = searchParams.get('estado');
-    const canal = searchParams.get('canal');
-    const q = searchParams.get('q');
-    const from = searchParams.get('from'); // ISO fecha inclusiva (check-out >=)
-    const to = searchParams.get('to'); // ISO fecha exclusiva (check-in <)
     const limit = Math.min(parseInt(searchParams.get('limit') || '500') || 500, 1000);
-
-    const where: any = { tenantId: auth.tenant!.id };
-    if (propertyId) where.propertyId = propertyId;
-    if (unitId) where.unitId = unitId;
-
-    if (estadoParam) {
-      const estados = estadoParam.split(',').map((e) => e.trim()).filter(Boolean);
-      if (estados.length === 1) where.estado = estados[0];
-      else if (estados.length > 1) where.estado = { in: estados };
-    }
-    if (canal) where.channel = { contains: canal, mode: 'insensitive' };
-    if (q) {
-      where.OR = [
-        { externalBookingId: { contains: q, mode: 'insensitive' } },
-        { cmBookingId: { contains: q, mode: 'insensitive' } },
-        { guestData: { path: ['firstName'], string_contains: q } },
-        { guestData: { path: ['lastName'], string_contains: q } },
-        { guestData: { path: ['email'], string_contains: q } },
-        { contact: { nombre: { contains: q, mode: 'insensitive' } } },
-        { contact: { email: { contains: q, mode: 'insensitive' } } },
-      ];
-    }
-    if (from) {
-      where.checkOut = { gte: new Date(from) };
-    }
-    if (to) {
-      where.checkIn = { lt: new Date(to) };
-    }
+    const where = whereDeFiltrosReservas(searchParams, auth.tenant!.id);
 
     const reservations = await prisma.hospitalityReservation.findMany({
       where,
@@ -68,11 +36,140 @@ export async function GET(req: NextRequest) {
       take: limit,
     });
 
-    return NextResponse.json({ reservations });
+    // El parte de viajeros (RD 933/2021) de cada reserva, en lote: la pantalla
+    // avisa de los huéspedes a los que les faltan datos y ofrece completarlos
+    // desde ahí mismo. Se calcula con las reglas del check-in, así que el aviso
+    // sale desde que entra la reserva y no cuando el barrido ya la miró.
+    const partes = await partesDeViajerosPorReserva(auth.tenant!.id, reservations);
+
+    // Textos de las preguntas personalizadas del check-in (id → pregunta): la
+    // reserva guarda las respuestas por id, y la pantalla las enseña con su
+    // pregunta. Asunto del hotel — no salen en el parte del Ministerio.
+    // Auxiliar: si la consulta falla, la lista de reservas no se tumba.
+    const preguntas = await prisma.hospitalityCheckinPregunta
+      .findMany({
+        where: { tenantId: auth.tenant!.id },
+        select: { id: true, es: true },
+      })
+      .catch(() => [] as Array<{ id: string; es: string }>);
+
+    // La carga de trabajo del día de recepción: cuántas llegadas y salidas
+    // hay HOY en todo el tenant. Va INDEPENDIENTE de los filtros (la recepción
+    // puede estar filtrando por propiedad o buscando a alguien, y aún así
+    // quiere ver la carga completa del día); con el chip activo coincide con
+    // lo que lista la pantalla, porque el where del chip es el mismo. Se
+    // cuenta en lote (una consulta por campo, no N por fila) y es AUXILIAR:
+    // si falla, la lista sale sin resumen — el listado no se tumba por esto.
+    let resumenHoy: { llegadas: number; salidas: number } | null = null;
+    try {
+      const whereDia = (campo: 'checkIn' | 'checkOut') => {
+        const w: any = { tenantId: auth.tenant!.id };
+        aplicarMovimientoRecepcion(w, campo === 'checkIn' ? 'llegadas' : 'salidas');
+        return prisma.hospitalityReservation.count({ where: w });
+      };
+      const [llegadas, salidas] = await Promise.all([whereDia('checkIn'), whereDia('checkOut')]);
+      resumenHoy = { llegadas, salidas };
+    } catch (err) {
+      console.error('No se pudo calcular el resumen del día de reservas:', err);
+    }
+
+    return NextResponse.json({
+      reservations: reservations.map((reserva) => ({
+        ...reserva,
+        parteViajeros: partes.get(reserva.id) ?? null,
+      })),
+      resumenHoy,
+      preguntasCheckin: Object.fromEntries(preguntas.map((p) => [p.id, p.es])),
+    });
   } catch (error) {
     console.error('Error obteniendo reservas:', error);
     return NextResponse.json({ error: 'Error al obtener reservas' }, { status: 500 });
   }
+}
+
+/**
+ * El `where` de los filtros de la lista de reservas, compartido por la
+ * consulta JSON y por la exportación CSV: la recepción exporta EXACTAMENTE
+ * la lista que ve en pantalla (mismos filtros, sin segundo criterio).
+ */
+/**
+ * Movimiento del día para recepción: los chips de «Llegadas hoy» y «Salidas
+ * hoy». La ventana es el DÍA LOCAL del servidor —la misma regla con la que el
+ * planning pinta los días y el CSV exporta las fechas (una sola definición de
+ * «día» en el módulo)— y solo cuentan las reservas con movimiento posible
+ * (`esMovimientoDelDia`): la cancelada no llega ni se va.
+ */
+export type MovimientoRecepcion = 'llegadas' | 'salidas';
+
+export function aplicarMovimientoRecepcion(
+  where: any,
+  movimiento: MovimientoRecepcion,
+  hoy: Date = new Date()
+): void {
+  const { inicio, fin } = ventanaDeDiaLocal(hoy);
+  if (movimiento === 'llegadas') {
+    where.checkIn = { gte: inicio, lt: fin };
+  } else {
+    where.checkOut = { gte: inicio, lt: fin };
+  }
+  // La cancelada carece de movimiento (la regla del módulo de estados): no
+  // puede aparecer como llegada ni como salida. Si ya hay filtro de estado se
+  // respeta: un objeto se combina con el notIn; un string de estado sin
+  // movimiento (p. ej. «canceladas») con el chip activo no tiene resultado
+  // posible y se responde vacío en vez de contradecir el chip.
+  const sinMovimiento = estadosSinMovimiento();
+  const estadoActual = where.estado;
+  if (typeof estadoActual === 'string') {
+    where.estado = esMovimientoDelDia(estadoActual) ? estadoActual : { in: [] };
+  } else if (estadoActual && typeof estadoActual === 'object') {
+    where.estado = { ...estadoActual, notIn: sinMovimiento };
+  } else {
+    where.estado = { notIn: sinMovimiento };
+  }
+}
+
+export function whereDeFiltrosReservas(searchParams: URLSearchParams, tenantId: string) {
+  const where: any = { tenantId };
+  const propertyId = searchParams.get('propertyId');
+  const unitId = searchParams.get('unitId');
+  const estadoParam = searchParams.get('estado');
+  const canal = searchParams.get('canal');
+  const q = searchParams.get('q');
+  const from = searchParams.get('from'); // ISO fecha inclusiva (check-out >=)
+  const to = searchParams.get('to'); // ISO fecha exclusiva (check-in <)
+
+  if (propertyId) where.propertyId = propertyId;
+  if (unitId) where.unitId = unitId;
+  if (estadoParam) {
+    const estados = estadoParam.split(',').map((e) => e.trim()).filter(Boolean);
+    if (estados.length === 1) where.estado = estados[0];
+    else if (estados.length > 1) where.estado = { in: estados };
+  }
+  if (canal) where.channel = { contains: canal, mode: 'insensitive' };
+  if (q) {
+    where.OR = [
+      { externalBookingId: { contains: q, mode: 'insensitive' } },
+      { cmBookingId: { contains: q, mode: 'insensitive' } },
+      { guestData: { path: ['firstName'], string_contains: q } },
+      { guestData: { path: ['lastName'], string_contains: q } },
+      { guestData: { path: ['email'], string_contains: q } },
+      { contact: { nombre: { contains: q, mode: 'insensitive' } } },
+      { contact: { email: { contains: q, mode: 'insensitive' } } },
+    ];
+  }
+  if (from) {
+    where.checkOut = { gte: new Date(from) };
+  }
+  if (to) {
+    where.checkIn = { lt: new Date(to) };
+  }
+  // Movimiento del día (chips de recepción): se aplica al final para que su
+  // ventana de día local no sea pisada por los filtros de rango from/to.
+  const movimiento = searchParams.get('movimiento');
+  if (movimiento === 'llegadas' || movimiento === 'salidas') {
+    aplicarMovimientoRecepcion(where, movimiento);
+  }
+  return where;
 }
 
 /**
@@ -97,7 +194,10 @@ async function findConflict(
     },
     select: { id: true, externalBookingId: true, checkIn: true, checkOut: true, estado: true },
   });
-  const spans: ActiveReservationSpan[] = candidates.map((r) => ({
+  // El id viaja con el span para poder devolver la reserva en conflicto sin
+  // volver a comparar fechas a mano.
+  const spans: Array<ActiveReservationSpan & { id: string }> = candidates.map((r) => ({
+    id: r.id,
     unitId,
     checkIn: r.checkIn,
     checkOut: r.checkOut,
@@ -110,9 +210,10 @@ async function findConflict(
   last.setHours(0, 0, 0, 0);
   while (cursor.getTime() < last.getTime()) {
     if (unitOccupiedOnDay(unitId, cursor, spans)) {
-      return candidates.find(
-        (r) => r.checkIn.getTime() < new Date(cursor.getTime() + 86_400_000).getTime() && r.checkOut.getTime() > cursor.getTime()
-      );
+      // La reserva que ocupa ese día se identifica con la MISMA regla por días
+      // (nada de comparar instantes: la hora del check-out corre un día).
+      const span = spans.find((s) => unitOccupiedOnDay(unitId, cursor, [s]));
+      return candidates.find((c) => c.id === span?.id) ?? null;
     }
     cursor.setDate(cursor.getDate() + 1);
   }
@@ -204,7 +305,7 @@ export async function POST(req: NextRequest) {
       if (conflict) {
         return NextResponse.json(
           {
-            error: `Conflicto de disponibilidad: la unidad ya tiene una reserva activa del ${conflict.checkIn.toISOString().slice(0, 10)} al ${conflict.checkOut.toISOString().slice(0, 10)} (${conflict.externalBookingId || conflict.estado}).`,
+            error: `Conflicto de disponibilidad: la unidad ya tiene una reserva activa del ${toIsoDate(conflict.checkIn)} al ${toIsoDate(conflict.checkOut)} (${conflict.externalBookingId || conflict.estado}).`,
           },
           { status: 409 }
         );
@@ -220,7 +321,7 @@ export async function POST(req: NextRequest) {
         channel: String(canal).trim(),
         externalBookingId: body.referencia || `MAN-${Date.now().toString(36).toUpperCase()}`,
         action: 'book',
-        estado: ESTADOS_VALIDOS.includes(estado) ? estado : 'confirmed',
+        estado: esEstadoValido(estado) ? estado : 'confirmed',
         checkIn: ci,
         checkOut: co,
         bookedOn: new Date(),

@@ -2,6 +2,91 @@ import nodemailer from 'nodemailer';
 import { prisma } from '@/lib/db';
 import { getFromAddress, sendEmail as sendResendEmail } from './resend-email';
 
+/**
+ * Override del ENSAYO E2E: con `EMAIL_E2E_ENDPOINT` apuntando a loopback, todo
+ * email sale por HTTP POST a esa URL (cuerpo JSON) y NUNCA a un proveedor real.
+ * Es lo que permite probar el aviso de partes sin reintentar de punta a punta
+ * sin mandar correos de verdad. Sigue las guardias del override del MIR
+ * (`VAR_ENDPOINT_ENSALLO`): en producción se IGNORA (con aviso), solo se acepta
+ * loopback, y cualquier otro valor lanza — un mal copia/pega no puede desviar
+ * el correo de la plataforma a un tercero.
+ */
+export const VAR_ENDPOINT_EMAIL_ENSAYO = 'EMAIL_E2E_ENDPOINT';
+
+/** Aviso (una sola vez por proceso) de que el override del ensayo se ignora. */
+let avisadoOverrideEmailIgnorado = false;
+
+/** ¿Es un host de loopback? (el mock del ensayo corre en la misma máquina). */
+function esLoopbackEmail(host: string): boolean {
+  return host === '127.0.0.1' || host === 'localhost' || host === '::1' || host === '[::1]';
+}
+
+/**
+ * Resuelve el destino del email: el override del ensayo o `null` (proveedor
+ * real). Con un override no-loopback lanza, en vez de enviar a ese host.
+ */
+function destinoEmail(env: NodeJS.ProcessEnv = process.env): string | null {
+  const override = (env[VAR_ENDPOINT_EMAIL_ENSAYO] ?? '').trim();
+  if (!override) return null;
+
+  if (env.NODE_ENV === 'production') {
+    if (!avisadoOverrideEmailIgnorado) {
+      avisadoOverrideEmailIgnorado = true;
+      console.warn(
+        `[Email] ${VAR_ENDPOINT_EMAIL_ENSAYO} está definida pero se IGNORA en producción: ` +
+          'los envíos salen a los proveedores reales.'
+      );
+    }
+    return null;
+  }
+
+  let host = '';
+  try {
+    host = new URL(override).hostname;
+  } catch {
+    host = '';
+  }
+  if (!esLoopbackEmail(host)) {
+    throw new Error(
+      `${VAR_ENDPOINT_EMAIL_ENSAYO} solo acepta loopback (127.0.0.1, localhost, [::1]); recibido «${override}»`
+    );
+  }
+  return override;
+}
+
+/**
+ * Envío por el override del ensayo: POST JSON con el email. Devuelve el mismo
+ * contrato que los proveedores ({ success, error?, messageId? }) para que el
+ * llamante no sepa (ni le importe) que su correo fue a parar a un mock.
+ */
+async function sendEmailEnsayo(
+  url: string,
+  params: SendEmailParams
+): Promise<{ success: boolean; error?: string; messageId?: string; tenantSmtpConfigured: boolean }> {
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: params.to,
+        subject: params.subject,
+        text: params.text ?? null,
+        html: params.html ?? null,
+      }),
+    });
+    if (!res.ok) {
+      return { success: false, error: `mock de ensayo respondió ${res.status}`, tenantSmtpConfigured: false };
+    }
+    return { success: true, messageId: `e2e-${Date.now()}`, tenantSmtpConfigured: false };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: err?.message || 'fallo hablando con el mock de ensayo',
+      tenantSmtpConfigured: false,
+    };
+  }
+}
+
 interface Attachment {
   filename: string;
   content: Buffer;
@@ -107,6 +192,13 @@ export async function sendEmail({
   tenantId,
   attachments,
 }: SendEmailParams) {
+  // Override del ensayo: si está activo, el email va al mock y nada más. Antes
+  // de tocar SMTP ni Resend, para que ninguna credencial real salga de casa.
+  const destinoEnsayo = destinoEmail();
+  if (destinoEnsayo) {
+    return await sendEmailEnsayo(destinoEnsayo, { to, subject, html, text });
+  }
+
   let tenantSmtpConfigured = false
 
   try {

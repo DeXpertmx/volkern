@@ -342,9 +342,19 @@ export async function POST(request: NextRequest) {
               console.log('Subscription activated for tenant:', subTenantId)
             }
           } else {
-            const { citaId, leadId, servicioId } = session.metadata || {}
+            const { citaId, leadId, servicioId, producto } = session.metadata || {}
 
-            if (citaId) {
+            // Cobro directo de hospitality (FASE 3.C): conciliar el pago con la
+            // reserva. La conciliación es idempotente (una fila por sesión).
+            if (producto === 'hospitality') {
+              try {
+                const { conciliarPagoHospitality } = await import('@/lib/stripe/connect')
+                const resultado = await conciliarPagoHospitality(session)
+                console.log('[StripeWebhook] Conciliación hospitality:', resultado.creado ? 'pago creado' : resultado.motivo, session.id)
+              } catch (error) {
+                console.error('[StripeWebhook] Error conciliando pago de hospitality:', error)
+              }
+            } else if (citaId) {
               const cita = await prisma.cita.update({
                 where: { id: citaId },
                 data: {
@@ -512,6 +522,38 @@ export async function POST(request: NextRequest) {
         case 'payment_intent.payment_failed':
           console.log('Payment failed:', event.data.object.id)
           break
+
+        case 'account.updated': {
+          // Estado de la cuenta Connect de un tenant (FASE 3.C): sincronizar
+          // charges/payouts y estado (activo | pendiente | restringido).
+          const account = event.data.object as any
+          const cuentaTenantId = account.metadata?.tenantId
+          if (cuentaTenantId && account.id) {
+            try {
+              const cuenta = await prisma.hospitalityPaymentAccount.findUnique({
+                where: { tenantId_provider: { tenantId: cuentaTenantId, provider: 'stripe' } },
+              })
+              if (cuenta && cuenta.stripeAccountId === account.id) {
+                const activa = Boolean(account.charges_enabled && account.payouts_enabled)
+                const restringida = Boolean(account.requirements?.disabled_reason)
+                await prisma.hospitalityPaymentAccount.update({
+                  where: { id: cuenta.id },
+                  data: {
+                    estado: restringida ? 'restringido' : activa ? 'activo' : 'pendiente',
+                    chargesEnabled: Boolean(account.charges_enabled),
+                    payoutsEnabled: Boolean(account.payouts_enabled),
+                    moneda: account.default_currency?.toUpperCase() || cuenta.moneda,
+                    pais: account.country || cuenta.pais,
+                  },
+                })
+                console.log('[StripeWebhook] Cuenta Connect actualizada:', cuentaTenantId, account.id)
+              }
+            } catch (error) {
+              console.error('[StripeWebhook] Error actualizando cuenta Connect:', error)
+            }
+          }
+          break
+        }
 
         case 'invoice.finalized': {
           const invoice = event.data.object

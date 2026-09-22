@@ -64,6 +64,18 @@ describe('reservationsOnDay (regla del plan: checkout no ocupa su día)', () => 
     const cancelled = res({ estado: 'cancelled' });
     expect(reservationsOnDay([cancelled], '2026-09-12').length).toBe(0);
   });
+
+  it('excluye no-shows: la vista Mes es ocupación, y el motor la da por libre', () => {
+    // Auditoría del 17 sep 2026: esta vista filtraba solo «no cancelada», así
+    // que un no-show pintaba la noche como ocupada mientras el motor de
+    // disponibilidad y los canales la vendían. La regla es `aportaProduccion`.
+    const noShow = res({ estado: 'no_show' });
+    for (const dia of ['2026-09-10', '2026-09-12', '2026-09-14']) {
+      expect(reservationsOnDay([noShow], dia).length).toBe(0);
+    }
+    // El control: una reserva viva sí ocupa esas mismas noches.
+    expect(reservationsOnDay([res({ estado: 'checked_in' })], '2026-09-12').length).toBe(1);
+  });
 });
 
 describe('occupancyByDay', () => {
@@ -92,6 +104,14 @@ describe('arrivalsOn / departuresOn', () => {
   it('excluye canceladas', () => {
     const cancelledArrival = res({ estado: 'cancelled', checkIn: new Date('2026-09-09T15:00:00') });
     expect(arrivalsOn([cancelledArrival], today).length).toBe(0);
+  });
+
+  it('el no-show sí figura como llegada del día (no ocupa, pero se le esperaba)', () => {
+    // Misma definición que los reportes (`llegadas` alimenta la tasa de
+    // no-show) y que el panel de operaciones. Es «movimiento», no «ocupación».
+    const noShow = res({ estado: 'no_show', checkIn: new Date('2026-09-09T15:00:00') });
+    expect(arrivalsOn([noShow], today).length).toBe(1);
+    expect(reservationsOnDay([noShow], '2026-09-09').length).toBe(0);
   });
 
   it('respeta zonas horarias locales (sin desfase UTC)', () => {

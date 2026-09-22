@@ -18,6 +18,7 @@ import {
   DoorOpen,
   Tags,
   RefreshCcw,
+  Scale,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -35,6 +36,13 @@ import {
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
+// Regla compartida: una reserva viva es la que puede cancelarse; el criterio
+// no se copia en la UI (docs/hospitality-estados-auditoria.md).
+import { esReservaViva } from '@/lib/hospitality/estados';
+// Misma regla que la API: el diagnóstico se deriva del último fallo, no se
+// almacena — la MISMA función produce la causa del badge y la de la tabla.
+import { causaDeFalloConectividad, type CausaConectividad } from '@/lib/hospitality/conectividad-causa';
+import { sanitizarRespuestaExterna } from '@/lib/hospitality/conectividad-secreto';
 
 interface EstadoConectividad {
   configurado: boolean;
@@ -45,7 +53,15 @@ interface EstadoConectividad {
   tieneCredenciales: boolean;
   ultimaSincronizacion: string | null;
   ultimoEvento: string | null;
+  /** Última verificación activa (health-check diario o botón «Probar»). */
+  ultimaVerificacion?: string | null;
   contadorErrores: number;
+  /** Último fallo de la capa en crudo (sin secretos): alimenta el diagnóstico del badge. */
+  ultimoFallo?: {
+    httpStatus: number | null;
+    errorMensaje: string | null;
+    fechaCreacion: string;
+  } | null;
 }
 
 /** Estado de sincronización por propiedad (plan maestro §29). */
@@ -54,6 +70,24 @@ interface EventoSync {
   tipo: string;
   estado: string;
   detalle?: string | null;
+}
+
+/** Reserva interna activa que el proveedor ya no reporta (divergencia). */
+interface Divergencia {
+  reservationId: string;
+  syncLogId: string;
+  syncLogFecha: string;
+  tenantNombre: string | null;
+  propertyNombre: string | null;
+  externalBookingId: string;
+  channel: string;
+  checkIn: string | null;
+  checkOut: string | null;
+  unidad: string | null;
+  huespedes: number | null;
+  veces: number;
+  estadoActual: string | null;
+  reservaExiste: boolean;
 }
 
 interface EstadoPropiedad {
@@ -72,6 +106,8 @@ interface EstadoPropiedad {
   ultimoPush: EventoSync | null;
   ultimoFetch: EventoSync | null;
   ultimoError: EventoSync | null;
+  /** Causa en palabras del último fallo (credenciales rechazadas ≠ sin respuesta). */
+  causaUltimoError?: CausaConectividad | null;
   contadorErrores: number;
   webhooksTotales: number;
   webhooksFallidos: number;
@@ -124,11 +160,59 @@ export default function AdminConectividad() {
     totalDivergencias?: number;
     errores?: string[];
   } | null>(null);
+  const [divergencias, setDivergencias] = useState<Divergencia[]>([]);
+  const [loadingDivergencias, setLoadingDivergencias] = useState(true);
+  const [cancelando, setCancelando] = useState<string | null>(null);
+  const [confirmarCancel, setConfirmarCancel] = useState<Divergencia | null>(null);
 
   useEffect(() => {
     loadEstado();
     loadPropiedades();
+    loadDivergencias();
   }, []);
+
+  const loadDivergencias = async () => {
+    try {
+      setLoadingDivergencias(true);
+      const res = await fetch('/api/admin/conectividad/divergencias');
+      if (!res.ok) return;
+      const data = await res.json();
+      setDivergencias(data.divergencias || []);
+    } catch {
+      // Informativa: un fallo aquí no rompe la pantalla.
+    } finally {
+      setLoadingDivergencias(false);
+    }
+  };
+
+  const handleCancelarDivergencia = async (d: Divergencia) => {
+    setCancelando(d.reservationId);
+    try {
+      const res = await fetch('/api/admin/conectividad/divergencias', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reservationId: d.reservationId, syncLogId: d.syncLogId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.ok) {
+        toast.success(`Reserva ${d.externalBookingId} cancelada`);
+        setConfirmarCancel(null);
+        await loadDivergencias();
+      } else if (data.reaparece) {
+        toast.warning(
+          'El proveedor vuelve a reportar la reserva: era ruido transitorio. No se canceló nada; re-ejecuta la reconciliación.'
+        );
+        setConfirmarCancel(null);
+        await loadDivergencias();
+      } else {
+        toast.error(data.error || 'No se pudo cancelar la reserva');
+      }
+    } catch {
+      toast.error('Error de red al cancelar la reserva');
+    } finally {
+      setCancelando(null);
+    }
+  };
 
   const loadPropiedades = async () => {
     try {
@@ -279,6 +363,10 @@ export default function AdminConectividad() {
   }
 
   const estadoInfo = estado ? ESTADO_LABEL[estado.estado] || ESTADO_LABEL.sin_configurar : ESTADO_LABEL.sin_configurar;
+  // El badge rojo nombra la causa: 401/403 → credenciales rechazadas;
+  // 5xx/timeout → sin respuesta del servicio. Derivado del último fallo de la
+  // capa (push/fetch), con la MISMA regla que la tabla por propiedad.
+  const causaUltimoFallo = causaDeFalloConectividad(estado?.ultimoFallo ?? null);
 
   return (
     <div className="space-y-6">
@@ -313,6 +401,13 @@ export default function AdminConectividad() {
                 )}
                 {estadoInfo.text}
               </Badge>
+              {estado?.estado === 'error' && estado.ultimoFallo && (
+                <Badge variant="destructive" className="gap-1 max-w-[420px]">
+                  <span className="truncate" title={`${causaUltimoFallo.texto} · ${causaUltimoFallo.consejo} (último fallo: ${hace(estado.ultimoFallo.fechaCreacion)})`}>
+                    {causaUltimoFallo.texto}
+                  </span>
+                </Badge>
+              )}
               <Button
                 variant="outline"
                 size="sm"
@@ -345,6 +440,18 @@ export default function AdminConectividad() {
               <p className="text-muted-foreground mt-1">{estado?.contadorErrores || 0}</p>
             </div>
           </div>
+          <p className="text-xs text-muted-foreground mt-3">
+            Última verificación: {hace(estado?.ultimaVerificacion)} — sondea la capa a propósito (health-check
+            diario o botón «Probar»), sin esperar tráfico real.
+          </p>
+          {estado?.estado === 'error' && estado.ultimoFallo && (
+            <div className="mt-4 rounded-lg border border-red-200 bg-red-50 dark:bg-red-950 p-3 text-sm" role="alert">
+              <p className="font-medium text-red-700 dark:text-red-300">
+                {causaUltimoFallo.texto} · último fallo {hace(estado.ultimoFallo.fechaCreacion)}
+              </p>
+              <p className="text-red-700/80 dark:text-red-300/80 mt-1">{causaUltimoFallo.consejo}</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -482,6 +589,168 @@ export default function AdminConectividad() {
         </CardContent>
       </Card>
 
+      {/* Divergencias de reconciliación: reservas que el proveedor ya no reporta */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-amber-100 rounded-lg dark:bg-amber-950">
+                <Scale className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  Divergencias de Reconciliación
+                  {divergencias.length > 0 && (
+                    <Badge variant="destructive">{divergencias.length}</Badge>
+                  )}
+                </CardTitle>
+                <CardDescription>
+                  Reservas activas aquí que el proveedor ya no reporta — el caso típico es un
+                  cancel que el webhook perdió y la unidad queda vendida dos veces. Revisa fechas e
+                  importes y cancela manualmente: nada se cancela solo.
+                </CardDescription>
+              </div>
+            </div>
+            <Button variant="outline" size="sm" onClick={loadDivergencias} disabled={loadingDivergencias}>
+              {loadingDivergencias ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+              Actualizar
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {loadingDivergencias && divergencias.length === 0 ? (
+            <div className="flex items-center justify-center py-6 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin mr-2" />
+              Cargando divergencias...
+            </div>
+          ) : divergencias.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">
+              Sin divergencias pendientes. Si el proveedor cancela fuera del webhook, aparecerá aquí
+              tras la siguiente reconciliación.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Reserva</TableHead>
+                    <TableHead>Propiedad / unidad</TableHead>
+                    <TableHead>Fechas</TableHead>
+                    <TableHead>Detectada</TableHead>
+                    <TableHead>Estado actual</TableHead>
+                    <TableHead className="text-right">Acción</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {divergencias.map((d) => (
+                    <TableRow key={d.reservationId}>
+                      <TableCell>
+                        <div className="font-medium">{d.externalBookingId}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {d.channel}
+                          {d.tenantNombre ? ` · ${d.tenantNombre}` : ''}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        <div>{d.propertyNombre || '—'}</div>
+                        <div className="text-xs text-muted-foreground">{d.unidad || 'sin unidad'}</div>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {d.checkIn || '—'} → {d.checkOut || '—'}
+                        {d.huespedes !== null && d.huespedes > 0 && (
+                          <div className="text-xs text-muted-foreground">{d.huespedes} huésped(es)</div>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        <div>{hace(d.syncLogFecha)}</div>
+                        {d.veces > 1 && (
+                          <div className="text-xs text-muted-foreground">en {d.veces} barridos</div>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {d.reservaExiste ? (
+                          <Badge
+                            variant={
+                              d.estadoActual === 'pending' || d.estadoActual === 'checked_in'
+                                ? 'outline'
+                                : 'destructive'
+                            }
+                          >
+                            {d.estadoActual || 'desconocido'}
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline">eliminada</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {d.reservaExiste &&
+                        d.estadoActual &&
+                        esReservaViva(d.estadoActual) ? (
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => setConfirmarCancel(d)}
+                            disabled={cancelando === d.reservationId}
+                          >
+                            Cancelar reserva
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Nada que hacer</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Confirmación de cancelación de una divergencia */}
+      {confirmarCancel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white dark:bg-slate-950 rounded-xl shadow-2xl max-w-lg w-full">
+            <div className="p-6 border-b">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-amber-500" />
+                Cancelar reserva {confirmarCancel.externalBookingId}
+              </h2>
+            </div>
+            <div className="p-6 space-y-3 text-sm">
+              <p>
+                Vas a cancelar la reserva <strong>{confirmarCancel.externalBookingId}</strong> ({confirmarCancel.channel})
+                de <strong>{confirmarCancel.propertyNombre || '—'}</strong>
+                {confirmarCancel.unidad ? `, unidad ${confirmarCancel.unidad}` : ''}, del{' '}
+                <strong>{confirmarCancel.checkIn || '—'}</strong> al <strong>{confirmarCancel.checkOut || '—'}</strong>.
+              </p>
+              <p className="text-muted-foreground">
+                Antes de cancelar se consulta al proveedor: si la reserva vuelve a aparecer reportada, la
+                divergencia era transitoria y no se cancelará nada. Si no aparece (cancel perdida), la
+                reserva se marca <code>cancelled</code> y la unidad queda libre.
+              </p>
+            </div>
+            <div className="p-6 border-t flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setConfirmarCancel(null)} disabled={cancelando !== null}>
+                Volver
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => handleCancelarDivergencia(confirmarCancel)}
+                disabled={cancelando !== null}
+              >
+                {cancelando ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <XCircle className="h-4 w-4 mr-2" />}
+                {cancelando ? 'Cancelando...' : 'Confirmar cancelación'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Estado de sincronización por propiedad (plan maestro §29) */}
       <Card>
         <CardHeader>
@@ -586,6 +855,14 @@ export default function AdminConectividad() {
                         {(p.contadorErrores > 0 || p.webhooksFallidos > 0) ? (
                           <>
                             <Badge variant="destructive">{p.contadorErrores + p.webhooksFallidos}</Badge>
+                            {p.causaUltimoError && (
+                              <div
+                                className="text-xs font-medium text-red-700 dark:text-red-300 mt-1"
+                                title={p.causaUltimoError.consejo}
+                              >
+                                {p.causaUltimoError.texto}
+                              </div>
+                            )}
                             {p.ultimoError && (
                               <div className="text-xs text-muted-foreground mt-1 max-w-[220px] truncate" title={p.ultimoError.detalle || undefined}>
                                 {hace(p.ultimoError.fecha)} · {p.ultimoError.detalle || p.ultimoError.tipo}
@@ -719,8 +996,11 @@ export default function AdminConectividad() {
                   {!testResult.ok && testResult.respuestaExterna !== undefined && (
                     <div className="mt-3">
                       <p className="text-xs font-medium text-muted-foreground mb-1">Respuesta del servicio:</p>
+                      {/* Segunda capa de saneo al renderizar: la fuente ya sanea
+                          (connectivity.ts), esto protege ante cuerpos viejos
+                          persistidos sin redactar o cambios futuros. */}
                       <pre className="bg-slate-900 text-green-400 text-xs p-3 rounded-lg overflow-x-auto max-h-40">
-                        {JSON.stringify(testResult.respuestaExterna, null, 2)}
+                        {JSON.stringify(sanitizarRespuestaExterna(testResult.respuestaExterna), null, 2)}
                       </pre>
                     </div>
                   )}

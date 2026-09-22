@@ -22,7 +22,7 @@ vi.mock('@/lib/resend-email', () => ({
   sendEmail: resendMock,
 }))
 
-import { sendEmail } from '@/lib/ses-email'
+import { sendEmail, VAR_ENDPOINT_EMAIL_ENSAYO } from '@/lib/ses-email'
 
 describe('routing de correo por tenant', () => {
   beforeEach(() => {
@@ -96,5 +96,60 @@ describe('routing de correo por tenant', () => {
     expect(result.success).toBe(true)
     expect(resendMock).toHaveBeenCalledOnce()
     expect(sendMailMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('override del ensayo E2E (EMAIL_E2E_ENDPOINT)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    delete process.env[VAR_ENDPOINT_EMAIL_ENSAYO]
+    delete process.env.NODE_ENV
+  })
+
+  it('sin la variable, el envío sale por los proveedores reales', async () => {
+    process.env.RESEND_API_KEY = 're_test'
+    findManyMock.mockResolvedValue([{ clave: 'smtp_enabled', valor: 'false' }])
+
+    const result = await sendEmail({ to: 'a@b.test', subject: 's', text: 't' })
+
+    expect(result.success).toBe(true)
+    expect(resendMock).toHaveBeenCalledOnce()
+  })
+
+  it('con la variable en loopback, el email va al mock y NUNCA a un proveedor real', async () => {
+    process.env.RESEND_API_KEY = 're_test'
+    process.env[VAR_ENDPOINT_EMAIL_ENSAYO] = 'http://127.0.0.1:41423/email'
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await sendEmail({ to: 'hotel@ejemplo.test', subject: 'Partes (2)', text: 'cuerpo' })
+
+    expect(result.success).toBe(true)
+    expect(fetchMock).toHaveBeenCalledOnce()
+    const llamada = fetchMock.mock.calls[0]
+    expect(llamada[0]).toBe('http://127.0.0.1:41423/email')
+    expect(JSON.parse(llamada[1].body).subject).toBe('Partes (2)')
+    expect(resendMock).not.toHaveBeenCalled()
+    expect(sendMailMock).not.toHaveBeenCalled()
+    vi.unstubAllGlobals()
+  })
+
+  it('un valor no loopback LANZA en vez de desviar el correo a un tercero', async () => {
+    process.env[VAR_ENDPOINT_EMAIL_ENSAYO] = 'https://mail.malicioso.test/recoger'
+    await expect(
+      sendEmail({ to: 'a@b.test', subject: 's', text: 't' })
+    ).rejects.toThrow(/loopback/)
+  })
+
+  it('en producción el override se IGNORA y el envío sale por el proveedor real', async () => {
+    process.env.RESEND_API_KEY = 're_test'
+    process.env.NODE_ENV = 'production'
+    process.env[VAR_ENDPOINT_EMAIL_ENSAYO] = 'http://127.0.0.1:41423/email'
+    findManyMock.mockResolvedValue([{ clave: 'smtp_enabled', valor: 'false' }])
+
+    const result = await sendEmail({ to: 'a@b.test', subject: 's', text: 't' })
+
+    expect(result.success).toBe(true)
+    expect(resendMock).toHaveBeenCalledOnce()
   })
 })

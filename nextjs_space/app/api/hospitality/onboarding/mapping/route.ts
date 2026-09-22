@@ -20,6 +20,19 @@ import { testConnectivityConnection } from '@/lib/hospitality/connectivity';
 
 const PROVIDER = 'channel_connectivity';
 
+/**
+ * Marca de un vínculo confirmado por una persona en el wizard. Sustituye al
+ * `metadata` que dejó la vinculación automática, de modo que `vinculoAutomatico`
+ * (y el recordatorio periódico) dejen de considerarlo pendiente.
+ */
+function metadataConfirmado(userId: string | null) {
+  return {
+    origen: 'manual',
+    confirmadoEn: new Date().toISOString(),
+    confirmadoPor: userId,
+  };
+}
+
 interface Asignacion {
   unitId?: unknown;
   roomCode?: unknown;
@@ -187,6 +200,7 @@ export async function POST(req: NextRequest) {
           externalUnitCode: a.roomCode,
           externalRatePlanCode: a.rateplanCode,
           estado: 'activo',
+          metadata: metadataConfirmado(auth.user?.id ?? null),
         },
         update: {
           tenantId,
@@ -194,6 +208,9 @@ export async function POST(req: NextRequest) {
           unitId: a.unitId,
           externalRatePlanCode: a.rateplanCode,
           estado: 'activo',
+          // Guardar los vínculos ES la revisión: el vínculo pasa a ser manual
+          // (una persona lo confirmó) y deja de contar como pendiente de revisar.
+          metadata: metadataConfirmado(auth.user?.id ?? null),
         },
       });
 

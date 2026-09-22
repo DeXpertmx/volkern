@@ -24,7 +24,9 @@
  */
 
 import { prisma } from '@/lib/db';
+import type { Prisma } from '@prisma/client';
 import { fetchReservations, updateConnectivityStatus } from './connectivity';
+import { ESTADOS_RESERVA_VIVA } from './estados';
 import {
   processBook,
   processModify,
@@ -64,7 +66,23 @@ export interface ReconciliationSummary {
     sinCambios: number;
     divergencias: number;
     error?: string;
+    /** Reservas internas activas que el proveedor ya no reporta
+     *  (divergencias de disponibilidad). Vacío cuando no hubo ninguna;
+     *  es la lista que revisa el operador en el panel de admin. */
+    ausentes?: ReservaAusente[];
   }>;
+}
+
+/** Reserva activa del PMS que el fetch del proveedor ya no devuelve. */
+export interface ReservaAusente {
+  reservationId: string;
+  externalBookingId: string;
+  channel: string;
+  estado: string;
+  checkIn: string | null;
+  checkOut: string | null;
+  unidad: string | null;
+  huespedes: number;
 }
 
 /** Normaliza a YYYY-MM-DD en hora local. */
@@ -291,18 +309,31 @@ export async function runReconciliation(
       where: {
         tenantId: input.tenantId,
         propertyId: prop.id,
-        estado: { in: ['pending', 'confirmed', 'checked_in'] },
+        // Reservas VIVAS (estancia en curso): una estancia terminada ya no es
+        // una divergencia pendiente de resolver.
+        estado: { in: [...ESTADOS_RESERVA_VIVA] },
         checkIn: { lt: end },
         checkOut: { gt: today },
       },
-      select: { id: true, channel: true, externalBookingId: true, estado: true },
+      select: {
+        id: true,
+        channel: true,
+        externalBookingId: true,
+        estado: true,
+        checkIn: true,
+        checkOut: true,
+        occupancyAdults: true,
+        occupancyChildren: true,
+        unit: { select: { nombre: true } },
+      },
     });
+
+    const ausentes: ReservaAusente[] = [];
 
     for (const r of activas) {
       if (vistos.has(`${r.channel}|${r.externalBookingId}`)) continue;
       detalle.divergencias += 1;
       summary.divergencias += 1;
-
       if (input.cancelarAusentes) {
         const result = await processCancel(input.tenantId, {
           action: 'cancel',
@@ -313,9 +344,24 @@ export async function runReconciliation(
         if (result.status === 'cancelada') {
           detalle.canceladas += 1;
           summary.canceladas += 1;
+          // Cancelada en esta corrida: ya no es divergencia pendiente de revisión.
+          continue;
         }
       }
+      ausentes.push({
+        reservationId: r.id,
+        externalBookingId: r.externalBookingId,
+        channel: r.channel,
+        estado: r.estado,
+        checkIn: r.checkIn ? toIsoDate(new Date(r.checkIn)) : null,
+        checkOut: r.checkOut ? toIsoDate(new Date(r.checkOut)) : null,
+        unidad: r.unit?.nombre ?? null,
+        huespedes: (r.occupancyAdults ?? 0) + (r.occupancyChildren ?? 0),
+      });
     }
+
+    // La lista viaja también en el resumen devuelto a la ruta/API.
+    if (ausentes.length > 0) detalle.ausentes = ausentes;
 
     // Log de auditoría por propiedad (motivo y fuente, §14/§29/§30).
     try {
@@ -331,13 +377,19 @@ export async function runReconciliation(
             rango: `${toIsoDate(today)} → ${toIsoDate(end)}`,
             cancelarAusentes: input.cancelarAusentes ?? false,
           },
-          responseBody: {
-            creadas: detalle.creadas,
-            actualizadas: detalle.actualizadas,
-            canceladas: detalle.canceladas,
-            sinCambios: detalle.sinCambios,
-            divergencias: detalle.divergencias,
-          },
+          // La lista concreta de ausentes es lo que revisa el operador:
+          // sin ella el log solo dice "hay N divergencias" pero no cuáles.
+          responseBody: ((): Prisma.InputJsonValue => {
+            const body: Record<string, Prisma.InputJsonValue> = {
+              creadas: detalle.creadas,
+              actualizadas: detalle.actualizadas,
+              canceladas: detalle.canceladas,
+              sinCambios: detalle.sinCambios,
+              divergencias: detalle.divergencias,
+            };
+            if (ausentes.length > 0) body.ausentes = ausentes as unknown as Prisma.InputJsonValue;
+            return body;
+          })(),
           errorMensaje: detalle.error ?? null,
         },
       });

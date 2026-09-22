@@ -142,6 +142,14 @@ describe('middleware — rutas canónicas pasan (sin redirección)', () => {
     }
   });
 
+  it('el check-in del huésped es público: su credencial es el token, no una sesión', async () => {
+    // Sin esto, el enlace que recibe el huésped acaba en /auth/login y los
+    // documentos del registro de viajeros no se recogen nunca.
+    const res = await middleware(makeRequest('/checkin/TOKEN-abc123'));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('location')).toBeNull();
+  });
+
   it('añade requestId y CORS también en respuestas que pasan', async () => {
     const res = await middleware(makeRequest('/tarjeta/abc123'));
 

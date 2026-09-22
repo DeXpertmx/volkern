@@ -1,0 +1,112 @@
+// @vitest-environment node
+//
+// Guardias de las dos pantallas que recogen los datos del huésped para el
+// registro de viajeros. Son guardias de fuente (leen el código, no lo ejecutan)
+// porque lo que fijan es de arquitectura, no de comportamiento:
+//  - La página del check-in habla SOLO con su propia API pública (el token es
+//    la credencial) y no con ningún servicio externo.
+//  - Todos los textos salen del módulo de i18n (CHECKIN_TEXTOS): cero
+//    literales de interfaz en castellano dentro del componente.
+//  - El idioma se resuelve con el MISMO patrón isomórfico que el motor de
+//    reservas (español en servidor y primer render, `?lang=` antes del paint).
+//  - La herencia de la dirección viaja como consentimiento explícito
+//    (`heredarDireccion`), no como suposición del servidor.
+//  - El motor público pide los datos del documento y devuelve el enlace de
+//    check-in en la confirmación.
+
+import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+
+const raiz = path.resolve(__dirname, '..');
+const leer = (rel: string) => readFileSync(path.join(raiz, rel), 'utf8');
+
+const PAGINA_CHECKIN = 'app/checkin/[token]/page.tsx';
+const PAGINA_MOTOR = 'app/booking/[slug]/page.tsx';
+const API_CHECKIN = 'app/api/public/checkin/[token]/route.ts';
+
+describe('check-in online (pantalla del huésped)', () => {
+  const page = leer(PAGINA_CHECKIN);
+
+  it('habla solo con su API pública por token (no con terceros)', () => {
+    expect(page).toContain('`/api/public/checkin/${token}`');
+    // Ni fetch a hosts externos ni SDKs de agregadores.
+    expect(page).not.toMatch(/fetch\(\s*['"`]https?:\/\//);
+  });
+
+  it('todos los textos salen del i18n del módulo (sin literales de interfaz)', () => {
+    expect(page).toContain('CHECKIN_TEXTOS[idioma]');
+    expect(page).toContain('etiquetasDeCampos');
+    // Los textos de los campos se piden al módulo, no se escriben aquí.
+    expect(page).toContain('t.campos');
+    expect(page).not.toMatch(/etiqueta="(Nombre|Documento|Dirección|Teléfono)/);
+  });
+
+  it('resuelve el idioma como el motor: español primero y `?lang=` antes del paint', () => {
+    expect(page).toContain('idiomaDesdeUrl(window.location.search)');
+    expect(page).toContain('useLayoutEffect');
+    expect(page).toContain('IDIOMA_POR_DEFECTO');
+  });
+
+  it('la herencia de la dirección es un consentimiento explícito del huésped', () => {
+    expect(page).toContain('heredarDireccion: mismaDireccion');
+    expect(page).toContain('t.mismaDireccion');
+    // Se ofrece, no se aplica sola: el checkbox arranca marcado, pero se manda.
+    expect(page).toContain('setMismaDireccion');
+  });
+
+  it('un `id` de datalist por página (no uno por viajero)', () => {
+    const ocurrencias = page.match(/id="tipos-documento"/g) ?? [];
+    expect(ocurrencias).toHaveLength(1);
+    expect(page.match(/id="paises"/g) ?? []).toHaveLength(1);
+  });
+
+  it('dice qué falta con las etiquetas del huésped, no con códigos internos', () => {
+    expect(page).toContain('t.pendiente');
+    expect(page).toContain('faltan');
+    expect(page).toContain('EstadoDocumentacion');
+  });
+});
+
+describe('API pública del check-in', () => {
+  const api = leer(API_CHECKIN);
+
+  it('la credencial es el token de la reserva y su reserva cerrada da 410', () => {
+    expect(api).toContain('reservaParaCheckin(token)');
+    expect(api).toContain('reservaCerrada(reserva.estado)');
+    expect(api).toContain('status: 410');
+  });
+
+  it('envía el parte solo cuando la documentación está completa (y el servicio ya empezó)', () => {
+    expect(api).toContain('guardado.documentacion.completa');
+    expect(api).toContain('enviarParteSiCorresponde');
+  });
+
+  it('el tope de viajeros se valida en el servidor, no solo en la pantalla', () => {
+    expect(api).toContain("guardado.error === 'demasiados_viajeros'");
+    expect(api).toContain('CAMPOS_MINIMOS_VIAJERO');
+  });
+});
+
+describe('motor de reservas: datos del documento del titular', () => {
+  const page = leer(PAGINA_MOTOR);
+  const api = leer('app/api/public/booking/[slug]/route.ts');
+
+  it('el formulario pide el documento y lo manda con la reserva', () => {
+    expect(page).toContain('t.documentoTitulo');
+    expect(page).toContain('documento');
+    expect(page).toContain('CHECKIN_TEXTOS[idioma].campos');
+  });
+
+  it('la confirmación muestra el enlace de check-in para el resto del grupo', () => {
+    expect(page).toContain('t.enlaceCheckinTitulo');
+    expect(page).toContain('confirmada.checkinUrl');
+    expect(api).toContain('checkinUrl');
+    expect(api).toContain('asegurarTokenCheckin');
+  });
+
+  it('sin datos de documento no se inventa un viajero (lo pide el check-in)', () => {
+    expect(api).toContain('documentaAlgo');
+    expect(api).toContain('normalizarViajero');
+  });
+});

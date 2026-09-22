@@ -1,5 +1,7 @@
 import { prisma } from '@/lib/db';
 import { encrypt, decrypt } from '@/lib/core/crypto';
+import { TIPOS_SYNC_CONECTIVIDAD, type FalloConectividad } from './conectividad-causa';
+import { sanitizarRespuestaExterna } from './conectividad-secreto';
 
 /**
  * Capa de Conectividad de Canales (Hospitality).
@@ -87,8 +89,26 @@ export async function getConnectivityPublic() {
       tieneCredenciales: false,
       ultimaSincronizacion: null,
       ultimoEvento: null,
+      ultimaVerificacion: null,
       contadorErrores: 0,
+      // Sin configuración no puede haber fallo previo de la capa.
+      ultimoFallo: null,
     };
+  }
+
+  // Último SyncLog fallido de la capa de conectividad (push/fetch): alimenta el
+  // diagnóstico del badge. Campos de diagnóstico solamente — nada de payloads.
+  // Si la consulta de diagnóstico falla, se degrada a null: el estado del panel
+  // no puede morir por un dato auxiliar.
+  let ultimoFallo: FalloConectividad | null = null;
+  try {
+    ultimoFallo = await prisma.hospitalitySyncLog.findFirst({
+      where: { estado: 'error', tipo: { in: [...TIPOS_SYNC_CONECTIVIDAD] } },
+      orderBy: { fechaCreacion: 'desc' },
+      select: { httpStatus: true, errorMensaje: true, fechaCreacion: true },
+    });
+  } catch {
+    ultimoFallo = null;
   }
 
   return {
@@ -101,7 +121,11 @@ export async function getConnectivityPublic() {
     tieneCredenciales: !!(provider.partnerIdEnc && provider.usernameEnc && provider.passwordEnc),
     ultimaSincronizacion: provider.ultimaSincronizacion,
     ultimoEvento: provider.ultimoEvento,
+    /** Última verificación activa de la capa (health-check diario o «Probar»). */
+    ultimaVerificacion: provider.ultimaVerificacion ?? null,
     contadorErrores: provider.contadorErrores,
+    /** Último fallo de la capa (push/fetch de conectividad), en crudo para derivar la causa en el cliente. */
+    ultimoFallo: ultimoFallo,
   };
 }
 
@@ -179,6 +203,8 @@ export async function updateConnectivityStatus(input: {
   ultimoEvento?: Date;
   error?: boolean;
   resetErrores?: boolean;
+  /** Marca del health-check diario (sonda property_details) y de «Probar». */
+  ultimaVerificacion?: Date;
 }) {
   const provider = await getConnectivityProvider();
   if (!provider) return null;
@@ -187,6 +213,7 @@ export async function updateConnectivityStatus(input: {
   if (input.estado !== undefined) data.estado = input.estado;
   if (input.ultimaSincronizacion !== undefined) data.ultimaSincronizacion = input.ultimaSincronizacion;
   if (input.ultimoEvento !== undefined) data.ultimoEvento = input.ultimoEvento;
+  if (input.ultimaVerificacion !== undefined) data.ultimaVerificacion = input.ultimaVerificacion;
   if (input.error) data.contadorErrores = (provider.contadorErrores || 0) + 1;
   if (input.resetErrores) data.contadorErrores = 0;
 
@@ -291,11 +318,13 @@ export async function testConnectivityConnection(hotelCode?: string): Promise<Te
     return { ok: false, error: `No se pudo conectar: ${msg}` };
   }
 
+  // El cuerpo del proveedor puede reflejar el header Authorization u otros
+  // secretos: se sanea antes de exponerlo (contrato: se muestra en fallos).
   let body: unknown = null;
   try {
-    body = await res.json();
+    body = sanitizarRespuestaExterna(await res.json());
   } catch {
-    body = await res.text().catch(() => null);
+    body = sanitizarRespuestaExterna(await res.text().catch(() => null));
   }
 
   if (!res.ok) {
@@ -438,14 +467,20 @@ async function connectivityFetch(
 }
 
 /**
- * Lee el cuerpo de una respuesta (JSON preferido, texto como fallback).
+ * Lee el cuerpo de una respuesta (JSON preferido, texto como fallback) y
+ * lo SANEa antes de devolverlo: el proveedor puede reflejar el header
+ * Authorization u otros secretos en sus errores, y este cuerpo acaba en
+ * `HospitalitySyncLog.responseBody` (historial) y en pantallas de admin.
+ * La redacción en la fuente cubre todos los consumidores de una vez.
  */
 async function readBody(res: Response): Promise<unknown> {
+  let cuerpo: unknown;
   try {
-    return await res.json();
+    cuerpo = await res.json();
   } catch {
-    return await res.text().catch(() => null);
+    cuerpo = await res.text().catch(() => null);
   }
+  return sanitizarRespuestaExterna(cuerpo);
 }
 
 /**

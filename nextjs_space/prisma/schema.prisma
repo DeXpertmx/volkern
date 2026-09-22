@@ -4,8 +4,10 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  // Base shadow para `migrate dev` (ver docs/PRISMA-BASELINE.md).
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
 model Account {
@@ -504,10 +506,16 @@ model Tenant {
   hospitalityMaintenanceTasks   HospitalityMaintenanceTask[]      @relation("HospitalityMaintenanceTasks")
   hospitalityUnitBlocks          HospitalityUnitBlock[]            @relation("HospitalityUnitBlocks")
   hospitalityReservationItems   HospitalityReservationItem[]     @relation("HospitalityReservationItems")
+  hospitalityExtras             HospitalityExtra[]               @relation("HospitalityExtras")
   hospitalityPayments           HospitalityPayment[]             @relation("HospitalityPayments")
   hospitalityPaymentAccounts    HospitalityPaymentAccount[]      @relation("HospitalityPaymentAccounts")
   hospitalitySyncLogs           HospitalitySyncLog[]              @relation("HospitalitySyncLogs")
   hospitalityCommunicationTemplates HospitalityCommunicationTemplate[] @relation("HospitalityCommunicationTemplates")
+  // Registro de viajeros (MIR / SES Hospedajes, RD 933/2021, art. 6).
+  hospitalityMirConfigs         HospitalityMirConfig[]            @relation("HospitalityMirConfigs")
+  hospitalityGuestRegistry      HospitalityGuestRegistryCommunication[] @relation("HospitalityGuestRegistry")
+  hospitalityCheckinPreguntas   HospitalityCheckinPregunta[]      @relation("HospitalityCheckinPreguntas")
+  hospitalityReviews            HospitalityReview[]               @relation("HospitalityReviews")
   automationActionExecutions    AutomationActionExecution[]        @relation("AutomationActionExecutions")
 }
 
@@ -4399,6 +4407,10 @@ model Expense {
   isAnomaly          Boolean  @default(false)
   parentFingerprint  String?
   verificationStatus String   @default("PENDING")
+  // Atribución opcional a hospitality (FASE 3.B, "sin duplicar entidades"):
+  // un gasto del ERP (limpieza externa, incidencia, consumibles…) puede
+  // imputarse a una reserva concreta para calcular su rentabilidad real.
+  hospitalityReservationId String?
 
   // ── Verifactu ─────────────────────────────────────────────
   invoiceNumber      String?  // Número y serie de la factura
@@ -4414,6 +4426,7 @@ model Expense {
   lead               Lead?    @relation(fields: [leadId], references: [id])
   project            Project? @relation(fields: [projectId], references: [id])
   supplier           Supplier @relation(fields: [supplierId], references: [id])
+  hospitalityReservation HospitalityReservation? @relation("ExpenseHospitalityReservation", fields: [hospitalityReservationId], references: [id], onDelete: SetNull)
   tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
@@ -4422,6 +4435,7 @@ model Expense {
   @@index([category])
   @@index([status])
   @@index([date])
+  @@index([hospitalityReservationId])
   @@map("erp_expenses")
 }
 
@@ -8060,6 +8074,10 @@ model ConnectivityProvider {
   estado                String    @default("sin_configurar")
   ultimaSincronizacion  DateTime?
   ultimoEvento          DateTime?
+  /// Health-check diario: última verificación activa (sonda property_details).
+  /// Persistido (no solo memoria del proceso): la marca sobrevive reinicios y
+  /// la puede leer también la API sin pasar por el store del cron.
+  ultimaVerificacion    DateTime?
   contadorErrores       Int       @default(0)
   configuracion         Json?
   fechaCreacion         DateTime  @default(now())
@@ -8091,6 +8109,20 @@ model HospitalityProperty {
   fotos          Json?
   timezone       String    @default("America/Mexico_City")
   estado         String    @default("activa")
+  // Penalización por no-show de esta propiedad: ninguna|primera_noche|estancia_completa.
+  // El no-show NO ocupa la unidad (regla 7 del plan); esto solo decide qué se cobra.
+  politicaNoShow String    @default("primera_noche")
+  // Salida anticipada (decisión del Anfitrión, docs/hospitality-estados-auditoria.md):
+  // cerrar_estancia = A (el check-out pone el checkOut al día en curso y libera las
+  // noches no usadas pisando las fechas previstas) | salida_real = B (se guarda
+  // checkOutReal y la disponibilidad/ocupación usa min(checkOut, checkOutReal),
+  // dejando checkOut para las noches vendidas y la facturación).
+  politicaSalidaAnticipada String @default("salida_real")
+  // Horas que un hold `pending` retiene la unidad antes de caducar solo
+  // (docs/hospitality-estados-auditoria.md §holds). 0 = sin caducidad
+  // automática: el hold solo lo cierra una persona. Con pagos registrados
+  // nunca caduca (es una decisión humana, no un barrido). Ver lib/hospitality/holds.ts.
+  holdHoras      Int       @default(24)
   fechaCreacion  DateTime  @default(now())
   fechaEdicion   DateTime  @updatedAt
   tenant         Tenant    @relation("HospitalityProperties", fields: [tenantId], references: [id], onDelete: Cascade)
@@ -8101,6 +8133,15 @@ model HospitalityProperty {
   syncLogs       HospitalitySyncLog[]
   reservationItems HospitalityReservationItem[]
   payments       HospitalityPayment[]
+  extras         HospitalityExtra[]
+
+  // Código de establecimiento asignado por el Sistema de Hospedajes del
+  // Ministerio del Interior en el momento del registro de la entidad. Es el
+  // `codigoEstablecimiento` que exige el XSD de alta de partes de viajeros
+  // (arts. 3.1.1.1 de la interfaz v3.1.2). Null = todavía sin registrar.
+  codigoEstablecimientoMIR String?
+
+  reviews HospitalityReview[] @relation("HospitalityReviews")
 
   @@index([tenantId])
   @@map("hospitality_properties")
@@ -8132,6 +8173,7 @@ model HospitalityUnit {
   manualBlocks HospitalityUnitBlock[]
   reservationItems HospitalityReservationItem[]
   payments       HospitalityPayment[]
+  reviews        HospitalityReview[] @relation("HospitalityReviews")
 
   @@index([tenantId])
   @@index([propertyId])
@@ -8213,6 +8255,10 @@ model HospitalityReservation {
   estado                String    @default("confirmed") // pending|confirmed|cancelled|checked_in|checked_out|no_show
   checkIn               DateTime
   checkOut              DateTime
+  // Salida REAL del huésped (check-out anticipado, opción B): null = no ha
+  // salido o salió el día previsto. La ocupación usa min(checkOut, checkOutReal)
+  // vía finEstanciaReal(); checkOut queda intacto para noches vendidas y facturación.
+  checkOutReal          DateTime?
   bookedOn              DateTime?
   segment               String?
   specialRequests       String?
@@ -8227,7 +8273,23 @@ model HospitalityReservation {
   occupancyAdults       Int       @default(1)
   occupancyChildren     Int       @default(0)
   guestData             Json?
+  // Respuestas del huésped a las preguntas personalizadas del check-in
+  // ({preguntaId: valor}), para el hotel. Viven fuera de `guestData.viajeros`
+  // a propósito: nada de lo que el huésped conteste aquí entra en el XML del
+  // parte que se comunica al Ministerio (el XSD es cerrado).
+  respuestasCheckin     Json?
   payload               Json?
+  // Token público del check-in online (registro de viajeros): es el enlace que
+  // se le manda al huésped para que suba los documentos de su grupo. Opaco y
+  // único — quien lo tiene edita esa reserva y solo esa, así que no se puede
+  // adivinar (cuidado: no exponerlo en respuestas de listado).
+  tokenCheckin          String?   @unique
+  // Token público de la reseña (solicitud §21): el enlace del email que le
+  // llega al huésped tras el check-out. Mismo patrón que tokenCheckin: opaco,
+  // único y por reserva — quien lo tiene escribe (o corrige) la reseña de esa
+  // estancia y solo esa. Vive aquí y no en la reseña porque el cron lo genera
+  // ANTES de que exista reseña (la reseña nace cuando el huésped envía).
+  tokenResena           String?   @unique
   fechaCreacion         DateTime  @default(now())
   fechaEdicion          DateTime  @updatedAt
   tenant                Tenant    @relation("HospitalityReservations", fields: [tenantId], references: [id], onDelete: Cascade)
@@ -8238,6 +8300,12 @@ model HospitalityReservation {
   cleaningTasks         HospitalityCleaningTask[]
   items                 HospitalityReservationItem[]
   payments              HospitalityPayment[]
+  // Gastos del ERP imputados a esta reserva (limpieza externa, incidencias…).
+  expenses              Expense[] @relation("ExpenseHospitalityReservation")
+  // Comunicaciones al Ministerio del Interior generadas desde esta reserva.
+  guestRegistryCommunications HospitalityGuestRegistryCommunication[]
+  // La reseña de esta estancia (una sola por reserva, la moderación decide).
+  review                HospitalityReview? @relation("HospitalityReviews")
 
   @@unique([tenantId, channel, externalBookingId])
   @@index([tenantId])
@@ -8378,6 +8446,34 @@ model HospitalityUnitBlock {
 // El desglose vive en las líneas; la reserva conserva el total externo recibido
 // de la OTA para poder conciliar sin perder el dato de origen.
 
+// Extra comprable en el booking engine (desayuno, late check-out, traslado):
+// catálogo por propiedad. El PRECIO vive aquí — el huésped elige, la ruta
+// pública valida contra este catálogo y nunca usa el precio del cliente.
+// precioPorNoche=true: el importe se multiplica por las noches de la estancia.
+model HospitalityExtra {
+  id             String   @id @default(cuid())
+  tenantId       String
+  propertyId     String
+  nombre         String
+  // Descripción bilingüe opcional para la web (el motor es ES/EN).
+  descripcionEs  String?
+  descripcionEn  String?
+  precio         Float
+  moneda         String   @default("MXN")
+  precioPorNoche Boolean  @default(false)
+  activo         Boolean  @default(true)
+  orden          Int      @default(0)
+  fechaCreacion  DateTime @default(now())
+  fechaEdicion   DateTime @updatedAt
+  tenant         Tenant                @relation("HospitalityExtras", fields: [tenantId], references: [id], onDelete: Cascade)
+  property       HospitalityProperty   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  // (la inversa `extras` vive en HospitalityProperty)
+
+  @@index([tenantId])
+  @@index([propertyId, activo])
+  @@map("hospitality_extra")
+}
+
 // Línea de desglose de una reserva: alojamiento, limpieza, extras u otro.
 // El ingreso bruto es la suma de las líneas activas de la reserva.
 model HospitalityReservationItem {
@@ -8386,12 +8482,16 @@ model HospitalityReservationItem {
   reservationId   String
   propertyId      String
   unitId          String?
-  tipo            String   @default("alojamiento") // alojamiento|limpieza|extra|otro
+  tipo            String   @default("alojamiento") // alojamiento|limpieza|extra|otro|penalizacion
   concepto        String
   cantidad        Float    @default(1)
   importeUnitario Float
   importeTotal    Float
   moneda          String   @default("MXN")
+  // Factura del ERP emitida por esta línea. Solo la usa la penalización por
+  // no-show: es la traza del cargo (regla 5) y la garantía de no facturar dos
+  // veces la misma línea. Ver lib/hospitality/penalizaciones.ts.
+  invoiceId       String?
   fechaCreacion   DateTime @default(now())
   fechaEdicion    DateTime @updatedAt
   tenant          Tenant                 @relation("HospitalityReservationItems", fields: [tenantId], references: [id], onDelete: Cascade)
@@ -8403,6 +8503,7 @@ model HospitalityReservationItem {
   @@index([reservationId])
   @@index([propertyId])
   @@index([tipo])
+  @@index([invoiceId])
   @@map("hospitality_reservation_items")
 }
 
@@ -8469,6 +8570,10 @@ model HospitalityCommunicationTemplate {
   asunto        String?  // Solo para email
   contenido     String   // Texto con variables {{nombre}}, {{checkIn}}, ...
   activo        Boolean  @default(true)
+  // Idioma de la plantilla: "es" (defecto) o "en". La comunicación al huésped
+  // sale en el idioma en que reservó (guestData.idioma); "es" siempre responde
+  // (incluidas OTA y reservas manuales sin idioma) — ver booking-i18n.ts.
+  idioma        String   @default("es")
   fechaCreacion DateTime @default(now())
   fechaEdicion  DateTime @updatedAt
   tenant        Tenant   @relation("HospitalityCommunicationTemplates", fields: [tenantId], references: [id], onDelete: Cascade)
@@ -8478,5 +8583,156 @@ model HospitalityCommunicationTemplate {
   @@index([canal])
   @@index([activo])
   @@map("hospitality_communication_templates")
+}
+
+// Credenciales y datos del sujeto obligado ante el Sistema de Hospedajes del
+// Ministerio del Interior (RD 933/2021). Una configuración por tenant (el
+// arrendador es el titular de la actividad de hospedaje). El usuario y la
+// contraseña los entrega la Sede Electrónica en el momento del registro y
+// viajan en la cabecera HTTP Basic de cada petición: se guardan cifrados, como
+// el resto de credenciales de integración.
+model HospitalityMirConfig {
+  id               String    @id @default(cuid())
+  tenantId         String    @unique
+  // Código de arrendador asignado por el Sistema de Hospedajes. String(10).
+  codigoArrendador String
+  // Nombre del sistema origen que viaja en la cabecera. String(50).
+  aplicacion       String    @default("Volkern")
+  // Entorno del servicio: pre (pruebas del Ministerio) | prod.
+  entorno          String    @default("pre")
+  usuarioEnc       String?
+  passwordEnc      String?
+  // Códigos del catálogo TIPO_PAGO del Ministerio. No se inventan: los
+  // publica el servicio (operación `catalogo`) y el hotel los configura aquí.
+  // `mapaTiposPago` traduce el método interno de pago (efectivo, stripe…) al
+  // código del catálogo; `tipoPagoDefecto` cubre lo que no esté en el mapa.
+  // Sin ninguno de los dos no se envía el parte: mejor `datos_incompletos`
+  // que mandar un código de pago inventado.
+  tipoPagoDefecto  String?
+  mapaTiposPago    Json?
+  activo           Boolean   @default(true)
+  ultimoEnvio      DateTime?
+  ultimoError      String?
+  fechaCreacion    DateTime  @default(now())
+  fechaEdicion     DateTime  @updatedAt
+  tenant           Tenant    @relation("HospitalityMirConfigs", fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("hospitality_mir_config")
+}
+
+// Preguntas personalizadas del check-in online: cada hotel define qué más
+// quiere saber del huésped (hora de llegada, matrícula, mascotas…) y el
+// formulario de `/checkin/<token>` las muestra tras las fichas de viajeros.
+// Las respuestas viven en la reserva (`respuestasCheckin`) y NUNCA viajan al
+// XML del parte: el esquema del Ministerio es cerrado y un elemento extra
+// rechazaría la comunicación entera.
+// Reseña de huésped de una estancia (hueco nº 1 frente a Lodgify): el cron de
+// solicitud (§21) manda el enlace por token al huésped que hizo check-out, este
+// valora su estancia y el hotel la MODERA antes de publicarla en la web pública
+// del motor de reservas. Una sola reseña por reserva (@@unique) y una sola por
+// token: quien tiene el enlace escribe (o corrige) la reseña de esa estancia.
+// Reseñas HISTÓRICAS importadas de OTAs: sin reserva en el sistema, nacen
+// `publicada` (ya pasaron el filtro real: el canal las mostró) y llevan huella
+// sha256 (canal+fecha+nombre+puntuación) para no importarlas dos veces.
+model HospitalityReview {
+  id             String    @id @default(cuid())
+  tenantId       String
+  propertyId     String
+  reservationId  String?   @unique
+  unitId         String?
+  // nativa (ciclo §21) | importada (histórico de una OTA)
+  origen         String    @default("nativa")
+  // Fecha de la ESTANCIA (check-in) para el «mes de septiembre 2026» público:
+  // en las nativas vive en la reserva; en las importadas no hay reserva y se
+  // guarda aquí (la columna del CSV del canal).
+  fechaEstancia  DateTime?
+  // Canal de origen de una importada (Booking.com, Airbnb…): la web y Reportes
+  // lo enseñan junto al mes — la prueba social honesta dice de dónde viene.
+  // Null en las nativas (su canal real es la venta directa del propio motor).
+  canal          String?
+  // Huella de una reseña importada (null en las nativas): importar el mismo
+  // CSV dos veces no duplica reseñas.
+  huellaImport   String?   @unique
+  // pendiente (recién escrita, aún no visible) | publicada | rechazada
+  estado         String    @default("pendiente")
+  puntuacion     Int
+  comentario     String?
+  // Nombre que se enseña en la web (no el email ni el teléfono).
+  nombreHuesped  String
+  /** Respuesta pública del hotel a la reseña publicada. */
+  respuestaHotel String?
+  fechaCreacion  DateTime  @default(now())
+  fechaEdicion   DateTime  @updatedAt
+  tenant         Tenant                     @relation("HospitalityReviews", fields: [tenantId], references: [id], onDelete: Cascade)
+  property       HospitalityProperty        @relation("HospitalityReviews", fields: [propertyId], references: [id], onDelete: Cascade)
+  reservation    HospitalityReservation?    @relation("HospitalityReviews", fields: [reservationId], references: [id], onDelete: Cascade)
+  unit           HospitalityUnit?           @relation("HospitalityReviews", fields: [unitId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, estado])
+  @@index([propertyId, estado])
+  @@map("hospitality_review")
+}
+
+model HospitalityCheckinPregunta {
+  id        String   @id @default(cuid())
+  tenantId  String
+  // Pregunta y opciones (si tipo = opcion) en ES y EN — el formulario es
+  // bilingüe y una pregunta solo en un idioma rompería la pantalla.
+  es        Json
+  en        Json
+  // texto | opcion | numero | fecha
+  tipo      String   @default("texto")
+  opciones  Json?
+  requerida Boolean  @default(false)
+  activa    Boolean  @default(true)
+  orden     Int      @default(0)
+  fechaCreacion DateTime @default(now())
+  fechaEdicion  DateTime @updatedAt
+  tenant    Tenant   @relation("HospitalityCheckinPreguntas", fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, activa])
+  @@map("hospitality_checkin_pregunta")
+}
+
+// Traza de cada comunicación enviada al Ministerio (una fila por parte de
+// viajeros y reserva). El alta es ASÍNCRONA: el `0` solo confirma que la
+// petición se recibió y devuelve un número de lote; el código de comunicación
+// (o el error de validación) se obtiene después consultando el lote. La fila
+// guarda ambos momentos para poder auditar qué se envió, cuándo y con qué
+// resultado — obligación documental del propio RD 933/2021.
+model HospitalityGuestRegistryCommunication {
+  id                    String    @id @default(cuid())
+  tenantId              String
+  reservationId         String?
+  tipoComunicacion      String    @default("PV")
+  // A = alta, B = anulación (RD: anular la comunicación si se cancela).
+  tipoOperacion         String    @default("A")
+  // pendiente | enviada | aceptada | rechazada | anulada | error | datos_incompletos
+  estado                String    @default("pendiente")
+  referencia            String?
+  codigoEstablecimiento String?
+  lote                  String?
+  codigoComunicacion    String?
+  codigoRetorno         String?
+  descripcion           String?
+  intentos              Int       @default(0)
+  errores               Json?
+  xmlSolicitud          String?
+  respuesta             String?
+  fechaEnvio            DateTime?
+  fechaRespuesta        DateTime?
+  fechaCreacion         DateTime  @default(now())
+  fechaEdicion          DateTime  @updatedAt
+  tenant                Tenant    @relation("HospitalityGuestRegistry", fields: [tenantId], references: [id], onDelete: Cascade)
+  reservation           HospitalityReservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+
+  // Una comunicación de cada tipo por reserva y operación: el barrido es
+  // idempotente y no reenvía lo ya aceptado.
+  @@unique([tenantId, reservationId, tipoComunicacion, tipoOperacion])
+  @@index([tenantId])
+  @@index([estado])
+  @@index([lote])
+  @@index([reservationId])
+  @@map("hospitality_guest_registry_communications")
 }
 

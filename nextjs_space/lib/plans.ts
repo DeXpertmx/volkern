@@ -135,7 +135,7 @@ const ALL_FEATURES_SET: CrmModule[] = ALL_MODULES
 // después para confirmar).
 // ═══════════════════════════════════════════════════════════════════════════
 
-export const VERTICALS = ['insurance', 'real_estate', 'accounting', 'general'] as const;
+export const VERTICALS = ['insurance', 'real_estate', 'accounting', 'hospitality', 'general'] as const;
 export type Vertical = typeof VERTICALS[number];
 
 export interface VerticalDefinition {
@@ -195,6 +195,21 @@ export const VERTICAL_DEFINITIONS: Record<Vertical, VerticalDefinition> = {
       'mi_tarjeta',
       'equipo', 'configuracion',
       'conocimiento',
+    ],
+  },
+  hospitality: {
+    id: 'hospitality',
+    name: 'Hospitality (Hoteles y alojamientos)',
+    description: 'Propiedades y unidades alojativas, planning de ocupación, '
+               + 'motor de reservas público y canales de distribución.',
+    icon: '🏨',
+    modules: [
+      'leads', 'contactos', 'empresas', 'tareas', 'analytics',
+      'mensajes', 'citas', 'catalogo',
+      'hospitality',
+      'automatizaciones',
+      'mi_tarjeta',
+      'equipo', 'configuracion',
     ],
   },
   general: {

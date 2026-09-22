@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
-import { COMUNICACION_EVENTOS } from '@/lib/hospitality/comunicaciones';
+import { COMUNICACION_EVENTOS, IDIOMAS_COMUNICACION } from '@/lib/hospitality/comunicaciones';
 
 /** PATCH /api/hospitality/comunicaciones/[id] — editar/activar/desactivar. */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -22,7 +22,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     const body = await req.json().catch(() => ({}));
-    const { evento, canal, asunto, contenido, activo } = body;
+    const { evento, canal, asunto, contenido, activo, idioma } = body;
 
     if (evento !== undefined && !COMUNICACION_EVENTOS.includes(evento)) {
       return NextResponse.json(
@@ -32,6 +32,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
     if (canal !== undefined && !['whatsapp', 'email'].includes(canal)) {
       return NextResponse.json({ error: 'canal inválido. Debe ser whatsapp o email' }, { status: 400 });
+    }
+    if (idioma !== undefined && !IDIOMAS_COMUNICACION.includes(idioma)) {
+      return NextResponse.json(
+        { error: `idioma inválido. Debe ser uno de: ${IDIOMAS_COMUNICACION.join(', ')}` },
+        { status: 400 }
+      );
     }
     const canalFinal = canal !== undefined ? canal : existente.canal;
     const asuntoFinal = asunto !== undefined ? (asunto ? String(asunto).trim() : null) : existente.asunto;
@@ -46,6 +52,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         ...(canal !== undefined ? { canal: canalFinal } : {}),
         ...(asunto !== undefined ? { asunto: asuntoFinal } : {}),
         ...(contenido !== undefined ? { contenido: String(contenido).trim() } : {}),
+        ...(idioma !== undefined ? { idioma } : {}),
         ...(activo !== undefined ? { activo: !!activo } : {}),
       },
     });

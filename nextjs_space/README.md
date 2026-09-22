@@ -61,46 +61,54 @@ Sistema completo de gestión inmobiliaria con:
 
 ### Requisitos
 
-- Node.js 20 LTS (requisito: `>=20.19.0 <21`, ver `.nvmrc` y `engines`)
-- PostgreSQL 15+
-- Redis 7+ (para colas)
-- Yarn
+- Node.js 20 LTS (`>=20.19.0 <21`, ver `.nvmrc` y `engines`; el setup lo comprueba y avisa)
+- PostgreSQL 15+ accesible (local o gestionado como Neon)
+- Redis 7+ (para colas; lo necesita la app en marcha, no el setup)
+- Git
+- npm (gestor del proyecto: hay `package-lock.json`; Yarn no es necesario)
 
-### 1. Clonar e instalar
-
-```bash
-git clone <repository-url>
-cd nextjs_space
-yarn install
-```
-
-### 2. Configurar variables de entorno
-
-Crea un archivo `.env.local` en la raíz del proyecto:
+### 1. Primer arranque — un solo comando
 
 ```bash
-touch .env.local
-# Editar .env.local con tus credenciales
+npm run setup
 ```
 
-Variables mínimas requeridas:
+Encadena todo: preflight (Node/git) → dependencias (`npm install` solo si
+falta `node_modules`) → cliente Prisma → base de datos (`db:setup`:
+migraciones + tenant + seed + verificación). Es idempotente: en una máquina
+ya lista termina en segundos.
 
-```env
-DATABASE_URL="postgresql://user:password@localhost:5432/volkern"
-NEXTAUTH_SECRET="<generar con: openssl rand -base64 32>"
-NEXTAUTH_URL="http://localhost:3000"
-```
+**Punto de control la primera vez:** si no existe `.env`, lo crea desde
+`.env.example` y **se detiene** — edita `.env` con tus credenciales (mínimo
+`DATABASE_URL`; opcional `SHADOW_DATABASE_URL` para el chequeo de drift de
+`db:verify`, y `NEXTAUTH_SECRET`/`NEXTAUTH_URL` para arrancar la app) y
+relanza `npm run setup`. La lista completa de variables está en
+`.env.example` y [la guía de deploy](docs/DEPLOY-GUIDE.md).
 
-> ⚠️ No hay archivo `.env.example` — consulta [la guía de deploy](docs/DEPLOY-GUIDE.md)
-> para la lista completa de variables de entorno.
-
-### 3. Base de datos
+### 2. Alternativa manual (paso a paso)
 
 ```bash
-yarn prisma generate
-yarn prisma db push
-yarn prisma db seed
+npm install
+npx prisma generate
+npm run db:setup             # Migraciones + tenant + seed + verificación, de una vez
 ```
+
+`db:setup` es idempotente (re-ejecutarlo es barato) y deja la base lista sin
+memoria tribal. Para verificar sin escribir nada: `yarn db:verify`.
+Si la base quedó en un estado roto (migraciones a medias, datos de prueba
+inconsistentes) y quieres partir de limpio: `yarn db:reset` borra TODO el
+esquema y los datos, y reconstruye con `db:setup`. Antes del drop crea un
+volcado de seguridad `backup-db-<fecha>-<base>.sql` en la raíz del proyecto
+(gitignorado; con pg_dump; si pg_dump no puede —p. ej. más viejo que el
+servidor— exporta un JSON alternativo con Prisma). En interactivo se pregunta;
+con `--force` se hace siempre y con `--sin-volcado` se omite a conciencia.
+Pide escribir `RESET` para confirmar (con `--force` se salta la pregunta,
+pensado para CI); **nunca** apuntarlo a producción.
+
+> Desde el baseline de 2026-09-17 (ver `docs/PRISMA-BASELINE.md`) el proyecto
+> usa el flujo oficial de migraciones: `migrate dev` en desarrollo y
+> `migrate deploy` en entornos desplegados. `prisma db push` quedó obsoleto
+> para la base principal.
 
 ### 4. Ejecutar
 
@@ -173,6 +181,9 @@ Cobertura: **98.3% Statements**
 | [Inmobiliario (Comercial)](docs/COMMERCIAL-REAL-ESTATE.md) | Propuesta de valor, pricing, casos de uso, competencia, roadmap |
 | [Inmobiliario (Manual)](docs/OPERATIONAL-MANUAL-REAL-ESTATE.md) | Guía operativa paso a paso para agentes y franquicias |
 | [Módulos del Sistema](docs/VOLKERN-SYSTEM-MODULES.md) | Arquitectura de los 7 hubs |
+| [Verticales y Estrategia Comercial](docs/COMMERCIAL-VERTICALS.md) | Verticales completas con estado real, matriz de hubs, prioridades de venta y pricing |
+| [Hospitality (Comercial)](docs/COMMERCIAL-HOSPITALITY.md) | Pack comercial del PMS + Booking Engine: ICPs, competencia, argumentarios, FAQ y validación del precio en el piloto |
+| [Hospitality (Resumen para dirección)](docs/hospitality-resumen-ejecutivo.md) | Una página: qué hace hoy, qué está probado y qué falta para arrancar |
 | [Plan de Modularización](docs/MODULARIZATION_PLAN.md) | Optimización de build y monorepo |
 | [Guía de Deploy](docs/DEPLOY-GUIDE.md) | VPS, Docker, Vercel, migraciones |
 | [Infraestructura VPS](docs/volkern-plan-infraestructura-vps.pdf) | Plan detallado de infraestructura |
@@ -294,13 +305,26 @@ yarn start                  # Servidor de producción
 
 # Base de datos
 yarn prisma studio          # Explorador visual de BD
-yarn prisma db push         # Push del esquema
+yarn db:setup               # Migraciones + tenant + seed + verificación (idempotente)
+npm run setup               # Primer arranque completo: install + env + prisma + db:setup
+yarn db:verify              # Solo verificación, sin escribir
+yarn db:reset               # BORRA todo y reconstruye desde cero (pide confirmación)
+yarn prisma migrate dev     # Genera y aplica una migración (desarrollo)
+yarn prisma migrate deploy  # Aplica migraciones pendientes (deploy)
 yarn prisma db seed         # Seed de datos
 yarn prisma generate        # Generar cliente
 
 # Testing
 npx vitest run              # Todos los tests
 npx vitest run --coverage   # Con coverage
+npm run test:e2e:booking    # Ensayo E2E del booking engine: arranca next dev, publica una
+                            # propiedad de prueba, reserva por la API pública y verifica
+                            # que la reserva entra en el planning (docs/hospitality-booking-engine-e2e.md)
+npm run test:e2e:noshow     # Ensayo E2E del no-show: con el proveedor de conectividad
+                            # simulado, comprueba que la unidad vuelve a venderse y que la
+                            # disponibilidad empujada al canal sube (docs/hospitality-no-show-e2e.md)
+                            # · Guía para el emisor de eventos (respuestas y reintentos del
+                            #   webhook, incl. no_show): docs/hospitality-webhook-emisor-guia.md
 
 # Lint y tipo
 yarn lint                   # ESLint

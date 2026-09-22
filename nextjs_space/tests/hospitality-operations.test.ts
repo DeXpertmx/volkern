@@ -9,6 +9,7 @@ const mockFindCleaning = vi.fn();
 const mockCreateCleaning = vi.fn();
 const mockUpdateCleaning = vi.fn();
 const mockDispatch = vi.fn();
+const mockFindProperty = vi.fn();
 
 vi.mock('../lib/db', () => ({
   prisma: {
@@ -18,6 +19,9 @@ vi.mock('../lib/db', () => ({
     },
     hospitalityUnit: {
       update: (...a: any[]) => mockUpdateUnit(...a),
+    },
+    hospitalityProperty: {
+      findFirst: (...a: any[]) => mockFindProperty(...a),
     },
     hospitalityCleaningTask: {
       findFirst: (...a: any[]) => mockFindCleaning(...a),
@@ -50,6 +54,8 @@ describe('performCheckOperation', () => {
       Promise.resolve({ id: 'r1', ...data })
     );
     mockUpdateUnit.mockResolvedValue({ id: 'u1', estado: 'cleaning' });
+    // Por defecto la propiedad usa B (salida real): el checkOut previsto no se toca.
+    mockFindProperty.mockResolvedValue({ politicaSalidaAnticipada: 'salida_real' });
     mockFindCleaning.mockResolvedValue(null);
     mockCreateCleaning.mockResolvedValue({ id: 'cleaning-1' });
     mockDispatch.mockResolvedValue({ ok: true });

@@ -33,6 +33,26 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import AvisoIncidenciasConectividad from '@/components/hospitality/aviso-incidencias-conectividad';
+import {
+  POLITICAS_NO_SHOW,
+  ETIQUETA_POLITICA_NO_SHOW,
+  DESCRIPCION_POLITICA_NO_SHOW,
+  POLITICA_NO_SHOW_POR_DEFECTO,
+  esPoliticaNoShow,
+} from '@/lib/hospitality/no-show';
+import {
+  POLITICAS_SALIDA_ANTICIPADA,
+  POLITICA_SALIDA_ANTICIPADA_POR_DEFECTO,
+  ETIQUETA_SALIDA_ANTICIPADA,
+  DESCRIPCION_SALIDA_ANTICIPADA,
+  esPoliticaSalidaAnticipada,
+} from '@/lib/hospitality/checkout';
+import {
+  HOLD_HORAS_POR_DEFECTO,
+  HOLD_HORAS_MAXIMO,
+  holdHorasEfectivas,
+} from '@/lib/hospitality/holds';
 
 interface Property {
   id: string;
@@ -50,6 +70,11 @@ interface Property {
   fotos: string[] | null;
   timezone: string;
   estado: string;
+  /** Penalización por no-show: ninguna | primera_noche | estancia_completa. */
+  politicaNoShow: string | null;
+  politicaSalidaAnticipada?: string | null;
+  /** Horas que un hold `pending` retiene la unidad (0 = sin caducidad). */
+  holdHoras?: number | null;
   _count?: { units: number; reservations: number };
 }
 
@@ -102,6 +127,9 @@ const EMPTY_PROPERTY_FORM = {
   nombre: '', descripcion: '', codigo: '', zona: '', direccion: '', ciudad: '',
   estadoProvincia: '', pais: '', cp: '', latitud: '', longitud: '',
   fotos: [] as string[], timezone: 'America/Mexico_City', estado: 'activa',
+  politicaNoShow: POLITICA_NO_SHOW_POR_DEFECTO,
+  politicaSalidaAnticipada: POLITICA_SALIDA_ANTICIPADA_POR_DEFECTO,
+  holdHoras: String(HOLD_HORAS_POR_DEFECTO),
 };
 
 const EMPTY_UNIT_FORM = {
@@ -277,6 +305,14 @@ export default function HospitalityPage() {
       fotos: p.fotos || [],
       timezone: p.timezone,
       estado: p.estado,
+      // Un valor corrupto en la BD no debe cambiar el criterio en silencio.
+      politicaNoShow: esPoliticaNoShow(p.politicaNoShow)
+        ? p.politicaNoShow
+        : POLITICA_NO_SHOW_POR_DEFECTO,
+      politicaSalidaAnticipada: esPoliticaSalidaAnticipada(p.politicaSalidaAnticipada)
+        ? p.politicaSalidaAnticipada
+        : POLITICA_SALIDA_ANTICIPADA_POR_DEFECTO,
+      holdHoras: String(holdHorasEfectivas(p.holdHoras)),
     });
     setUnidadesIniciales([]);
     setPropertyDialog({ open: true, editing: p });
@@ -368,6 +404,9 @@ export default function HospitalityPage() {
           </p>
         </div>
       </div>
+
+      {/* Reservas de canal que no se pudieron registrar (aviso, no un KPI) */}
+      <AvisoIncidenciasConectividad />
 
       <Tabs value={tab} onValueChange={setTab}>
         <div className="flex items-center justify-between">
@@ -645,7 +684,7 @@ export default function HospitalityPage() {
                 <Input id="p-longitud" value={propertyForm.longitud} onChange={(e) => setPropertyForm({ ...propertyForm, longitud: e.target.value })} placeholder="-87.0739" />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="p-timezone">Zona horaria</Label>
                 <Select value={propertyForm.timezone} onValueChange={(v) => setPropertyForm({ ...propertyForm, timezone: v })}>
@@ -668,7 +707,67 @@ export default function HospitalityPage() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="p-no-show">Penalización por no-show</Label>
+                <Select
+                  value={propertyForm.politicaNoShow}
+                  onValueChange={(v) =>
+                    setPropertyForm({ ...propertyForm, politicaNoShow: v as typeof propertyForm.politicaNoShow })
+                  }
+                >
+                  <SelectTrigger id="p-no-show"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {POLITICAS_NO_SHOW.map((p) => (
+                      <SelectItem key={p} value={p}>{ETIQUETA_POLITICA_NO_SHOW[p]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+            <p className="text-xs text-muted-foreground -mt-1">
+              {DESCRIPCION_POLITICA_NO_SHOW[propertyForm.politicaNoShow]}
+            </p>
+
+            {/* Salida anticipada: decisión del Anfitrión, A o B (audit de estados). */}
+            <div className="space-y-2">
+              <Label htmlFor="p-salida-anticipada">Salida anticipada</Label>
+              <Select
+                value={propertyForm.politicaSalidaAnticipada}
+                onValueChange={(v) =>
+                  setPropertyForm({ ...propertyForm, politicaSalidaAnticipada: v as typeof propertyForm.politicaSalidaAnticipada })
+                }
+              >
+                <SelectTrigger id="p-salida-anticipada"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {POLITICAS_SALIDA_ANTICIPADA.map((p) => (
+                    <SelectItem key={p} value={p}>{ETIQUETA_SALIDA_ANTICIPADA[p]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-xs text-muted-foreground -mt-1">
+              {DESCRIPCION_SALIDA_ANTICIPADA[propertyForm.politicaSalidaAnticipada]}
+            </p>
+
+            {/* Caducidad de holds: un hold olvidado no bloquea la unidad para siempre. */}
+            <div className="space-y-2">
+              <Label htmlFor="p-hold-horas">Caducidad de reservas pendientes (horas)</Label>
+              <Input
+                id="p-hold-horas"
+                type="number"
+                min={0}
+                max={HOLD_HORAS_MAXIMO}
+                value={propertyForm.holdHoras}
+                onChange={(e) =>
+                  setPropertyForm({ ...propertyForm, holdHoras: e.target.value })
+                }
+              />
+            </div>
+            <p className="text-xs text-muted-foreground -mt-1">
+              {Number(propertyForm.holdHoras) > 0
+                ? `Una reserva pendiente sin confirmar se cancela sola a las ${propertyForm.holdHoras} h y libera la unidad. Con pagos registrados no caduca: eso lo decide una persona.`
+                : 'Sin caducidad automática: los holds pendientes solo los cierra una persona.'}
+            </p>
 
             {/* Fotos */}
             <div className="space-y-2">

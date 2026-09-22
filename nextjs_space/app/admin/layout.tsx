@@ -83,6 +83,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { name: 'Marketing', href: '/admin/marketing', icon: Sparkles },
     { name: 'WhatsApp', href: '/admin/whatsapp', icon: MessageCircle },
     { name: 'Conectividad', href: '/admin/conectividad', icon: Plug },
+    { name: 'Hospitality', href: '/admin/hospitality', icon: Building2 },
     { name: 'Planes', href: '/admin/planes', icon: CreditCard },
     { name: 'Billing Global', href: '/admin/billing', icon: BarChart3 },
     { name: 'Seguridad', href: '/admin/seguridad', icon: ShieldAlert },

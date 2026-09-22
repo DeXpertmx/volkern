@@ -1,6 +1,6 @@
 /**
  * Tests vitest del sistema de verticales:
- *   • VERTICAL_DEFINITIONS en lib/plans.ts: 4 verticales con módulos
+ *   • VERTICAL_DEFINITIONS en lib/plans.ts: verticales con módulos
  *     curados, ninguno con módulos duplicados, helpers basics.
  *   • seedTenantModulesFromVertical en lib/provisioning/tenant-provisioner:
  *     upsert idempotente de tenantFeature habilitando los módulos de la
@@ -50,16 +50,17 @@ describe('VERTICAL_DEFINITIONS', () => {
         }
     });
 
-    it('insurance incluye insurance, real_estate incluye catalogo, accounting incluye finanzas', () => {
+    it('insurance incluye insurance, real_estate incluye catalogo, accounting incluye finanzas, hospitality incluye hospitality', () => {
         expect(VERTICAL_DEFINITIONS.insurance.modules).toContain('insurance');
         expect(VERTICAL_DEFINITIONS.real_estate.modules).toContain('catalogo');
         expect(VERTICAL_DEFINITIONS.accounting.modules).toContain('finanzas');
+        expect(VERTICAL_DEFINITIONS.hospitality.modules).toContain('hospitality');
     });
 
-    it('insurance, real_estate, accounting y general son todas distintas en componentes clave', () => {
+    it('insurance, real_estate, accounting, hospitality y general son todas distintas en componentes clave', () => {
         const sig = (v: keyof typeof VERTICAL_DEFINITIONS) =>
             VERTICAL_DEFINITIONS[v].modules.slice().sort().join(',');
-        const all = ['insurance', 'real_estate', 'accounting', 'general'].map(sig);
+        const all = ['insurance', 'real_estate', 'accounting', 'hospitality', 'general'].map(sig);
         // Asegurar que cada vertical tiene una combinación distinta.
         expect(new Set(all).size).toBeGreaterThan(2);
     });

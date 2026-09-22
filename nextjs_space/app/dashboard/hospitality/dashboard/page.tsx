@@ -8,6 +8,7 @@ import {
   BedDouble,
   ArrowDownToLine,
   ArrowUpFromLine,
+  CalendarClock,
   TrendingUp,
   DollarSign,
   CalendarCheck2,
@@ -38,6 +39,7 @@ import {
   Legend,
 } from 'recharts';
 import { channelStyle, statusLabel } from '@/lib/hospitality/calendar';
+import AvisoIncidenciasConectividad from '@/components/hospitality/aviso-incidencias-conectividad';
 
 interface Kpis {
   totalUnidades: number;
@@ -92,6 +94,11 @@ interface DashboardData {
     limpieza: Record<string, number>;
     mantenimiento: Record<string, number>;
   };
+  /** Tablón para preparar el día siguiente (auxiliar: puede no venir). */
+  movimientoManana?: {
+    llegadas: Array<{ id: string; huesped: string; unidad: string; propiedad: string }>;
+    salidas: Array<{ id: string; huesped: string; unidad: string; propiedad: string }>;
+  } | null;
 }
 
 const PIE_COLORS = ['#FF5A5F', '#003580', '#00355F', '#DF7A00', '#4F46E5', '#64748B', '#059669', '#D97706'];
@@ -149,7 +156,7 @@ export default function HospitalityDashboardPage() {
     );
   }
 
-  const { kpis, mixCanales, proximos7, ocupacionPropiedades, ingresosPorCanal, operaciones } = data;
+  const { kpis, mixCanales, proximos7, ocupacionPropiedades, ingresosPorCanal, operaciones, movimientoManana } = data;
   const limpiezaPendiente = (operaciones.limpieza.pending || 0) + (operaciones.limpieza.in_progress || 0);
   const mantenimientoAbierto = (operaciones.mantenimiento.abierta || 0) + (operaciones.mantenimiento.en_proceso || 0);
 
@@ -251,6 +258,9 @@ export default function HospitalityDashboardPage() {
         </p>
       </div>
 
+      {/* Reservas de canal que no se pudieron registrar (aviso, no un KPI) */}
+      <AvisoIncidenciasConectividad />
+
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
         {kpiCards.map((k) => (
@@ -266,6 +276,73 @@ export default function HospitalityDashboardPage() {
           </Card>
         ))}
       </div>
+
+      {/* Movimiento de mañana: el tablón para PREPARAR el día siguiente —
+          quién llega, a qué unidad (asignación) y quién sale (limpieza).
+          Con nombre, unidad y propiedad, no solo el recuento; si no hay nada
+          para mañana, lo dice — un tablón vacío también es información. */}
+      {movimientoManana && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <CalendarClock className="h-4 w-4 text-primary" />
+              Movimiento de mañana
+              <span className="text-xs font-normal text-muted-foreground">
+                {movimientoManana.llegadas.length} llegada{movimientoManana.llegadas.length === 1 ? '' : 's'} ·{' '}
+                {movimientoManana.salidas.length} salida{movimientoManana.salidas.length === 1 ? '' : 's'} — para asignar unidades y planificar limpiezas
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {movimientoManana.llegadas.length === 0 && movimientoManana.salidas.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">
+                Sin movimientos para mañana: ni llegadas ni salidas previstas.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-emerald-700 mb-2 flex items-center gap-1.5">
+                    <ArrowDownToLine className="h-3.5 w-3.5" /> Llegadas ({movimientoManana.llegadas.length})
+                  </p>
+                  {movimientoManana.llegadas.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-2">Ninguna llegada prevista.</p>
+                  ) : (
+                    <ul className="divide-y">
+                      {movimientoManana.llegadas.map((m) => (
+                        <li key={m.id} className="py-2 text-sm flex items-baseline justify-between gap-3">
+                          <span className="font-medium truncate">{m.huesped}</span>
+                          <span className="text-xs text-muted-foreground truncate text-right">
+                            {m.unidad} · {m.propiedad}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-amber-700 mb-2 flex items-center gap-1.5">
+                    <ArrowUpFromLine className="h-3.5 w-3.5" /> Salidas ({movimientoManana.salidas.length})
+                  </p>
+                  {movimientoManana.salidas.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-2">Ninguna salida prevista.</p>
+                  ) : (
+                    <ul className="divide-y">
+                      {movimientoManana.salidas.map((m) => (
+                        <li key={m.id} className="py-2 text-sm flex items-baseline justify-between gap-3">
+                          <span className="font-medium truncate">{m.huesped}</span>
+                          <span className="text-xs text-muted-foreground truncate text-right">
+                            {m.unidad} · {m.propiedad}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Mix de canales + próximos 7 días */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

@@ -107,6 +107,40 @@ describe('GET /api/hospitality/onboarding', () => {
     expect(body.onboarding.pasos[9].estado).toBe('pendiente');
   });
 
+  it('marca los vínculos que creó el sistema para que el operador los revise', async () => {
+    mocks.hospitalityUnit.findMany.mockResolvedValue([
+      {
+        ...UNIDAD_VINCULADA,
+        mappings: [
+          {
+            externalPropertyId: 'sandbox-pms',
+            externalUnitCode: 'penthouse',
+            externalRatePlanCode: 'penthouse-ep',
+            metadata: { origen: 'vinculacion_automatica_webhook', motivo: 'codigo_de_unidad' },
+          },
+        ],
+      },
+    ]);
+
+    const res = await GET(
+      new Request('https://volkern.app/api/hospitality/onboarding?propertyId=p1') as any
+    );
+    const body = await res.json();
+
+    expect(body.onboarding.unidades[0].vinculoAutomatico).toBe(true);
+    expect(body.onboarding.unidades[0].vinculoMotivo).toBe('codigo_de_unidad');
+  });
+
+  it('un vínculo hecho a mano no se marca como automático', async () => {
+    const res = await GET(
+      new Request('https://volkern.app/api/hospitality/onboarding?propertyId=p1') as any
+    );
+    const body = await res.json();
+
+    expect(body.onboarding.unidades[0].vinculoAutomatico).toBe(false);
+    expect(body.onboarding.unidades[0].vinculoMotivo).toBeNull();
+  });
+
   it('propiedad de otro tenant → 404', async () => {
     mocks.hospitalityProperty.findFirst.mockResolvedValue(null);
     const res = await GET(

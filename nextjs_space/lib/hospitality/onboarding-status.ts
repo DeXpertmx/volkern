@@ -34,6 +34,10 @@ export interface UnidadOnboarding {
   vinculada: boolean;
   roomCode: string | null;
   rateplanCode: string | null;
+  /** El vínculo lo creó el sistema (webhook) y conviene que alguien lo revise. */
+  vinculoAutomatico: boolean;
+  /** Motivo con el que el sistema eligió la unidad (si fue automático). */
+  vinculoMotivo: string | null;
 }
 
 export interface OnboardingSnapshot {
@@ -100,7 +104,12 @@ export async function loadOnboardingSnapshot(
         estado: true,
         mappings: {
           where: { provider: 'channel_connectivity', estado: 'activo' },
-          select: { externalPropertyId: true, externalUnitCode: true, externalRatePlanCode: true },
+          select: {
+            externalPropertyId: true,
+            externalUnitCode: true,
+            externalRatePlanCode: true,
+            metadata: true,
+          },
         },
         ratePlans: {
           where: { activo: true },
@@ -130,6 +139,7 @@ export async function loadOnboardingSnapshot(
 
   const unidades: UnidadOnboarding[] = units.map((u: any) => {
     const mapping = u.mappings?.[0] ?? null;
+    const metadata = (mapping?.metadata ?? null) as Record<string, unknown> | null;
     const planesConPrecio = (u.ratePlans || []).filter((rp: any) => rp.tarifa != null && rp.tarifa > 0);
     return {
       id: u.id,
@@ -144,6 +154,8 @@ export async function loadOnboardingSnapshot(
       vinculada: !!mapping,
       roomCode: mapping?.externalUnitCode ?? null,
       rateplanCode: mapping?.externalRatePlanCode ?? null,
+      vinculoAutomatico: metadata?.origen === 'vinculacion_automatica_webhook',
+      vinculoMotivo: typeof metadata?.motivo === 'string' ? metadata.motivo : null,
     };
   });
 

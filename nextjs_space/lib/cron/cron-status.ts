@@ -22,6 +22,16 @@ export interface CronJobStatus {
   lastMessage: string | null
   /** Duración de la última ejecución en ms */
   lastDurationMs: number | null
+  /**
+   * Avisos del último resultado que hay que enseñar aunque el job haya ido
+   * bien: cosas que no son un error del job —por eso no caben en `lastMessage`,
+   * que el panel solo pinta en rojo— pero que alguien tiene que mirar. El job
+   * los deja aquí y el panel los pinta en ámbar bajo la fila.
+   *
+   * Describen el ÚLTIMO resultado, no la historia: cada ejecución los deja como
+   * los deja ella (vacío si no tiene nada que avisar).
+   */
+  lastAvisos: string[]
 }
 
 const store = new Map<string, CronJobStatus>()
@@ -37,6 +47,7 @@ export function registerCronJob(id: string, label: string, schedule: string) {
       lastResult: null,
       lastMessage: null,
       lastDurationMs: null,
+      lastAvisos: [],
     })
   }
 }
@@ -48,16 +59,25 @@ export function cronJobStarted(id: string) {
     job.lastRunAt = new Date().toISOString()
     job.lastResult = null
     job.lastMessage = 'Ejecutando...'
+    // Los avisos son del último resultado: mientras corre, el anterior ya no
+    // describe nada y dejarlo puesto sería mentir sobre lo que está pasando.
+    job.lastAvisos = []
   }
 }
 
-/** Marca el fin exitoso de una ejecución. */
-export function cronJobCompleted(id: string, message: string, durationMs: number) {
+/**
+ * Marca el fin exitoso de una ejecución.
+ *
+ * `avisos` es opcional: un job sin nada que avisar no los pasa (y así limpia los
+ * de la pasada anterior, que ya no describen nada).
+ */
+export function cronJobCompleted(id: string, message: string, durationMs: number, avisos: string[] = []) {
   const job = store.get(id)
   if (job) {
     job.lastResult = 'success'
     job.lastMessage = message
     job.lastDurationMs = durationMs
+    job.lastAvisos = avisos
   }
 }
 
@@ -68,6 +88,9 @@ export function cronJobFailed(id: string, message: string, durationMs: number) {
     job.lastResult = 'error'
     job.lastMessage = message
     job.lastDurationMs = durationMs
+    // Un error se explica con su mensaje: los avisos de la pasada anterior ya no
+    // son ciertos y mezclarlos confundiría la causa con un estado viejo.
+    job.lastAvisos = []
   }
 }
 

@@ -31,6 +31,8 @@ export interface CreateExpenseInput {
   createdById: string;
   supplierId: string;
   leadId?: string;
+  /** Atribución opcional a una reserva de hospitality (rentabilidad real). */
+  hospitalityReservationId?: string;
   description: string;
   amount: number;
   currency?: string;

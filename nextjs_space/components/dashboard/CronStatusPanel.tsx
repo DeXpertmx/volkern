@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Clock, CheckCircle2, XCircle, MinusCircle, RefreshCw, Timer } from 'lucide-react'
+import { Clock, CheckCircle2, XCircle, MinusCircle, RefreshCw, Timer, TriangleAlert } from 'lucide-react'
 
 interface CronJobStatus {
   id: string
@@ -14,6 +14,11 @@ interface CronJobStatus {
   lastResult: 'success' | 'error' | 'skipped' | null
   lastMessage: string | null
   lastDurationMs: number | null
+  /**
+   * Cosas que hay que mirar aunque el job haya ido bien (p. ej. partes que el
+   * barrido ya no reintenta). No son errores del job: van en ámbar, no en rojo.
+   */
+  lastAvisos?: string[]
 }
 
 interface CronStatusResponse {
@@ -177,6 +182,21 @@ export function CronStatusPanel() {
                   </div>
                   {job.lastMessage && job.lastResult === 'error' && (
                     <p className="text-[10px] text-red-500 mt-1 truncate">{job.lastMessage}</p>
+                  )}
+                  {/* Avisos del último resultado: el job fue bien, pero hay algo
+                      que nadie debería tener que descubrir por su cuenta. */}
+                  {job.lastAvisos && job.lastAvisos.length > 0 && (
+                    <ul className="mt-1 space-y-0.5">
+                      {job.lastAvisos.map((aviso, i) => (
+                        <li
+                          key={`${job.id}-aviso-${i}`}
+                          className="flex items-start gap-1 text-[10px] text-amber-700"
+                        >
+                          <TriangleAlert className="mt-0.5 h-3 w-3 shrink-0" />
+                          <span>{aviso}</span>
+                        </li>
+                      ))}
+                    </ul>
                   )}
                 </div>
               </div>

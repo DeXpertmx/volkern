@@ -170,6 +170,61 @@ describe('runReconciliation', () => {
     expect(mockProcessCancel).not.toHaveBeenCalled();
   });
 
+  it('guarda la lista concreta de ausentes en el log y en el resumen (para el panel de admin)', async () => {
+    mockFindManyReservations.mockResolvedValue([
+      {
+        id: 'r-active',
+        channel: 'Booking.com',
+        externalBookingId: 'BK-888',
+        estado: 'confirmed',
+        checkIn: new Date('2026-09-20T15:00:00Z'),
+        checkOut: new Date('2026-09-24T11:00:00Z'),
+        occupancyAdults: 2,
+        occupancyChildren: 1,
+        unit: { nombre: 'Suite Ática' },
+      },
+    ]);
+    mockFetch.mockResolvedValue({ ok: true, reservas: [] });
+    const result = await runReconciliation({ tenantId: 't1' });
+
+    // En el resumen devuelto a la API...
+    expect(result.detalle?.[0]?.ausentes).toEqual([
+      {
+        reservationId: 'r-active',
+        externalBookingId: 'BK-888',
+        channel: 'Booking.com',
+        estado: 'confirmed',
+        checkIn: '2026-09-20',
+        checkOut: '2026-09-24',
+        unidad: 'Suite Ática',
+        huespedes: 3,
+      },
+    ]);
+    // ...y en el log de auditoría, que es de donde lee el panel de admin.
+    expect(mockCreateSyncLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          responseBody: expect.objectContaining({
+            divergencias: 1,
+            ausentes: [expect.objectContaining({ externalBookingId: 'BK-888', huespedes: 3 })],
+          }),
+        }),
+      })
+    );
+  });
+
+  it('la ausente cancelada en la misma corrida (cancelarAusentes) no queda como divergencia pendiente', async () => {
+    mockFindManyReservations.mockResolvedValue([
+      { id: 'r-active', channel: 'Booking.com', externalBookingId: 'BK-888', estado: 'confirmed' },
+    ]);
+    mockFetch.mockResolvedValue({ ok: true, reservas: [] });
+    mockProcessCancel.mockResolvedValue({ ok: true, status: 'cancelada', reservationId: 'r-active' });
+
+    const result = await runReconciliation({ tenantId: 't1', cancelarAusentes: true });
+    expect(result.canceladas).toBe(1);
+    expect(result.detalle?.[0]?.ausentes).toBeUndefined();
+  });
+
   it('cancela reservas ausentes solo si cancelarAusentes=true', async () => {
     mockFindManyReservations.mockResolvedValue([
       { id: 'r-active', channel: 'Booking.com', externalBookingId: 'BK-888', estado: 'confirmed' },
