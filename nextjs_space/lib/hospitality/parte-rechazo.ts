@@ -21,7 +21,7 @@
  * aparecía ante el hotel como «el Ministerio rechazó este parte».
  */
 
-import { describirCodigoMIR } from './registro-viajeros';
+import { describirCodigoMIR } from './mir-espec';
 import { etiquetasDeCampos } from './booking-i18n';
 import type { CampoViajero } from './guest-checkin';
 
