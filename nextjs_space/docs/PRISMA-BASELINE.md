@@ -173,3 +173,99 @@ Cero datos tocados: el único cambio en la base viva fue crear y luego poblar
 archivos) son estructuras nuevas. El riesgo residual queda eliminado: un
 despliegue desde cero (CI, staging fresco) ahora reproduce el esquema exacto
 con una sola migración.
+
+---
+
+# Baseline de PRODUCCIÓN (VPS) — 2026-09-22
+
+El baseline de arriba se hizo sobre la base de **desarrollo** (Neon). Producción
+(`volkern_erp` en el Postgres del VPS) seguía con la **historia vieja**: 80 filas
+en `_prisma_migrations` (última: `20260915_hospitality_huesped_contacto`) y un
+esquema de 332 tablas levantado en la era `db push`. Con el repo ya baselinado,
+el primer despliegue del módulo Hospitality exigía baselinar producción también —
+si no, `migrate deploy` habría intentado ejecutar el SQL de `0_init` sobre un
+esquema ya existente (`relation … already exists`).
+
+## 1. Preflight (solo lectura) — antes de tocar nada
+
+`deploy-vps/preflight-migraciones.sh` (se ejecuta EN el VPS) hace tres cosas sin
+escribir nada:
+
+- vuelca la tabla `_prisma_migrations` de producción (cuántas filas y cuáles);
+- lista las tablas clave de Hospitality para saber qué existe y qué no;
+- calcula `prisma migrate diff --from-url <producción> --to-schema-datamodel`
+  contra el esquema de la imagen nueva, y resume las sentencias destructivas.
+
+Resultado en producción: **0 tablas de Hospitality nuevas** (ninguna de
+`hospitality_review`, `hospitality_extra`, `hospitality_checkin_pregunta`,
+`hospitality_guest_registry_communications`, `hospitality_mir_config` existía) y
+un diff de 97 sentencias que se partía en dos grupos:
+
+| Grupo | Qué es | ¿Se aplica? |
+| --- | --- | --- |
+| **Aditivo** | columnas y tablas de las 16 migraciones nuevas (`holdHoras`, `politicaNoShow`, `tokenCheckin`, `tokenResena`, `respuestasCheckin`, `checkOutReal`, `ultimaVerificacion`, `hospitality_review`…) | Sí, vía `migrate deploy` |
+| **Drift viejo** | tablas legacy que el esquema ya no modela (`hospitality_compliance*`, `hospitality_travelers`, `hospitality_booking_config`, `notifications_backup_20260814`), `User.contactId` y renombrados cosméticos de constraints/índices (PascalCase → snake_case) | **No** — ver abajo |
+
+Evidencia de que el grupo aditivo es exactamente el de las migraciones nuevas:
+ninguna de las 16 migraciones contiene `DROP` ni `RENAME`
+(`grep -rn "DROP\|RENAME" prisma/migrations/` → solo `0_init`), así que la
+historia nueva **no espera** ningún nombre de constraint previo y no hay
+migraciones de datos que dependan del drift.
+
+## 2. Lo que se hizo (orden exacto)
+
+`deploy-vps/baseline-prod.sh` (una sola vez, EN el VPS) encadena:
+
+1. **Backup de metadatos**: `pg_dump --data-only --table=_prisma_migrations`
+   → `/root/deploy-vps/preflight/_prisma_migrations-<fecha>.sql.gz`.
+2. **Backup completo** de la base → `/root/backups/volkern_erp-pre-baseline-<fecha>.sql.gz`
+   (verificado: 332 `CREATE TABLE` + 332 `COPY`).
+3. **Baseline**: `prisma migrate resolve --applied 0_init` — inserta la fila de
+   `0_init` **sin ejecutar su SQL** (el esquema ya está).
+4. **Migraciones**: `prisma migrate deploy` → las 16 pendientes aplicadas
+   (`All migrations have been successfully applied`).
+5. **Verificación**: `prisma migrate status` → `Database schema is up to date!`
+   y `_prisma_migrations` con 80 + 1 + 16 = 97 filas.
+
+Se conservan a propósito las 80 filas de la historia vieja: son metadatos, no
+molestan a `migrate deploy` y dejan rastro de por dónde pasó la base.
+
+El paso 3 y 4 corren en un **job Swarm one-shot** (`--mode replicated-job
+--restart-condition none --network DXnet`) con la imagen `volkern-erp:migrator`,
+la misma receta que `run-migrations.sh` — la red `DXnet` no es *attachable* a
+mano, así que la única forma de llegar a la base desde un contenedor es un
+servicio de Swarm.
+
+## 3. Drift residual (conocido y deliberado)
+
+Producción sigue teniendo las tablas legacy y los nombres viejos de
+constraints/índices. **No se dropean en este baseline** por decisión explícita:
+
+- el cliente de Prisma **no** consulta nombres de constraints ni de índices, así
+  que el drift es cosmético para la aplicación;
+- `DROP TABLE` / `DROP COLUMN` sobre tablas con datos históricos es la única
+  parte del diff con riesgo de pérdida; se deja para una decisión aparte, con su
+  propia migración y su propio backup.
+
+Para ver el drift exacto que queda en cualquier momento (solo lectura):
+
+```bash
+bash /root/deploy-vps/preflight-migraciones.sh /tmp/volkern-erp-migrator.tar
+cat /root/deploy-vps/preflight/prod-diff.sql
+```
+
+Si algún día se decide limpiarlo, debe ser una migración nueva del repo (no una
+edición de `0_init`) y con el backup delante.
+
+## 4. Después de este baseline
+
+Producción queda en el mismo régimen que desarrollo: **una base, una historia**.
+Los siguientes despliegues son el flujo normal:
+
+```bash
+bash deploy-vps/deploy-local.sh          # build → scp → deploy-app.sh → smoke
+```
+
+`deploy-app.sh` corre `migrate deploy` antes del `service update`, así que una
+migración nueva se aplica sola. Si el deploy aborta en migraciones, aborta
+**antes** de cambiar la imagen: el servicio se queda con la versión que ya corría.
