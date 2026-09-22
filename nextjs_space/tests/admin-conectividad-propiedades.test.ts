@@ -117,4 +117,77 @@ describe('GET /api/admin/conectividad/propiedades (§29 — estado por propiedad
     expect(body.propiedades).toEqual([]);
     expect(typeof body.generadoEn).toBe('string');
   });
+
+  describe('diagnóstico de la causa del último error (§ registro en pantalla)', () => {
+    function logs4001(): any[] {
+      return [
+        {
+          propertyId: 'p1',
+          tipo: 'inventory',
+          estado: 'error',
+          httpStatus: 401,
+          errorMensaje: 'HTTP 401 del proveedor',
+          fechaCreacion: new Date('2026-09-19T08:00:00Z'),
+        },
+      ];
+    }
+
+    function propiedades(): any[] {
+      return [
+        {
+          id: 'p1',
+          nombre: 'Villa Mar Azul',
+          tenantId: 't1',
+          tenant: { nombre: 'Demo' },
+          mappings: [{ externalPropertyId: 'villa-mar-azul', estado: 'activo' }],
+        },
+      ];
+    }
+
+    it('un 401 de push → causa «credenciales_rechazadas» para la propiedad', async () => {
+      mocks.hospitalityProperty.findMany.mockResolvedValue(propiedades());
+      mocks.hospitalitySyncLog.findMany.mockResolvedValue(logs4001());
+
+      const res = await GET(req());
+      const body = await res.json();
+      expect(body.propiedades[0].causaUltimoError.clave).toBe('credenciales_rechazadas');
+      expect(body.propiedades[0].causaUltimoError.texto).toBe('Credenciales rechazadas');
+    });
+
+    it('un 502 de reconciliación → «sin_respuesta_servicio»', async () => {
+      mocks.hospitalityProperty.findMany.mockResolvedValue(propiedades());
+      mocks.hospitalitySyncLog.findMany.mockResolvedValue([
+        {
+          propertyId: 'p1',
+          tipo: 'reconciliacion',
+          estado: 'error',
+          httpStatus: 502,
+          errorMensaje: 'HTTP 502 del proveedor',
+          fechaCreacion: new Date('2026-09-19T08:00:00Z'),
+        },
+      ]);
+
+      const res = await GET(req());
+      const body = await res.json();
+      expect(body.propiedades[0].causaUltimoError.clave).toBe('sin_respuesta_servicio');
+    });
+
+    it('un fallo de OTRA superficie (aviso de partes) que comparte la tabla → sin causa', async () => {
+      mocks.hospitalityProperty.findMany.mockResolvedValue(propiedades());
+      mocks.hospitalitySyncLog.findMany.mockResolvedValue([
+        {
+          propertyId: 'p1',
+          tipo: 'aviso_partes_sin_reintentar',
+          estado: 'error',
+          httpStatus: null,
+          errorMensaje: 'Resend caído',
+          fechaCreacion: new Date('2026-09-19T08:00:00Z'),
+        },
+      ]);
+
+      const res = await GET(req());
+      const body = await res.json();
+      expect(body.propiedades[0].causaUltimoError).toBeNull();
+    });
+  });
 });

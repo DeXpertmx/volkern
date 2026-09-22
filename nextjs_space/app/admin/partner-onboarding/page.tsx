@@ -25,6 +25,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Building,
+  Building2,
   Check,
   CheckCircle2,
   ChevronRight,
@@ -103,6 +104,7 @@ const VERTICAL_ICONS: Record<Vertical, React.ReactNode> = {
   insurance: <Shield size={20} className="text-rose-600" />,
   real_estate: <Building size={20} className="text-blue-600" />,
   accounting: <Sparkles size={20} className="text-emerald-600" />,
+  hospitality: <Building2 size={20} className="text-violet-600" />,
   general: <User size={20} className="text-slate-600" />,
 };
 

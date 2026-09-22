@@ -1413,6 +1413,7 @@ function VerticalCard({
     insurance:   { bg: 'bg-amber-50',  border: 'border-amber-200',  text: 'text-amber-900',  ring: 'ring-amber-300' },
     real_estate: { bg: 'bg-blue-50',   border: 'border-blue-200',   text: 'text-blue-900',   ring: 'ring-blue-300' },
     accounting:  { bg: 'bg-emerald-50',border: 'border-emerald-200',text: 'text-emerald-900',ring: 'ring-emerald-300' },
+    hospitality: { bg: 'bg-violet-50', border: 'border-violet-200', text: 'text-violet-900', ring: 'ring-violet-300' },
     general:     { bg: 'bg-slate-50',  border: 'border-slate-200',  text: 'text-slate-900',  ring: 'ring-slate-300' },
   };
   const tone = toneById[vertical];

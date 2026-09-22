@@ -1,0 +1,128 @@
+# ═══════════════════════════════════════════════════════════════
+# Volkern ERP — DB Drift Check
+# Verifica en cada PR que la historia de migraciones reproduce
+# schema.prisma EXACTO y que la base se levanta de cero con un
+# solo comando (`db:setup`): migraciones + tenant + seed + humo.
+#
+# Job extra `reset`: demuestra que `db:reset --force` reconstruye
+# TODO desde cero (drop + migraciones + tenant + seed) y que tras
+# la reconstrucción la base queda coherente y sin drift.
+#
+# Falla si un PR cambia el esquema sin generar su migración
+# (`npx prisma migrate dev --name ...`) o edita una ya aplicada.
+# Detalles del flujo de migraciones: docs/PRISMA-BASELINE.md
+# ═══════════════════════════════════════════════════════════════
+
+name: DB Drift Check
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+jobs:
+  drift:
+    name: Migraciones vs esquema
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: app
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    env:
+      # Base de desarrollo que el job levanta desde cero.
+      DATABASE_URL: postgresql://test:test@localhost:5432/app
+      # Shadow VACÍA para el diff de drift (migraciones vs schema.prisma).
+      SHADOW_DATABASE_URL: postgresql://test:test@localhost:5432/shadow
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Crear base shadow vacía
+        run: |
+          psql "postgresql://test:test@localhost:5432/postgres" \
+            -c "CREATE DATABASE shadow OWNER test;"
+
+      - name: Setup completo de la base (migraciones + tenant + seed + humo)
+        run: npm run db:setup
+
+      - name: Verificación + chequeo de drift (migraciones vs schema.prisma)
+        run: npm run db:verify
+
+  reset:
+    name: db:reset reconstruye desde cero
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: app
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5432/app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Sembrar estado previo (db:setup — lo que db:reset va a destruir)
+        run: npm run db:setup
+
+      - name: Reconstrucción completa (db:reset --force, drop + migraciones + tenant + seed)
+        # --sin-volcado: en CI la base es efímera y muere con el job; el
+        # respaldo previo al drop no aporta nada y solo consume minutos.
+        run: npm run db:reset -- --force --sin-volcado
+
+      - name: La base reconstruida es coherente y sin drift (db:verify)
+        run: npm run db:verify
+
+      - name: Idempotencia (segundo reset consecutivo en verde)
+        run: npm run db:reset -- --force --sin-volcado

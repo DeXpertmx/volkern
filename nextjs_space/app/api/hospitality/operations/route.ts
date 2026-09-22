@@ -3,7 +3,9 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
-import { startOfDay, toIsoDate } from '@/lib/hospitality/calendar';
+import { startOfDay } from '@/lib/hospitality/calendar';
+import { unitOccupiedOnDay, type ActiveReservationSpan } from '@/lib/hospitality/availability';
+import { llegadasDelDia, salidasDelDia } from '@/lib/hospitality/analytics';
 
 // GET /api/hospitality/operations — Operations Board (plan maestro §19)
 // Llegadas hoy · Salidas hoy · Limpieza · Mantenimiento · Unidades
@@ -14,21 +16,21 @@ export async function GET(req: NextRequest) {
 
     const tenantId = auth.tenant!.id;
     const today = startOfDay(new Date());
-    const todayIso = toIsoDate(today);
     const tomorrow = new Date(today);
     tomorrow.setDate(today.getDate() + 1);
 
     const where = { tenantId };
 
     const [reservations, units, cleaning, maintenance] = await Promise.all([
+      // Reservas que OCUPAN hoy (o llegan o salen hoy): es el conjunto que
+      // necesita el estado operativo por unidad. Con solo llegadas y salidas,
+      // un huésped a mitad de estancia no aparecía y su unidad se pintaba libre.
       prisma.hospitalityReservation.findMany({
         where: {
           ...where,
           estado: { not: 'cancelled' },
-          OR: [
-            { checkIn: { gte: today, lt: tomorrow } },
-            { checkOut: { gte: today, lt: tomorrow } },
-          ],
+          checkIn: { lt: tomorrow },
+          checkOut: { gt: today },
         },
         include: {
           unit: { select: { id: true, nombre: true, codigo: true } },
@@ -59,22 +61,24 @@ export async function GET(req: NextRequest) {
       }),
     ]);
 
-    const arriv = reservations.filter((r) => toIsoDate(r.checkIn) === todayIso);
-    const depart = reservations.filter((r) => toIsoDate(r.checkOut) === todayIso);
+    // Llegadas y salidas del día: comparación por días, del módulo puro (no
+    // por instantes, que corría un día la frontera).
+    const arriv = llegadasDelDia(reservations, today);
+    const depart = salidasDelDia(reservations, today);
 
-    // Estado operativo por unidad (plan §17): occupied si hay reserva activa
-    const unitStatus = units.map((u) => {
-      const hasActive = reservations.some(
-        (r) =>
-          r.unitId === u.id &&
-          r.checkIn.getTime() < tomorrow.getTime() &&
-          r.checkOut.getTime() > today.getTime()
-      );
-      return {
-        ...u,
-        estadoOperativo: hasActive ? 'occupied' : u.estado,
-      };
-    });
+    // Estado operativo por unidad (plan §17): la ocupación la decide el MOTOR
+    // de disponibilidad (§8), la misma regla que la disponibilidad del booking
+    // y del planning.
+    const spans: ActiveReservationSpan[] = reservations.map((r) => ({
+      unitId: r.unitId as string,
+      checkIn: r.checkIn,
+      checkOut: r.checkOut,
+      estado: r.estado,
+    }));
+    const unitStatus = units.map((u) => ({
+      ...u,
+      estadoOperativo: unitOccupiedOnDay(u.id, today, spans) ? 'occupied' : u.estado,
+    }));
 
     return NextResponse.json({
       llegadasHoy: arriv.map((r) => ({

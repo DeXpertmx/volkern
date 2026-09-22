@@ -38,6 +38,24 @@ describe('unitOccupiedOnDay (regla §8: checkout no ocupa su día)', () => {
   it('ignora canceladas', () => {
     expect(unitOccupiedOnDay('u1', day('2026-09-12'), [{ ...SPAN, estado: 'cancelled' }])).toBe(false);
   });
+
+  it('ignora no-shows: la habitación que nadie ocupó vuelve al inventario', () => {
+    // Decisión de producto (docs/hospitality-booking-payments-plan.md §0, regla
+    // 7): el no-show no bloquea disponibilidad — es un hecho de cobro, no un
+    // bloqueo de inventario. Antes solo la cancelada liberaba la unidad y un
+    // no-show dejaba un bloqueo fantasma invisible en planning y canales.
+    for (const dia of ['2026-09-10', '2026-09-12', '2026-09-14']) {
+      expect(unitOccupiedOnDay('u1', day(dia), [{ ...SPAN, estado: 'no_show' }])).toBe(false);
+    }
+    // Y la unidad queda vendible esas mismas noches (misma regla en el motor).
+    const libres = unitAvailability(
+      { id: 'u1', propertyId: 'p1', roomCode: 'STD', estado: 'available' },
+      day('2026-09-10'),
+      day('2026-09-15'),
+      [{ ...SPAN, estado: 'no_show' }]
+    );
+    expect(libres.every((d) => d.disponible)).toBe(true);
+  });
   it('aplica bloqueos manuales con intervalo inicio inclusivo y fin exclusivo', () => {
     const block = {
       unitId: 'u1',

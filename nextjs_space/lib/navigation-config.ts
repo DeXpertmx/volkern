@@ -30,6 +30,7 @@ import {
   ScrollText,
   Tag,
   ShoppingCart,
+  Star,
   ListTodo,
   Sparkles,
   HelpCircle,
@@ -280,9 +281,14 @@ export const HUBS: HubConfig[] = [
       '/dashboard/hospitality/huespedes',
       '/dashboard/hospitality/dashboard',
       '/dashboard/hospitality/tarifas',
+      '/dashboard/hospitality/booking-engine',
+      '/dashboard/hospitality/finanzas',
       '/dashboard/hospitality/comunicaciones',
+      '/dashboard/hospitality/resenas',
+      '/dashboard/hospitality/registro-viajeros',
       '/dashboard/hospitality/automatizaciones',
-      '/dashboard/hospitality/onboarding'
+      '/dashboard/hospitality/onboarding',
+      '/dashboard/hospitality/reportes'
     ],
     items: [
       { name: 'Inicio', href: '/dashboard/hospitality', icon: Home, planModule: 'hospitality', description: 'Propiedades, unidades y resumen del módulo' },
@@ -293,9 +299,14 @@ export const HUBS: HubConfig[] = [
       { name: 'Propiedades', href: '/dashboard/hospitality?tab=propiedades', icon: Building2, planModule: 'hospitality', description: 'Propiedades, unidades alojativas, capacidad y estado' },
       { name: 'Reservas', href: '/dashboard/hospitality/reservas', icon: CalendarX2, planModule: 'hospitality', description: 'Lista, alta y edición de reservas' },
       { name: 'Tarifas', href: '/dashboard/hospitality/tarifas', icon: Tag, planModule: 'hospitality', description: 'Planes de tarifa por unidad y restricciones de venta' },
+      { name: 'Booking Engine', href: '/dashboard/hospitality/booking-engine', icon: Globe, planModule: 'hospitality', description: 'Motor de reservas público: enlaces, embed para tu web y previsualización' },
+      { name: 'Finanzas', href: '/dashboard/hospitality/finanzas', icon: Wallet, planModule: 'hospitality', description: 'Desglose por reserva, comisiones, cobros pendientes, neto y margen' },
       { name: 'Huéspedes', href: '/dashboard/hospitality/huespedes', icon: Users, planModule: 'hospitality', description: 'Historial de estancias por huésped vinculado al CRM' },
       { name: 'Comunicaciones', href: '/dashboard/hospitality/comunicaciones', icon: MessageSquareText, planModule: 'hospitality', description: 'Plantillas automáticas por evento (confirmación, check-in, reseña...)' },
+      { name: 'Reseñas', href: '/dashboard/hospitality/resenas', icon: Star, planModule: 'hospitality', description: 'Moderación de reseñas de huéspedes: publica, responde y mira la media de tu web' },
       { name: 'Automatizaciones', href: '/dashboard/hospitality/automatizaciones', icon: Zap, planModule: 'hospitality', description: 'Reglas sobre el Automation Engine: eventos → tareas, limpiezas y mensajes' },
+      { name: 'Registro de viajeros', href: '/dashboard/hospitality/registro-viajeros', icon: ShieldCheck, planModule: 'hospitality', description: 'Comunicación de los viajeros al Ministerio del Interior (RD 933/2021): estado, configuración y partes pendientes' },
+      { name: 'Reportes', href: '/dashboard/hospitality/reportes', icon: BarChart3, planModule: 'hospitality', description: 'Operación: ocupación, ADR, RevPAR, estancia media, no-shows · Ventas: canales, directa y antelación' },
     ]
   },
   {

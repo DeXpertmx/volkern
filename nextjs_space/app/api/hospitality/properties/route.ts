@@ -5,6 +5,9 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
 import { logAuditAction } from '@/lib/permissions';
+import { politicaEfectiva } from '@/lib/hospitality/no-show';
+import { politicaSalidaAnticipadaEfectiva } from '@/lib/hospitality/checkout';
+import { holdHorasEfectivas } from '@/lib/hospitality/holds';
 
 // GET /api/hospitality/properties — listar propiedades del tenant
 export async function GET(req: NextRequest) {
@@ -49,7 +52,8 @@ export async function POST(req: NextRequest) {
     const data = await req.json();
     const {
       nombre, descripcion, codigo, zona, direccion, ciudad, estadoProvincia,
-      pais, cp, latitud, longitud, fotos, timezone, estado, unidades,
+      pais, cp, latitud, longitud, fotos, timezone, estado, unidades, politicaNoShow,
+      politicaSalidaAnticipada, holdHoras,
     } = data || {};
 
     if (!nombre || !nombre.trim()) {
@@ -73,6 +77,15 @@ export async function POST(req: NextRequest) {
         fotos: Array.isArray(fotos) ? (fotos as Prisma.InputJsonValue[]) : Prisma.DbNull,
         timezone: timezone || 'America/Mexico_City',
         estado: estado || 'activa',
+        // Política de penalización por no-show. Un valor inválido cae en la de
+        // defecto en vez de guardarse y cambiar el criterio en silencio.
+        politicaNoShow: politicaEfectiva(politicaNoShow),
+        // Apagador de salida anticipada (A/B). Un valor inválido cae en el
+        // defecto (B) en vez de guardarse y cambiar el criterio en silencio.
+        politicaSalidaAnticipada: politicaSalidaAnticipadaEfectiva(politicaSalidaAnticipada),
+        // Ventana de caducidad de los holds `pending` (0 = sin caducidad).
+        // Un valor inválido cae en el defecto (24 h).
+        holdHoras: holdHorasEfectivas(holdHoras),
       },
     });
 

@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
-import { COMUNICACION_EVENTOS } from '@/lib/hospitality/comunicaciones';
+import { COMUNICACION_EVENTOS, IDIOMAS_COMUNICACION } from '@/lib/hospitality/comunicaciones';
 
 /**
  * Plantillas de comunicación automática (plan maestro §21).
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
 
     const tenantId = auth.tenant!.id;
     const body = await req.json().catch(() => ({}));
-    const { evento, canal, asunto, contenido, activo } = body;
+    const { evento, canal, asunto, contenido, activo, idioma } = body;
 
     if (!evento || !COMUNICACION_EVENTOS.includes(evento)) {
       return NextResponse.json(
@@ -60,6 +60,12 @@ export async function POST(req: NextRequest) {
     }
     if (!canal || !['whatsapp', 'email'].includes(canal)) {
       return NextResponse.json({ error: 'canal inválido. Debe ser whatsapp o email' }, { status: 400 });
+    }
+    if (idioma !== undefined && !IDIOMAS_COMUNICACION.includes(idioma)) {
+      return NextResponse.json(
+        { error: `idioma inválido. Debe ser uno de: ${IDIOMAS_COMUNICACION.join(', ')}` },
+        { status: 400 }
+      );
     }
     if (!contenido || !String(contenido).trim()) {
       return NextResponse.json({ error: 'contenido es obligatorio' }, { status: 400 });
@@ -76,6 +82,7 @@ export async function POST(req: NextRequest) {
         asunto: asunto ? String(asunto).trim() : null,
         contenido: String(contenido).trim(),
         activo: activo !== false,
+        idioma: IDIOMAS_COMUNICACION.includes(idioma) ? idioma : 'es',
       },
     });
 

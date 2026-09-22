@@ -8,6 +8,11 @@ import {
   cronJobFailed,
   cronJobSkipped,
 } from './cron-status';
+import {
+  JOB_ID_HEALTH_CHECK,
+  JOB_LABEL_HEALTH_CHECK,
+  JOB_SCHEDULE_HEALTH_CHECK,
+} from './hospitality-connectivity-health';
 
 /**
  * Orquestador de Tareas Programadas para Gemma 4 Proactivity
@@ -21,15 +26,33 @@ import {
  * Wrapper que instrumenta un job con métricas de estado para el panel.
  * Registra inicio, duración y resultado (success/error/skipped).
  */
-function runCronJob(id: string, label: string, schedule: string, fn: () => Promise<void>) {
+/**
+ * Lo que un job puede devolver para contarlo en el panel de estado.
+ *
+ * Opcional: la mayoría de los jobs no devuelven nada y el panel sigue mostrando
+ * `OK (150ms)`. Existe para los que tienen algo que decir SIN ser un error —por
+ * ejemplo el registro de viajeros, que avisa de los partes que ya no se van a
+ * reintentar—, porque el mensaje de un error se pinta en rojo y un aviso no.
+ */
+interface SalidaDeJob {
+  mensaje?: string
+  avisos?: string[]
+}
+
+function runCronJob(
+  id: string,
+  label: string,
+  schedule: string,
+  fn: () => Promise<SalidaDeJob | void>,
+) {
   registerCronJob(id, label, schedule)
   return async () => {
     const start = Date.now()
     cronJobStarted(id)
     try {
-      await fn()
+      const salida = await fn()
       const duration = Date.now() - start
-      cronJobCompleted(id, `OK (${duration}ms)`, duration)
+      cronJobCompleted(id, salida?.mensaje ?? `OK (${duration}ms)`, duration, salida?.avisos ?? [])
     } catch (err: any) {
       const duration = Date.now() - start
       cronJobFailed(id, err?.message || String(err), duration)
@@ -172,6 +195,75 @@ export function initCronJobs() {
   }));
 
   console.log('✅ [Scheduler] Hospitality solicitud de reseña programada (diaria 10:30)');
+
+  // 16d. Hospitality: recordatorio de los vínculos de conectividad que el
+  //      sistema creó solo (webhook) y nadie ha confirmado. Un vínculo
+  //      automático cambia la configuración de canales sin que nadie lo pida:
+  //      su aviso puntual se pierde si el operador no está. El resumen respeta
+  //      un intervalo mínimo y solo se adelanta si aparecen vínculos nuevos.
+  cron.schedule('45 9 * * *', runCronJob('hospitality-vinculos-pendientes', 'Hospitality Vínculos Automáticos por Revisar', '45 9 * * *', async () => {
+    const { runHospitalityVinculosPendientesScan } = await import('./hospitality-vinculos-pendientes');
+    await runHospitalityVinculosPendientesScan();
+  }));
+
+  console.log('✅ [Scheduler] Hospitality recordatorio de vínculos automáticos programado (diaria 09:45)');
+
+  // 16e. Hospitality: caducidad de holds `pending` olvidados.
+  //      Una reserva pendiente bloquea la unidad en todas las vistas; si nadie
+  //      la confirma, este barrido la cancela al cumplir la ventana de su
+  //      propiedad (`holdHoras`, 0 = sin caducidad), libera la unidad y la
+  //      vuelve a publicar a los canales. Nunca toca un hold con pagos
+  //      registrados (eso lo decide una persona).
+  // El id/etiqueta/cadencia deben coincidir con las constantes del módulo
+  // (`JOB_ID_HOLDS_CADUCADOS` etc.): hay un test que lo exige, porque el panel
+  // de estado cruza los dos registros.
+  cron.schedule('0 * * * *', runCronJob('hospitality-holds-expirados', 'Hospitality Holds Caducados', '0 * * * *', async () => {
+    const { runHospitalityHoldExpiryScan } = await import('./hospitality-holds');
+    await runHospitalityHoldExpiryScan();
+  }));
+
+  console.log('✅ [Scheduler] Hospitality caducidad de holds programada (cada hora)');
+
+  // 16f. Hospitality: registro de viajeros ante el Ministerio del Interior.
+  //      El RD 933/2021 (art. 6) obliga a comunicar los viajeros en un plazo
+  //      máximo de 24 h desde el inicio del servicio: este barrido envía los
+  //      partes pendientes, consulta los lotes (el alta es asíncrona) y anula
+  //      los de reservas canceladas. Sin credenciales del tenant no envía nada.
+  // El id/etiqueta/cadencia deben coincidir con las constantes del módulo
+  // (`JOB_ID_REGISTRO_VIAJEROS` etc.): hay un test que lo exige, porque el
+  // panel de estado cruza los dos registros.
+  cron.schedule('30 * * * *', runCronJob('hospitality-registro-viajeros', 'Hospitality Registro de Viajeros (MIR)', '30 * * * *', async () => {
+    const { runRegistroViajerosScan, resumenDelBarrido, avisosDelBarrido } = await import(
+      './hospitality-registro-viajeros'
+    );
+    const resultado = await runRegistroViajerosScan();
+    // El mismo resumen y los mismos avisos que el disparo por HTTP: el panel de
+    // estado no puede contar una cosa u otra según quién haya lanzado el job.
+    return { mensaje: resumenDelBarrido(resultado), avisos: avisosDelBarrido(resultado) };
+  }));
+
+  console.log('✅ [Scheduler] Hospitality registro de viajeros programado (cada hora, minuto 30)');
+
+  // 16g. Hospitality: health-check diario de la capa de conectividad.
+  //      El estado del panel solo cambia con tráfico: si el proveedor revoca
+  //      las credenciales un día sin reservas ni pushes, el badge seguiría
+  //      «Conectado» por inercia. Esta sonda llama a property_details (la
+  //      misma del botón «Probar»), mueve el estado con las mismas reglas y
+  //      deja la marca de última verificación.
+  // El id/etiqueta/cadencia deben coincidir con las constantes del módulo
+  // (`JOB_ID_HEALTH_CHECK` etc.): hay un test que lo exige, porque el panel
+  // de estado cruza los dos registros.
+  cron.schedule(JOB_SCHEDULE_HEALTH_CHECK, runCronJob(JOB_ID_HEALTH_CHECK, JOB_LABEL_HEALTH_CHECK, JOB_SCHEDULE_HEALTH_CHECK, async () => {
+    const { runConnectivityHealthCheck, mensajeDelHealthCheck, avisosDelHealthCheck } = await import(
+      './hospitality-connectivity-health'
+    );
+    const resultado = await runConnectivityHealthCheck();
+    // El mismo resumen y los mismos avisos que el disparo por HTTP: el panel de
+    // estado no puede contar una cosa u otra según quién haya lanzado el job.
+    return { mensaje: mensajeDelHealthCheck(resultado), avisos: avisosDelHealthCheck(resultado) };
+  }));
+
+  console.log('✅ [Scheduler] Hospitality conectividad health-check programado (diaria 05:00)');
 
   // 17. Automatizaciones: cerrar ejecuciones colgadas.
   // El motor crea el log en `queued` y el worker lo cierra con el resultado

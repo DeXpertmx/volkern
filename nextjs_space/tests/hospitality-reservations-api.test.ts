@@ -20,6 +20,10 @@ const prisma = vi.hoisted(() => ({
     update: vi.fn(),
   },
   contact: { findFirst: vi.fn(), create: vi.fn() },
+  hospitalityGuestRegistryCommunication: { findMany: vi.fn() },
+  // Preguntas personalizadas del check-in: la API etiqueta las respuestas
+  // guardadas en cada reserva con el texto de la pregunta (id → es).
+  hospitalityCheckinPregunta: { findMany: vi.fn().mockResolvedValue([]) },
 }));
 
 vi.mock('@/lib/db', () => ({ prisma }));
@@ -48,6 +52,7 @@ describe('GET /api/hospitality/reservations (filtros)', () => {
     vi.clearAllMocks();
     mockAuth.mockResolvedValue(AUTH_OK);
     prisma.hospitalityReservation.findMany.mockResolvedValue([]);
+    prisma.hospitalityGuestRegistryCommunication.findMany.mockResolvedValue([]);
   });
 
   it('autenticación inválida → 401', async () => {
@@ -76,6 +81,248 @@ describe('GET /api/hospitality/reservations (filtros)', () => {
         expect.objectContaining({ externalBookingId: expect.objectContaining({ contains: 'AB-123' }) }),
       ])
     );
+  });
+
+  // El parte de viajeros de cada reserva se calcula en la lista (RD 933/2021):
+  // la pantalla avisa de los huéspedes sin datos y permite completarlos ahí.
+  describe('parte de viajeros', () => {
+    const RESERVA = (extra: Record<string, unknown>) => ({
+      id: 'r1',
+      estado: 'confirmed',
+      checkIn: new Date('2026-07-01T15:00:00Z'),
+      checkOut: new Date('2026-07-05T11:00:00Z'),
+      guestData: {},
+      ...extra,
+    });
+
+    it('marca la reserva a la que le faltan los datos del huésped', async () => {
+      prisma.hospitalityReservation.findMany.mockResolvedValue([RESERVA({})]);
+      prisma.hospitalityGuestRegistryCommunication.findMany.mockResolvedValue([
+        { reservationId: 'r1', estado: 'datos_incompletos' },
+      ]);
+
+      const res = await GET(buildReq('GET'));
+      const { reservations } = await res.json();
+
+      expect(reservations[0].parteViajeros).toMatchObject({
+        aplica: true,
+        completo: false,
+        // Sin fichas guardadas: la pantalla dice «sin datos de ningún viajero»
+        // en vez de una lista de campos vacía.
+        viajeros: 0,
+        faltan: [],
+        estado: 'datos_incompletos',
+        comunicada: false,
+      });
+    });
+
+    it('distingue «no hay documentación» de «hay campos por revisar»', async () => {
+      prisma.hospitalityReservation.findMany.mockResolvedValue([
+        RESERVA({ guestData: { viajeros: [{ nombre: 'Ana' }] } }),
+      ]);
+
+      const res = await GET(buildReq('GET'));
+      const { reservations } = await res.json();
+
+      const parte = reservations[0].parteViajeros;
+      expect(parte.viajeros).toBe(1);
+      // La ficha existe pero está a medias: se listan los campos que bloquean.
+      expect(parte.faltan.length).toBeGreaterThan(0);
+      expect(parte.faltan).toContain('numeroDocumento');
+    });
+
+    it('con los datos completos el parte queda listo (y ya no hay nada que avisar)', async () => {
+      prisma.hospitalityReservation.findMany.mockResolvedValue([
+        RESERVA({
+          guestData: {
+            viajeros: [
+              {
+                nombre: 'Ana',
+                apellido1: 'Pérez',
+                apellido2: 'Gómez',
+                tipoDocumento: 'NIF',
+                numeroDocumento: '12345678Z',
+                // El NIF/NIE exige número de soporte y segundo apellido: son las
+                // dos reglas que más partes incompletos producen.
+                soporteDocumento: 'ABC123456',
+                fechaNacimiento: '1990-05-04',
+                nacionalidad: 'ESP',
+                sexo: 'M',
+                telefono: '+34600111222',
+                direccion: { direccion: 'Calle Mayor 1', codigoPostal: '28013', pais: 'ESP', codigoMunicipio: '28079' },
+              },
+            ],
+          },
+        }),
+      ]);
+
+      const res = await GET(buildReq('GET'));
+      const { reservations } = await res.json();
+
+      expect(reservations[0].parteViajeros).toMatchObject({ aplica: true, completo: true, viajeros: 1 });
+      expect(reservations[0].parteViajeros.faltan).toEqual([]);
+    });
+
+    it('la última comunicación es la que manda (un alta rechazada y otra aceptada)', async () => {
+      prisma.hospitalityReservation.findMany.mockResolvedValue([RESERVA({})]);
+      // Orden por fecha de edición descendente: el primero viene de Prisma.
+      prisma.hospitalityGuestRegistryCommunication.findMany.mockResolvedValue([
+        { reservationId: 'r1', estado: 'aceptada' },
+        { reservationId: 'r1', estado: 'datos_incompletos' },
+      ]);
+
+      const res = await GET(buildReq('GET'));
+      const { reservations } = await res.json();
+
+      expect(reservations[0].parteViajeros).toMatchObject({ estado: 'aceptada', comunicada: true });
+    });
+
+    it('trae el motivo del rechazo del Ministerio y qué hay que corregir', async () => {
+      prisma.hospitalityReservation.findMany.mockResolvedValue([
+        RESERVA({
+          guestData: {
+            viajeros: [
+              {
+                nombre: 'Ana',
+                apellido1: 'Pérez',
+                apellido2: 'Gómez',
+                tipoDocumento: 'NIF',
+                numeroDocumento: '12345678Z',
+                soporteDocumento: 'ABC123456',
+                fechaNacimiento: '1990-05-04',
+                telefono: '+34600111222',
+                direccion: { direccion: 'Calle Mayor 1', codigoPostal: '28013', pais: 'ESP', codigoMunicipio: '28079' },
+              },
+            ],
+          },
+        }),
+      ]);
+      prisma.hospitalityGuestRegistryCommunication.findMany.mockResolvedValue([
+        {
+          reservationId: 'r1',
+          estado: 'rechazada',
+          descripcion: 'El campo persona[0].numeroDocumento no tiene un formato válido',
+          codigoRetorno: '10130',
+          errores: [],
+        },
+      ]);
+
+      const res = await GET(buildReq('GET'));
+      const { reservations } = await res.json();
+      const parte = reservations[0].parteViajeros;
+
+      // Los datos están completos: lo que falla es el parte, no la ficha.
+      expect(parte).toMatchObject({ completo: true, rechazado: true, comunicada: false });
+      expect(parte.rechazo).toMatchObject({ codigo: '10130', ambito: 'datos', campos: ['numeroDocumento'] });
+      expect(parte.rechazo.motivo).toContain('no tiene un formato válido');
+    });
+
+    it('un rechazo de configuración NO se cuenta como datos del huésped', async () => {
+      prisma.hospitalityReservation.findMany.mockResolvedValue([RESERVA({})]);
+      prisma.hospitalityGuestRegistryCommunication.findMany.mockResolvedValue([
+        {
+          reservationId: 'r1',
+          estado: 'rechazada',
+          descripcion: 'El código de arrendador no existe en el sistema',
+          codigoRetorno: '10103',
+          errores: null,
+        },
+      ]);
+
+      const res = await GET(buildReq('GET'));
+      const { reservations } = await res.json();
+
+      expect(reservations[0].parteViajeros.rechazo).toMatchObject({
+        ambito: 'configuracion',
+        campos: [],
+      });
+    });
+
+    it('marca el rechazo que el barrido ya NO va a reintentar (intentos agotados)', async () => {
+      prisma.hospitalityReservation.findMany.mockResolvedValue([RESERVA({})]);
+      prisma.hospitalityGuestRegistryCommunication.findMany.mockResolvedValue([
+        {
+          reservationId: 'r1',
+          estado: 'rechazada',
+          descripcion: 'El código de arrendador no existe en el sistema',
+          codigoRetorno: '10103',
+          errores: null,
+          intentos: 5,
+        },
+      ]);
+
+      const res = await GET(buildReq('GET'));
+      const { reservations } = await res.json();
+
+      expect(reservations[0].parteViajeros).toMatchObject({ abandonado: true, intentos: 5 });
+    });
+
+    it('un rechazo con intentos de sobra sigue contando con el barrido', async () => {
+      prisma.hospitalityReservation.findMany.mockResolvedValue([RESERVA({})]);
+      prisma.hospitalityGuestRegistryCommunication.findMany.mockResolvedValue([
+        {
+          reservationId: 'r1',
+          estado: 'rechazada',
+          descripcion: 'Error de validación',
+          codigoRetorno: '10130',
+          errores: [],
+          intentos: 2,
+        },
+      ]);
+
+      const res = await GET(buildReq('GET'));
+      const { reservations } = await res.json();
+
+      expect(reservations[0].parteViajeros).toMatchObject({ abandonado: false, intentos: 2 });
+    });
+
+    it('un parte incompleto no se abandona aunque tenga muchos intentos: no gasta ninguno', async () => {
+      prisma.hospitalityReservation.findMany.mockResolvedValue([RESERVA({})]);
+      prisma.hospitalityGuestRegistryCommunication.findMany.mockResolvedValue([
+        { reservationId: 'r1', estado: 'datos_incompletos', descripcion: 'Faltan datos', intentos: 5 },
+      ]);
+
+      const res = await GET(buildReq('GET'));
+      const { reservations } = await res.json();
+
+      expect(reservations[0].parteViajeros).toMatchObject({ abandonado: false, rechazado: false });
+    });
+
+    it('un parte aceptado después del rechazo ya no avisa de nada', async () => {
+      prisma.hospitalityReservation.findMany.mockResolvedValue([RESERVA({})]);
+      prisma.hospitalityGuestRegistryCommunication.findMany.mockResolvedValue([
+        { reservationId: 'r1', estado: 'aceptada', descripcion: 'Ok', codigoRetorno: '0', errores: null },
+        {
+          reservationId: 'r1',
+          estado: 'rechazada',
+          descripcion: 'El código de arrendador no existe en el sistema',
+          codigoRetorno: '10103',
+          errores: null,
+        },
+      ]);
+
+      const res = await GET(buildReq('GET'));
+      const { reservations } = await res.json();
+
+      expect(reservations[0].parteViajeros).toMatchObject({
+        comunicada: true,
+        rechazado: false,
+        rechazo: null,
+      });
+    });
+
+    it('una cancelada o un no-show no tienen parte que completar', async () => {
+      prisma.hospitalityReservation.findMany.mockResolvedValue([
+        RESERVA({ id: 'r1', estado: 'cancelled' }),
+        RESERVA({ id: 'r2', estado: 'no_show' }),
+      ]);
+
+      const res = await GET(buildReq('GET'));
+      const { reservations } = await res.json();
+
+      expect(reservations[0].parteViajeros.aplica).toBe(false);
+      expect(reservations[1].parteViajeros.aplica).toBe(false);
+    });
   });
 });
 
@@ -204,5 +451,41 @@ describe('POST /api/hospitality/reservations (alta manual)', () => {
         data: expect.objectContaining({ contactId: 'c-existing' }),
       })
     );
+  });
+});
+
+describe('preguntas personalizadas del check-in en GET reservations', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAuth.mockResolvedValue(AUTH_OK);
+    prisma.hospitalityReservation.findMany.mockResolvedValue([]);
+    prisma.hospitalityGuestRegistryCommunication.findMany.mockResolvedValue([]);
+  });
+
+  it('sirve el mapa id → texto de pregunta (ES) del propio tenant', async () => {
+    prisma.hospitalityCheckinPregunta.findMany.mockResolvedValue([
+      { id: 'p1', es: 'Hora estimada de llegada' },
+      { id: 'p2', es: 'Trae mascotas' },
+    ]);
+
+    const res = await GET(buildReq('GET'));
+    const { preguntasCheckin } = await res.json();
+
+    expect(preguntasCheckin).toEqual({
+      p1: 'Hora estimada de llegada',
+      p2: 'Trae mascotas',
+    });
+    expect(prisma.hospitalityCheckinPregunta.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { tenantId: 't1' } })
+    );
+  });
+
+  it('con la consulta de preguntas rota, la lista de reservas sigue saliendo (diagnóstico auxiliar)', async () => {
+    prisma.hospitalityCheckinPregunta.findMany.mockRejectedValue(new Error('bd caída'));
+
+    const res = await GET(buildReq('GET'));
+    expect(res.status).toBe(200);
+    const { preguntasCheckin } = await res.json();
+    expect(preguntasCheckin).toEqual({});
   });
 });

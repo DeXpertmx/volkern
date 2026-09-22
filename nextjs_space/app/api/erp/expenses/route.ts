@@ -13,6 +13,7 @@ export const GET = withTenantAuth(async (request, auth) => {
     const category = searchParams.get('category');
     const status = searchParams.get('status');
     const supplierId = searchParams.get('supplierId');
+    const hospitalityReservationId = searchParams.get('hospitalityReservationId');
     const limit = parseInt(searchParams.get('limit') || '50');
 
     const where: any = {
@@ -22,6 +23,7 @@ export const GET = withTenantAuth(async (request, auth) => {
     if (category) where.category = category;
     if (status) where.status = status;
     if (supplierId) where.supplierId = supplierId;
+    if (hospitalityReservationId) where.hospitalityReservationId = hospitalityReservationId;
 
     const expenses = await prisma.expense.findMany({
       where,
@@ -31,6 +33,9 @@ export const GET = withTenantAuth(async (request, auth) => {
         },
         lead: {
           select: { id: true, nombre: true }
+        },
+        hospitalityReservation: {
+          select: { id: true, externalBookingId: true, channel: true }
         }
       },
       orderBy: { date: 'desc' },
@@ -161,11 +166,26 @@ export const POST = withTenantAuth(async (request, auth) => {
         : undefined
     );
 
+    // Enlace con hospitality (FASE 3.B): si el gasto se imputa a una reserva,
+    // validar que exista y sea del tenant (aislamiento multi-tenant).
+    let hospitalityReservationId: string | undefined = undefined;
+    if (body.hospitalityReservationId) {
+      const reserva = await prisma.hospitalityReservation.findFirst({
+        where: { id: body.hospitalityReservationId, tenantId },
+        select: { id: true, externalBookingId: true },
+      });
+      if (!reserva) {
+        return NextResponse.json({ error: 'Reserva de hospitality no encontrada' }, { status: 404 });
+      }
+      hospitalityReservationId = reserva.id;
+    }
+
     const expense = await (skills as any).create_expense({
       tenantId,
       createdById,
       supplierId: body.supplierId,
       leadId: body.leadId,
+      hospitalityReservationId,
       description: body.description,
       amount: parseFloat(body.amount),
       currency: body.currency || 'EUR',

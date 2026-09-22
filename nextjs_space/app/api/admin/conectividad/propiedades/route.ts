@@ -21,6 +21,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/db';
+import { TIPO_RESUMEN_VINCULOS, PROVIDER_CONECTIVIDAD } from '@/lib/hospitality/incidencias';
+import {
+  causaDeFalloConectividad,
+  TIPOS_SYNC_CONECTIVIDAD,
+  type CausaConectividad,
+} from '@/lib/hospitality/conectividad-causa';
 
 async function requireSuperadmin() {
   const session = await getServerSession(authOptions);
@@ -43,6 +49,13 @@ interface EventoResumen {
   estado: string;
   detalle?: string | null;
 }
+
+/** Tipos de SyncLog que empujan a la capa de conectividad (excluye partes de viajeros). */
+// Tipos de push a canales: derivados del módulo de causas para que la lista
+// de diagnóstico y la de la tabla no puedan divergir.
+const TIPOS_PUSH = new Set<string>(
+  TIPOS_SYNC_CONECTIVIDAD.filter((tipo) => tipo !== 'reconciliacion')
+);
 
 export async function GET(_req: NextRequest) {
   try {
@@ -122,20 +135,31 @@ export async function GET(_req: NextRequest) {
     const ultimoPushPorPropiedad = new Map<string, EventoResumen>();
     const ultimoFetchPorPropiedad = new Map<string, EventoResumen>();
     const ultimoErrorSyncPorPropiedad = new Map<string, EventoResumen>();
+    const causaPorPropiedad = new Map<string, CausaConectividad>();
     for (const log of ultimosSync) {
       const pid = log.propertyId;
       if (!pid) continue;
+      // El diagnóstico de credenciales solo aplica a la capa de conectividad:
+      // los logs de partes de viajeros comparten la tabla pero no el proveedor.
+      if (log.tipo !== 'reconciliacion' && !TIPOS_PUSH.has(log.tipo)) continue;
       const base: EventoResumen = {
         fecha: log.fechaCreacion,
         tipo: log.tipo,
         estado: log.estado,
         detalle: log.errorMensaje ?? (log.httpStatus ? `HTTP ${log.httpStatus}` : null),
       };
+      if (log.estado === 'error' && !causaPorPropiedad.has(pid)) {
+        causaPorPropiedad.set(pid, causaDeFalloConectividad(log));
+      }
       if (log.tipo === 'reconciliacion') {
         if (!ultimoFetchPorPropiedad.has(pid)) ultimoFetchPorPropiedad.set(pid, base);
       } else if (log.tipo === 'reservacion_prueba') {
         // Prueba del onboarding (§31): no es un push a canales, no debe
         // aparecer como "último push" en la observabilidad.
+        continue;
+      } else if (log.tipo === 'mapping_automatico' || log.tipo === TIPO_RESUMEN_VINCULOS) {
+        // Vínculo creado automáticamente y su recordatorio periódico: son
+        // cambios de configuración, no pushes a canales.
         continue;
       } else if (!ultimoPushPorPropiedad.has(pid)) {
         ultimoPushPorPropiedad.set(pid, base);
@@ -194,6 +218,8 @@ export async function GET(_req: NextRequest) {
         ultimoPush: ultimoPushPorPropiedad.get(p.id) ?? null,
         ultimoFetch: ultimoFetchPorPropiedad.get(p.id) ?? null,
         ultimoError: errorSync,
+        /** Causa del último fallo, en palabras (credenciales rechazadas ≠ sin respuesta). */
+        causaUltimoError: causaPorPropiedad.get(p.id) ?? null,
         contadorErrores: erroresSyncMap.get(p.id) ?? 0,
         webhooksTotales: hotelCode ? totalWebhooksPorHotel.get(hotelCode) ?? 0 : 0,
         webhooksFallidos: hotelCode ? erroresWebhookPorHotel.get(hotelCode) ?? 0 : 0,

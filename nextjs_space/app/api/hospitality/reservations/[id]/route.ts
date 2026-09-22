@@ -5,12 +5,16 @@ import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
 import { logAuditAction } from '@/lib/permissions';
 import { dispatchConnectivityPush } from '@/lib/hospitality/sync';
+import { toIsoDate } from '@/lib/hospitality/calendar';
+import { esEstadoValido } from '@/lib/hospitality/estados';
+import { datosDeSalida } from '@/lib/hospitality/checkout';
+import { registrarHoldConfirmado } from '@/lib/hospitality/holds-audit';
+import { aplicarPenalizacionNoShow } from '@/lib/hospitality/penalizaciones';
 
 interface Params {
   params: Promise<{ id: string }> | { id: string };
 }
 
-const ESTADOS_VALIDOS = ['pending', 'confirmed', 'cancelled', 'checked_in', 'checked_out', 'no_show'];
 
 // GET /api/hospitality/reservations/[id] — detalle
 export async function GET(_req: NextRequest, ctx: Params) {
@@ -50,6 +54,7 @@ export async function PATCH(req: NextRequest, ctx: Params) {
       select: {
         id: true, unitId: true, channel: true, checkIn: true, checkOut: true,
         estado: true, amountAfterTax: true, currency: true, specialRequests: true,
+        propertyId: true,
       },
     });
     if (!existing) return NextResponse.json({ error: 'Reserva no encontrada' }, { status: 404 });
@@ -95,8 +100,24 @@ export async function PATCH(req: NextRequest, ctx: Params) {
 
     // Estado: transiciones libres excepto desde cancelled (usar reactivar si
     // se desea volver a activa) — coherente con las validaciones del check.
+    // Salida anticipada (check-out manual): la política de la propiedad decide
+    // A (pisar el checkOut) o B (guardar checkOutReal) — la misma que el
+    // check-out operativo (módulo checkout).
+    let salidaAnticipada: { checkOut?: Date; checkOutReal?: Date } = {};
+    const esCheckOut =
+      estado === 'checked_out' && existing.estado !== 'checked_out';
+    if (esCheckOut) {
+      const property = await prisma.hospitalityProperty.findFirst({
+        where: { id: existing.propertyId, tenantId: auth.tenant!.id },
+        select: { politicaSalidaAnticipada: true },
+      });
+      salidaAnticipada = datosDeSalida(property?.politicaSalidaAnticipada, {
+        checkOutPrevisto: co,
+      });
+    }
+
     if (estado !== undefined) {
-      if (!ESTADOS_VALIDOS.includes(estado)) {
+      if (!esEstadoValido(estado)) {
         return NextResponse.json({ error: 'Estado inválido' }, { status: 400 });
       }
       if (existing.estado === 'cancelled' && estado !== 'cancelled') {
@@ -106,6 +127,7 @@ export async function PATCH(req: NextRequest, ctx: Params) {
         );
       }
       data.estado = estado;
+      Object.assign(data, salidaAnticipada);
     }
 
     if (canal !== undefined) data.channel = String(canal).trim() || existing.channel;
@@ -132,7 +154,7 @@ export async function PATCH(req: NextRequest, ctx: Params) {
         const c = candidates[0];
         return NextResponse.json(
           {
-            error: `Conflicto de disponibilidad: la unidad ya tiene una reserva activa del ${c.checkIn.toISOString().slice(0, 10)} al ${c.checkOut.toISOString().slice(0, 10)} (${c.externalBookingId || c.estado}).`,
+            error: `Conflicto de disponibilidad: la unidad ya tiene una reserva activa del ${toIsoDate(c.checkIn)} al ${toIsoDate(c.checkOut)} (${c.externalBookingId || c.estado}).`,
           },
           { status: 409 }
         );
@@ -158,6 +180,19 @@ export async function PATCH(req: NextRequest, ctx: Params) {
       `Reserva ${reservation.externalBookingId} editada`
     ).catch(() => {});
 
+    // Un `pending` que pasa a confirmada es un hold rescatado: deja traza para
+    // que la tasa de abandono de holds de Reportes cuadre (el barrido audita el
+    // otro desenlace). Nunca lanza ni revierte la edición.
+    if (existing.estado === 'pending' && estado === 'confirmed') {
+      await registrarHoldConfirmado({
+        tenantId: auth.tenant!.id,
+        reservationId: reservation.id,
+        propertyId: reservation.propertyId,
+        channel: reservation.channel,
+        origen: 'operador',
+      });
+    }
+
     // Push si cambió algo que afecte disponibilidad.
     if (rangoCambia || data.estado !== undefined) {
       try {
@@ -167,7 +202,16 @@ export async function PATCH(req: NextRequest, ctx: Params) {
       }
     }
 
-    return NextResponse.json({ reservation });
+    // No-show: la unidad vuelve al inventario (el push de arriba ya empuja el
+    // hueco) y, a la vez, se emite la penalización de la política de la
+    // propiedad. Son dos hechos distintos: uno de inventario y otro de cobro.
+    // Si falla la emisión, el no-show ya está aplicado — no se revierte.
+    let penalizacion: Awaited<ReturnType<typeof aplicarPenalizacionNoShow>> | null = null;
+    if (data.estado === 'no_show') {
+      penalizacion = await aplicarPenalizacionNoShow(auth.tenant!.id, reservation.id);
+    }
+
+    return NextResponse.json({ reservation, penalizacion });
   } catch (error) {
     console.error('Error actualizando reserva:', error);
     return NextResponse.json({ error: 'Error al actualizar reserva' }, { status: 500 });

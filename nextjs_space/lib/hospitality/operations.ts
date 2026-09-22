@@ -30,6 +30,8 @@
 
 import { prisma } from '@/lib/db';
 import { dispatchConnectivityPush } from './sync';
+import { ESTADOS_RESERVA_VIVA } from './estados';
+import { datosDeSalida } from './checkout';
 import { dispararComunicacionReserva } from '@/lib/hospitality/comunicaciones';
 import {
   emitReservationCheckedIn,
@@ -131,10 +133,19 @@ export async function performCheckOperation(
     return { ok: true, status: updated.estado, reservationId: updated.id };
   }
 
-  // §18.2: check-out → reserva checked_out, unidad cleaning, tarea de limpieza
+  // §18.2: check-out → reserva checked_out, unidad cleaning, tarea de limpieza.
+  // La salida anticipada se aplica por la política de la propiedad (apagador del
+  // Anfitrión, módulo checkout): A pisa el checkOut; B guarda checkOutReal.
+  const property = await prisma.hospitalityProperty.findFirst({
+    where: { id: reservation.propertyId, tenantId },
+    select: { politicaSalidaAnticipada: true },
+  });
+  const salida = datosDeSalida(property?.politicaSalidaAnticipada, {
+    checkOutPrevisto: reservation.checkOut,
+  });
   const updated = await prisma.hospitalityReservation.update({
     where: { id: reservation.id },
-    data: { estado: 'checked_out' },
+    data: { estado: 'checked_out', ...salida },
   });
 
   let cleaningTaskId: string | undefined;
@@ -266,11 +277,13 @@ export async function completeCleaningTask(
     const endToday = new Date(startToday);
     endToday.setDate(startToday.getDate() + 1);
 
+    // Reserva VIVA que ocupa la unidad hoy (`esReservaViva`): una estancia
+    // terminada o inexistente no vuelve a poner la unidad en `occupied`.
     const activeReservation = await prisma.hospitalityReservation.findFirst({
       where: {
         tenantId,
         unitId: task.unit.id,
-        estado: { notIn: ['cancelled', 'checked_out', 'no_show'] },
+        estado: { in: [...ESTADOS_RESERVA_VIVA] },
         checkIn: { lt: endToday },
         checkOut: { gt: startToday },
       },

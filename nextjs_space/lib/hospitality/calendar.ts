@@ -8,7 +8,17 @@
  *   diarios (no crear 5 bloques para una estancia de 5 noches).
  * - El bloque comienza en check-in y termina el día anterior a check-out.
  * - Agrupación por unidad (filas) y columnas de días.
+ *
+ * Las preguntas sobre el estado se responden con el vocabulario de
+ * `./estados`, no con listas propias: «ocupa» es `aportaProduccion` y
+ * «llegó/salió» es `esMovimientoDelDia` (el no-show llegó, pero no ocupa).
+ * El fin de la estancia es el REAL (`finEstanciaReal`, módulo `./checkout`):
+ * una salida anticipada libera las noches no usadas aquí igual que en el
+ * motor de disponibilidad — misma coherencia que ya tiene la analítica.
  */
+
+import { aportaProduccion, esMovimientoDelDia } from './estados';
+import { finEstanciaReal } from './checkout';
 
 export interface CalendarReservation {
   id: string;
@@ -22,6 +32,8 @@ export interface CalendarReservation {
   estado: string;
   checkIn: Date;
   checkOut: Date;
+  /** Salida real registrada (política B del apagador de salida anticipada). */
+  checkOutReal?: Date | null;
   nights: number;
   amountAfterTax: number | null;
   currency: string | null;
@@ -64,6 +76,18 @@ export interface CalendarReservationBlock {
  */
 export function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+/**
+ * La ventana de UN día local completo [00:00, 00:00+1) — la unidad de «día»
+ * del módulo. Una sola definición para todo lo que cuenta por días: el
+ * planning que pinta días, el CSV que exporta fechas, el filtro de
+ * «llegadas/salidas de hoy» de reservas y el tablón de mañana del dashboard.
+ */
+export function ventanaDeDiaLocal(d: Date): { inicio: Date; fin: Date } {
+  const inicio = startOfDay(d);
+  const fin = new Date(inicio.getTime() + 24 * 60 * 60 * 1000);
+  return { inicio, fin };
 }
 
 /**
@@ -255,37 +279,48 @@ export function statusLabel(estado: string): string {
 
 /**
  * Reservas que llegan o salen en una fecha concreta (para la vista Mes y
- * el Operations Board). Excluye canceladas salvo que se pida incluirlas.
+ * el Operations Board).
+ *
+ * Es la pregunta «¿hubo movimiento?» (`esMovimientoDelDia`): una reserva
+ * cancelada no llegó ni salió —nunca existió—, pero un **no-show sí figura
+ * como llegada del día** (fue un huésped esperado; es el mismo criterio con el
+ * que los reportes calculan la tasa de no-show).
  */
 export function arrivalsOn(reservations: CalendarReservation[], dayKey: string): CalendarReservation[] {
   return reservations.filter(
-    (r) => r.estado !== 'cancelled' && toIsoDate(r.checkIn) === dayKey
+    (r) => esMovimientoDelDia(r.estado) && toIsoDate(r.checkIn) === dayKey
   );
 }
 
 export function departuresOn(reservations: CalendarReservation[], dayKey: string): CalendarReservation[] {
   return reservations.filter(
-    (r) => r.estado !== 'cancelled' && toIsoDate(r.checkOut) === dayKey
+    (r) => esMovimientoDelDia(r.estado) && toIsoDate(r.checkOut) === dayKey
   );
 }
 
 /**
- * Mini-bloques por día para la vista Mes: reservas que ocupan cada fecha.
- * Se respeta la regla del plan (check-out no ocupa su día).
+ * Mini-bloques por día para la vista Mes: reservas que OCUPAN cada fecha.
+ *
+ * Es ocupación, no movimiento: la decide la regla de producción
+ * (`aportaProduccion`) más la del plan (check-out no ocupa su día). Un no-show
+ * no pinta la noche como ocupada — el motor de disponibilidad ya la da por
+ * libre y los canales la están vendiendo.
+ *
+ * El fin es el REAL (`finEstanciaReal` = `min(checkOut, checkOutReal)`, módulo
+ * `./checkout`): con salida anticipada —pise A o anote B— la vista Mes deja de
+ * pintar como ocupadas las noches que el motor ya publica como disponibles.
  */
 export function reservationsOnDay(
   reservations: CalendarReservation[],
   dayKey: string
 ): CalendarReservation[] {
   const d = startOfDay(new Date(dayKey + 'T00:00:00'));
-  const next = new Date(d);
-  next.setDate(d.getDate() + 1);
   return reservations
-    .filter((r) => r.estado !== 'cancelled')
+    .filter((r) => aportaProduccion(r.estado))
     .filter((r) => {
       const inDay = startOfDay(r.checkIn);
-      const outDay = startOfDay(r.checkOut);
-      return inDay.getTime() <= d.getTime() && outDay.getTime() > d.getTime();
+      const finReal = startOfDay(finEstanciaReal(r.checkOut, r.checkOutReal));
+      return inDay.getTime() <= d.getTime() && finReal.getTime() > d.getTime();
     });
 }
 

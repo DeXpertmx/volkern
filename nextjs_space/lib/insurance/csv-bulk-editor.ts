@@ -54,7 +54,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // leading/trailing dashes, no consecutive dashes, length 3-40.
 const SUBDOMAIN_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const VALID_MONEDAS = new Set(['USD', 'EUR', 'MXN', 'GBP', 'JPY', 'CNY', 'CAD', 'BRL', 'CLP', 'ARS', 'COP', 'PEN']);
-const VALID_VERTICALS = new Set(['insurance', 'real_estate', 'accounting', 'general']);
+const VALID_VERTICALS = new Set(['insurance', 'real_estate', 'accounting', 'hospitality', 'general']);
 
 /**
  * Valida el valor de una celda según su columna. `null`/`undefined` o

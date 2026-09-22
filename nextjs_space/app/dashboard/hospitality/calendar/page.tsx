@@ -51,6 +51,7 @@ import {
   type CalendarUnit,
   type CalendarDay,
 } from '@/lib/hospitality/calendar';
+import { finEstanciaReal } from '@/lib/hospitality/checkout';
 
 interface Property {
   id: string;
@@ -76,6 +77,7 @@ interface RawReservation {
   estado: string;
   checkIn: string;
   checkOut: string;
+  checkOutReal?: string | null;
   amountAfterTax: number | null;
   currency: string | null;
   specialRequests: string | null;
@@ -197,6 +199,7 @@ export default function HospitalityCalendar() {
         estado: r.estado,
         checkIn: new Date(r.checkIn),
         checkOut: new Date(r.checkOut),
+        checkOutReal: r.checkOutReal ? new Date(r.checkOutReal) : null,
         nights: nightsBetween(new Date(r.checkIn), new Date(r.checkOut)),
         amountAfterTax: r.amountAfterTax,
         currency: r.currency,
@@ -276,8 +279,14 @@ export default function HospitalityCalendar() {
     return reservations.filter((r) => r.estado !== 'cancelled' && toIsoDate(r.checkIn) === todayKey);
   }, [reservations, todayKey]);
 
+  // La salida se anuncia el día del fin REAL de la estancia
+  // (`finEstanciaReal` = min(checkOut, checkOutReal), módulo checkout): con
+  // salida anticipada no se anuncia días después de que el huésped ya se
+  // fue. La llegada no cambia (no hay checkInReal).
   const todayDepartures = useMemo(() => {
-    return reservations.filter((r) => r.estado !== 'cancelled' && toIsoDate(r.checkOut) === todayKey);
+    return reservations.filter(
+      (r) => r.estado !== 'cancelled' && toIsoDate(finEstanciaReal(r.checkOut, r.checkOutReal)) === todayKey
+    );
   }, [reservations, todayKey]);
 
   const gotoWeek = (offset: number) => {
@@ -745,6 +754,21 @@ export default function HospitalityCalendar() {
             <span key={k} className="flex items-center gap-1.5">
               <span className={`w-2.5 h-2.5 rounded-full ${c}`} />
               {statusLabel(k)}
+            </span>
+          ))}
+          <span className="mx-2 border-l h-4" />
+          <span className="font-semibold text-muted-foreground">Bloqueos:</span>
+          {TIPOS_BLOQUEO.map((tipo) => (
+            <span key={tipo} className="flex items-center gap-1.5">
+              {/* Mismo aspecto que en la cuadrícula: fondo translúcido + borde del color del tipo. */}
+              <span
+                className="w-3 h-3 rounded-sm border"
+                style={{
+                  backgroundColor: `${PRESENTACION_BLOQUEO[tipo].color}1f`,
+                  borderColor: PRESENTACION_BLOQUEO[tipo].color,
+                }}
+              />
+              {PRESENTACION_BLOQUEO[tipo].etiqueta}
             </span>
           ))}
         </div>

@@ -15,6 +15,8 @@ import {
   RefreshCw,
   Rocket,
   Send,
+  Sparkles,
+  Undo2,
   XCircle,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,12 +26,24 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { formatDistanceToNow } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 interface PropiedadResumen {
   id: string;
@@ -54,6 +68,9 @@ interface UnidadOnboarding {
   vinculada: boolean;
   roomCode: string | null;
   rateplanCode: string | null;
+  /** El vínculo lo creó el sistema al recibir una reserva. */
+  vinculoAutomatico: boolean;
+  vinculoMotivo: string | null;
 }
 
 type EstadoPaso = 'completado' | 'pendiente' | 'error' | 'bloqueado';
@@ -101,6 +118,123 @@ interface RoomCatalogo {
   minOcc: number | null;
   maxOcc: number | null;
   rateplans: RateplanCatalogo[];
+}
+
+/**
+ * Ocupación de la habitación en una línea. Ayuda a elegir la unidad correcta
+ * cuando el código no lo dice todo: la capacidad de la unidad tiene que caer
+ * dentro de este rango.
+ */
+function etiquetaOcupacion(room: RoomCatalogo): string | null {
+  if (room.minOcc !== null && room.maxOcc !== null) return `${room.minOcc}-${room.maxOcc} huéspedes`;
+  if (room.maxOcc !== null) return `hasta ${room.maxOcc} huéspedes`;
+  if (room.minOcc !== null) return `desde ${room.minOcc} huéspedes`;
+  return null;
+}
+
+/** Incidencia de conectividad: reserva que no se pudo registrar por falta de vínculo. */
+interface IncidenciaConectividad {
+  hotelCode: string;
+  propertyId: string | null;
+  property: string | null;
+  roomCode: string | null;
+  rateplanCode: string | null;
+  tipo: 'roomcode_sin_mapping' | 'propiedad_sin_mapping' | 'multi_habitacion';
+  /** Solo multi_habitación: habitaciones del booking para registrarlas partidas. */
+  habitaciones?: Array<{
+    indice: number;
+    roomCode: string | null;
+    bookingId: string | null;
+    roomGuestName: string | null;
+    ocupacion: { adultos: number; ninos: number } | null;
+    /** Partes derivadas (bookingId#n) ya registradas como reservas. */
+    registradas: string[];
+  }>;
+  intentos: number;
+  primeraFecha: string;
+  ultimaFecha: string;
+  canales: string[];
+  acciones: string[];
+  bookingIds: string[];
+  /** Reservas del grupo que ya están registradas en el sistema. */
+  registradas: number;
+  /** Eventos reenviables al Reservation Engine (vacío si no se puede procesar ninguno). */
+  eventoIds: string[];
+  vinculo: { unitId: string | null; unit: string | null; externalUnitCode: string } | null;
+  /** Huéspedes reales de la reserva según el payload (null si no los publica). */
+  ocupacion: { adultos: number; ninos: number; total: number } | null;
+  errorMensaje: string | null;
+}
+
+/** Reserva viva que sigue ocupando una unidad cuyo vínculo se deshizo. */
+interface ReservaAfectada {
+  id: string;
+  externalBookingId: string | null;
+  channel: string | null;
+  estado: string;
+  checkIn: string | null;
+  checkOut: string | null;
+  huesped: string | null;
+  huéspedes: number;
+}
+
+interface ResumenIncidencias {
+  pendientes: number;
+  vinculadas: number;
+  resueltas: number;
+  eventosAnalizados: number;
+}
+
+/** Una reserva que el canal reportó como no-show (con su cargo emitido). */
+interface NoShowCanal {
+  reservationId: string;
+  bookingId: string | null;
+  referencia: string;
+  canal: string;
+  hotelCode: string;
+  propertyId: string | null;
+  property: string | null;
+  unit: string | null;
+  huesped: string | null;
+  email: string | null;
+  checkIn: string;
+  checkOut: string;
+  reportadoEn: string;
+  intentos: number;
+  estado: string;
+  penalizacion: { importe: number; moneda: string; facturada: boolean } | null;
+}
+
+interface ResumenNoShowsCanal {
+  total: number;
+  conPenalizacion: number;
+}
+
+interface ResultadoReenvio {
+  eventoId: string;
+  bookingId: string | null;
+  channel: string | null;
+  estado: 'registrada' | 'duplicado' | 'sin_vinculo' | 'error';
+  reservationId?: string;
+  error?: string;
+  roomCode?: string | null;
+}
+
+interface RespuestaReenvio {
+  ok: boolean;
+  reenviadas: number;
+  duplicadas: number;
+  sinVinculo: number;
+  fallidas: number;
+  resultados?: ResultadoReenvio[];
+}
+
+interface RespuestaVinculacionAutomatica {
+  ok: boolean;
+  aplicar: boolean;
+  aplicadas: Array<{ roomCode: string; unit: string; motivo: string }>;
+  propuestas: Array<{ roomCode: string | null; motivo: string; detalle?: string }>;
+  resumen: { aplicadas: number; propuestas: number; sinVinculo: number };
 }
 
 const TIPOS_UNIDAD = ['apartamento', 'habitacion', 'casa', 'villa', 'estudio', 'loft', 'bungalow', 'otro'];
@@ -152,6 +286,38 @@ export default function HospitalityOnboardingPage() {
   // Resultado detallado de la última prueba por paso
   const [resultados, setResultados] = useState<Record<string, { ok: boolean; texto: string }>>({});
 
+  // Incidencias de conectividad (reservas rechazadas por falta de vínculo)
+  const [incidencias, setIncidencias] = useState<IncidenciaConectividad[] | null>(null);
+  const [resumenIncidencias, setResumenIncidencias] = useState<ResumenIncidencias | null>(null);
+  const [incidenciasError, setIncidenciasError] = useState<string | null>(null);
+  const [cargandoIncidencias, setCargandoIncidencias] = useState(false);
+  // No-shows reportados por el canal (action no_show del webhook) con su cargo.
+  const [noShowsCanal, setNoShowsCanal] = useState<NoShowCanal[] | null>(null);
+  const [resumenNoShows, setResumenNoShows] = useState<ResumenNoShowsCanal | null>(null);
+  // Qué lista mira el operador en el panel de incidencias.
+  const [vistaIncidencias, setVistaIncidencias] = useState<'vinculos' | 'noshow'>('vinculos');
+  // Clave del grupo que se está reenviando (hotelCode|roomCode|rateplanCode)
+  const [reenviando, setReenviando] = useState<string | null>(null);
+  /** Unidad cuyo vínculo automático se está a punto de deshacer (confirmación). */
+  const [unidadADeshacer, setUnidadADeshacer] = useState<UnidadOnboarding | null>(null);
+  /** Reservas vivas de esa unidad (preview mientras se confirma el deshacer). */
+  const [reservasDeshacer, setReservasDeshacer] = useState<ReservaAfectada[] | null>(null);
+  const [cargandoReservasDeshacer, setCargandoReservasDeshacer] = useState(false);
+  /** Reservas del último vínculo deshecho: el operador decide si las mueve. */
+  const [deshacerReservas, setDeshacerReservas] = useState<{
+    unitId: string;
+    unitName: string;
+    roomCode: string | null;
+    reservas: ReservaAfectada[];
+  } | null>(null);
+  /** Reasignación en curso: id de la reserva que se está moviendo. */
+  const [reasignando, setReasignando] = useState<string | null>(null);
+  const [autoVinculando, setAutoVinculando] = useState(false);
+  // Registro partido de un booking multi-habitación: unidades elegidas por
+  // habitación + estado del envío (la clave del grupo en curso).
+  const [partidaUnidades, setPartidaUnidades] = useState<Record<number, string>>({});
+  const [partidaEnCurso, setPartidaEnCurso] = useState<string | null>(null);
+
   const cargar = useCallback(async (idPropiedad?: string) => {
     try {
       if (idPropiedad) setCargandoSnapshot(true);
@@ -197,6 +363,180 @@ export default function HospitalityOnboardingPage() {
   useEffect(() => {
     if (propertyId) cargar(propertyId);
   }, [propertyId, cargar]);
+
+  // Incidencias del webhook: reservas rechazadas por falta de vínculo de unidad.
+  const cargarIncidencias = useCallback(async (idPropiedad: string) => {
+    if (!idPropiedad) return;
+    setCargandoIncidencias(true);
+    setIncidenciasError(null);
+    try {
+      // Las dos listas del panel viajan en paralelo; cada una falla sola.
+      const [resVinculos, resNoShow] = await Promise.allSettled([
+        fetch(`/api/hospitality/incidencias?propertyId=${encodeURIComponent(idPropiedad)}`),
+        fetch(`/api/hospitality/incidencias?tipo=no_show&propertyId=${encodeURIComponent(idPropiedad)}`),
+      ]);
+
+      if (resVinculos.status === 'fulfilled' && resVinculos.value.ok) {
+        const data = await resVinculos.value.json();
+        setIncidencias(data.incidencias || []);
+        setResumenIncidencias(data.resumen || null);
+      } else {
+        setIncidencias(null);
+        setResumenIncidencias(null);
+      }
+
+      if (resNoShow.status === 'fulfilled' && resNoShow.value.ok) {
+        const data = await resNoShow.value.json();
+        setNoShowsCanal(data.noShows || []);
+        setResumenNoShows(data.resumen || null);
+      } else {
+        setNoShowsCanal(null);
+        setResumenNoShows(null);
+      }
+
+      if (resVinculos.status === 'rejected' || resNoShow.status === 'rejected') {
+        setIncidenciasError('Error al cargar las incidencias');
+      }
+    } catch (e) {
+      setIncidencias(null);
+      setResumenIncidencias(null);
+      setIncidenciasError(e instanceof Error ? e.message : 'Error al cargar las incidencias');
+    } finally {
+      setCargandoIncidencias(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (snapshot?.propiedad.id) cargarIncidencias(snapshot.propiedad.id);
+  }, [snapshot?.propiedad.id, cargarIncidencias]);
+
+  /**
+   * Vincula automáticamente las habitaciones que están rechazando reservas con
+   * unidades libres, pero solo cuando la coincidencia no admite dudas (el
+   * código o el nombre de la unidad, o una única unidad libre). Lo demás vuelve
+   * como propuesta para que decida el operador.
+   */
+  const vincularAutomaticamente = async () => {
+    if (!snapshot) return;
+    setAutoVinculando(true);
+    try {
+      const res = await fetch('/api/hospitality/incidencias/vinculacion-automatica', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ propertyId: snapshot.propiedad.id }),
+      });
+      const data: RespuestaVinculacionAutomatica & { error?: string } = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'No se pudieron proponer los vínculos');
+
+      const aplicadas = data.resumen?.aplicadas ?? 0;
+      const propuestas = data.resumen?.propuestas ?? 0;
+      const detalle = (data.aplicadas || [])
+        .map((a) => `${a.roomCode} → ${a.unit}`)
+        .join(', ');
+
+      if (aplicadas > 0) {
+        toast.success(
+          `${aplicadas} vínculo(s) aplicados${detalle ? `: ${detalle}` : ''}` +
+            (propuestas > 0 ? ` · ${propuestas} para revisar` : '')
+        );
+      } else if (propuestas > 0) {
+        toast.info(`${propuestas} propuesta(s) que necesitan tu decisión`);
+      } else {
+        toast.info('No hay vínculos que aplicar');
+      }
+
+      await cargar(snapshot.propiedad.id);
+      await cargarIncidencias(snapshot.propiedad.id);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al proponer los vínculos');
+    } finally {
+      setAutoVinculando(false);
+    }
+  };
+
+  /**
+   * Reenvía al Reservation Engine los eventos guardados de una incidencia que
+   * ya tiene vínculo, sin esperar a que el canal vuelva a enviar la reserva.
+   * El motor es idempotente por bookingId: un reenvío no duplica nada.
+   */
+  /**
+   * Registro partido: envía las unidades elegidas por habitación del booking
+   * multi-habitación. El endpoint es idempotente por parte (bookingId#n), así
+   * que reintentar una pasada fallida no duplica nada.
+   */
+  const registrarPartida = async (incidencia: IncidenciaConectividad) => {
+    if (!snapshot || incidencia.eventoIds.length === 0 || !incidencia.habitaciones?.length) return;
+    const elegidas = incidencia.habitaciones
+      .filter((h) => h.registradas.length === 0)
+      .map((h) => ({ indice: h.indice, unitId: partidaUnidades[h.indice] }));
+    if (elegidas.some((u) => !u.unitId)) {
+      toast.error('Elige la unidad para cada habitación pendiente antes de registrar.');
+      return;
+    }
+    if (new Set(elegidas.map((u) => u.unitId)).size !== elegidas.length) {
+      toast.error('Cada habitación necesita una unidad distinta.');
+      return;
+    }
+    setPartidaEnCurso(claveIncidencia(incidencia));
+    try {
+      const res = await fetch('/api/hospitality/incidencias/registrar-partida', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventoId: incidencia.eventoIds[0], unidades: elegidas }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        throw new Error(data?.error || 'No se pudo registrar la reserva partida');
+      }
+      const creadas = (data.habitaciones as Array<{ estado: string }>).filter((h) => h.estado === 'creada').length;
+      toast.success(
+        data.eventoCerrado
+          ? `Booking partido registrado: ${creadas} reserva(s) nueva(s).`
+          : `Registradas ${creadas} habitación(es); quedan pendientes: el grupo sigue en el panel.`
+      );
+      setPartidaUnidades({});
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al registrar la reserva partida');
+    } finally {
+      setPartidaEnCurso(null);
+      await cargarIncidencias(snapshot.propiedad.id);
+    }
+  };
+
+  const reenviarIncidencia = async (incidencia: IncidenciaConectividad) => {
+    if (!snapshot || incidencia.eventoIds.length === 0) return;
+    setReenviando(claveIncidencia(incidencia));
+    try {
+      const res = await fetch('/api/hospitality/incidencias/reintentar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventoIds: incidencia.eventoIds }),
+      });
+      const data: RespuestaReenvio & { error?: string } = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'No se pudieron reenviar las reservas');
+
+      const partes: string[] = [];
+      if (data.reenviadas > 0) partes.push(`${data.reenviadas} procesada(s)`);
+      if (data.duplicadas > 0) partes.push(`${data.duplicadas} ya estaba(n) registrada(s)`);
+      if (data.sinVinculo > 0) partes.push(`${data.sinVinculo} sin vínculo`);
+      if (data.fallidas > 0) partes.push(`${data.fallidas} con error`);
+      const detalle = partes.join(' · ') || 'sin cambios';
+
+      if (data.ok) {
+        toast.success(`Reenvío completado: ${detalle}`);
+      } else {
+        const primerError = data.resultados?.find(
+          (r) => r.estado === 'sin_vinculo' || r.estado === 'error'
+        )?.error;
+        toast.error(`Reenvío con pendientes: ${detalle}${primerError ? ` · ${primerError}` : ''}`);
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al reenviar las reservas');
+    } finally {
+      setReenviando(null);
+      await cargarIncidencias(snapshot.propiedad.id);
+    }
+  };
 
   const paso = useMemo(
     () => (clave: string) => snapshot?.pasos.find((p) => p.clave === clave) ?? null,
@@ -319,8 +659,94 @@ export default function HospitalityOnboardingPage() {
       if (!data.ok) throw new Error(data.error || 'No se pudo guardar el mapping');
       toast.success(`${data.vinculadas?.length || lista.length} unidad(es) vinculadas`);
       await cargar(snapshot.propiedad.id);
+      // Los vínculos nuevos pueden resolver incidencias ya registradas.
+      await cargarIncidencias(snapshot.propiedad.id);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Error guardando el mapping');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // ── Paso 6b: deshacer un vínculo (revisión de un vínculo automático) ────
+  /** Preview de las reservas que siguen en la unidad, para la confirmación. */
+  const cargarReservasADeshacer = async (unidad: UnidadOnboarding) => {
+    if (!snapshot) return;
+    setCargandoReservasDeshacer(true);
+    try {
+      const qs = `propertyId=${encodeURIComponent(snapshot.propiedad.id)}&unitId=${encodeURIComponent(unidad.id)}`;
+      const res = await fetch(`/api/hospitality/onboarding/mapping/deshacer?${qs}`);
+      const data = await res.json();
+      setReservasDeshacer(data.ok ? data.reservas : []);
+    } catch {
+      // El preview es best-effort: no bloquea el deshacer.
+      setReservasDeshacer(null);
+    } finally {
+      setCargandoReservasDeshacer(false);
+    }
+  };
+
+  /** Reasigna una reserva a otra unidad (PATCH, valida overbooking). */
+  const reasignarReserva = async (reservaId: string, unitId: string, nombre: string) => {
+    if (!snapshot) return;
+    setReasignando(reservaId);
+    try {
+      const res = await fetch(`/api/hospitality/reservations/${encodeURIComponent(reservaId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ unitId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'No se pudo mover la reserva');
+      toast.success(`Reserva movida a ${nombre}`);
+      setDeshacerReservas((d) =>
+        d ? { ...d, reservas: d.reservas.filter((r) => r.id !== reservaId) } : d
+      );
+      await cargar(snapshot.propiedad.id);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al mover la reserva');
+    } finally {
+      setReasignando(null);
+    }
+  };
+
+  const deshacerVinculo = async (unidad: UnidadOnboarding) => {
+    if (!snapshot) return;
+    setBusy(`deshacer-${unidad.id}`);
+    try {
+      const res = await fetch('/api/hospitality/onboarding/mapping/deshacer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ propertyId: snapshot.propiedad.id, unitId: unidad.id }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'No se pudo deshacer el vínculo');
+
+      toast.success(
+        `Vínculo deshecho: ${unidad.nombre} queda libre y ${data.roomCode ?? 'la habitación'} sin vínculo. ` +
+          'No se volverá a crear solo.'
+      );
+      // El select no debe seguir mostrando el vínculo que acabamos de deshacer.
+      setAsignaciones((a) => {
+        const copia = { ...a };
+        delete copia[unidad.id];
+        return copia;
+      });
+      // Las reservas que siguen en la unidad se muestran con su acción para
+      // reasignarlas: no son un aviso que se pierde en un toast.
+      const reservas: ReservaAfectada[] = data.reservas ?? [];
+      if (reservas.length > 0) {
+        setDeshacerReservas({
+          unitId: unidad.id,
+          unitName: unidad.nombre,
+          roomCode: data.roomCode ?? null,
+          reservas,
+        });
+      }
+      await cargar(snapshot.propiedad.id);
+      await cargarIncidencias(snapshot.propiedad.id);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al deshacer el vínculo');
     } finally {
       setBusy(null);
     }
@@ -702,6 +1128,9 @@ export default function HospitalityOnboardingPage() {
                     <div key={r.roomCode} className="px-3 py-2 text-sm">
                       <div className="font-medium text-slate-800">
                         {r.roomName} <span className="text-slate-400">({r.roomCode})</span>
+                        {etiquetaOcupacion(r) && (
+                          <span className="ml-2 text-xs text-slate-500">{etiquetaOcupacion(r)}</span>
+                        )}
                       </div>
                       <div className="text-slate-500">
                         {r.rateplans.length > 0
@@ -732,6 +1161,38 @@ export default function HospitalityOnboardingPage() {
                           <p className="text-slate-500">
                             {u.codigo || 'sin código'} · {u.capacidad} huésped(es)
                           </p>
+                          {u.vinculoAutomatico && (
+                            <div className="mt-1 flex flex-wrap items-center gap-2">
+                              <Badge
+                                variant="outline"
+                                className="border-amber-200 bg-amber-100 text-amber-800"
+                                title={`Vínculo creado por el sistema al recibir una reserva${
+                                  u.vinculoMotivo ? ` (${u.vinculoMotivo})` : ''
+                                }`}
+                              >
+                                Vínculo automático
+                              </Badge>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+                                onClick={() => {
+                                  setUnidadADeshacer(u);
+                                  setReservasDeshacer(null);
+                                  void cargarReservasADeshacer(u);
+                                }}
+                                disabled={busy !== null}
+                                title="Deshacer: deja la unidad libre y la habitación sin vínculo. No se volverá a crear solo."
+                              >
+                                {busy === `deshacer-${u.id}` ? (
+                                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Undo2 className="mr-1 h-3 w-3" />
+                                )}
+                                Deshacer
+                              </Button>
+                            </div>
+                          )}
                         </div>
                         <Select
                           value={asignaciones[u.id]?.roomCode || ''}
@@ -746,6 +1207,7 @@ export default function HospitalityOnboardingPage() {
                             {catalogo.map((r) => (
                               <SelectItem key={r.roomCode} value={r.roomCode}>
                                 {r.roomName} ({r.roomCode})
+                                {etiquetaOcupacion(r) ? ` · ${etiquetaOcupacion(r)}` : ''}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -780,6 +1242,29 @@ export default function HospitalityOnboardingPage() {
                   </Button>
                 </>
               )}
+
+              <IncidenciasPanel
+                incidencias={incidencias}
+                resumen={resumenIncidencias}
+                error={incidenciasError}
+                cargando={cargandoIncidencias}
+                reenviando={reenviando}
+                autoVinculando={autoVinculando}
+                onRefrescar={() => {
+                  if (snapshot) cargarIncidencias(snapshot.propiedad.id);
+                }}
+                onReenviar={reenviarIncidencia}
+                onAutoVincular={vincularAutomaticamente}
+                onPartir={registrarPartida}
+                partidaUnidades={partidaUnidades}
+                setPartidaUnidades={setPartidaUnidades}
+                partidaEnCurso={partidaEnCurso}
+                noShows={noShowsCanal}
+                noShowsResumen={resumenNoShows}
+                vista={vistaIncidencias}
+                onVista={setVistaIncidencias}
+                unidades={snapshot?.unidades ?? []}
+              />
             </div>
           </PasoCard>
 
@@ -858,6 +1343,156 @@ export default function HospitalityOnboardingPage() {
           <Loader2 className="mr-1 inline h-3 w-3 animate-spin" /> Actualizando estado…
         </p>
       )}
+
+      {/* Confirmación del deshacer: es un cambio de configuración, no un botón inocente. */}
+      <AlertDialog
+        open={unidadADeshacer !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setUnidadADeshacer(null);
+            setReservasDeshacer(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Undo2 className="h-5 w-5 text-destructive" />
+              ¿Deshacer el vínculo de &quot;{unidadADeshacer?.nombre}&quot;?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <p>
+                {unidadADeshacer?.roomCode
+                  ? `El sistema vinculó esta unidad con la habitación "${unidadADeshacer.roomCode}" del proveedor`
+                  : 'El sistema creó este vínculo al recibir una reserva'}
+                {unidadADeshacer?.vinculoMotivo ? ` (${unidadADeshacer.vinculoMotivo})` : ''}. Al
+                deshacerlo:
+              </p>
+              <ul className="list-disc space-y-1 pl-5">
+                <li>
+                  La unidad <strong>{unidadADeshacer?.nombre}</strong> queda libre para asignarla a
+                  otra habitación.
+                </li>
+                <li>
+                  El sistema <strong>no volverá a crearlo solo</strong> para esa habitación, ni
+                  siquiera cuando llegue otra reserva. Si vuelve a hacer falta, tendrás que
+                  asignarla a mano aquí.
+                </li>
+                <li>
+                  Las reservas ya registradas <strong>siguen en esta unidad</strong>: se listan
+                  debajo y podrás reasignarlas al terminar.
+                </li>
+              </ul>
+              {cargandoReservasDeshacer ? (
+                <p className="flex items-center gap-2 text-xs text-slate-500">
+                  <Loader2 className="h-3 w-3 animate-spin" /> Comprobando las reservas de la unidad…
+                </p>
+              ) : reservasDeshacer && reservasDeshacer.length > 0 ? (
+                <div className="rounded-md border border-amber-200 bg-amber-50 p-2">
+                  <p className="text-xs font-medium text-amber-800">
+                    {reservasDeshacer.length} reserva(s) siguen en esta unidad:
+                  </p>
+                  <ul className="mt-1 space-y-0.5 text-xs text-amber-900">
+                    {reservasDeshacer.map((r) => (
+                      <li key={r.id}>
+                        <span className="font-medium">{r.externalBookingId || r.id}</span>
+                        {r.huesped ? ` · ${r.huesped}` : ''}
+                        {r.checkIn ? ` · ${r.checkIn} → ${r.checkOut ?? ''}` : ''}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : reservasDeshacer ? (
+                <p className="text-xs text-emerald-700">
+                  No queda ninguna reserva activa en esta unidad: puedes deshacer el vínculo sin
+                  mover nada.
+                </p>
+              ) : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                const unidad = unidadADeshacer;
+                setUnidadADeshacer(null);
+                if (unidad) void deshacerVinculo(unidad);
+              }}
+            >
+              Deshacer vínculo
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Reservas que siguen en la unidad recién deshecha: el operador decide
+          si las mueve (no se tocan solas: son noches facturadas). */}
+      <AlertDialog
+        open={deshacerReservas !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeshacerReservas(null);
+        }}
+      >
+        <AlertDialogContent className="max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Reservas que siguen en &quot;{deshacerReservas?.unitName}&quot;
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <p>
+                El vínculo quedó deshecho
+                {deshacerReservas?.roomCode ? ` (habitación "${deshacerReservas.roomCode}")` : ''}, pero
+                estas reservas siguen asignadas a la unidad. Muévelas donde correspondan o déjalas
+                como están: no se tocan solas.
+              </p>
+              <div className="divide-y rounded-md border border-slate-200">
+                {deshacerReservas?.reservas.map((r) => (
+                  <div key={r.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+                    <div className="text-sm">
+                      <p className="font-medium text-slate-800">
+                        {r.externalBookingId || r.id}
+                        {r.huesped ? ` · ${r.huesped}` : ''}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {r.channel ? `${r.channel} · ` : ''}
+                        {r.checkIn ? `${r.checkIn} → ${r.checkOut ?? ''}` : r.estado} ·{' '}
+                        {r.huéspedes} huésped(es)
+                      </p>
+                    </div>
+                    <Select
+                      value=""
+                      onValueChange={(v) => {
+                        const destino = snapshot?.unidades.find((u) => u.id === v);
+                        if (destino) {
+                          void reasignarReserva(r.id, destino.id, destino.nombre);
+                        }
+                      }}
+                      disabled={reasignando !== null}
+                    >
+                      <SelectTrigger className="h-8 w-[190px]">
+                        <SelectValue placeholder="Mover a…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {snapshot?.unidades
+                          .filter((u) => u.id !== deshacerReservas.unitId)
+                          .map((u) => (
+                            <SelectItem key={u.id} value={u.id}>
+                              {u.nombre} · {u.capacidad} huésped(es)
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ))}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction>Hecho</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -893,6 +1528,363 @@ function PasoCard({
       </CardHeader>
       <CardContent>{children}</CardContent>
     </Card>
+  );
+}
+
+/** Clave estable de una incidencia: hotelCode|roomCode|rateplanCode. */
+function claveIncidencia(i: IncidenciaConectividad): string {
+  return `${i.hotelCode}|${i.roomCode ?? ''}|${i.rateplanCode ?? ''}`;
+}
+
+/**
+ * Incidencias del webhook para esta propiedad: habitaciones que recibieron
+ * reservas sin tener vínculo con una unidad. Se muestran pegadas al paso 6
+ * porque el arreglo es exactamente asignar esa habitación y guardar.
+ *
+ * Una vez guardado el vínculo, la incidencia se convierte en un reenvío: el
+ * payload guardado se reenvía al Reservation Engine (idempotente por
+ * bookingId) sin esperar a que el canal vuelva a enviar la reserva.
+ */
+function IncidenciasPanel({
+  incidencias,
+  resumen,
+  error,
+  cargando,
+  reenviando,
+  autoVinculando,
+  onRefrescar,
+  onReenviar,
+  onAutoVincular,
+  onPartir,
+  partidaUnidades,
+  setPartidaUnidades,
+  partidaEnCurso,
+  unidades,
+  noShows,
+  noShowsResumen,
+  vista,
+  onVista,
+}: {
+  incidencias: IncidenciaConectividad[] | null;
+  resumen: ResumenIncidencias | null;
+  error: string | null;
+  cargando: boolean;
+  reenviando: string | null;
+  autoVinculando: boolean;
+  onRefrescar: () => void;
+  onReenviar: (incidencia: IncidenciaConectividad) => void;
+  onAutoVincular: () => void;
+  onPartir: (incidencia: IncidenciaConectividad) => void;
+  partidaUnidades: Record<number, string>;
+  setPartidaUnidades: (u: Record<number, string>) => void;
+  partidaEnCurso: string | null;
+  unidades: UnidadOnboarding[];
+  noShows: NoShowCanal[] | null;
+  noShowsResumen: ResumenNoShowsCanal | null;
+  vista: 'vinculos' | 'noshow';
+  onVista: (v: 'vinculos' | 'noshow') => void;
+}) {
+  const pendientes = incidencias?.filter((i) => !i.vinculo && i.eventoIds.length === 0).length ?? 0;
+  const listas = incidencias?.filter((i) => i.eventoIds.length > 0).length ?? 0;
+  return (
+    <div className="space-y-3 border-t pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+            <AlertTriangle className={`h-4 w-4 ${pendientes > 0 ? 'text-amber-600' : 'text-slate-400'}`} />
+            {vista === 'vinculos' ? 'Reservas sin vínculo de unidad' : 'No-shows reportados por el canal'}
+          </span>
+          {pendientes > 0 && (
+            <Badge variant="outline" className="border-amber-200 bg-amber-100 text-amber-800">
+              {pendientes} habitación(es) por vincular
+            </Badge>
+          )}
+          {listas > 0 && (
+            <Badge variant="outline" className="border-emerald-200 bg-emerald-100 text-emerald-800">
+              {listas} lista(s) para reenviar
+            </Badge>
+          )}
+          {/* Filtro del panel: incidencias de vínculo vs no-shows que el canal
+              reportó por el webhook (con el importe emitido de cada uno). */}
+          <span className="ml-1 flex items-center gap-0.5 rounded-md border border-slate-200 p-0.5">
+            <button
+              type="button"
+              onClick={() => onVista('vinculos')}
+              className={`rounded px-2 py-0.5 text-xs ${vista === 'vinculos' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+            >
+              Vínculos
+            </button>
+            <button
+              type="button"
+              onClick={() => onVista('noshow')}
+              className={`rounded px-2 py-0.5 text-xs ${vista === 'noshow' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+            >
+              No-shows{noShowsResumen && noShowsResumen.total > 0 ? ` (${noShowsResumen.total})` : ''}
+            </button>
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {vista === 'vinculos' && pendientes > 0 && (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={onAutoVincular}
+              disabled={autoVinculando || cargando}
+            >
+              {autoVinculando ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="mr-2 h-4 w-4" />
+              )}
+              Vincular automáticamente
+            </Button>
+          )}
+          <Button variant="outline" size="sm" onClick={onRefrescar} disabled={cargando}>
+            {cargando ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-2 h-4 w-4" />
+            )}
+            Revisar
+          </Button>
+        </div>
+      </div>
+
+      <p className="text-xs text-slate-500">
+        Reservas que el proveedor envió y el sistema no registró porque la habitación (roomCode) del payload no
+        estaba vinculada a ninguna unidad. Asigna esa habitación en la tabla de arriba y guarda los vínculos; las
+        que ya tengan vínculo se pueden reenviar al motor de reservas sin esperar al canal (nunca se duplican).
+        La vinculación automática solo resuelve los casos inequívocos (el código o el nombre de la unidad coinciden,
+        la ocupación de la habitación o los huéspedes de la reserva dejan una sola candidata, o queda una única
+        unidad libre) y ya actúa al recibir la reserva; lo demás sigue necesitando tu decisión. Los bookings
+        <strong>multi-habitación</strong> no se arreglan vinculando: hay que registrarlos por separado. Cada
+        vínculo creado así guarda su motivo y queda registrado en el historial de sincronización, y <strong>guardar
+        los vínculos los confirma como revisados</strong>: dejan de aparecer marcados y dejan de recordarse por
+        notificación.
+      </p>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {vista === 'vinculos' && !error && incidencias && incidencias.length === 0 && (
+        <p className="flex items-center gap-2 text-sm text-emerald-700">
+          <CheckCircle2 className="h-4 w-4" />
+          Sin incidencias pendientes.
+          {resumen && resumen.resueltas > 0
+            ? ` ${resumen.resueltas} habitación(es) ya tienen sus reservas registradas.`
+            : ''}
+        </p>
+      )}
+
+      {vista === 'vinculos' && !error && incidencias && incidencias.length > 0 && (
+        <div className="divide-y rounded-md border">
+          {incidencias.map((i) => {
+            const clave = claveIncidencia(i);
+            const enCurso = reenviando === clave;
+            return (
+              <div key={clave} className="space-y-2 px-3 py-2">
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <span className="font-medium text-slate-800">{i.roomCode || 'sin roomCode'}</span>
+                  {i.rateplanCode && <span className="text-slate-400">· {i.rateplanCode}</span>}
+                  {i.tipo === 'multi_habitacion' ? (
+                    <Badge variant="destructive">Booking multi-habitación</Badge>
+                  ) : i.vinculo ? (
+                    <Badge variant="outline" className="border-emerald-200 bg-emerald-100 text-emerald-800">
+                      Vínculo listo{i.vinculo.unit ? ` · ${i.vinculo.unit}` : ''}
+                    </Badge>
+                  ) : (
+                    <Badge variant={i.tipo === 'propiedad_sin_mapping' ? 'destructive' : 'outline'}>
+                      {i.tipo === 'propiedad_sin_mapping' ? 'Propiedad sin vincular' : 'Habitación sin vincular'}
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
+                  <span>
+                    {i.property || i.hotelCode}
+                    {i.property ? ` · ${i.hotelCode}` : ''}
+                  </span>
+                  <span>
+                    último intento{' '}
+                    {formatDistanceToNow(new Date(i.ultimaFecha), { addSuffix: true, locale: es })}
+                  </span>
+                  {i.ocupacion && (
+                    <span>
+                      {i.ocupacion.total} huésped(es)
+                      {i.ocupacion.ninos > 0
+                        ? ` (${i.ocupacion.adultos} adulto(s) + ${i.ocupacion.ninos} niño(s))`
+                        : ''}
+                    </span>
+                  )}
+                  {i.intentos > 1 && <span>{i.intentos} intentos</span>}
+                  {i.canales.length > 0 && <span>{i.canales.join(', ')}</span>}
+                  {i.bookingIds.length > 0 && <span>reservas: {i.bookingIds.join(', ')}</span>}
+                  {i.registradas > 0 && (
+                    <span className="text-emerald-700">
+                      {i.registradas} de {i.registradas + i.eventoIds.length} ya registrada(s)
+                    </span>
+                  )}
+                </div>
+                {i.eventoIds.length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => onReenviar(i)}
+                    disabled={reenviando !== null}
+                  >
+                    {enCurso ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="mr-2 h-4 w-4" />
+                    )}
+                    Reenviar {i.eventoIds.length} reserva(s)
+                  </Button>
+                )}
+                {!i.vinculo && i.tipo === 'propiedad_sin_mapping' && (
+                  <p className="text-xs text-amber-700">
+                    El código de propiedad {i.hotelCode} no tiene ningún vínculo guardado: revísalo en el paso 5.
+                  </p>
+                )}
+                {i.tipo === 'multi_habitacion' && (
+                  <p className="text-xs text-amber-700">
+                    El booking trae varias habitaciones y este sistema registra una reserva por
+                    booking: asígnale una unidad a cada habitación y regístralo partido. Reenviar
+                    reproduciría el mismo rechazo y vincular unidades no resuelve este caso.
+                  </p>
+                )}
+                {i.tipo === 'multi_habitacion' && (i.habitaciones?.length ?? 0) > 0 && (
+                  <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-2">
+                    {i.habitaciones!.map((h) => {
+                      const registrada = h.registradas.length > 0;
+                      return (
+                        <div key={h.indice} className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="text-sm">
+                            <p className="font-medium text-slate-800">
+                              Habitación {h.indice + 1}
+                              {h.roomCode ? ` · ${h.roomCode}` : ''}
+                              {h.roomGuestName ? ` · ${h.roomGuestName}` : ''}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              {h.ocupacion
+                                ? `${h.ocupacion.adultos + h.ocupacion.ninos} huésped(es)${h.ocupacion.ninos > 0 ? ` (${h.ocupacion.adultos} adulto(s) + ${h.ocupacion.ninos} niño(s))` : ''}`
+                                : 'ocupación no publicada'}
+                              {registrada ? ` · ya registrada (${h.registradas.join(', ')})` : ''}
+                            </p>
+                          </div>
+                          {registrada ? (
+                            <Badge
+                              variant="outline"
+                              className="border-emerald-200 bg-emerald-100 text-emerald-800"
+                            >
+                              Registrada
+                            </Badge>
+                          ) : (
+                            <Select
+                              value={partidaUnidades[h.indice] ?? ''}
+                              onValueChange={(v) => setPartidaUnidades({ ...partidaUnidades, [h.indice]: v })}
+                              disabled={partidaEnCurso !== null}
+                            >
+                              <SelectTrigger className="h-8 w-[190px]">
+                                <SelectValue placeholder="Unidad para esta habitación…" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {unidades.map((u) => (
+                                  <SelectItem key={u.id} value={u.id}>
+                                    {u.nombre} · {u.capacidad} huésped(es)
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {i.habitaciones!.some((h) => h.registradas.length === 0) && (
+                      <Button
+                        size="sm"
+                        onClick={() => onPartir(i)}
+                        disabled={partidaEnCurso !== null}
+                      >
+                        {partidaEnCurso === clave ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Plus className="mr-2 h-4 w-4" />
+                        )}
+                        Registrar {i.habitaciones!.filter((h) => h.registradas.length === 0).length} reserva(s)
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {vista === 'vinculos' && resumen && resumen.eventosAnalizados > 0 && (
+        <p className="text-xs text-slate-400">
+          Últimos {resumen.eventosAnalizados} evento(s) sin mapping revisados
+          {resumen.resueltas > 0 ? ` · ${resumen.resueltas} ya con su reserva registrada` : ''}.
+        </p>
+      )}
+
+      {vista === 'noshow' && (
+        <div className="space-y-2">
+          {!error && noShows && noShows.length === 0 && (
+            <p className="flex items-center gap-2 text-sm text-emerald-700">
+              <CheckCircle2 className="h-4 w-4" />
+              El canal no ha reportado ningún no-show.
+            </p>
+          )}
+          {!error && noShows && noShows.length > 0 && (
+            <div className="divide-y rounded-md border">
+              {noShows.map((n) => (
+                <div key={n.reservationId} className="space-y-1 px-3 py-2">
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <span className="font-medium text-slate-800">{n.referencia}</span>
+                    {n.unit && <span className="text-slate-500">· {n.unit}</span>}
+                    {n.penalizacion ? (
+                      <Badge variant="outline" className="border-amber-200 bg-amber-100 text-amber-800">
+                        Penalización {n.penalizacion.importe.toLocaleString('es-MX')} {n.penalizacion.moneda}
+                        {n.penalizacion.facturada ? ' · facturada' : ' · sin facturar'}
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline">Sin cargo (canal externo o política «ninguna»)</Badge>
+                    )}
+                    {n.estado !== 'no_show' && <Badge variant="outline">estado: {n.estado}</Badge>}
+                  </div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
+                    <span>{n.property || n.hotelCode}</span>
+                    {n.canal && <span>{n.canal}</span>}
+                    {n.huesped && (
+                      <span>
+                        {n.huesped}
+                        {n.email ? ` · ${n.email}` : ''}
+                      </span>
+                    )}
+                    <span>
+                      estancia {n.checkIn.slice(0, 10)} → {n.checkOut.slice(0, 10)}
+                    </span>
+                    <span>
+                      reportado {formatDistanceToNow(new Date(n.reportadoEn), { addSuffix: true, locale: es })}
+                    </span>
+                    {n.intentos > 1 && <span>{n.intentos} evento(s)</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {noShowsResumen && noShowsResumen.total > 0 && (
+            <p className="text-xs text-slate-400">
+              {noShowsResumen.total} no-show(s) reportado(s) por el canal ·{' '}
+              {noShowsResumen.conPenalizacion} con cargo emitido.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

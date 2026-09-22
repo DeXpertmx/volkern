@@ -1,648 +1,702 @@
+'use client';
 
-'use client'
+/**
+ * Booking Engine público (FASE 3.D) — página de reserva de una propiedad.
+ *
+ * Flujo del plan: fechas → disponibilidad (Availability Engine, con precio por
+ * unidad) → datos del huésped → confirmación. Si el hotel tiene Stripe
+ * Connect activo, el último paso redirige al pago; si no, queda confirmada.
+ *
+ * Es pública: no usa sesión. La propiedad se identifica por su id (slug) y
+ * solo responde si está "conectada" (publicada vía Puesta en marcha).
+ *
+ * Idioma (ES/EN): los textos viven en `lib/hospitality/booking-i18n.ts`. El
+ * idioma se resuelve en el cliente con el patrón «locale por query»: servidor y
+ * primer render del cliente pintan SIEMPRE español (hydratación idéntica, sin
+ * mismatch) y un efecto isomórfico (useLayoutEffect en cliente, useEffect en
+ * servidor) cambia al idioma de `?lang=` ANTES del primer paint — sin destello
+ * visible para el huésped internacional. La moneda se formatea con el locale
+ * del idioma elegido.
+ */
 
-import { useState, useEffect } from 'react'
-import { useParams, useRouter } from 'next/navigation'
-import Image from 'next/image'
-import { Calendar, Clock, User, Mail, Phone, CheckCircle, ChevronRight, ChevronLeft, Briefcase, StickyNote, Sparkles, ArrowRight, CalendarDays } from 'lucide-react'
-import { format, addDays, setHours, setMinutes, startOfDay } from 'date-fns'
-import { es } from 'date-fns/locale'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { useToast } from '@/hooks/use-toast'
+import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
+import { toast } from 'sonner';
+import {
+  CalendarDays,
+  CheckCircle2,
+  Languages,
+  Loader2,
+  Mail,
+  Moon,
+  Phone,
+  Sparkles,
+  Star,
+  User,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import {
+  CHECKIN_TEXTOS,
+  TEXTOS,
+  interpolar,
+  idiomaDesdeUrl,
+  localeDeIdioma,
+  IDIOMAS,
+  IDIOMA_POR_DEFECTO,
+  type Idioma,
+} from '@/lib/hospitality/booking-i18n';
+import { textosResena } from '@/lib/hospitality/resenas-i18n';
+import type { ResenaPublica } from '@/lib/hospitality/resenas';
+import type { ExtraPublico } from '@/lib/hospitality/booking-extras';
 
-interface UserProfile {
-    id: string
-    name: string
-    image: string | null
-    title: string | null
-    bio: string | null
-    tenantId: string
-    tenantName: string
+/** Selección de extras del huésped: ids y cantidades — nunca precios. */
+interface SeleccionExtraUI {
+  extraId: string;
+  cantidad: number;
 }
 
-interface Servicio {
-    id: string
-    nombre: string
-    descripcion: string | null
-    duracionMinutos: number
-    precio: number
-    moneda: string
-    modalidad?: string
+/** Resumen público de reseñas tal como lo devuelve la API del motor. */
+interface ResumenResenas {
+  media: number | null;
+  total: number;
+  reseñas: ResenaPublica[];
 }
 
-const tipoOptions = [
-    { value: 'reunion', label: 'Reunion', color: 'bg-blue-500' },
-    { value: 'llamada', label: 'Llamada', color: 'bg-green-500' },
-    { value: 'demo', label: 'Demo', color: 'bg-purple-500' },
-    { value: 'servicio', label: 'Servicio', color: 'bg-orange-500' },
-    { value: 'otro', label: 'Otro', color: 'bg-gray-500' },
-]
+interface UnidadCatalogo {
+  id: string;
+  nombre: string;
+  tipo: string;
+  capacidad: number;
+  descripcion: string | null;
+  fotos: string[];
+  amenidades: string[];
+  tarifaNoche: number | null;
+  moneda: string;
+}
 
-export default function UserBookingPage() {
-    const params = useParams()
-    const slug = params.slug as string
-    const { toast } = useToast()
+interface UnidadCotizada extends UnidadCatalogo {
+  disponible: boolean;
+  motivo?: string;
+  noches: number;
+  precioTotal: number | null;
+}
 
-    const [step, setStep] = useState(1)
-    const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
-    const [servicios, setServicios] = useState<Servicio[]>([])
-    const [selectedServicio, setSelectedServicio] = useState<Servicio | null>(null)
-    const [selectedTipo, setSelectedTipo] = useState('')
-    const [selectedDate, setSelectedDate] = useState('')
-    const [selectedTime, setSelectedTime] = useState('')
-    const [availableSlots, setAvailableSlots] = useState<string[]>([])
-    const [isLoading, setIsLoading] = useState(true)
-    const [isSubmitting, setIsSubmitting] = useState(false)
-    const [isLoadingSlots, setIsLoadingSlots] = useState(false)
+/**
+ * Datos del documento del titular (opcionales en la reserva).
+ *
+ * Se piden aquí porque es el momento en que el huésped está delante: si los
+ * deja, el parte de viajeros nace casi completo y el hotel no tiene que
+ * perseguir a nadie. Si no los deja, el enlace de check-in que recibe en la
+ * confirmación le pide lo mismo (y lo de sus acompañantes).
+ */
+interface DocumentoTitular {
+  nombre: string;
+  apellido1: string;
+  apellido2: string;
+  tipoDocumento: string;
+  numeroDocumento: string;
+  soporteDocumento: string;
+  fechaNacimiento: string;
+  nacionalidad: string;
+  sexo: string;
+  direccion: {
+    direccion: string;
+    codigoPostal: string;
+    pais: string;
+    codigoMunicipio: string;
+  };
+}
 
-    const [rescheduling, setRescheduling] = useState<{ citaId: string; token: string } | null>(null)
+function documentoVacio(): DocumentoTitular {
+  return {
+    nombre: '',
+    apellido1: '',
+    apellido2: '',
+    tipoDocumento: '',
+    numeroDocumento: '',
+    soporteDocumento: '',
+    fechaNacimiento: '',
+    nacionalidad: '',
+    sexo: '',
+    direccion: { direccion: '', codigoPostal: '', pais: '', codigoMunicipio: '' },
+  };
+}
 
-    useEffect(() => {
-        const searchParams = new URLSearchParams(window.location.search)
-        const rescheduleId = searchParams.get('reschedule')
-        const rescheduleToken = searchParams.get('token')
+function hoyMas(dias: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + dias);
+  return d.toISOString().slice(0, 10);
+}
 
-        if (rescheduleId && rescheduleToken) {
-            setRescheduling({ citaId: rescheduleId, token: rescheduleToken })
+export default function BookingPublico() {
+  return <BookingCliente />;
+}
+
+function BookingCliente() {
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const { slug } = useSlug();
+  // Servidor y primer render del cliente: SIEMPRE español (hydratación sin
+  // mismatch). El efecto isomórfico aplica `?lang=` antes del primer paint.
+  const [idioma, setIdioma] = useState<Idioma>(IDIOMA_POR_DEFECTO);
+  const [montado, setMontado] = useState(false);
+  const useEfectoIsomorfico = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
+  useEfectoIsomorfico(() => {
+    setIdioma(idiomaDesdeUrl(window.location.search));
+    setMontado(true);
+  }, []);
+  const t = TEXTOS[idioma];
+  // Etiquetas de los campos del registro de viajeros: las mismas que usa el
+  // check-in online (una sola lista de textos en los dos idiomas).
+  const cd = CHECKIN_TEXTOS[idioma].campos;
+  const moneda = useCallback(
+    (valor: number, currency: string) =>
+      new Intl.NumberFormat(localeDeIdioma(idioma), { style: 'currency', currency }).format(valor),
+    [idioma],
+  );
+
+  const [cargando, setCargando] = useState(true);
+  const [noDisponible, setNoDisponible] = useState(false);
+  const [propiedad, setPropiedad] = useState<{ nombre: string; descripcion: string | null; ciudad: string | null; moneda: string } | null>(null);
+  const [unidades, setUnidades] = useState<UnidadCatalogo[]>([]);
+  const [resenas, setResenas] = useState<ResumenResenas | null>(null);
+  const [extrasDisponibles, setExtrasDisponibles] = useState<ExtraPublico[]>([]);
+  const [seleccionExtras, setSeleccionExtras] = useState<SeleccionExtraUI[]>([]);
+  const [checkIn, setCheckIn] = useState(hoyMas(7));
+  const [checkOut, setCheckOut] = useState(hoyMas(9));
+  const [cotizando, setCotizando] = useState(false);
+  const [cotizadas, setCotizadas] = useState<UnidadCotizada[] | null>(null);
+  const [noches, setNoches] = useState(0);
+  const [elegida, setElegida] = useState<UnidadCotizada | null>(null);
+  const [nombre, setNombre] = useState('');
+  const [email, setEmail] = useState('');
+  const [telefono, setTelefono] = useState('');
+  const [notas, setNotas] = useState('');
+  const [documento, setDocumento] = useState<DocumentoTitular>(documentoVacio());
+  const [mostrarDocumento, setMostrarDocumento] = useState(false);
+  const [creando, setCreando] = useState(false);
+  const [confirmada, setConfirmada] = useState<{
+    referencia: string;
+    total: number;
+    moneda: string;
+    paymentUrl: string | null;
+    checkinUrl: string | null;
+  } | null>(null);
+
+  // Carga del catálogo público.
+  useEffect(() => {
+    if (!slug) return;
+    (async () => {
+      try {
+        const res = await fetch(`/api/public/booking/${slug}`);
+        if (res.status === 404) {
+          setNoDisponible(true);
+          return;
         }
-    }, [])
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || t.errorCargarPropiedad);
+        setPropiedad(data.propiedad);
+        setUnidades(data.unidades || []);
+        setResenas(data.resenas || null);
+        setExtrasDisponibles(data.extras || []);
+      } catch {
+        toast.error(t.errorCargarPropiedad);
+      } finally {
+        setCargando(false);
+      }
+    })();
+  }, [slug, t]);
 
-    const [contactData, setContactData] = useState({
-        nombre: '',
-        email: '',
-        telefono: '',
-        empresa: '',
-        notas: ''
-    })
-
-    useEffect(() => {
-        const fetchProfile = async () => {
-            try {
-                const response = await fetch(`/api/public/users/${slug}`)
-                if (!response.ok) throw new Error('Usuario no encontrado')
-                const data = await response.json()
-                setUserProfile(data.user)
-                setServicios(data.servicios)
-            } catch (error) {
-                console.error('Error fetching profile:', error)
-                toast({
-                    title: 'Error',
-                    description: 'No se pudo cargar el perfil de agendamiento.',
-                    variant: 'destructive',
-                })
-            } finally {
-                setIsLoading(false)
-            }
-        }
-        fetchProfile()
-    }, [slug, toast])
-
-    const fetchAvailability = async (date: string) => {
-        if (!userProfile || !selectedServicio) return
-        setIsLoadingSlots(true)
-        try {
-            const response = await fetch(
-                `/api/public/citas/disponibilidad?tenantId=${userProfile.tenantId}&fecha=${date}&duracion=${selectedServicio.duracionMinutos}&usuarioId=${userProfile.id}`
-            )
-            if (!response.ok) throw new Error('Error al cargar disponibilidad')
-            const data = await response.json()
-            setAvailableSlots(data.disponibles || [])
-        } catch (error) {
-            console.error('Error fetching availability:', error)
-        } finally {
-            setIsLoadingSlots(false)
-        }
+  const cotizar = useCallback(async () => {
+    if (!slug) return;
+    if (new Date(checkOut) <= new Date(checkIn)) {
+      toast.error(t.errorSalidaAntesLlegada);
+      return;
     }
-
-    const handleDateSelect = (date: string) => {
-        setSelectedDate(date)
-        setSelectedTime('')
-        fetchAvailability(date)
+    setCotizando(true);
+    setElegida(null);
+    try {
+      const res = await fetch(`/api/public/booking/${slug}?checkIn=${checkIn}&checkOut=${checkOut}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || t.errorDisponibilidad);
+      setNoches(data.cotizacion.noches);
+      // El catálogo identifica la unidad con `id` y la cotización con `unitId`
+      // (el mismo campo que acepta el POST). Se normaliza en este único punto,
+      // donde entra la cotización: el resto de la página trabaja con `id`, como
+      // el catálogo. Sin esto la unidad se selecciona por un id indefinido y la
+      // reserva se envía sin unidad (incidencia detectada en el ensayo E2E).
+      setCotizadas(
+        ((data.cotizacion.unidades || []) as Array<UnidadCotizada & { unitId: string }>).map((u) => ({
+          ...u,
+          id: u.unitId,
+        }))
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t.errorDisponibilidad);
+    } finally {
+      setCotizando(false);
     }
+  }, [slug, checkIn, checkOut, t]);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault()
-        if (!userProfile || !selectedServicio || !selectedDate || !selectedTime) return
-
-        setIsSubmitting(true)
-        try {
-            const [hours, minutes] = selectedTime.split(':').map(Number)
-            const fechaHora = setMinutes(setHours(new Date(selectedDate), hours), minutes)
-
-            const response = await fetch('/api/public/citas', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    tenantId: userProfile.tenantId,
-                    usuarioAsignadoId: userProfile.id,
-                    servicioId: selectedServicio.id,
-                    catalogoItemId: selectedServicio.id,
-                    tipo: selectedServicio.modalidad === 'virtual' ? 'llamada' : 
-                          selectedServicio.modalidad === 'presencial' ? 'reunion' : 'servicio',
-                    fechaHora: fechaHora.toISOString(),
-                    leadData: {
-                        nombre: contactData.nombre,
-                        email: contactData.email,
-                        telefono: contactData.telefono,
-                        empresa: contactData.empresa,
-                    },
-                    notas: contactData.notas
-                }),
-            })
-
-            const result = await response.json()
-            if (!result.success) throw new Error(result.error || 'Error al agendar')
-
-            // Si estamos reagendando, marcar la cita anterior como cancelada
-            if (rescheduling) {
-                try {
-                    await fetch('/api/citas/accion', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ token: rescheduling.token }),
-                    })
-                } catch (e) {
-                    console.error('Error cancelling old appointment:', e)
-                }
-            }
-
-            setStep(4) // Success step
-        } catch (error: any) {
-            toast({
-                title: 'Error',
-                description: error.message,
-                variant: 'destructive',
-            })
-        } finally {
-            setIsSubmitting(false)
-        }
+  const reservar = async () => {
+    if (!slug || !elegida) return;
+    if (!nombre.trim() || !email.trim()) {
+      toast.error(t.errorDatosHuuesped);
+      return;
     }
-
-    if (isLoading) {
-        return (
-            <div className="min-h-screen bg-[#050510] flex items-center justify-center">
-                <div className="animate-pulse flex flex-col items-center">
-                    <div className="h-12 w-12 bg-purple-500/20 rounded-full mb-4" />
-                    <div className="h-4 w-32 bg-gray-800 rounded" />
-                </div>
-            </div>
-        )
+    setCreando(true);
+    try {
+      // Idempotencia: si el navegador reintenta, no se duplica la reserva.
+      const key = (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`).slice(0, 40);
+      const res = await fetch(`/api/public/booking/${slug}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          unitId: elegida.id,
+          checkIn,
+          checkOut,
+          huespedNombre: nombre,
+          huespedEmail: email,
+          huespedTelefono: telefono,
+          notas,
+          idempotencyKey: key,
+          lang: idioma,
+          // Extras elegidos (ids y cantidades; el precio lo pone el servidor).
+          extras: seleccionExtras.filter((s) => s.cantidad > 0),
+          // Opcional: solo viaja si el huésped lo rellenó, y el servidor decide
+          // si hay documentación suficiente para guardarla.
+          documento,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || t.errorReserva);
+      setConfirmada({
+        referencia: data.referencia,
+        total: data.total,
+        moneda: data.moneda,
+        paymentUrl: data.paymentUrl || null,
+        checkinUrl: data.checkinUrl || null,
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t.errorReserva);
+    } finally {
+      setCreando(false);
     }
+  };
 
-    if (!userProfile) {
-        return (
-            <div className="min-h-screen bg-[#050510] flex items-center justify-center p-4">
-                <Card className="bg-gray-900/50 border-gray-800 text-center p-8 max-w-md">
-                    <h2 className="text-xl font-bold text-white mb-2">Perfil no encontrado</h2>
-                    <p className="text-gray-400">Este enlace de agendamiento no es válido o ha sido desactivado.</p>
-                </Card>
-            </div>
-        )
-    }
-
-    const generateAvailableDates = () => {
-        const dates = []
-        const today = startOfDay(new Date())
-        for (let i = 1; i <= 30; i++) {
-            const date = addDays(today, i)
-            if (date.getDay() !== 0 && date.getDay() !== 6) {
-                dates.push(format(date, 'yyyy-MM-dd'))
-            }
-        }
-        return dates
-    }
-
+  if (noDisponible) {
     return (
-        <div className="min-h-screen bg-[#0a0a1a] text-white font-sans selection:bg-purple-500/30">
-            {/* Background Orbs */}
-            <div className="fixed inset-0 overflow-hidden pointer-events-none">
-                <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-purple-600/10 blur-[120px] rounded-full" />
-                <div className="absolute bottom-[10%] right-[-5%] w-[30%] h-[30%] bg-blue-600/10 blur-[100px] rounded-full" />
-            </div>
+      <main className="min-h-screen flex items-center justify-center p-6 bg-muted/40">
+        <Card className="max-w-sm w-full">
+          <CardContent className="p-8 text-center text-sm text-muted-foreground">
+            {t.noDisponible}
+          </CardContent>
+        </Card>
+      </main>
+    );
+  }
 
-            <div className="relative max-w-4xl mx-auto px-4 py-12 md:py-20">
-                {/* Rescheduling Banner */}
-                {rescheduling && (
-                    <motion.div
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="mb-6 bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4 text-center"
-                    >
-                        <div className="flex items-center justify-center gap-2 text-yellow-400 mb-1">
-                            <CalendarDays className="h-4 w-4" />
-                            <span className="text-sm font-medium">Reagendando cita</span>
-                        </div>
-                        <p className="text-xs text-yellow-400/70">
-                            Selecciona una nueva fecha y hora. Tu cita actual se cancelará automáticamente.
-                        </p>
-                    </motion.div>
-                )}
+  if (confirmada) {
+    return (
+      <main className="min-h-screen flex items-center justify-center p-6 bg-muted/40">
+        <Card className="max-w-md w-full">
+          <CardContent className="p-8 text-center space-y-3">
+            <CheckCircle2 className="h-12 w-12 text-emerald-500 mx-auto" />
+            <h1 className="text-xl font-bold">{t.reservaConfirmada}</h1>
+            <p className="text-sm text-muted-foreground">
+              {t.referencia} <span className="font-mono font-semibold">{confirmada.referencia}</span> ·{' '}
+              {confirmada.total > 0 && (
+                <>
+                  {t.total} {moneda(confirmada.total, confirmada.moneda)}
+                </>
+              )}
+            </p>
+            {confirmada.paymentUrl ? (
+              <Button className="w-full" onClick={() => (window.location.href = confirmada.paymentUrl!)}>
+                {t.irAlPago}
+              </Button>
+            ) : (
+              <p className="text-xs text-muted-foreground">{t.teContactaremos}</p>
+            )}
 
-                {/* Header - User Profile */}
-                <header className="mb-12 text-center">
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="inline-block"
-                    >
-                        <div className="relative mb-6 mx-auto w-24 h-24">
-                            {userProfile.image ? (
-                                <Image
-                                    src={userProfile.image}
-                                    alt={userProfile.name}
-                                    fill
-                                    className="rounded-2xl object-cover border-2 border-purple-500/30 p-1"
-                                />
-                            ) : (
-                                <div className="w-full h-full rounded-2xl bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-3xl font-bold">
-                                    {userProfile.name.charAt(0)}
-                                </div>
-                            )}
-                            <div className="absolute -bottom-2 -right-2 bg-green-500 w-5 h-5 rounded-full border-4 border-[#0a0a1a]" />
-                        </div>
-                        <h1 className="text-3xl md:text-4xl font-bold tracking-tight mb-2">
-                            {userProfile.name}
-                        </h1>
-                        {userProfile.title && (
-                            <p className="text-purple-400 font-medium mb-3 uppercase tracking-widest text-xs">
-                                {userProfile.title}
-                            </p>
-                        )}
-                        {userProfile.bio && (
-                            <p className="text-gray-400 max-w-md mx-auto text-sm leading-relaxed">
-                                {userProfile.bio}
-                            </p>
-                        )}
-                    </motion.div>
-                </header>
+            {confirmada.checkinUrl && (
+              <div className="rounded-md border p-3 text-left space-y-1">
+                <p className="text-sm font-medium">{t.enlaceCheckinTitulo}</p>
+                <p className="text-xs text-muted-foreground">{t.enlaceCheckinAyuda}</p>
+                <a
+                  className="break-all text-xs font-medium text-primary hover:underline"
+                  href={confirmada.checkinUrl}
+                >
+                  {confirmada.checkinUrl}
+                </a>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </main>
+    );
+  }
 
-                {/* Stepper Navigation */}
-                {step < 4 && (
-                    <div className="flex justify-center mb-12">
-                        {[1, 2, 3].map((s) => (
-                            <div key={s} className="flex items-center">
-                                <div className={`
-                  w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300
-                  ${step === s ? 'bg-purple-600 shadow-[0_0_20px_rgba(147,51,234,0.5)]' : step > s ? 'bg-green-500' : 'bg-gray-800'}
-                `}>
-                                    {step > s ? <CheckCircle className="w-5 h-5 text-white" /> : <span className="font-bold">{s}</span>}
-                                </div>
-                                {s < 3 && <div className={`w-8 h-[2px] mx-2 ${step > s ? 'bg-green-500' : 'bg-gray-800'}`} />}
-                            </div>
-                        ))}
+  return (
+    <main className="min-h-screen p-4 sm:p-6 bg-muted/40">
+      <div className="max-w-3xl mx-auto space-y-4">
+        <header className="pt-4 flex items-start justify-between gap-2">
+          <div>
+            <Badge variant="outline" className="mb-2 gap-1">
+              <Sparkles className="h-3 w-3" /> {t.reservaDirecta}
+            </Badge>
+            <h1 className="text-2xl font-bold">{propiedad?.nombre || '…'}</h1>
+            {propiedad?.descripcion && <p className="text-sm text-muted-foreground mt-1">{propiedad.descripcion}</p>}
+            {propiedad?.ciudad && <p className="text-xs text-muted-foreground">{propiedad.ciudad}</p>}
+          </div>
+          {montado && <ConmutadorIdioma actual={idioma} />}
+        </header>
+
+        {/* Reseñas publicadas (moderadas por el hotel): la prueba social del
+            motor — media, total y las recientes, con la respuesta del hotel. */}
+        {resenas && resenas.total > 0 && <SeccionResenas resumen={resenas} idioma={idioma} />}
+
+        {/* Paso 1: fechas */}
+        <Card>
+          <CardContent className="p-4 flex flex-wrap items-end gap-3">
+            <label className="text-sm">
+              <span className="font-medium flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" /> {t.llegada}</span>
+              <Input type="date" value={checkIn} min={hoyMas(0)} onChange={(e) => setCheckIn(e.target.value)} className="mt-1" />
+            </label>
+            <label className="text-sm">
+              <span className="font-medium flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" /> {t.salida}</span>
+              <Input type="date" value={checkOut} min={checkIn} onChange={(e) => setCheckOut(e.target.value)} className="mt-1" />
+            </label>
+            <Button onClick={cotizar} disabled={cotizando || cargando}>
+              {cotizando ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Moon className="mr-1 h-4 w-4" />}
+              {t.verDisponibilidad}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Paso 2: elegir unidad (con precio) */}
+        {cotizadas && (
+          <div className="space-y-3">
+            <h2 className="text-sm font-semibold text-muted-foreground">
+              {interpolar(t.resumenDisponibilidad, {
+                noches: `${noches} ${noches === 1 ? t.noche : t.noches}`,
+                libres: cotizadas.filter((u) => u.disponible).length,
+                total: cotizadas.length,
+              })}
+            </h2>
+            {cotizadas.map((u) => (
+              <Card key={u.id} className={elegida?.id === u.id ? 'ring-2 ring-primary' : u.disponible ? '' : 'opacity-60'}>
+                <CardContent className="p-4 flex flex-wrap items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold">{u.nombre}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {u.tipo} · {interpolar(t.hastaPersonas, { n: u.capacidad })}{u.amenidades.length ? ` · ${u.amenidades.slice(0, 4).join(', ')}` : ''}
                     </div>
+                  </div>
+                  {u.disponible ? (
+                    <div className="text-right">
+                      <div className="font-bold">
+                        {moneda(u.precioTotal || 0, u.moneda)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {moneda(u.tarifaNoche || 0, u.moneda)}/{t.porNoche}
+                      </div>
+                    </div>
+                  ) : (
+                    <Badge variant="outline">{t.motivos[u.motivo || 'ocupada'] ?? u.motivo}</Badge>
+                  )}
+                  {u.disponible && (
+                    <Button size="sm" variant={elegida?.id === u.id ? 'default' : 'outline'} onClick={() => setElegida(u)}>
+                      {elegida?.id === u.id ? t.elegida : t.elegir}
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        {/* Paso 3: datos del huésped */}
+        {elegida && (
+          <Card>
+            <CardContent className="p-4 space-y-3">
+              <h2 className="text-sm font-semibold">{interpolar(t.tusDatos, { unidad: elegida.nombre })}</h2>
+
+              {/* Extras del hotel: la selección viaja como ids y cantidades;
+                  el precio lo pone el servidor (guardia del módulo). */}
+              {extrasDisponibles.length > 0 && <SelectorExtras extras={extrasDisponibles} idioma={idioma} seleccion={seleccionExtras} onChange={setSeleccionExtras} />}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="text-sm">
+                  <span className="font-medium flex items-center gap-1"><User className="h-3.5 w-3.5" /> {t.nombreCompleto}</span>
+                  <Input value={nombre} onChange={(e) => setNombre(e.target.value)} className="mt-1" autoComplete="name" />
+                </label>
+                <label className="text-sm">
+                  <span className="font-medium flex items-center gap-1"><Mail className="h-3.5 w-3.5" /> {t.email}</span>
+                  <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1" autoComplete="email" />
+                </label>
+                <label className="text-sm">
+                  <span className="font-medium flex items-center gap-1"><Phone className="h-3.5 w-3.5" /> {t.telefono}</span>
+                  <Input value={telefono} onChange={(e) => setTelefono(e.target.value)} className="mt-1" autoComplete="tel" />
+                </label>
+                <label className="text-sm">
+                  <span className="font-medium">{t.peticiones}</span>
+                  <Input value={notas} onChange={(e) => setNotas(e.target.value)} className="mt-1" placeholder={t.peticionesPlaceholder} />
+                </label>
+              </div>
+              <div className="flex items-center justify-between pt-1">
+                <div className="text-sm text-muted-foreground">
+                  {t.total}: <span className="font-bold text-foreground">
+                    {moneda(elegida.precioTotal || 0, elegida.moneda)}
+                  </span>
+                </div>
+                <Button onClick={reservar} disabled={creando}>
+                  {creando ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-1 h-4 w-4" />}
+                  {t.confirmarReserva}
+                </Button>
+              </div>
+
+              {/* Registro de viajeros: opcional aquí, imprescindible antes de
+                  entrar. Los textos de los campos son los del check-in para no
+                  mantener dos listas de etiquetas. */}
+              <div className="rounded-md border p-3 space-y-3">
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between text-left"
+                  onClick={() => setMostrarDocumento((v) => !v)}
+                >
+                  <span className="text-sm font-semibold">{t.documentoTitulo}</span>
+                  <span className="text-xs text-muted-foreground">{mostrarDocumento ? '−' : '+'}</span>
+                </button>
+                <p className="text-xs text-muted-foreground">{t.documentoAyuda}</p>
+                {mostrarDocumento && (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <CampoDocumento etiqueta={cd.nombre}>
+                      <Input value={documento.nombre} onChange={(e) => setDocumento({ ...documento, nombre: e.target.value })} autoComplete="given-name" />
+                    </CampoDocumento>
+                    <CampoDocumento etiqueta={cd.apellido1}>
+                      <Input value={documento.apellido1} onChange={(e) => setDocumento({ ...documento, apellido1: e.target.value })} autoComplete="family-name" />
+                    </CampoDocumento>
+                    <CampoDocumento etiqueta={cd.apellido2}>
+                      <Input value={documento.apellido2} onChange={(e) => setDocumento({ ...documento, apellido2: e.target.value })} />
+                    </CampoDocumento>
+                    <CampoDocumento etiqueta={cd.fechaNacimiento}>
+                      <Input type="date" value={documento.fechaNacimiento} onChange={(e) => setDocumento({ ...documento, fechaNacimiento: e.target.value })} />
+                    </CampoDocumento>
+                    <CampoDocumento etiqueta={cd.tipoDocumento}>
+                      <Input list="tipos-documento" value={documento.tipoDocumento} onChange={(e) => setDocumento({ ...documento, tipoDocumento: e.target.value })} />
+                    </CampoDocumento>
+                    <CampoDocumento etiqueta={cd.numeroDocumento}>
+                      <Input value={documento.numeroDocumento} onChange={(e) => setDocumento({ ...documento, numeroDocumento: e.target.value })} />
+                    </CampoDocumento>
+                    <CampoDocumento etiqueta={cd.soporteDocumento}>
+                      <Input value={documento.soporteDocumento} onChange={(e) => setDocumento({ ...documento, soporteDocumento: e.target.value })} />
+                    </CampoDocumento>
+                    <CampoDocumento etiqueta={cd.nacionalidad}>
+                      <Input list="paises" maxLength={3} value={documento.nacionalidad} onChange={(e) => setDocumento({ ...documento, nacionalidad: e.target.value })} />
+                    </CampoDocumento>
+                    <CampoDocumento etiqueta={cd['direccion.calle']}>
+                      <Input value={documento.direccion.direccion} onChange={(e) => setDocumento({ ...documento, direccion: { ...documento.direccion, direccion: e.target.value } })} autoComplete="street-address" />
+                    </CampoDocumento>
+                    <CampoDocumento etiqueta={cd['direccion.codigoPostal']}>
+                      <Input value={documento.direccion.codigoPostal} onChange={(e) => setDocumento({ ...documento, direccion: { ...documento.direccion, codigoPostal: e.target.value } })} autoComplete="postal-code" />
+                    </CampoDocumento>
+                    <CampoDocumento etiqueta={cd['direccion.pais']}>
+                      <Input list="paises" maxLength={3} value={documento.direccion.pais} onChange={(e) => setDocumento({ ...documento, direccion: { ...documento.direccion, pais: e.target.value } })} autoComplete="country" />
+                    </CampoDocumento>
+                    <CampoDocumento etiqueta={cd['direccion.municipio']}>
+                      <Input value={documento.direccion.codigoMunicipio} onChange={(e) => setDocumento({ ...documento, direccion: { ...documento.direccion, codigoMunicipio: e.target.value } })} />
+                    </CampoDocumento>
+                  </div>
                 )}
+                <p className="text-xs text-muted-foreground">{t.documentoOpcional}</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
-                <main>
-                    <AnimatePresence mode="wait" initial={false}>
-                        {step === 1 && (
-                            <motion.div
-                                key="step1"
-                                initial={{ opacity: 0, x: 20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: -20 }}
-                                className="space-y-6"
-                            >
-                                <div className="text-center mb-8">
-                                    <h2 className="text-2xl font-bold">Selecciona un Servicio o Producto</h2>
-                                    <p className="text-gray-400 mt-1">¿Cómo puedo ayudarte hoy?</p>
-                                </div>
-                                {servicios.length === 0 ? (
-                                    <div className="text-center py-12 text-gray-500">
-                                        <p className="text-lg">No hay servicios disponibles</p>
-                                    </div>
-                                ) : (
-                                    <div className="grid md:grid-cols-2 gap-4">
-                                        {servicios.map((s) => (
-                                            <div
-                                                key={s.id}
-                                                onClick={() => { setSelectedServicio(s); }}
-                                                className={`
-                            group relative p-6 rounded-2xl border transition-all duration-300 cursor-pointer overflow-hidden
-                            ${selectedServicio?.id === s.id
-                                                        ? 'bg-purple-600/20 border-purple-500 shadow-xl'
-                                                        : 'bg-gray-900/40 border-gray-800 hover:border-gray-700 hover:bg-gray-800/40'}
-                          `}
-                                            >
-                                                <div className="flex justify-between items-start mb-4">
-                                                    <div className="p-3 bg-purple-500/10 rounded-xl group-hover:scale-110 transition-transform">
-                                                        <Sparkles className="w-6 h-6 text-purple-400" />
-                                                    </div>
-                                                    <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/20">
-                                                        {s.duracionMinutos} min
-                                                    </Badge>
-                                                </div>
-                                                <h3 className="text-xl font-bold mb-2">{s.nombre}</h3>
-                                                <p className="text-gray-400 text-sm mb-4 line-clamp-2">{s.descripcion}</p>
-                                                <div className="flex items-center justify-between mt-auto pt-4 border-t border-gray-800/50">
-                                                    <span className="text-lg font-bold">${s.precio} <span className="text-xs text-gray-500">{s.moneda}</span></span>
-                                                    <ChevronRight className="w-5 h-5 text-gray-600 group-hover:translate-x-1 transition-transform" />
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                                <div className="flex justify-center pt-4">
-                                    <Button
-                                        onClick={() => setStep(2)}
-                                        disabled={!selectedServicio}
-                                        className="h-14 px-12 bg-purple-600 hover:bg-purple-500 text-lg rounded-2xl transition-all shadow-xl shadow-purple-900/20"
-                                    >
-                                        Continuar <ArrowRight className="ml-2 w-5 h-5" />
-                                    </Button>
-                                </div>
-                            </motion.div>
-                        )}
+        {/* Catálogos sugeridos: los publica el servicio del Ministerio, aquí solo
+            se ofrecen los códigos del ejemplo oficial (un `id` por documento). */}
+        <datalist id="tipos-documento">
+          <option value="NIF" />
+          <option value="NIE" />
+          <option value="PAS" />
+        </datalist>
+        <datalist id="paises">
+          <option value="ESP" />
+          <option value="FRA" />
+          <option value="DEU" />
+          <option value="ITA" />
+          <option value="PRT" />
+          <option value="GBR" />
+          <option value="USA" />
+          <option value="MEX" />
+          <option value="ARG" />
+          <option value="BRA" />
+          <option value="COL" />
+          <option value="CHL" />
+        </datalist>
+      </div>
+    </main>
+  );
+}
 
-                        {step === 2 && (
-                            <motion.div
-                                key="step2"
-                                initial={{ opacity: 0, x: 20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: -20 }}
-                                className="space-y-8"
-                            >
-                                <div className="flex items-center justify-between mb-8">
-                                    <Button variant="ghost" onClick={() => setStep(1)} className="text-gray-400 hover:text-white">
-                                        <ChevronLeft className="mr-2 w-4 h-4" /> Volver
-                                    </Button>
-                                    <div className="text-right">
-                                        <h2 className="text-2xl font-bold">Fecha y Hora</h2>
-                                        <p className="text-gray-400 text-sm">{selectedServicio?.nombre}</p>
-                                    </div>
-                                </div>
+/** Etiqueta de un campo del bloque de documento (mismo texto que el check-in). */
+function CampoDocumento({ etiqueta, children }: { etiqueta: string; children: React.ReactNode }) {
+  return (
+    <label className="text-sm">
+      <span className="font-medium">{etiqueta}</span>
+      {children}
+    </label>
+  );
+}
 
-                                <div className="grid lg:grid-cols-2 gap-10">
-                                    {/* Calendar/Date Picker */}
-                                    <div className="bg-gray-900/60 p-6 rounded-3xl border border-gray-800">
-                                        <Label className="text-sm font-semibold uppercase tracking-widest text-purple-400 mb-6 block">
-                                            Selecciona un día
-                                        </Label>
-                                        <div className="grid grid-cols-4 gap-3">
-                                            {generateAvailableDates().map((date) => (
-                                                <button
-                                                    key={date}
-                                                    onClick={() => handleDateSelect(date)}
-                                                    className={`
-                            p-4 rounded-2xl border transition-all text-center
-                            ${selectedDate === date
-                                                            ? 'bg-purple-600 border-purple-500 shadow-lg scale-105'
-                                                            : 'bg-gray-800/50 border-gray-700 hover:border-gray-600'}
-                          `}
-                                                >
-                                                    <div className="text-xs text-gray-400 group-hover:text-white mb-1">
-                                                        {format(new Date(date), 'EEE', { locale: es })}
-                                                    </div>
-                                                    <div className="text-lg font-bold">
-                                                        {format(new Date(date), 'd')}
-                                                    </div>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
+/**
+ * Selector de extras del hotel: cantidad por extra (0 = no se quiere).
+ * La selección viaja como {extraId, cantidad} — el precio lo pone el servidor
+ * validando contra su catálogo, así que aquí no se muestra un total "comprometido":
+ * el total real llega en la confirmación.
+ */
+function SelectorExtras({
+  extras,
+  idioma,
+  seleccion,
+  onChange,
+}: {
+  extras: ExtraPublico[];
+  idioma: Idioma;
+  seleccion: SeleccionExtraUI[];
+  onChange: (s: SeleccionExtraUI[]) => void;
+}) {
+  const t = TEXTOS[idioma];
+  const cantidadDe = (id: string) => seleccion.find((s) => s.extraId === id)?.cantidad ?? 0;
+  const fijar = (id: string, cantidad: number) => {
+    const resto = seleccion.filter((s) => s.extraId !== id);
+    onChange(cantidad > 0 ? [...resto, { extraId: id, cantidad }] : resto);
+  };
+  const precioDe = (e: ExtraPublico) =>
+    new Intl.NumberFormat(localeDeIdioma(idioma), { style: 'currency', currency: e.moneda, maximumFractionDigits: 0 }).format(e.precio);
 
-                                    {/* Time Slots */}
-                                    <div className="bg-gray-900/60 p-6 rounded-3xl border border-gray-800 relative">
-                                        <Label className="text-sm font-semibold uppercase tracking-widest text-purple-400 mb-6 block">
-                                            Horarios disponibles
-                                        </Label>
-
-                                        {!selectedDate ? (
-                                            <div className="flex flex-col items-center justify-center h-48 text-gray-500 border-2 border-dashed border-gray-800 rounded-2xl">
-                                                <Clock className="w-8 h-8 mb-2 opacity-20" />
-                                                <p className="text-sm">Selecciona una fecha primero</p>
-                                            </div>
-                                        ) : isLoadingSlots ? (
-                                            <div className="flex items-center justify-center h-48">
-                                                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-purple-500" />
-                                            </div>
-                                        ) : availableSlots.length === 0 ? (
-                                            <div className="flex flex-col items-center justify-center h-48 text-gray-500">
-                                                <p className="text-sm">No hay horarios para este día.</p>
-                                            </div>
-                                        ) : (
-                                            <div className="grid grid-cols-3 gap-3">
-                                                {availableSlots.map((time) => (
-                                                    <button
-                                                        key={time}
-                                                        onClick={() => setSelectedTime(time)}
-                                                        className={`
-                                        p-3 rounded-xl border font-bold text-sm transition-all
-                                        ${selectedTime === time
-                                                                ? 'bg-purple-600 border-purple-400 shadow-lg'
-                                                                : 'bg-gray-800/50 border-gray-700 hover:border-purple-500/50'}
-                                    `}
-                                                    >
-                                                        {time}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        )}
-
-                                        <div className="mt-8">
-                                            <Button
-                                                disabled={!selectedTime}
-                                                onClick={() => setStep(3)}
-                                                className="w-full h-14 bg-purple-600 hover:bg-purple-500 text-lg rounded-2xl transition-all shadow-xl shadow-purple-900/20"
-                                            >
-                                                Confirmar Fecha <ArrowRight className="ml-2 w-5 h-5" />
-                                            </Button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </motion.div>
-                        )}
-
-                        {step === 3 && (
-                            <motion.div
-                                key="step3"
-                                initial={{ opacity: 0, x: 20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: -20 }}
-                                className="max-w-xl mx-auto"
-                            >
-                                <div className="flex items-center justify-between mb-8">
-                                    <Button variant="ghost" onClick={() => setStep(2)} className="text-gray-400 hover:text-white">
-                                        <ChevronLeft className="mr-2 w-4 h-4" /> Volver
-                                    </Button>
-                                    <div className="text-right">
-                                        <h2 className="text-2xl font-bold">Tus Datos</h2>
-                                        <p className="text-gray-400 text-sm">Finalizar reserva</p>
-                                    </div>
-                                </div>
-
-                                <div className="bg-gray-900/60 p-8 rounded-[2rem] border border-gray-800 backdrop-blur-xl">
-                                    {/* Summary */}
-                                    <div className="bg-purple-500/10 border border-purple-500/20 rounded-2xl p-4 mb-8 flex items-center gap-4">
-                                        <div className="p-3 bg-purple-500/20 rounded-xl">
-                                            <Calendar className="w-6 h-6 text-purple-400" />
-                                        </div>
-                                        <div>
-                                            <p className="text-xs uppercase tracking-widest text-purple-400 font-bold">Cita Confirmada</p>
-                                            <p className="font-bold">{format(new Date(selectedDate), "EEEE, d 'de' MMMM", { locale: es })}</p>
-                                            <p className="text-sm text-gray-400">{selectedTime} • {selectedServicio?.nombre}</p>
-                                        </div>
-                                    </div>
-
-                                    <form onSubmit={handleSubmit} className="space-y-5">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="nombre" className="text-gray-400 ml-1">Nombre Completo</Label>
-                                            <div className="relative group">
-                                                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-purple-500 transition-colors" />
-                                                <Input
-                                                    id="nombre"
-                                                    value={contactData.nombre}
-                                                    onChange={(e) => setContactData(p => ({ ...p, nombre: e.target.value }))}
-                                                    placeholder="Escribe tu nombre"
-                                                    className="h-14 pl-12 bg-gray-950/50 border-gray-800 focus:border-purple-500 rounded-2xl transition-all"
-                                                    required
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="email" className="text-gray-400 ml-1">Email Corporativo</Label>
-                                            <div className="relative group">
-                                                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-purple-500 transition-colors" />
-                                                <Input
-                                                    id="email"
-                                                    type="email"
-                                                    value={contactData.email}
-                                                    onChange={(e) => setContactData(p => ({ ...p, email: e.target.value }))}
-                                                    placeholder="nombre@empresa.com"
-                                                    className="h-14 pl-12 bg-gray-950/50 border-gray-800 focus:border-purple-500 rounded-2xl transition-all"
-                                                    required
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <div className="grid md:grid-cols-2 gap-4">
-                                            <div className="space-y-2">
-                                                <Label htmlFor="telefono" className="text-gray-400 ml-1">WhatsApp</Label>
-                                                <div className="relative group">
-                                                    <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-purple-500 transition-colors" />
-                                                    <Input
-                                                        id="telefono"
-                                                        value={contactData.telefono}
-                                                        onChange={(e) => setContactData(p => ({ ...p, telefono: e.target.value }))}
-                                                        placeholder="+34 ..."
-                                                        className="h-14 pl-12 bg-gray-950/50 border-gray-800 focus:border-purple-500 rounded-2xl transition-all"
-                                                    />
-                                                </div>
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label htmlFor="empresa" className="text-gray-400 ml-1">Empresa</Label>
-                                                <div className="relative group">
-                                                    <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-purple-500 transition-colors" />
-                                                    <Input
-                                                        id="empresa"
-                                                        value={contactData.empresa}
-                                                        onChange={(e) => setContactData(p => ({ ...p, empresa: e.target.value }))}
-                                                        placeholder="Nombre de empresa"
-                                                        className="h-14 pl-12 bg-gray-950/50 border-gray-800 focus:border-purple-500 rounded-2xl transition-all"
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="notas" className="text-gray-400 ml-1">¿Cómo podemos ayudarte?</Label>
-                                            <div className="relative group">
-                                                <StickyNote className="absolute left-4 top-4 w-5 h-5 text-gray-500 group-focus-within:text-purple-500 transition-colors" />
-                                                <Textarea
-                                                    id="notas"
-                                                    value={contactData.notas}
-                                                    onChange={(e) => setContactData(p => ({ ...p, notas: e.target.value }))}
-                                                    placeholder="Cuéntanos brevemente tus objetivos..."
-                                                    className="min-h-[120px] pl-12 pt-4 bg-gray-950/50 border-gray-800 focus:border-purple-500 rounded-2xl transition-all resize-none"
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <Button
-                                            type="submit"
-                                            disabled={isSubmitting}
-                                            className="w-full h-16 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-bold text-lg rounded-2xl mt-4 shadow-xl shadow-purple-900/30"
-                                        >
-                                            {isSubmitting ? (
-                                                <div className="flex items-center">
-                                                    <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-white mr-3" />
-                                                    Procesando...
-                                                </div>
-                                            ) : (
-                                                <span className="flex items-center">
-                                                    Confirmar Reserva <ArrowRight className="ml-2 w-6 h-6" />
-                                                </span>
-                                            )}
-                                        </Button>
-                                    </form>
-                                </div>
-                            </motion.div>
-                        )}
-
-                        {step === 4 && (
-                            <motion.div
-                                key="success"
-                                initial={{ scale: 0.9, opacity: 0 }}
-                                animate={{ scale: 1, opacity: 1 }}
-                                className="max-w-lg mx-auto text-center"
-                            >
-                                <div className="bg-gray-900/60 p-12 rounded-[3rem] border border-gray-800 backdrop-blur-xl relative overflow-hidden">
-                                    <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-purple-500 to-blue-500" />
-
-                                    <div className="w-24 h-24 bg-green-500/20 rounded-3xl flex items-center justify-center mx-auto mb-8 animate-bounce">
-                                        <CheckCircle className="w-12 h-12 text-green-500" />
-                                    </div>
-
-                                    <h2 className="text-3xl font-bold mb-4">¡Cita Confirmada!</h2>
-                                    <p className="text-gray-400 mb-10 leading-relaxed">
-                                        Tu reserva ha sido registrada correctamente. Hemos enviado un correo con los detalles y el enlace a la videollamada.
-                                    </p>
-
-                                    <div className="bg-gray-950/80 rounded-3xl p-6 text-left border border-gray-800 mb-8">
-                                        <div className="flex items-center gap-4 mb-4">
-                                            <div className="w-12 h-12 rounded-2xl bg-purple-500/10 flex items-center justify-center">
-                                                <Calendar className="w-6 h-6 text-purple-400" />
-                                            </div>
-                                            <div>
-                                                <p className="text-xs text-purple-400 font-bold uppercase tracking-widest">Resumen</p>
-                                                <p className="font-bold">{format(new Date(selectedDate), "d 'de' MMMM", { locale: es })} • {selectedTime}</p>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center">
-                                                <Sparkles className="w-6 h-6 text-blue-400" />
-                                            </div>
-                                            <div>
-                                                <p className="text-xs text-blue-400 font-bold uppercase tracking-widest">Servicio</p>
-                                                <p className="font-bold">{selectedServicio?.nombre}</p>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <Button
-                                        onClick={() => window.location.reload()}
-                                        variant="outline"
-                                        className="border-gray-800 hover:bg-gray-800 rounded-2xl px-8 h-12"
-                                    >
-                                        Agendar otra cita
-                                    </Button>
-                                </div>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-                </main>
-            </div>
-
-            <footer className="relative py-12 text-center text-gray-600 text-xs">
-                <p>© 2026 Volkern Business Operating Hub. Reservados todos los derechos.</p>
-            </footer>
+  return (
+    <div className="rounded-md border p-3 space-y-3">
+      <div>
+        <p className="text-sm font-semibold">{t.extrasTitulo}</p>
+        <p className="text-xs text-muted-foreground">{t.extrasAyuda}</p>
+      </div>
+      {extras.map((e) => (
+        <div key={e.id} className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-sm font-medium truncate">
+              {e.nombre}
+              <span className="ml-1 text-xs font-normal text-muted-foreground">
+                {e.precioPorNoche ? interpolar(t.extraPorNoche, { precio: precioDe(e) }) : precioDe(e)}
+              </span>
+            </p>
+            {e.descripcion && <p className="text-xs text-muted-foreground">{e.descripcion}</p>}
+          </div>
+          <select
+            className="h-9 w-20 shrink-0 rounded-md border bg-background text-sm"
+            aria-label={`${t.extraCantidad} · ${e.nombre}`}
+            value={String(cantidadDe(e.id))}
+            onChange={(ev) => fijar(e.id, Number(ev.target.value))}
+          >
+            {[0, 1, 2, 3, 4, 5].map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
         </div>
-    )
+      ))}
+    </div>
+  );
+}
+
+/** Estrellas de una reseña publicada (solo lectura). */
+function EstrellasPublicas({ n }: { n: number }) {
+  return (
+    <div className="flex gap-0.5" aria-hidden="true">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <Star key={i} className={`h-3.5 w-3.5 ${i <= n ? 'fill-amber-400 text-amber-400' : 'text-slate-300'}`} />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Sección pública de reseñas del motor: media de lo publicado, total y las
+ * últimas reseñas con su respuesta del hotel. Solo enseña lo que el hotel
+ * moderó — la reseña es la palabra del huésped y la web la cita tal cual.
+ */
+function SeccionResenas({ resumen, idioma }: { resumen: ResumenResenas; idioma: Idioma }) {
+  const t = textosResena(idioma);
+  return (
+    <section className="space-y-3">
+      <div className="flex items-baseline justify-between gap-2">
+        <h2 className="text-base font-semibold">{t.resenasTitulo}</h2>
+        <span className="text-xs text-muted-foreground">
+          {t.resenasResumen.replace('{media}', String(resumen.media ?? '—')).replace('{total}', String(resumen.total))}
+        </span>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {resumen.reseñas.map((r, i) => (
+          <Card key={i}>
+            <CardContent className="space-y-2 p-4">
+              <div className="flex items-center justify-between gap-2">
+                <EstrellasPublicas n={r.puntuacion} />
+                <span className="text-xs text-muted-foreground">
+                  {[r.canal, r.mesEstancia].filter(Boolean).join(' · ')}
+                </span>
+              </div>
+              {r.comentario && <p className="text-sm text-slate-700">“{r.comentario}”</p>}
+              <p className="text-xs font-medium text-slate-600">{r.nombreHuesped}</p>
+              {r.respuestaHotel && (
+                <div className="rounded-md bg-muted p-2">
+                  <p className="text-xs font-medium text-muted-foreground">{t.respuestaHotel}</p>
+                  <p className="mt-1 text-xs text-slate-700">{r.respuestaHotel}</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Conmutador ES/EN: recarga la misma página conservando todos los parámetros
+ * (embed, etc.) y cambiando solo `lang`. Un `<a>` real, no JS de por medio,
+ * para que funcione también en el iframe del embed.
+ */
+function ConmutadorIdioma({ actual }: { actual: Idioma }) {
+  if (typeof window === 'undefined') return null;
+  const params = new URLSearchParams(window.location.search);
+  return (
+    <div className="flex items-center gap-1 text-xs text-muted-foreground" aria-label="Language">
+      <Languages className="h-3.5 w-3.5" />
+      {IDIOMAS.map((idioma) => {
+        params.set('lang', idioma);
+        const href = `${window.location.pathname}?${params.toString()}`;
+        return idioma === actual ? (
+          <span key={idioma} className="font-semibold text-foreground uppercase">{idioma}</span>
+        ) : (
+          <a key={idioma} href={href} className="uppercase hover:text-foreground hover:underline">
+            {idioma}
+          </a>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Extrae el [slug] de la ruta sin depender de useParams del servidor. */
+function useSlug(): { slug: string | null } {
+  const [slug, setSlug] = useState<string | null>(null);
+  useEffect(() => {
+    const partes = window.location.pathname.split('/').filter(Boolean);
+    const i = partes.indexOf('booking');
+    setSlug(i >= 0 && partes[i + 1] ? partes[i + 1] : null);
+  }, []);
+  return { slug };
 }

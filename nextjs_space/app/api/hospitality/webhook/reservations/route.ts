@@ -13,9 +13,9 @@ import {
 /**
  * Webhook de reservas de la capa de conectividad.
  *
- * El proveedor llama a este endpoint con `book` / `modify` / `cancel`
- * (campo `action`), usando HTTP Basic Auth con las credenciales cargadas
- * en /admin/conectividad.
+ * El proveedor llama a este endpoint con `book` / `modify` / `cancel` /
+ * `no_show` (campo `action`), usando HTTP Basic Auth con las credenciales
+ * cargadas en /admin/conectividad.
  *
  * Contrato: docs/hospitality-connectivity-contract.md
  * - Idempotente por bookingId.
@@ -54,9 +54,11 @@ export async function POST(request: NextRequest) {
     const creds = await getConnectivityCredentials();
     if (!creds) {
       await updateConnectivityStatus({ estado: 'error', error: true });
+      // La política de reintentos viaja en el propio HTTP (contrato: reintento
+      // con backoff). 60 s = el primer escalón del backoff.
       return NextResponse.json(
         { success: false, error: 'Conectividad no configurada' },
-        { status: 503 }
+        { status: 503, headers: { 'Retry-After': '60' } }
       );
     }
 
@@ -98,9 +100,15 @@ export async function POST(request: NextRequest) {
     if (!result.ok) {
       await updateConnectivityStatus({ estado: 'error', error: true });
       const status = result.status === 'no_encontrada' ? 404 : 400;
+      // 404 = reintento con backoff limitado (la reserva puede estar aún en
+      // camino): la cabecera fija el mínimo de espera (5 min). 400 = defecto
+      // del payload, sin reintento ni cabecera.
       return NextResponse.json(
         { success: false, error: result.error || 'Error procesando evento' },
-        { status }
+        {
+          status,
+          ...(status === 404 ? { headers: { 'Retry-After': '300' } } : {}),
+        }
       );
     }
 
@@ -115,13 +123,15 @@ export async function POST(request: NextRequest) {
       success: true,
       status: result.status,
       reservationId: result.reservationId,
+      // Vía entrante del no-show: cómo quedó el cargo (emitida/importe/motivo).
+      penalizacion: result.penalizacion ?? null,
     });
   } catch (error) {
     console.error('[Hospitality] Error en webhook de reservas:', error);
     await updateConnectivityStatus({ estado: 'error', error: true }).catch(() => {});
     return NextResponse.json(
       { success: false, error: 'Error interno' },
-      { status: 500 }
+      { status: 500, headers: { 'Retry-After': '60' } }
     );
   }
 }

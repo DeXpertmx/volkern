@@ -35,12 +35,18 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  plantillaSugerida,
+  idiomaDeValor,
+  IDIOMAS,
+} from '@/lib/hospitality/booking-i18n';
 
 interface Plantilla {
   id: string;
   tenantId: string;
   evento: string;
   canal: string;
+  idioma: string;
   asunto?: string | null;
   contenido: string;
   activo: boolean;
@@ -73,23 +79,13 @@ const VARIABLES = [
 const EMPTY_FORM = {
   evento: 'confirmacion',
   canal: 'whatsapp',
+  idioma: 'es',
   asunto: '',
   contenido: '',
   activo: true,
 };
 
-const PLANTILLAS_SUGERIDAS: Record<string, string> = {
-  confirmacion:
-    '¡Hola {{nombre}}! 🎉 Tu reserva en {{propiedad}} ({{unidad}}) está confirmada.\n\n📅 Check-in: {{checkIn}}\n📅 Check-out: {{checkOut}}\n🌙 {{noches}} noches\n💰 Total: {{importe}}\n\nReferencia: {{referencia}}\n\n¡Te esperamos!',
-  pre_llegada:
-    'Hola {{nombre}}, faltan pocos días para tu llegada a {{propiedad}} el {{checkIn}}. 🧳\n\nSi necesitas ayuda con tu llegada, escríbenos por aquí. ¡Nos vemos pronto!',
-  check_in:
-    '¡Hola {{nombre}}! Hoy es tu check-in en {{propiedad}} ({{unidad}}). 🔑\n\nTu reserva {{referencia}} está lista. Si necesitas instrucciones de acceso, responde este mensaje.',
-  post_salida:
-    'Hola {{nombre}}, esperamos que hayas disfrutado tu estancia en {{propiedad}}. 🙌\n\n¡Gracias por hospedarte con nosotros!',
-  resena:
-    '¡Hola {{nombre}}! ¿Cómo estuvo tu estancia en {{propiedad}}? ⭐\n\nNos encantaría saber tu opinión para seguir mejorando. ¡Gracias!',
-};
+const IDIOMA_LABEL: Record<string, string> = { es: 'Español', en: 'English' };
 
 export default function HospitalityComunicacionesPage() {
   const [loading, setLoading] = useState(true);
@@ -99,6 +95,10 @@ export default function HospitalityComunicacionesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Plantilla | null>(null);
   const [form, setForm] = useState<typeof EMPTY_FORM>({ ...EMPTY_FORM });
+  // El contenido del diálogo viene de una plantilla sugerida (no la escribió
+  // el hotel todavía): al cambiar el idioma se sustituye por la sugerida de
+  // ese idioma. Si el hotel ya editó el texto, nunca se pisa.
+  const [contenidoSugerido, setContenidoSugerido] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState<Plantilla | null>(null);
   const [testTarget, setTestTarget] = useState<Plantilla | null>(null);
@@ -142,9 +142,17 @@ export default function HospitalityComunicacionesPage() {
     };
   }, [plantillas]);
 
-  const openNew = (evento: string) => {
+  const openNew = (evento: string, idioma = 'es') => {
     setEditing(null);
-    setForm({ ...EMPTY_FORM, evento, contenido: PLANTILLAS_SUGERIDAS[evento] || '' });
+    const sugerida = plantillaSugerida(evento, idiomaDeValor(idioma));
+    setForm({
+      ...EMPTY_FORM,
+      evento,
+      idioma,
+      asunto: sugerida?.asunto || '',
+      contenido: sugerida?.contenido || '',
+    });
+    setContenidoSugerido(!!sugerida);
     setDialogOpen(true);
   };
 
@@ -153,11 +161,30 @@ export default function HospitalityComunicacionesPage() {
     setForm({
       evento: p.evento,
       canal: p.canal,
+      idioma: p.idioma || 'es',
       asunto: p.asunto || '',
       contenido: p.contenido,
       activo: p.activo,
     });
+    setContenidoSugerido(false);
     setDialogOpen(true);
+  };
+
+  /** Cambia el idioma del diálogo: si el contenido aún es la sugerida, la
+   *  sustituye por la del idioma nuevo; si el hotel ya escribió la suya, no
+   *  se toca. */
+  const cambiarIdioma = (idioma: string) => {
+    setForm((f) => {
+      const siguiente = { ...f, idioma };
+      if (contenidoSugerido) {
+        const sugerida = plantillaSugerida(f.evento, idiomaDeValor(idioma));
+        if (sugerida) {
+          siguiente.asunto = sugerida.asunto || '';
+          siguiente.contenido = sugerida.contenido;
+        }
+      }
+      return siguiente;
+    });
   };
 
   const save = async () => {
@@ -322,9 +349,16 @@ export default function HospitalityComunicacionesPage() {
                       <p className="text-xs text-muted-foreground mt-0.5">{ev.desc}</p>
                     </div>
                   </div>
-                  <Button size="sm" variant="outline" onClick={() => openNew(ev.id)}>
-                    <Plus className="h-4 w-4 mr-1" /> Nueva
-                  </Button>
+                  <div className="flex gap-1">
+                    {!byEvento[ev.id].some((p) => (p.idioma || 'es') === 'en') && (
+                      <Button size="sm" variant="outline" onClick={() => openNew(ev.id, 'en')} title="Crear la versión en inglés con el texto sugerido">
+                        <Plus className="h-4 w-4 mr-1" /> English
+                      </Button>
+                    )}
+                    <Button size="sm" variant="outline" onClick={() => openNew(ev.id)}>
+                      <Plus className="h-4 w-4 mr-1" /> Nueva
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-2">
@@ -338,6 +372,7 @@ export default function HospitalityComunicacionesPage() {
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
                           {canalBadge(p.canal)}
+                          <Badge variant="outline" className="uppercase">{p.idioma || 'es'}</Badge>
                           <Badge variant={p.activo ? 'default' : 'secondary'}>
                             {p.activo ? 'Activa' : 'Inactiva'}
                           </Badge>
@@ -379,7 +414,7 @@ export default function HospitalityComunicacionesPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-1">
                 <Label>Evento</Label>
                 <Select value={form.evento} onValueChange={(v) => setForm((f) => ({ ...f, evento: v }))} disabled={!!editing}>
@@ -401,7 +436,21 @@ export default function HospitalityComunicacionesPage() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-1">
+                <Label>Idioma</Label>
+                <Select value={form.idioma} onValueChange={cambiarIdioma}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {IDIOMAS.map((i) => (
+                      <SelectItem key={i} value={i}>{IDIOMA_LABEL[i] || i}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Crea una plantilla por idioma: cada huésped recibe la del idioma en que reservó y, si no existe, la española.
+            </p>
 
             {form.canal === 'email' && (
               <div className="space-y-1">

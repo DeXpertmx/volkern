@@ -10,9 +10,16 @@
  *   A propósito NO se usa la expresión "ingreso bruto después de gastos".
  * - El estado de cobro se **deriva** de la suma real de los pagos; nunca se
  *   guarda un valor que pueda quedar desincronizado con ellos.
+ *
+ * **La penalización por no-show no es ingreso de alojamiento.** Es un cargo de
+ * cancelación: se emite y se cobra, pero no es ADR, no es RevPAR ni son noches
+ * vendidas (el no-show no ocupa: `aportaProduccion`). Por eso `calcularBruto`
+ * la EXCLUYE y viaja en su propio campo del desglose; sí suma al neto, a lo
+ * pendiente de cobro y al objetivo del estado de cobro, porque es dinero que
+ * hay que cobrar. Ver `lib/hospitality/no-show.ts`.
  */
 
-export type LineaTipo = 'alojamiento' | 'limpieza' | 'extra' | 'otro';
+export type LineaTipo = 'alojamiento' | 'limpieza' | 'extra' | 'otro' | 'penalizacion';
 
 export type PagoMetodo = 'stripe' | 'transferencia' | 'efectivo' | 'manual' | 'otro';
 
@@ -43,7 +50,10 @@ export interface GastoImputado {
 
 export interface RentabilidadReserva {
   moneda: string;
-  /** Suma de las líneas de la reserva. */
+  /**
+   * Ingreso de alojamiento y servicios: suma de las líneas MENOS la
+   * penalización por no-show (que no es ingreso de alojamiento).
+   */
   bruto: number;
   /** Desglose por tipo de línea (para pintar el detalle). */
   desglose: {
@@ -51,13 +61,17 @@ export interface RentabilidadReserva {
     limpieza: number;
     extra: number;
     otro: number;
+    /** Cargo de cancelación por no-show (no es ingreso de alojamiento). */
+    penalizacion: number;
   };
+  /** Cargo por no-show emitido en esta reserva (0 si no hay). */
+  penalizacion: number;
   comisionOta: number;
   comisionPasarela: number;
   otrosGastos: number;
-  /** bruto - comisionOta - comisionPasarela - otrosGastos */
+  /** (bruto + penalizacion) - comisionOta - comisionPasarela - otrosGastos */
   neto: number;
-  /** neto / bruto, en porcentaje (0 si no hay bruto). */
+  /** neto / (bruto + penalizacion), en porcentaje (0 si no hay nada). */
   margenPct: number;
   /** Suma de pagos netos (pagado - reembolsado). */
   cobrado: number;
@@ -99,17 +113,37 @@ export function normalizarLinea(linea: {
   };
 }
 
-/** Suma el importe de todas las líneas. Es el ingreso bruto de la reserva. */
+/**
+ * Ingreso bruto de la reserva: suma de las líneas **menos la penalización por
+ * no-show**, que es un cargo de cancelación y no ingreso de alojamiento. Si se
+ * sumara aquí, la reserva de un no-show «produciría» en Finanzas y el ADR/RevPAR
+ * del período dejarían de cuadrar con la ocupación.
+ */
 export function calcularBruto(lineas: LineaReserva[]): number {
-  return redondear(lineas.reduce((total, linea) => total + (linea.importeTotal || 0), 0));
+  return redondear(
+    lineas
+      .filter((linea) => linea.tipo !== 'penalizacion')
+      .reduce((total, linea) => total + (linea.importeTotal || 0), 0)
+  );
+}
+
+/** Suma de las penalizaciones por no-show emitidas en la reserva. */
+export function calcularPenalizacion(lineas: LineaReserva[]): number {
+  return redondear(
+    lineas
+      .filter((linea) => linea.tipo === 'penalizacion')
+      .reduce((total, linea) => total + (linea.importeTotal || 0), 0)
+  );
 }
 
 /** Desglose por tipo de línea. */
 export function desglosarLineas(lineas: LineaReserva[]): RentabilidadReserva['desglose'] {
-  const desglose = { alojamiento: 0, limpieza: 0, extra: 0, otro: 0 };
+  const desglose = { alojamiento: 0, limpieza: 0, extra: 0, otro: 0, penalizacion: 0 };
   for (const linea of lineas) {
-    const clave = (['alojamiento', 'limpieza', 'extra'] as const).includes(linea.tipo as any)
-      ? (linea.tipo as 'alojamiento' | 'limpieza' | 'extra')
+    const clave = (['alojamiento', 'limpieza', 'extra', 'penalizacion'] as const).includes(
+      linea.tipo as any
+    )
+      ? (linea.tipo as 'alojamiento' | 'limpieza' | 'extra' | 'penalizacion')
       : 'otro';
     desglose[clave] += linea.importeTotal || 0;
   }
@@ -118,6 +152,7 @@ export function desglosarLineas(lineas: LineaReserva[]): RentabilidadReserva['de
     limpieza: redondear(desglose.limpieza),
     extra: redondear(desglose.extra),
     otro: redondear(desglose.otro),
+    penalizacion: redondear(desglose.penalizacion),
   };
 }
 
@@ -173,9 +208,15 @@ export interface RentabilidadInput {
  * ───────────────────────────
  * Ingreso neto         €550
  * ```
+ *
+ * Una reserva no-show con penalización se lee al revés y con sentido: bruto 0
+ * (no hubo alojamiento), penalización €150, neto €150 — lo que el hotel ingresa
+ * de verdad por esa reserva, y lo que queda pendiente de cobrar si no se ha
+ * cobrado todavía.
  */
 export function calcularRentabilidad(input: RentabilidadInput): RentabilidadReserva {
   const bruto = calcularBruto(input.lineas);
+  const penalizacion = calcularPenalizacion(input.lineas);
   const comisionOta = redondear(Math.abs(input.comisionOta || 0));
   const comisionPasarela = redondear(Math.abs(input.comisionPasarela || 0));
 
@@ -185,16 +226,20 @@ export function calcularRentabilidad(input: RentabilidadInput): RentabilidadRese
       : Math.abs(input.otrosGastos || 0)
   );
 
-  const neto = redondear(bruto - comisionOta - comisionPasarela - otrosGastos);
-  const margenPct = bruto > 0 ? redondear((neto / bruto) * 100) : 0;
+  // Lo que hay que cobrar por esta reserva: alojamiento + penalización.
+  const aCobrar = redondear(bruto + penalizacion);
+
+  const neto = redondear(aCobrar - comisionOta - comisionPasarela - otrosGastos);
+  const margenPct = aCobrar > 0 ? redondear((neto / aCobrar) * 100) : 0;
 
   const cobrado = calcularCobrado(input.pagos || []);
-  const pendiente = Math.max(0, redondear(bruto - cobrado));
+  const pendiente = Math.max(0, redondear(aCobrar - cobrado));
 
   return {
     moneda: input.moneda || 'MXN',
     bruto,
     desglose: desglosarLineas(input.lineas),
+    penalizacion,
     comisionOta,
     comisionPasarela,
     otrosGastos,
@@ -202,7 +247,7 @@ export function calcularRentabilidad(input: RentabilidadInput): RentabilidadRese
     margenPct,
     cobrado,
     pendiente,
-    estadoCobro: derivarEstadoCobro(bruto, cobrado),
+    estadoCobro: derivarEstadoCobro(aCobrar, cobrado),
   };
 }
 

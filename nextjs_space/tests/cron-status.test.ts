@@ -41,6 +41,31 @@ describe('Cron Status Store', () => {
     expect(status!.lastResult).toBe('success')
     expect(status!.lastMessage).toBe('OK (150ms)')
     expect(status!.lastDurationMs).toBe(150)
+    expect(status!.lastAvisos).toEqual([])
+  })
+
+  it('los avisos del último resultado viven en el job (y se limpian solos)', () => {
+    registerCronJob('job-avisos', 'Job con avisos', '30 * * * *')
+    cronJobStarted('job-avisos')
+    cronJobCompleted('job-avisos', '2 enviadas', 20, ['Hotel Uno: 3 partes sin reintentar'])
+
+    expect(getCronStatus('job-avisos')!.lastAvisos).toEqual(['Hotel Uno: 3 partes sin reintentar'])
+
+    // Una pasada sin nada que avisar los retira: describen el ÚLTIMO resultado,
+    // no la historia (si no, el panel avisaría de un problema ya resuelto).
+    cronJobStarted('job-avisos')
+    expect(getCronStatus('job-avisos')!.lastAvisos).toEqual([])
+    cronJobCompleted('job-avisos', '0 enviadas', 18)
+    expect(getCronStatus('job-avisos')!.lastAvisos).toEqual([])
+  })
+
+  it('un error no arrastra los avisos de la pasada anterior', () => {
+    registerCronJob('job-avisos-error', 'Job con avisos y error', '30 * * * *')
+    cronJobCompleted('job-avisos-error', 'ok', 10, ['aviso viejo'])
+    cronJobFailed('job-avisos-error', 'servicio caído', 15)
+
+    expect(getCronStatus('job-avisos-error')!.lastAvisos).toEqual([])
+    expect(getCronStatus('job-avisos-error')!.lastMessage).toBe('servicio caído')
   })
 
   it('cronJobFailed marca error con mensaje', () => {

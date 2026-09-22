@@ -17,6 +17,10 @@ const prisma = vi.hoisted(() => ({
   hospitalityProperty: { findMany: vi.fn() },
   hospitalityCleaningTask: { groupBy: vi.fn() },
   hospitalityMaintenanceTask: { groupBy: vi.fn() },
+  // Cuenta los desenlaces del hold (caducado/confirmado) para los KPIs de Reportes.
+  auditLog: { count: vi.fn() },
+  // Trazas del registro de viajeros: la métrica de partes sin reintentar.
+  hospitalityGuestRegistryCommunication: { findMany: vi.fn() },
 }));
 
 vi.mock('@/lib/db', () => ({ prisma }));
@@ -145,6 +149,7 @@ describe('GET /api/hospitality/dashboard', () => {
     prisma.hospitalityProperty.findMany.mockResolvedValue([{ id: 'p1', nombre: 'Casa Mar' }]);
     prisma.hospitalityCleaningTask.groupBy.mockResolvedValue([{ estado: 'pending', _count: { _all: 2 } }]);
     prisma.hospitalityMaintenanceTask.groupBy.mockResolvedValue([{ estado: 'abierta', _count: { _all: 1 } }]);
+    prisma.hospitalityGuestRegistryCommunication.findMany.mockResolvedValue([]);
   });
 
   it('autenticación inválida → 401', async () => {
@@ -173,9 +178,16 @@ describe('GET /api/hospitality/dashboard', () => {
     expect(d.kpis.ocupacionHoy).toBeCloseTo(0.5);
     expect(d.kpis.cancelaciones).toBe(1);
     expect(d.kpis.reservasActivas).toBe(2);
-    expect(d.kpis.ingresos).toBe(9000); // 3000 + 6000 (sin la cancelada)
-    expect(d.kpis.nochesVendidas).toBe(5); // 2 + 3
-    expect(d.kpis.adr).toBeCloseTo(1800); // 9000 / 5
+    // Ingresos del período: ventana "últimos 30 días" de kpisVentana (módulo
+    // puro). La reserva r2 LLEGA a hoy+5 → fuera de la ventana: ni sus
+    // ingresos ni sus noches entran (la cancelada tampoco). Solo r1.
+    expect(d.kpis.ingresos).toBe(3000);
+    expect(d.kpis.nochesVendidas).toBe(2); // ayer → mañana
+    expect(d.kpis.adr).toBeCloseTo(1500); // 3000 / 2
+    // Los KPIs del dashboard y los de reportes salen del MISMO cálculo.
+    expect(d.reportesKpis.ingresos).toBe(d.kpis.ingresos);
+    expect(d.reportesKpis.nochesVendidas).toBe(d.kpis.nochesVendidas);
+    expect(d.reportesKpis.adr).toBeCloseTo(d.kpis.adr);
 
     // Mix de canales: 1 Airbnb + 1 Booking.com (sin la cancelada)
     expect(d.mixCanales).toHaveLength(2);
@@ -191,6 +203,32 @@ describe('GET /api/hospitality/dashboard', () => {
     // Operaciones
     expect(d.operaciones.limpieza.pending).toBe(2);
     expect(d.operaciones.mantenimiento.abierta).toBe(1);
+  });
+
+  it('un no-show de hoy es LLEGADA (no ocupación) y no es reserva activa', async () => {
+    // Auditoría del 17 sep 2026: este KPI se calculaba con la regla de
+    // producción (excluía el no-show) mientras el panel de operaciones y
+    // `reportesKpis.llegadas` sí lo contaban: el mismo día daba dos cifras.
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    prisma.hospitalityReservation.findMany.mockResolvedValue([
+      makeReservation({
+        id: 'ns',
+        unitId: 'u1',
+        estado: 'no_show',
+        checkIn: hoy,
+        checkOut: new Date(hoy.getTime() + 2 * 86_400_000),
+        amountAfterTax: 2000,
+      }),
+    ]);
+    const res = await GETDashboard(buildReq('https://volkern.app/api/hospitality/dashboard'));
+    const d = await res.json();
+
+    expect(d.kpis.llegadasHoy).toBe(1); // llegó (se le esperaba)
+    expect(d.reportesKpis.llegadas).toBe(1); // misma cifra que reportes
+    expect(d.kpis.ocupadasHoy).toBe(0); // no ocupa: el motor la da por libre
+    expect(d.kpis.reservasActivas).toBe(0); // no está viva
+    expect(d.kpis.ingresos).toBe(0); // no produce
   });
 
   it('sin reservas ni unidades → KPIs en cero, ADR null (no inventa métricas)', async () => {

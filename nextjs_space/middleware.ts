@@ -158,6 +158,9 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/public/') || 
     pathname.startsWith('/auth/') || 
     pathname.startsWith('/booking/') || 
+    // Check-in online del huésped (registro de viajeros): el enlace que recibe
+    // por email es público — la credencial es su token, no una sesión.
+    pathname.startsWith('/checkin/') || 
     pathname.startsWith('/embed/') ||
     pathname.startsWith('/tarjeta/') ||
     pathname.startsWith('/p/')

@@ -288,6 +288,7 @@ describe('runSeedVerticalBulk — todas las verticales', () => {
       if (v === 'insurance')      expect(result.modulesPlanned).toContain('insurance');
       if (v === 'accounting')     expect(result.modulesPlanned).toContain('finanzas');
       if (v === 'real_estate')    expect(result.modulesPlanned).toContain('catalogo');
+      if (v === 'hospitality')    expect(result.modulesPlanned).toContain('hospitality');
       if (v === 'general')        expect(result.modulesPlanned).toContain('leads');
     });
   }

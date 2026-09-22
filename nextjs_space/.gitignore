@@ -4,6 +4,9 @@ tsconfig.tsbuildinfo
 .tsbuildinfo.check
 # backup local de la limpieza de tenants (contiene datos, no es código)
 .cleanup-backup-*.json
+
+# volcados de seguridad de db:reset (contienen TODOS los datos de la base)
+backup-db-*.sql
 coverage/
 .env*
 traccar-device-mapping.json

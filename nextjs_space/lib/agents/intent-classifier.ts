@@ -1196,6 +1196,17 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       return { intent: 'resumen_gastos_pendientes', confidence: 0.85, extractedParams: extracted }
     }
 
+    // ═══ 0z-1b. CONSULTA INFORMATIVA DE GASTOS AUTORIZADOS ("cuántos gastos se
+    // autorizaron", "qué gastos se aprobaron") — es una PREGUNTA sobre lo ya
+    // autorizado, no una autorización: NUNCA debe ejecutar `autorizar_gastos`
+    // ni caer al fallback LLM (bajo carga clasifica mal y el flake de la suite
+    // venía de aquí). Excluye la interrogación y manda al resumen informativo.
+    const CONSULTA_AUTORIZADOS =
+      /\b(?:cu[aá]ntos?|cu[aá]nto|qu[eé])\s+gastos?\s+(?:se\s+)?(?:han\s+|fueron\s+|ya\s+)?(?:autorizaron|autorizados|aprobaron|aprobados)\b/i
+    if (CONSULTA_AUTORIZADOS.test(message) && !/\bautoriza\b|\baprueba\b/i.test(message)) {
+      return { intent: 'resumen_gastos_pendientes', confidence: 0.85, extractedParams: extracted }
+    }
+
     // ═══ 0z-2. IMPACTO DE VACACIONES ("cuál es el impacto de las vacaciones
     // de María", "qué pasa si Carlos se va de vacaciones") ═══
     const VAC_IMPACTO_SIGNAL =

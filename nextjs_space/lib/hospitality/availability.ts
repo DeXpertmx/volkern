@@ -5,8 +5,13 @@
  * calcula SIEMPRE desde el estado interno de Volkern (reservas activas),
  * nunca consultando al proveedor.
  *
- * - Un día está ocupado si existe una reserva activa (no cancelada) cuya
- *   estancia lo cubre. Check-in ocupa su día; check-out NO (plan §8).
+ * - Un día está ocupado si existe una reserva **que produce** cuya estancia lo
+ *   cubre. Check-in ocupa su día; check-out NO (plan §8).
+ * - «Que produce» es una sola definición, compartida con la analítica y el
+ *   resto de la vertical: `aportaProduccion` (§ estados.ts). Cancelada y
+ *   **no-show no bloquean la unidad**: una habitación que nadie ocupó vuelve al
+ *   inventario vendible, y el no-show sigue siendo un hecho facturable en su
+ *   reserva (el bloqueo es de inventario, no de cobro).
  * - La disponibilidad de una unidad es binaria (1 libre / 0 ocupada): las
  *   reservas se asignan a una unidad concreta.
  * - El empuje al exterior agrupa por roomCode (vía ConnectivityMapping):
@@ -14,6 +19,8 @@
  */
 
 import { startOfDay, toIsoDate } from './calendar';
+import { aportaProduccion, estadosSinProduccion } from './estados';
+import { finEstanciaReal } from './checkout';
 
 export interface AvailabilityUnit {
   id: string;
@@ -27,6 +34,8 @@ export interface ActiveReservationSpan {
   unitId: string | null;
   checkIn: Date;
   checkOut: Date;
+  /** Salida real (check-out anticipado, opción B); null si no hubo. */
+  checkOutReal?: Date | null;
   estado: string;
 }
 
@@ -39,7 +48,12 @@ export interface ActiveUnitBlockSpan {
 
 /**
  * ¿Una unidad está ocupada en una fecha concreta?
- * Una reserva activa cubre [checkIn, checkOut) — el día de checkout no cuenta.
+ * Una reserva activa cubre [checkIn, finReal) — el día de salida no cuenta.
+ *
+ * `finReal` es `min(checkOut, checkOutReal)` vía `finEstanciaReal` (módulo
+ * checkout): con salida anticipada, la habitación vacía vuelve a ser vendible
+ * desde la salida real. Con `cerrar_estancia` (A) el propio checkOut ya está
+ * acortado y esta función es inocua.
  */
 export function unitOccupiedOnDay(
   unitId: string,
@@ -48,9 +62,10 @@ export function unitOccupiedOnDay(
 ): boolean {
   const d = startOfDay(day).getTime();
   return reservations.some((r) => {
-    if (r.estado === 'cancelled') return false;
+    if (!aportaProduccion(r.estado)) return false;
     if (!r.unitId || r.unitId !== unitId) return false;
-    return startOfDay(r.checkIn).getTime() <= d && startOfDay(r.checkOut).getTime() > d;
+    const fin = finEstanciaReal(r.checkOut, r.checkOutReal);
+    return startOfDay(r.checkIn).getTime() <= d && startOfDay(fin).getTime() > d;
   });
 }
 
@@ -172,7 +187,7 @@ export async function loadAvailabilityContext(
       where: {
         tenantId,
         ...(propertyId ? { propertyId } : {}),
-        estado: { not: 'cancelled' },
+        estado: { notIn: estadosSinProduccion() },
         checkIn: { lt: end },
         checkOut: { gt: start },
       },
