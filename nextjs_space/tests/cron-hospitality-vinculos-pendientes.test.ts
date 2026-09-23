@@ -51,7 +51,12 @@ beforeEach(() => {
   mocks.connectivityMapping.findMany.mockResolvedValue([]);
   mocks.hospitalitySyncLog.findFirst.mockResolvedValue(null);
   mocks.hospitalitySyncLog.create.mockResolvedValue({ id: 'sync_1' });
-  mocks.user.findMany.mockResolvedValue([{ id: 'u_admin' }]);
+  // El aviso va a quien puede CONFIGURAR canales (capacidad
+  // `integraciones.gestionar`), no a quien se llame «Admin»: cada candidato
+  // llega con su rol y la regla del servidor decide.
+  mocks.user.findMany.mockResolvedValue([
+    { id: 'u_admin', role: { id: 'role-admin', nombre: 'Anfitrión', permisos: { all: true } } },
+  ]);
   mocks.sendPushNotification.mockResolvedValue({ success: true });
 });
 

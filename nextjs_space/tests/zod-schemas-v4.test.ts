@@ -745,9 +745,10 @@ describe('ExternalInvoiceCreateSchema', () => {
     ok(ExternalInvoiceCreateSchema, { contactId: 'cuid12345678901234567890222', amount: 300 });
   });
   it('debe rechazar sin leadId ni contactId', () => fail(ExternalInvoiceCreateSchema, { amount: 100 }));
-  it('debe aplicar default currency=EUR', () => {
+  it('no inventa una divisa cuando el cliente no la envía', () => {
+    // La factura se emite en la moneda de reporte del tenant; el esquema no la fija.
     const r = ok(ExternalInvoiceCreateSchema, valid);
-    expect(r.currency).toBe('EUR');
+    expect(r.currency).toBeUndefined();
   });
   it('debe aplicar default description="Factura externa"', () => {
     const r = ok(ExternalInvoiceCreateSchema, valid);

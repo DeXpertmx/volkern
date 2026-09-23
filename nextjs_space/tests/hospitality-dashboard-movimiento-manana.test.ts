@@ -45,7 +45,7 @@ import { GET } from '@/app/api/hospitality/dashboard/route';
 import { ventanaDeDiaLocal } from '@/lib/hospitality/calendar';
 import { estadosSinMovimiento } from '@/lib/hospitality/estados';
 
-const auth = { valid: true, tenant: { id: 'tenant_a' }, user: { id: 'user_a' } };
+const auth = { valid: true, tenant: { id: 'tenant_a' }, user: { id: 'user_a', role: { id: 'role_test', nombre: 'Superadmin', permisos: { all: true } } } };
 
 beforeEach(() => {
   vi.clearAllMocks();

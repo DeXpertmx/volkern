@@ -57,7 +57,7 @@ function reqConBody(body: unknown, url = 'https://volkern.app/api/hospitality/on
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.authenticateRequest.mockResolvedValue({ valid: true, tenant: { id: 't1' }, user: { id: 'u1' } });
+  mocks.authenticateRequest.mockResolvedValue({ valid: true, tenant: { id: 't1' }, user: { id: 'u1', role: { id: 'role_test', nombre: 'Superadmin', permisos: { all: true } } } });
   mocks.hospitalityProperty.findFirst.mockResolvedValue(PROPIEDAD);
   mocks.hospitalityProperty.findMany.mockResolvedValue([PROPIEDAD]);
   mocks.hospitalityProperty.update.mockResolvedValue({ ...PROPIEDAD, estado: 'conectada' });

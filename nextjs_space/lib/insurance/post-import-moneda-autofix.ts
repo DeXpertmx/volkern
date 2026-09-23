@@ -36,6 +36,7 @@ import {
   type CurrencyResolution,
 } from './tenant-currency-resolver';
 import type { Currency } from './currency';
+import { MONEDA_MINIMA_ESQUEMA } from '@/lib/moneda';
 
 /** Motivo por el que decidimos actuar o no actuar. Útil para diagnóstico. */
 export type AutoFixReason =
@@ -126,11 +127,11 @@ export async function maybeAutoFixTenantCurrencyAfterImport(
     throw new Error(`[auto-fix-moneda] tenant no encontrado: ${tenantId}`);
   }
 
-  const previousMoneda = (tenant.moneda ?? 'MXN') as Currency;
+  const previousMoneda = (tenant.moneda ?? MONEDA_MINIMA_ESQUEMA) as Currency;
 
   // 2. Regla: si el tenant no está en MXN default, no auto-fixeamos nada.
   //    El broker ya eligió su moneda intencionadamente.
-  if (previousMoneda !== 'MXN') {
+  if (previousMoneda !== MONEDA_MINIMA_ESQUEMA) {
     return makeResult({
       reason: 'already-correct',
       previousMoneda,
@@ -138,7 +139,7 @@ export async function maybeAutoFixTenantCurrencyAfterImport(
       appliedMoneda: undefined,
       resolverSource: 'explicit',
       distribution: await groupByMoneda(batchRows),
-      mensaje: `Tenant ya tiene moneda ${previousMoneda} (no es el default MXN). No auto-fixeamos.`,
+      mensaje: `Tenant ya tiene moneda ${previousMoneda} (no es el default ${MONEDA_MINIMA_ESQUEMA}). No auto-fixeamos.`,
       changed: false,
     });
   }
@@ -160,11 +161,11 @@ export async function maybeAutoFixTenantCurrencyAfterImport(
 
   // 4. Resolver: distribución del batch + decisión
   const distribution = await groupByMoneda(batchRows);
-  const resolution = resolveTenantCurrency(null, distribution, { fallbackDefault: 'MXN' });
+  const resolution = resolveTenantCurrency(null, distribution, { fallbackDefault: MONEDA_MINIMA_ESQUEMA });
 
   // 5. Regla: auto-fix sólo cuando source='auto-from-polizas' Y la moneda
   //    sugerida NO es el fallback default 'MXN'.
-  if (resolution.source !== 'auto-from-polizas' || resolution.moneda === 'MXN') {
+  if (resolution.source !== 'auto-from-polizas' || resolution.moneda === MONEDA_MINIMA_ESQUEMA) {
     const reason: AutoFixReason =
       Object.keys(distribution).length === 0
         ? 'empty-distribution'

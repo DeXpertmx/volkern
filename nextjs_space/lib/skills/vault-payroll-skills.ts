@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db';
+import { monedaEscritura } from '@/lib/moneda';
 import { VaultService } from '../security/vault';
 import { SkillContext } from './context';
 import crypto from 'crypto';
@@ -16,7 +17,7 @@ export async function orchestrate_secure_payroll({ tenantId, employeeId, ctx }: 
 
   const employee = await prisma.employee.findUnique({
     where: { id: employeeId, tenantId },
-    include: { tenant: { select: { vaultSeed: true } } }
+    include: { tenant: { select: { vaultSeed: true, moneda: true } } }
   });
 
   if (!employee) throw new Error('Empleado no encontrado');
@@ -54,7 +55,8 @@ export async function orchestrate_secure_payroll({ tenantId, employeeId, ctx }: 
     consolidatedSummary: {
       baseSalary: decryptedSalary > 0 ? 'CONECTADO (Cifrado)' : 'NO_CONFIGURADO',
       verifiedExpenses: bonusAmount,
-      currency: 'EUR'
+      // La divisa de la nómina es la de la cuenta, no un euro escrito aquí.
+      currency: monedaEscritura(employee.tenant?.moneda)
     },
     totalToDisburse: totalConsolidated,
     controlHash,

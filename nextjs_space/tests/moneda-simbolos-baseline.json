@@ -1,0 +1,191 @@
+{
+  "app/.well-known/agent-card.json/route.ts": {
+    "simbolo": 2
+  },
+  "app/admin/billing/page.tsx": {
+    "simbolo": 5
+  },
+  "app/admin/marketing/page.tsx": {
+    "simbolo": 2
+  },
+  "app/admin/planes/page.tsx": {
+    "simbolo": 2
+  },
+  "app/admin/saas/churn/page.tsx": {
+    "simbolo": 2
+  },
+  "app/admin/saas/page.tsx": {
+    "simbolo": 1
+  },
+  "app/admin/saas/revenue/page.tsx": {
+    "simbolo": 7
+  },
+  "app/admin/saas/tenants/[id]/page.tsx": {
+    "simbolo": 9
+  },
+  "app/admin/saas/tenants/page.tsx": {
+    "simbolo": 5
+  },
+  "app/api/customer/chat/route.ts": {
+    "simbolo": 1
+  },
+  "app/api/invoices/[id]/pdf/route.ts": {
+    "simbolo": 1
+  },
+  "app/api/invoices/[id]/send-email/route.ts": {
+    "simbolo": 1
+  },
+  "app/api/subscriptions/create/route.ts": {
+    "simbolo": 1
+  },
+  "app/api/webhooks/telegram/route.ts": {
+    "simbolo": 1
+  },
+  "app/checkout/page.tsx": {
+    "simbolo": 4
+  },
+  "app/dashboard/compliance/page.tsx": {
+    "simbolo": 1
+  },
+  "app/dashboard/configuracion/billing/page.tsx": {
+    "simbolo": 1
+  },
+  "app/dashboard/finanzas/contabilidad/modelo347/page.tsx": {
+    "simbolo": 1
+  },
+  "app/dashboard/strategy/page.tsx": {
+    "simbolo": 1
+  },
+  "app/member/dashboard/page.tsx": {
+    "simbolo": 3
+  },
+  "app/neting/page.tsx": {
+    "simbolo": 4
+  },
+  "app/precios/page.tsx": {
+    "simbolo": 3
+  },
+  "app/signup/page.tsx": {
+    "simbolo": 1
+  },
+  "app/terms/page.tsx": {
+    "simbolo": 1
+  },
+  "components/admin/GlobalAnalytics.tsx": {
+    "simbolo": 1
+  },
+  "components/ads/AdsBudgetRuleForm.tsx": {
+    "simbolo": 1
+  },
+  "components/compliance/ComplianceProUpgrade.tsx": {
+    "simbolo": 3
+  },
+  "components/dashboard-stats.tsx": {
+    "simbolo": 2
+  },
+  "components/hr/BenefitsManager.tsx": {
+    "simbolo": 1
+  },
+  "components/hr/PayrollExecutionConsole.tsx": {
+    "simbolo": 3
+  },
+  "components/hr/PayrollReview.tsx": {
+    "simbolo": 2
+  },
+  "components/hr/PayrollVault.tsx": {
+    "simbolo": 8
+  },
+  "components/hubs/ConfiguracionDashboard.tsx": {
+    "simbolo": 1
+  },
+  "components/hubs/InventarioDashboard.tsx": {
+    "simbolo": 1
+  },
+  "components/hubs/ProduccionDashboard.tsx": {
+    "simbolo": 6
+  },
+  "components/hubs/ProyectosDashboard.tsx": {
+    "simbolo": 6
+  },
+  "components/hubs/accounting/ReconciliationDashboard.tsx": {
+    "simbolo": 2
+  },
+  "components/insurance/MapaCartera.tsx": {
+    "simbolo": 2
+  },
+  "components/public/ComplianceProLanding.tsx": {
+    "simbolo": 1
+  },
+  "components/sovereignty/integrity-graph.tsx": {
+    "simbolo": 1
+  },
+  "components/webcreator/VariableDocumentationPanel.tsx": {
+    "simbolo": 3
+  },
+  "components/webcreator/blocks/DocumentBlocks.ts": {
+    "simbolo": 4
+  },
+  "components/webcreator/blocks/components/BookingBlock.ts": {
+    "simbolo": 1
+  },
+  "lib/accounting/fiscal-calendar-service.ts": {
+    "simbolo": 1
+  },
+  "lib/accounting/proactivity-worker.ts": {
+    "simbolo": 1
+  },
+  "lib/agents/command-validator.ts": {
+    "simbolo": 2
+  },
+  "lib/agents/intents/crm-intents.ts": {
+    "simbolo": 3
+  },
+  "lib/agents/intents/finance-intents.ts": {
+    "simbolo": 5
+  },
+  "lib/agents/response-formatter.ts": {
+    "simbolo": 7
+  },
+  "lib/approval-workflow-service.ts": {
+    "simbolo": 14
+  },
+  "lib/compliance-rules.ts": {
+    "simbolo": 2
+  },
+  "lib/erp/pdf-service.ts": {
+    "simbolo": 9
+  },
+  "lib/insurance/connectors/gnp/mock-data.ts": {
+    "simbolo": 5
+  },
+  "lib/insurance/connectors/qualitas/mock-data.ts": {
+    "simbolo": 2
+  },
+  "lib/insurance/connectors/tirea/mock-data.ts": {
+    "simbolo": 2
+  },
+  "lib/navigation-config.ts": {
+    "simbolo": 1
+  },
+  "lib/puck/components/index.tsx": {
+    "simbolo": 2
+  },
+  "lib/puck/puck-config.tsx": {
+    "simbolo": 3
+  },
+  "lib/sales/morning-briefing-service.ts": {
+    "simbolo": 1
+  },
+  "lib/seo/agent-skills.ts": {
+    "simbolo": 2
+  },
+  "lib/skills/cost-ai-skills.ts": {
+    "simbolo": 2
+  },
+  "lib/skills/index.ts": {
+    "simbolo": 1
+  },
+  "lib/skills/real-estate-skills.ts": {
+    "simbolo": 3
+  }
+}

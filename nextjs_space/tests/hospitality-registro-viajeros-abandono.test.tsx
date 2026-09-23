@@ -44,6 +44,7 @@ vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
 }));
 
+import { olvidarRolCacheado } from '@/hooks/use-capacidades-hospitality';
 import RegistroViajerosPage from '@/app/dashboard/hospitality/registro-viajeros/page';
 
 /** Respuesta de la API del registro: solo se informa lo que mira la pantalla. */
@@ -139,6 +140,15 @@ const ABANDONADO_SIN_ENTREGAR = {
 
 function montarFetch(estado: unknown) {
   return vi.fn(async (url: string, init?: RequestInit) => {
+    // Qué acciones ofrece la pantalla depende del rol de la sesión
+    // (`useCapacidadesHospitality`). Aquí el operador del hotel puede todo:
+    // esta prueba vigila el abandono de partes, no los permisos.
+    if (String(url).includes('/api/users/me')) {
+      return {
+        ok: true,
+        json: async () => ({ role: { id: 'rol-1', nombre: 'Admin', permisos: { all: true } } }),
+      };
+    }
     if (String(url).includes('/api/hospitality/registro-viajeros')) {
       if (init?.method === 'POST') {
         const cuerpo = JSON.parse(String(init.body));
@@ -155,6 +165,8 @@ function montarFetch(estado: unknown) {
 
 describe('Panel del hotel: partes sin reintentar', () => {
   beforeEach(() => {
+    // El rol se cachea en el módulo del hook: cada prueba parte sin rol.
+    olvidarRolCacheado();
     vi.clearAllMocks();
     global.fetch = montarFetch(estadoDeLaApi({})) as unknown as typeof fetch;
   });

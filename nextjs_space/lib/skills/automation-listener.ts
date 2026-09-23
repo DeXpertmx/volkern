@@ -37,6 +37,7 @@ import type {
   SocialPostPublishedEvent,
   EmployeeCreatedEvent,
   EvaluationCompletedEvent,
+  TrainingCompletedEvent,
   InvoiceDueEvent,
   ExpenseSubmittedEvent,
   InspectionCompletedEvent,
@@ -507,13 +508,18 @@ function eventToAutomationContext(event: EventType, payload: BaseEventPayload): 
     }
 
     case EVENTS.TRAINING_COMPLETED: {
-      const trainPayload = payload as EvaluationCompletedEvent;
+      // El emisor real es el cierre de sesión del simulador (training-skills),
+      // no una evaluación de RRHH: el payload tipado es TrainingCompletedEvent
+      // (trainingId, employeeId, employeeNombre, puntuacion, cursoNombre).
+      // Antes se leía evaluationId sobre este payload — siempre undefined.
+      const trainPayload = payload as TrainingCompletedEvent;
       return {
         ...baseContext,
-        trainingId: trainPayload.evaluationId,
+        trainingId: trainPayload.trainingId,
         employeeId: trainPayload.employeeId,
         employeeNombre: trainPayload.employeeNombre,
         puntuacion: trainPayload.puntuacion,
+        cursoNombre: trainPayload.cursoNombre,
       };
     }
 

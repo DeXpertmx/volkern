@@ -15,6 +15,7 @@
  */
 
 import type { InmuebleParsed } from '../property-helpers';
+import { monedaEfectiva } from '@/lib/moneda';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -313,7 +314,7 @@ export function propertyToMLS(
 
     // Precios
     price: property.precioBase,
-    currency: property.moneda || 'EUR',
+    currency: monedaEfectiva([property.moneda]),
     ...(property.areaM2 && property.areaM2 > 0
       ? { pricePerM2: Math.round(property.precioBase / property.areaM2) }
       : {}),

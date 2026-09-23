@@ -1,5 +1,5 @@
 /**
- * CurrencyMenu — fuente única del menú numerado de monedas.
+ * CurrencyMenu — fuente única del menú numerado de monedas del alta de cuentas.
  *
  * Compartido por:
  *   • `scripts/seed-partner-tenants.ts` (CLI con readline en TTY).
@@ -11,16 +11,29 @@
  * a mano. Centralizando la lista + las notas humanas + la lógica
  * "1..N o código válido", un único cambio afecta ambos frontend.
  *
+ * Qué NO es: este módulo ya no sabe nada de divisas. La lista, los nombres, los
+ * símbolos y las notas viven en `lib/moneda.ts` —el único archivo de la
+ * plataforma que puede nombrar una divisa— y aquí solo se le pone número y
+ * forma de menú. Antes declaraba dos tablas `Record<Currency, …>` con los doce
+ * códigos repetidos, que es exactamente la duplicación que la guardia de dinero
+ * existe para impedir.
+ *
  * Decisión de diseño : el menú NO hace I/O ni side effects. Solo devuelve
  * la lista + helpers (renderOptions, parseAnswer). El caller decide si
  * persiste (script → BD, UI → state del formulario).
  */
-import { SUPPORTED_CURRENCIES, type Currency } from './currency';
+import {
+  CATALOGO_MONEDAS,
+  chipMoneda,
+  etiquetaMoneda,
+  MONEDA_MINIMA_ESQUEMA,
+  type Currency,
+} from '@/lib/moneda';
 
 export interface CurrencyMenuOption {
-  /** Código ISO 4217 de la moneda (e.g. 'EUR'). */
+  /** Código ISO 4217 de la moneda. */
   code: Currency;
-  /** Número del menú (1..N). Estable según el orden de SUPPORTED_CURRENCIES. */
+  /** Número del menú (1..N). Estable según el orden del catálogo. */
   index: number;
   /** Etiqueta humana con formato `EUR — Euro (€)` para máxima claridad. */
   label: string;
@@ -28,55 +41,23 @@ export interface CurrencyMenuOption {
   nota: string;
 }
 
-/** Tabla de notas explicativas, alineadas con el script CLI existente. */
-const NOTAS_POR_MONEDA: Record<Currency, string> = {
-  USD: 'Recomendado para brokers estadounidenses',
-  EUR: 'Recomendado para brokers europeos',
-  MXN: 'Default conservador — solo si operas principalmente en México',
-  GBP: 'Recomendado para brokers británicos',
-  JPY: 'Yen japonés',
-  CNY: 'Yuan chino (RMB)',
-  CAD: 'Dólar canadiense',
-  BRL: 'Real brasileño',
-  CLP: 'Peso chileno',
-  ARS: 'Peso argentino (alta volatilidad)',
-  COP: 'Peso colombiano',
-  PEN: 'Sol peruano',
-};
-
-/** Tabla de nombres completos + símbolos (para el label humano). */
-const NOMBRES_POR_MONEDA: Record<Currency, { nombre: string; simbolo: string }> = {
-  USD: { nombre: 'Dólar estadounidense', simbolo: '$' },
-  EUR: { nombre: 'Euro',                 simbolo: '€' },
-  MXN: { nombre: 'Peso mexicano',        simbolo: '$' },
-  GBP: { nombre: 'Libra esterlina',      simbolo: '£' },
-  JPY: { nombre: 'Yen japonés',          simbolo: '¥' },
-  CNY: { nombre: 'Yuan chino',           simbolo: '¥' },
-  CAD: { nombre: 'Dólar canadiense',     simbolo: '$' },
-  BRL: { nombre: 'Real brasileño',       simbolo: 'R$' },
-  CLP: { nombre: 'Peso chileno',         simbolo: '$' },
-  ARS: { nombre: 'Peso argentino',       simbolo: '$' },
-  COP: { nombre: 'Peso colombiano',      simbolo: '$' },
-  PEN: { nombre: 'Sol peruano',          simbolo: 'S/' },
-};
+/** Tamaño del menú. Se usa para validar el número que teclea el usuario. */
+const TOTAL_MONEDAS = CATALOGO_MONEDAS.length;
 
 /**
  * Devuelve la lista canónica de opciones del menú (1..N) en el mismo orden
- * que `SUPPORTED_CURRENCIES` (que es el orden que el script CLI usa).
+ * que `MONEDAS_SOPORTADAS` (que es el orden que el script CLI usa).
  *
  * Caller: tanto el seed CLI (para renderizar el menu en consola) como el
  * componente UI (para poblar el `<Select>` con los mismos items).
  */
 export function getCurrencyMenuOptions(): CurrencyMenuOption[] {
-  return SUPPORTED_CURRENCIES.map((code, i) => {
-    const meta = NOMBRES_POR_MONEDA[code] ?? { nombre: code, simbolo: '' };
-    return {
-      code,
-      index: i + 1,
-      label: `${code} — ${meta.nombre} (${meta.simbolo})`,
-      nota: NOTAS_POR_MONEDA[code] ?? '',
-    };
-  });
+  return CATALOGO_MONEDAS.map((moneda, i) => ({
+    code: moneda.codigo,
+    index: i + 1,
+    label: etiquetaMoneda(moneda.codigo),
+    nota: moneda.nota,
+  }));
 }
 
 /**
@@ -99,38 +80,37 @@ export interface CurrencyPromptResult {
 export function parseCurrencyAnswer(raw: string): CurrencyPromptResult {
   const trimmed = (raw ?? '').trim();
   if (!trimmed) {
-    return { code: 'MXN', source: 'default' };
+    return { code: MONEDA_MINIMA_ESQUEMA, source: 'default' };
   }
   const upper = trimmed.toUpperCase();
 
-  // Acepta número 1..12
+  // Acepta número 1..N del menú
   const asNumber = Number(upper);
-  if (Number.isInteger(asNumber) && asNumber >= 1 && asNumber <= SUPPORTED_CURRENCIES.length) {
-    return { code: SUPPORTED_CURRENCIES[asNumber - 1], source: 'number' };
+  if (Number.isInteger(asNumber) && asNumber >= 1 && asNumber <= TOTAL_MONEDAS) {
+    return { code: CATALOGO_MONEDAS[asNumber - 1].codigo, source: 'number' };
   }
 
   // Acepta código directo
-  if ((SUPPORTED_CURRENCIES as readonly string[]).includes(upper)) {
-    return { code: upper as Currency, source: 'code' };
+  const porCodigo = CATALOGO_MONEDAS.find((m) => m.codigo === upper);
+  if (porCodigo) {
+    return { code: porCodigo.codigo, source: 'code' };
   }
 
-  return { code: 'MXN', source: 'invalid' };
+  return { code: MONEDA_MINIMA_ESQUEMA, source: 'invalid' };
 }
 
 /**
- * Devuelve una etiqueta corta (`EUR`, `USD`, ...) con emoji de fuente.
- * Para usar en chips del UI y de los toast del wizard.
+ * Devuelve una etiqueta corta (`EUR`, `USD`, ...) con el símbolo delante.
+ * Para usar en chips del UI y en los toast del wizard.
  *
  *   currencyChip('EUR') → '€ · EUR'
  *   currencyChip('MXN') → '$ · MXN'
  */
 export function currencyChip(code: Currency): string {
-  const meta = NOMBRES_POR_MONEDA[code];
-  const simbolo = meta?.simbolo ?? '';
-  return simbolo ? `${simbolo} · ${code}` : code;
+  return chipMoneda(code);
 }
 
-/** Comentario para la CLI: imprenta el menú numerado bonito en stderr. */
+/** Comentario para la CLI: imprime el menú numerado bonito en stderr. */
 export function printCurrencyMenuToConsole(stderrWrite: (line: string) => void): void {
   stderrWrite('');
   stderrWrite('  Opciones:');

@@ -57,7 +57,7 @@ vi.mock('@/lib/hospitality/checkin-preguntas', async (importOriginal) => {
   return { ...real };
 });
 
-const auth = { valid: true, tenant: { id: 'tenant_a' }, user: { id: 'user_a' } };
+const auth = { valid: true, tenant: { id: 'tenant_a' }, user: { id: 'user_a', role: { id: 'role_test', nombre: 'Superadmin', permisos: { all: true } } } };
 
 beforeEach(() => {
   vi.clearAllMocks();

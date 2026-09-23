@@ -9,6 +9,14 @@ export class PipelineWatchdog {
   static async runWatchdog(tenantId: string) {
     // 1. Recalcular salud
     const updatedDeals = await PipelineHealthService.syncPipelineHealth(tenantId);
+
+    // 1.5 PUERTA DE PRÁCTICA (bucle riesgo → roleplay): los deals activos que
+    // acaban de caer a CRÍTICO deben ensayar la conversación con su cliente
+    // real antes de volver a contactarlo. Idempotente: si ya tenían la puerta,
+    // no re-notifica ni re-emite. La levanta el post-mortem con puntuación
+    // suficiente (training-gate).
+    const { TrainingGateService } = await import('./training-gate-service');
+    const puertas = await TrainingGateService.abrirPuertas(tenantId);
     
     // 2. Identificar riesgos críticos para alertas (Silenciar si se alertó hace menos de 24h)
     const criticalDeals = updatedDeals.filter(d => 
@@ -61,7 +69,8 @@ export class PipelineWatchdog {
 
     return {
       scanned: updatedDeals.length,
-      alerts: criticalDeals.length
+      alerts: criticalDeals.length,
+      puertasAbiertas: puertas.abiertas
     };
   }
 }

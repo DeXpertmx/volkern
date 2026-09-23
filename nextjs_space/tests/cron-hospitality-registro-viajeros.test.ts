@@ -43,7 +43,7 @@ import {
   resumenDelBarrido,
   runRegistroViajerosScan,
 } from '../lib/cron/hospitality-registro-viajeros';
-import { MAX_INTENTOS_PARTE, esperaReintentoMs } from '../lib/hospitality/parte-rechazo';
+import { MAX_INTENTOS_PARTE, esperaReintentoConJitterMs } from '../lib/hospitality/parte-rechazo';
 import { ESTADO_REGISTRO, VENTANA_LOTE_MS } from '../lib/hospitality/registro-viajeros-service';
 import {
   ESTADOS_ACTIVOS_REGISTRO,
@@ -172,12 +172,19 @@ describe('Barrido del registro de viajeros', () => {
 
     // Cada peldaño perdon los intentos ya gastados con SU espera: 1h tras el
     // primero, 2h tras el segundo, 4h, 8h, 16h (el tope del peldaño).
+    // Con el JITTER (±20 %) los límites de la pasada ya no son los peldaños
+    // pelados: cada uno cae dentro de su banda [mínimo, máximo] de la función
+    // con azar — las bandas NO se solapan, así que el espaciado sigue creciendo.
     const esperas = espaciado.OR.map((rama) => ahora.getTime() - rama.fechaEdicion.gt.getTime());
-    expect(esperas[0]).toBe(esperaReintentoMs(1));
-    expect(esperas[1]).toBe(esperaReintentoMs(2));
-    expect(esperas[2]).toBe(esperaReintentoMs(3));
-    expect(esperas[3]).toBe(esperaReintentoMs(4));
-    expect(esperas[4]).toBe(esperaReintentoMs(5));
+    const banda = (n: number) => ({
+      min: esperaReintentoConJitterMs(n, () => 0),
+      max: esperaReintentoConJitterMs(n, () => 1),
+    });
+    [1, 2, 3, 4, 5].forEach((n, i) => {
+      const { min, max } = banda(n);
+      expect(esperas[i]).toBeGreaterThanOrEqual(min);
+      expect(esperas[i]).toBeLessThanOrEqual(max);
+    });
     // La propiedad que justifica el cambio: estrictamente crecientes.
     expect(esperas[0]).toBeLessThan(esperas[1]);
     expect(esperas[1]).toBeLessThan(esperas[2]);
@@ -185,14 +192,14 @@ describe('Barrido del registro de viajeros', () => {
     expect(esperas[3]).toBeLessThan(esperas[4]);
   });
 
-  it('los límites del cron salen de la MISMA regla que la del módulo puro', () => {
+  it('los límites del cron salen de la MISMA regla que la del módulo puro (con jitter)', () => {
     // Si el cron calcula sus fechas con otra fórmula, la pantalla (que usa la
     // función pura) y el barrido discutirían de cuándo toca reintentar.
     const fuenteCron = readFileSync(
       path.resolve(__dirname, '..', 'lib/cron/hospitality-registro-viajeros.ts'),
       'utf8'
     );
-    expect(fuenteCron).toContain('esperaReintentoMs(');
+    expect(fuenteCron).toContain('esperaReintentoConJitterMs(');
     expect(fuenteCron).not.toContain('ESPERA_REINTENTO_MS');
   });
 

@@ -196,8 +196,13 @@ describe('Bloque 25 — respuestas de ventas que recibe Telegram', () => {
     expect(result.success).toBe(true);
     expect(result.response).toContain('Negocio creado');
     expect(result.response).toContain('Implementación ERP');
-    expect(result.response).toContain('12500');
-    expect(result.response).toContain('EUR');
+    // El importe se escribe en la divisa del negocio y con su símbolo, no con la
+    // cifra pelada y el código ISO al lado.
+    expect(result.response.replace(/\\/g, '')).toContain('12.500,00');
+    // El símbolo va tras un espacio duro, así que se comprueba aparte.
+    expect(result.response).toContain('€');
+    expect(result.response).not.toContain('12500');
+    expect(result.response).not.toContain('EUR');
     expect(result.response).toContain('calificacion');
     expect(mocks.createDeal).toHaveBeenCalledWith(expect.objectContaining({
       tenantId: TENANT,
@@ -228,7 +233,9 @@ describe('Bloque 25 — respuestas de ventas que recibe Telegram', () => {
     expect(result.success).toBe(true);
     expect(result.response).toContain('Negocio actualizado');
     expect(result.response).toContain('negociacion');
-    expect(result.response).toContain('15000');
+    expect(result.response.replace(/\\/g, '')).toContain('15.000,00');
+    expect(result.response).toContain('€');
+    expect(result.response).not.toContain('15000');
     expect(result.response).toContain('alta');
     expect(mocks.updateDeal).toHaveBeenCalledWith(expect.objectContaining({
       tenantId: TENANT,

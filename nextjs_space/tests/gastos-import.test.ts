@@ -12,6 +12,9 @@ const { prismaMock, createExpenseMock } = vi.hoisted(() => ({
     expense: {
       findFirst: vi.fn(),
     },
+    tenant: {
+      findUnique: vi.fn(),
+    },
   },
   createExpenseMock: vi.fn(),
 }))
@@ -82,6 +85,7 @@ describe('POST /api/erp/expenses/import', () => {
     vi.clearAllMocks()
     prismaMock.supplier.findFirst.mockResolvedValue(SUPPLIER_1)
     prismaMock.expense.findFirst.mockResolvedValue(null)
+    prismaMock.tenant.findUnique.mockResolvedValue({ moneda: 'MXN' })
     createExpenseMock.mockResolvedValue({ id: 'exp-1' })
   })
 
@@ -140,6 +144,21 @@ describe('POST /api/erp/expenses/import', () => {
     expect(arg.vatBreakdown).toEqual([{ rate: 21, base: 100, amount: 21 }])
     expect(arg.vatRate).toBe(21)
     expect(arg.date).toBeInstanceOf(Date)
+    // El fichero no trae divisa: el gasto se guarda con la moneda del tenant,
+    // no con el 'EUR' que estaba fijado en la ruta.
+    expect(arg.currency).toBe('MXN')
+  })
+
+  it('sin moneda en el tenant no se inventa euros', async () => {
+    const buffer = buildWorkbookBuffer([
+      ['Empresa A SL', 'A11111111', '01/01/2026', 'FA-9', 100, '', '', '', '', '', '', 21, 121],
+    ])
+    prismaMock.tenant.findUnique.mockResolvedValue(null)
+
+    await POST(makeRequest(buffer, 'commit'))
+
+    const arg = createExpenseMock.mock.calls[0][0]
+    expect(arg.currency).not.toBe('EUR')
   })
 
   it('crea el proveedor nuevo si no existe por CIF ni nombre (commit)', async () => {

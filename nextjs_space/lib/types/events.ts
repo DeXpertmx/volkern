@@ -109,6 +109,8 @@ export const EVENTS = {
   EMPLOYEE_TERMINATED: 'employee_terminated',
   EVALUATION_COMPLETED: 'evaluation_completed',
   EVALUATION_DUE: 'evaluation_due',
+  /** La puerta de práctica se abre: oportunidad en riesgo crítico que exige ensayar antes de contactar (training-gate). */
+  TRAINING_REQUIRED: 'training_required',
   TRAINING_COMPLETED: 'training_completed',
   CERTIFICATION_EXPIRED: 'certification_expired',
 
@@ -513,6 +515,19 @@ export interface EvaluationDueEvent extends BaseEventPayload {
   tipo: string;
 }
 
+/**
+ * Puerta de práctica abierta (bucle riesgo → roleplay). Reutiliza la forma del
+ * payload de formación (`evaluationId`, `employeeId`, `employeeNombre`) porque
+ * el automation-listener mapea los eventos de formación con esos nombres:
+ * `evaluationId` lleva `gate_<dealId>`, `employeeNombre` el título del deal.
+ */
+export interface TrainingRequiredEvent extends BaseEventPayload {
+  evaluationId: string;
+  employeeId: string;
+  employeeNombre: string;
+  puntuacion?: number;
+}
+
 export interface TrainingCompletedEvent extends BaseEventPayload {
   trainingId: string;
   employeeId: string;
@@ -761,6 +776,7 @@ export type EventPayloadMap = {
   [EVENTS.EMPLOYEE_TERMINATED]: EmployeeTerminatedEvent;
   [EVENTS.EVALUATION_COMPLETED]: EvaluationCompletedEvent;
   [EVENTS.EVALUATION_DUE]: EvaluationDueEvent;
+  [EVENTS.TRAINING_REQUIRED]: TrainingRequiredEvent;
   [EVENTS.TRAINING_COMPLETED]: TrainingCompletedEvent;
   [EVENTS.CERTIFICATION_EXPIRED]: CertificationExpiredEvent;
 

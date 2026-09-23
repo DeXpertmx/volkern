@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db';
 import { Prisma, type HospitalityReservation } from '@prisma/client';
+import { monedaEscritura } from '@/lib/moneda';
 import { normalizeExternalCode } from '@/lib/hospitality/codigos';
 import {
   ocupacionDePayload,
@@ -506,7 +507,9 @@ function extractAmount(payload: WebhookReservationPayload) {
     amountAfterTax: a.amountAfterTax ?? null,
     amountBeforeTax: a.amountBeforeTax ?? null,
     tax: a.tax ?? null,
-    currency: a.currency || 'MXN',
+    // Divisa que manda el canal. Si no la trae, el mínimo del esquema: aquí no
+    // hay tenant del que tirar (el payload llega de fuera).
+    currency: monedaEscritura(a.currency),
     commission: a.commission ?? null,
     tcs: a.tcs ?? null,
     tds: a.tds ?? null,

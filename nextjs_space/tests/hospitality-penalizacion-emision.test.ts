@@ -51,7 +51,7 @@ import {
   TIPO_LINEA_PENALIZACION,
 } from '@/lib/hospitality/penalizaciones';
 
-const auth = { valid: true, tenant: { id: 'tenant_a' }, user: { id: 'user_a' } };
+const auth = { valid: true, tenant: { id: 'tenant_a' }, user: { id: 'user_a', role: { id: 'role_test', nombre: 'Superadmin', permisos: { all: true } } } };
 
 /** Reserva no-show de 5 noches por 700, vendida por el propio hotel. */
 const reservaNoShow = (overrides: Record<string, unknown> = {}) => ({

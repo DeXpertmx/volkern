@@ -3992,6 +3992,8 @@ const suggestCustomerResponseWrapper = async (input: {
   email?: string;
   nombre?: string;
   mensaje?: string;
+  /** Vendedor que practica: propaga a generateCustomerResponse para que la escalada (C2) use SU récord. */
+  userId?: string;
 }) => {
   const { tenantId, email, nombre } = input;
   const agentMessage = (input.mensaje || '').trim() || 'Hola, quería contarte cómo podemos ayudarte.';
@@ -4014,6 +4016,7 @@ const suggestCustomerResponseWrapper = async (input: {
     leadId: lead.id,
     tenantId,
     agentMessage,
+    agentId: input.userId,
   });
 };
 

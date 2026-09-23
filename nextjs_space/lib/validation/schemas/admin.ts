@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MONEDA_PLATAFORMA } from '@/lib/moneda';
 
 // ─── Tenants ───────────────────────────────────────────────
 
@@ -8,7 +9,8 @@ export const TenantCreateSchema = z.object({
   plan: z.string().optional().default('trial'),
   dominio: z.string().optional(),
   billingEmail: z.string().email('Email de facturación inválido').optional().or(z.literal('')),
-  moneda: z.string().optional().default('EUR'),
+  // Una cuenta nueva nace con la divisa con la que Volkern factura sus planes.
+  moneda: z.string().optional().default(MONEDA_PLATAFORMA),
   estado: z.enum(['activo', 'inactivo', 'suspendido', 'trial']).optional().default('activo'),
   limites: z.record(z.unknown()).optional(),
   trialDays: z.coerce.number().int().min(1).optional(),
@@ -60,7 +62,9 @@ export const TenantOperationSchema = z.object({
 export const PlanCreateSchema = z.object({
   nombre: z.string().min(1, 'El nombre del plan es obligatorio'),
   precio: z.coerce.number({ invalid_type_error: 'El precio debe ser un número válido' }),
-  moneda: z.string().optional().default('MXN'),
+  // Los planes son el catálogo de Volkern y se publican en la divisa de la
+  // plataforma: su precio no se factura en pesos por no indicarlo.
+  moneda: z.string().optional().default(MONEDA_PLATAFORMA),
   intervalo: z.string().optional().default('mensual'),
   limiteUsuarios: z.coerce.number().int().optional().default(0),
   limiteLeads: z.coerce.number().int().optional().default(0),

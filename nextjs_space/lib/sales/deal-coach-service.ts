@@ -22,9 +22,12 @@ export class DealCoachService {
    * Genera asesoría táctica integral para un Deal
    */
   static async getDealAdvice(dealId: string, tenantId: string): Promise<DealCoachAdvice> {
-    // 1. Recuperar contexto completo
-    const deal = await prisma.deal.findUnique({
-      where: { id: dealId },
+    // 1. Recuperar contexto completo — ÁMBITO POR TENANT: antes la búsqueda
+    // era por id a secas (findUnique) y la ruta solo comprobaba que hubiera
+    // sesión: quien conociera un id ajeno leía la estrategia, el sentimiento
+    // y el riesgo de ghosting de OTRO tenant. Ahora el tenant viaja en el where.
+    const deal = await prisma.deal.findFirst({
+      where: { id: dealId, tenantId },
       include: {
         actividades: { orderBy: { fechaCreacion: 'desc' }, take: 10 },
         lead: { include: { notasTimestamp: { orderBy: { fechaCreacion: 'desc' }, take: 10 } } },

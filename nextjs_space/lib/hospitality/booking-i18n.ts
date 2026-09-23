@@ -17,6 +17,7 @@
  */
 
 import type { CampoViajero } from './guest-checkin';
+import { formatearImporte, MONEDA_MINIMA_ESQUEMA } from '@/lib/moneda';
 
 export const IDIOMAS = ['es', 'en'] as const;
 export type Idioma = (typeof IDIOMAS)[number];
@@ -501,15 +502,25 @@ export function fechaLarga(
   });
 }
 
-/** Moneda localizada para la variable {{importe}}. */
+/**
+ * Importe para la variable {{importe}} de una plantilla.
+ *
+ * Lo escribe `formatearImporte`, el único sitio de la plataforma que da formato
+ * al dinero, con la convención de SU divisa (`lib/moneda.ts`): un huésped que
+ * paga en pesos lee `$2,400.00` y uno que paga en euros `2.400,00 €`, sin que
+ * esta plantilla tenga que saberlo. El idioma del email no decide el dinero —un
+ * hotel español con precios en pesos escribe pesos en sus dos idiomas—, así que
+ * el parámetro `idioma` no entra en el formato; se mantiene porque es parte de
+ * la firma que ya usan las comunicaciones.
+ *
+ * Sin divisa se cae al mínimo del esquema: una reserva de canal sin `currency`
+ * no puede quedarse sin símbolo en el email.
+ */
 export function monedaFormateada(
   valor: number | null | undefined,
   moneda: string | null | undefined,
-  idioma: Idioma,
+  _idioma: Idioma,
 ): string {
   if (valor == null) return '';
-  return new Intl.NumberFormat(localeDeIdioma(idioma), {
-    style: 'currency',
-    currency: moneda || 'MXN',
-  }).format(valor);
+  return formatearImporte(valor, moneda || MONEDA_MINIMA_ESQUEMA);
 }

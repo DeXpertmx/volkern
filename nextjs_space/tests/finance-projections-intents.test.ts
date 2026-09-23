@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   employeeFindMany: vi.fn(),
   productionLogFindMany: vi.fn(),
   leadAggregate: vi.fn(),
+  dealFindMany: vi.fn(),
+  pipelineStageFindMany: vi.fn(),
 }));
 
 vi.mock('@/lib/db', () => ({
@@ -23,6 +25,8 @@ vi.mock('@/lib/db', () => ({
     employee: { findMany: mocks.employeeFindMany },
     productionLog: { findMany: mocks.productionLogFindMany },
     lead: { aggregate: mocks.leadAggregate },
+    deal: { findMany: mocks.dealFindMany },
+    pipelineStage: { findMany: mocks.pipelineStageFindMany },
   },
 }));
 
@@ -59,6 +63,9 @@ beforeEach(() => {
   mocks.employeeFindMany.mockResolvedValue([]);
   mocks.productionLogFindMany.mockResolvedValue([]);
   mocks.leadAggregate.mockResolvedValue({ _sum: { valorEstimado: 6000 } } as any);
+  // Pipeline de la proyección: un deal de 6.000 en una etapa al 50 %.
+  mocks.dealFindMany.mockResolvedValue([{ valor: 6000, moneda: 'MXN', etapa: 'Propuesta' }] as any);
+  mocks.pipelineStageFindMany.mockResolvedValue([{ nombre: 'Propuesta', probabilidad: 50 }] as any);
 });
 
 // ─── 1. Intents registrados ─────────────────────────────────────────────────
@@ -153,11 +160,33 @@ describe('skills — proyecciones', () => {
     expect(result.data.revenue).toBe(10000);
   });
 
-  it('project_financial_forecast calcula el runway con el pipeline y gastos fijos', async () => {
+  it('un periodo sin movimientos no se declara CRÍTICO', async () => {
+    mocks.invoiceAggregate.mockResolvedValue({ _sum: { monto: 0 } } as any);
+    mocks.expenseAggregate.mockResolvedValue({ _sum: { amount: 0 } } as any);
+    const result = await (skills as any).analyze_global_profitability({ tenantId: TENANT, months: 1 });
+    expect(result.content).toContain('SIN DATOS');
+    expect(result.content).not.toContain('CRÍTICO');
+  });
+
+  it('project_financial_forecast pesa el pipeline activo por la probabilidad de su etapa', async () => {
     const result = await (skills as any).project_financial_forecast({ tenantId: TENANT });
-    // runway = 6000 / (2000/30) = 90 días
-    expect(Number(result.data.runwayDays)).toBeCloseTo(90, 0);
+    // 6.000 al 50 % → 3.000 ponderados; gasto medio 2.000 / 3 = 666,67 al mes
+    // → 3.000 / (666,67 / 30) = 135 días.
+    expect(result.data.expectedIn).toBeCloseTo(3000, 2);
+    expect(result.data.committedOut).toBeCloseTo(666.67, 2);
+    expect(Number(result.data.runwayDays)).toBeCloseTo(135, 0);
     expect(result.content).toContain('Proyección');
+  });
+
+  it('sin pipeline ni gasto no inventa un runway', async () => {
+    mocks.dealFindMany.mockResolvedValue([] as any);
+    mocks.expenseAggregate.mockResolvedValue({ _sum: { amount: 0 } } as any);
+    const result = await (skills as any).project_financial_forecast({ tenantId: TENANT });
+    // Antes devolvía 5.000 y 1.200 euros de relleno y un runway de 365 días.
+    expect(result.data.expectedIn).toBe(0);
+    expect(result.data.committedOut).toBe(0);
+    expect(result.data.runwayDays).toBeNull();
+    expect(result.content).toContain('no calculable');
   });
 });
 

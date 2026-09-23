@@ -298,35 +298,50 @@ describe('canAssignLeads', () => {
 });
 
 // ─── canOnlySeeOwnLeads ────────────────────────────────────────────────
+//
+// El alcance del pipeline es la llave `leads.ver_todos`, no el nombre del rol.
+// Los casos están escritos para que se note: los mismos nombres aparecen en
+// ambos sentidos, cambiando solo la llave.
+function conAlcance(permisos: unknown, nombre = 'Comercial'): UserWithRole {
+  return makeUser({ role: { id: 'r-1', nombre, permisos } });
+}
+
 describe('canOnlySeeOwnLeads', () => {
-  it('Sales Agent solo ve sus propios leads', () => {
-    const user = makeUser({ role: { id: 'r-1', nombre: 'Sales Agent', permisos: {} } });
-    expect(canOnlySeeOwnLeads(user)).toBe(true);
+  it('sin la llave de alcance solo se ven los leads propios', () => {
+    expect(canOnlySeeOwnLeads(conAlcance({ leads: { ver: true } }))).toBe(true);
+    expect(canOnlySeeOwnLeads(conAlcance({ leads: { ver: true } }, 'Sales Agent'))).toBe(true);
+    expect(canOnlySeeOwnLeads(conAlcance({ leads: { ver: true } }, 'Support'))).toBe(true);
   });
 
-  it('Support solo ve sus propios leads', () => {
-    const user = makeUser({ role: { id: 'r-1', nombre: 'Support', permisos: {} } });
-    expect(canOnlySeeOwnLeads(user)).toBe(true);
+  it('con la llave se ve todo el pipeline', () => {
+    expect(canOnlySeeOwnLeads(conAlcance({ leads: { ver: true, ver_todos: true } }))).toBe(false);
   });
 
-  it('Admin ve todos los leads', () => {
-    const user = makeUser();
-    expect(canOnlySeeOwnLeads(user)).toBe(false);
+  it('el nombre del rol no decide nada: los dos sentidos con el mismo nombre', () => {
+    expect(canOnlySeeOwnLeads(conAlcance({ leads: { ver: true } }, 'Admin'))).toBe(true);
+    expect(canOnlySeeOwnLeads(conAlcance({ leads: { ver: true, ver_todos: true } }, 'Admin'))).toBe(
+      false
+    );
+    expect(
+      canOnlySeeOwnLeads(conAlcance({ leads: { ver: true, ver_todos: true } }, 'Sales Agent'))
+    ).toBe(false);
+    expect(canOnlySeeOwnLeads(conAlcance({ leads: { ver: true, ver_todos: true } }, 'Support'))).toBe(
+      false
+    );
   });
 
-  it('Superadmin ve todos los leads', () => {
-    const user = makeUser({ role: { id: 'r-1', nombre: 'Superadmin', permisos: {} } });
-    expect(canOnlySeeOwnLeads(user)).toBe(false);
+  it('el módulo entero y el wildcard conceden el alcance', () => {
+    expect(canOnlySeeOwnLeads(conAlcance({ leads: true }))).toBe(false);
+    expect(canOnlySeeOwnLeads(conAlcance({ all: true }))).toBe(false);
   });
 
-  it('usuario sin role solo ve sus propios leads', () => {
+  it('Superadmin ve todo por su bypass, sin necesidad de la llave', () => {
+    expect(canOnlySeeOwnLeads(conAlcance({}, 'Superadmin'))).toBe(false);
+  });
+
+  it('sin usuario o sin rol, el alcance es el recortado', () => {
     expect(canOnlySeeOwnLeads(null)).toBe(true);
     expect(canOnlySeeOwnLeads(makeUser({ role: null }))).toBe(true);
-  });
-
-  it('Instructor ve todos los leads', () => {
-    const user = makeUser({ role: { id: 'r-1', nombre: 'Instructor', permisos: {} } });
-    expect(canOnlySeeOwnLeads(user)).toBe(false);
   });
 });
 

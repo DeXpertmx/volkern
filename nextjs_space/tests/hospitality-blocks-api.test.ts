@@ -38,7 +38,7 @@ import { DELETE, PATCH } from '@/app/api/hospitality/blocks/[id]/route';
 const auth = {
   valid: true,
   tenant: { id: 'tenant_a' },
-  user: { id: 'user_a' },
+  user: { id: 'user_a', role: { id: 'role_test', nombre: 'Superadmin', permisos: { all: true } } },
 };
 
 const request = (method: string, body?: unknown, url = 'http://test.local/api/hospitality/blocks') =>

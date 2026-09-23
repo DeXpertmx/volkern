@@ -20,8 +20,14 @@ const __mockPrisma = vi.hoisted(() => ({
 
 vi.mock('@/lib/db', () => ({ prisma: __mockPrisma }));
 
+// La ruta exige capacidad (§27) además del tenant: la sesión de prueba trae un
+// rol con el permiso completo, que es el caso del Anfitrión del hotel.
 vi.mock('@/lib/api-key-auth', () => ({
-  authenticateRequest: vi.fn().mockResolvedValue({ valid: true, tenant: { id: 'tenant-1' } }),
+  authenticateRequest: vi.fn().mockResolvedValue({
+    valid: true,
+    tenant: { id: 'tenant-1', moneda: 'EUR' },
+    user: { id: 'user-1', role: { id: 'role-1', nombre: 'Admin', permisos: { all: true } } },
+  }),
 }));
 
 vi.mock('@/lib/hospitality/registro-viajeros-service', () => ({

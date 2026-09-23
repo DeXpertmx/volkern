@@ -13,6 +13,9 @@ import { prisma } from '@/lib/db';
 import { normalizeExternalCode } from './codigos';
 import { testConnectivityConnection } from './connectivity';
 import { TIPO_LINEA_PENALIZACION } from './penalizaciones';
+import { CAPACIDADES_HOSPITALITY } from './capacidades';
+import { hasPermisoDeRol } from '@/lib/permissions-core';
+import { MONEDA_MINIMA_ESQUEMA } from '@/lib/moneda';
 
 /** Vínculo activo que podría resolver una incidencia. */
 export interface VinculoActivo {
@@ -458,8 +461,14 @@ export async function listarIncidencias(
   };
 }
 
-/** Moneda por defecto del cargo de no-show cuando la reserva no la trae. */
-export const PENALIZACION_MONEDA_DEFECTO = 'MXN';
+/**
+ * Moneda del cargo de no-show cuando la reserva no la trae.
+ *
+ * Es el mínimo que acepta el esquema —las columnas de moneda no admiten
+ * nulos—, no una divisa elegida: vive en `lib/moneda.ts` para que no haya un
+ * código suelto fuera del único módulo que puede tenerlos.
+ */
+export const PENALIZACION_MONEDA_DEFECTO = MONEDA_MINIMA_ESQUEMA;
 
 /** Una reserva que el canal reportó como no-show, para el panel. */
 export interface NoShowCanal {
@@ -1315,8 +1324,15 @@ async function propiedadDeHotelCode(
   return { tenantId: conPropiedad[0].tenantId, propertyId: conPropiedad[0].propertyId! };
 }
 
-/** Roles que deciden sobre la configuración de canales (destinatarios del aviso). */
-const ROLES_OPERADOR = ['Superadmin', 'Admin', 'admin', 'Administrador', 'administrator'];
+/**
+ * Capacidad que decide quién es operador: configurar canales y sincronización.
+ *
+ * El nombre del rol no decide nada (§27). Antes esto era una lista de nombres
+ * —`Superadmin`, `Admin`, `Administrador`…—, así que un hotel que bautizara su
+ * rol como «Anfitrión» se quedaba sin destinatarios para el aviso. La ficha sale
+ * del catálogo de capacidades para que no haya una segunda copia de la regla.
+ */
+const CAPACIDAD_OPERADOR = CAPACIDADES_HOSPITALITY['integraciones.gestionar'];
 
 /** Marca del origen manual: un vínculo así ya lo confirmó una persona. */
 export const ORIGEN_VINCULO_MANUAL = 'manual';
@@ -1324,13 +1340,30 @@ export const ORIGEN_VINCULO_MANUAL = 'manual';
 /** Tipo de log con el que el resumen periódico deja su marca de envío. */
 export const TIPO_RESUMEN_VINCULOS = 'resumen_vinculos_automaticos';
 
-/** Usuarios que deciden sobre la conectividad del tenant. */
+/**
+ * Usuarios que deciden sobre la conectividad del tenant.
+ *
+ * Se pregunta por la capacidad, no por el nombre del rol: se leen los usuarios
+ * del tenant y se filtra con la MISMA regla que autoriza en el servidor
+ * (`hasPermisoDeRol`, la que envuelve `puedePorRol`). Los roles del producto
+ * —Anfitrión, Agente, Limpieza— pueden llamarse como quiera el hotel.
+ *
+ * El tope de candidatos es acotado y explícito: sin él, este aviso recorrería
+ * la plantilla entera de un cliente grande para elegir diez destinatarios.
+ */
 export async function operadoresDelTenant(tenantId: string): Promise<Array<{ id: string }>> {
-  return prisma.user.findMany({
-    where: { tenantId, role: { nombre: { in: ROLES_OPERADOR } } },
-    select: { id: true },
-    take: 10,
+  const candidatos = await prisma.user.findMany({
+    where: { tenantId },
+    select: { id: true, role: true },
+    take: 100,
   });
+
+  return candidatos
+    .filter((usuario) =>
+      hasPermisoDeRol(usuario.role, CAPACIDAD_OPERADOR.modulo, CAPACIDAD_OPERADOR.accion)
+    )
+    .slice(0, 10)
+    .map((usuario) => ({ id: usuario.id }));
 }
 
 /** Vínculo creado por el sistema y todavía sin confirmar por una persona. */

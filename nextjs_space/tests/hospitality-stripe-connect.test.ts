@@ -26,7 +26,7 @@ const mocks = vi.hoisted(() => ({
   hospitalityReservationItem: { findMany: vi.fn() },
   hospitalityPayment: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn() },
   auditLog: { create: vi.fn() },
-  user: { findUnique: vi.fn() },
+  user: { findUnique: vi.fn(), role: { id: 'role_test', nombre: 'Superadmin', permisos: { all: true } } },
   authenticateRequest: vi.fn(),
   logAuditAction: vi.fn(),
 }));
@@ -62,7 +62,7 @@ import {
 import { GET, POST, PATCH } from '@/app/api/hospitality/cuenta-cobro/route';
 import { POST as cobrarPOST } from '@/app/api/hospitality/finanzas/cobrar/route';
 
-const auth = { valid: true, tenant: { id: 'tenant_a' }, user: { id: 'user_a' } };
+const auth = { valid: true, tenant: { id: 'tenant_a' }, user: { id: 'user_a', role: { id: 'role_test', nombre: 'Superadmin', permisos: { all: true } } } };
 
 const cuentaBase = {
   id: 'cuenta_a',

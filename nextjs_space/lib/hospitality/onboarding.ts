@@ -13,6 +13,7 @@
  */
 
 import type { WebhookReservationPayload } from './reservations';
+import { monedaEscritura } from '@/lib/moneda';
 
 export type PasoClave =
   | 'propiedad'
@@ -326,6 +327,8 @@ export function buildTestReservationPayload(input: {
   channel?: string;
   /** Sufijo único para el bookingId (por defecto: timestamp). */
   sufijo?: string;
+  /** Divisa del hotel: la reserva de prueba viaja en la que él usa de verdad. */
+  moneda?: string | null;
 }): WebhookReservationPayload {
   const noches = input.noches && input.noches > 0 ? input.noches : 2;
   // Sin fecha explícita: mañana (día calendario local del operador).
@@ -353,7 +356,10 @@ export function buildTestReservationPayload(input: {
       amountAfterTax: precioNoche * noches,
       amountBeforeTax: precioNoche * noches,
       tax: 0,
-      currency: 'MXN',
+      // Divisa de la reserva de prueba: la que indique quien la lanza (la del
+      // tenant), si no el mínimo del esquema. La prueba de conectividad debe
+      // viajar en la misma divisa que el hotel usa de verdad.
+      currency: monedaEscritura(input.moneda),
       commission: null,
       tcs: null,
       tds: null,

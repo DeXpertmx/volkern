@@ -41,7 +41,7 @@ import { kpisVentana } from '@/lib/hospitality/analytics';
 import { ACCION_AUDIT_HOLD_CADUCADO, ACCION_AUDIT_HOLD_CONFIRMADO } from '@/lib/hospitality/holds';
 import { MAX_INTENTOS_PARTE } from '@/lib/hospitality/parte-rechazo';
 
-const auth = { valid: true, tenant: { id: 'tenant_a' }, user: { id: 'user_a' } };
+const auth = { valid: true, tenant: { id: 'tenant_a' }, user: { id: 'user_a', role: { id: 'role_test', nombre: 'Superadmin', permisos: { all: true } } } };
 
 const d = (y: number, m: number, day: number) => new Date(y, m, day);
 

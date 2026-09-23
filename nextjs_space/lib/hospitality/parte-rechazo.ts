@@ -120,6 +120,32 @@ export function esperaReintentoMs(numeroReintento: number): number {
 }
 
 /**
+ * JITTER del reintento: cada peldaño se estira o encoge ±20 % para que las
+ * pasadas del barrido no golpeen al servicio siempre en el mismo minuto
+ * (efecto estampida cuando está caído). Por pasada del cron, no por parte:
+ * los límites viajan en SQL y ahí el azar solo se tira una vez por barrido.
+ */
+export const JITTER_REINTENTO = 0.2;
+
+/**
+ * El peldaño del backoff con su jitter: ±20 % del valor del peldaño
+ * (redondeado), construido con el azar INYECTADO para ser reproducible —
+ * en producción es `Math.random`, en la guardia es una secuencia fija.
+ */
+export function esperaReintentoConJitterMs(
+  numeroReintento: number,
+  azar: () => number = Math.random
+): number {
+  const base = esperaReintentoMs(numeroReintento);
+  const amplitud = Math.round(base * JITTER_REINTENTO);
+  if (amplitud <= 0) return base;
+  // El TOPE manda sobre el jitter: el máximo declarado es una promesa de
+  // producto («ningún reintento espera más de 16 h») — el azar no lo supera,
+  // solo lo acorta. En el último peldaño el jitter solo puede acortar.
+  return Math.min(base + Math.round((azar() * 2 - 1) * amplitud), ESPERA_REINTENTO_MAXIMA_MS);
+}
+
+/**
  * ¿El parte con `intentos` gastados y editado hace `msDesdeEdicion` está
  * disponible para el próximo reintento?
  *

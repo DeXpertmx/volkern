@@ -62,7 +62,7 @@ function reservaDb(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.authenticateRequest.mockResolvedValue({ valid: true, tenant: { id: 't1' }, user: { id: 'u1' } });
+  mocks.authenticateRequest.mockResolvedValue({ valid: true, tenant: { id: 't1' }, user: { id: 'u1', role: { id: 'role_test', nombre: 'Superadmin', permisos: { all: true } } } });
   mocks.hospitalityUnit.findFirst.mockResolvedValue(UNIDAD);
   mocks.connectivityMapping.findFirst.mockResolvedValue(vinculoAutomatico());
   mocks.connectivityMapping.update.mockResolvedValue({ id: 'map_auto' });

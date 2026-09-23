@@ -1,5 +1,6 @@
 import { callAssistantWithFallback } from '@/lib/assistant/openrouter-client';
 import { prisma } from '@/lib/db';
+import { PATRON_MENCION_MONEDA } from '@/lib/moneda';
 
 export interface ExtractedEntities {
   nombre?: string;
@@ -38,7 +39,9 @@ export class EntityExtractorAgent {
   private readonly regexPatterns = {
     email: /([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/i,
     telefono: /(\+?\d{1,3}[\s-]?)?\(?\d{2,4}\)?[\s-]?\d{3,4}[\s-]?\d{3,4}/g,
-    monto: /(\d+(?:[.,]\d{1,2})?)\s*(?:€|euros?|eur|USD|usd|dólares?|pesos)/i,
+    // La cifra y su divisa: el «cómo se menciona una divisa» sale del módulo
+    // único de dinero (símbolo, nombre o código ISO), no de una lista copiada.
+    monto: new RegExp(`(\\d+(?:[.,]\\d{1,2})?)\\s*${PATRON_MENCION_MONEDA}`, 'i'),
     hora: /(\d{1,2}):?(\d{2})?\s*(?:am|pm|h|horas?)?/i,
     duracion: /(\d+)\s*(?:min|minutos?|horas?|h)/i,
     prioridad: /(alta|media|baja|urgente|normal|poca)/i,

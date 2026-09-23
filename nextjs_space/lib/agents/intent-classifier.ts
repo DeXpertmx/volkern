@@ -1,8 +1,23 @@
 import { callAssistantWithFallback } from '@/lib/assistant/openrouter-client';
 import { prisma } from '@/lib/db';
+import { PATRON_MENCION_MONEDA } from '@/lib/moneda';
 import { ALL_INTENTS } from './intents/operations-intents';
 
 type IntentSchema = any;
+
+/**
+ * Cómo se escribe un importe en un mensaje: la cifra y, pegada, su divisa.
+ *
+ * El «cómo se menciona una divisa» sale del módulo único de dinero —símbolo,
+ * nombre en español o código ISO—, así que una divisa nueva del catálogo se
+ * reconoce aquí sin tocar ninguna de estas expresiones. Antes cada una llevaba
+ * su propia lista de euros, pesos y dólares, y las siete se quedaron atrás a la
+ * vez. El grupo 1 sigue siendo la cifra: los llamadores dependen de él.
+ */
+const CIFRA_CON_DIVISA = `(\\d+(?:[.,]\\d{1,2})?)\\s*${PATRON_MENCION_MONEDA}`;
+
+/** Divisas que pueden acompañar a una cifra, sin ser obligatorias. */
+const DIVISA_TRAS_CIFRA = `\\s*${PATRON_MENCION_MONEDA}?`;
 
 export interface IntentClassification {
   intent: string;
@@ -275,7 +290,7 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       extracted.nombre = nameMatch[1];
     }
     
-    const amountMatch = message.match(/(\d+(?:[.,]\d{1,2})?)\s*(?:€|euros|euro|pesos|dolares|USD|EUR)/i);
+    const amountMatch = message.match(new RegExp(CIFRA_CON_DIVISA, 'i'));
     if (amountMatch && intent === 'registrar_gasto') {
       extracted.monto = parseFloat(amountMatch[1].replace(',', '.'));
     }
@@ -1461,7 +1476,8 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     if (/\b(?:crea|agrega|registra|nueva|nuevo|abre|añade)\b/i.test(message) && DEAL_ENTITY.test(message)) {
       let nombre = this.extractNombreAfter(message, /\b(?:con|para)\b/i)
       // Recortar el monto: "María García a 3000€" → "María García"
-      if (nombre) nombre = nombre.split(/\s+(?:a|al|en)\s+(?:\d|€|etapa|prioridad|alta|media|baja)/i)[0].trim() || null
+      // La divisa del monto no se enumera aquí: sale del módulo único de dinero.
+      if (nombre) nombre = nombre.split(new RegExp(`\\s+(?:a|al|en)\\s+(?:\\d|${PATRON_MENCION_MONEDA}|etapa|prioridad|alta|media|baja)`, 'i'))[0].trim() || null
       if (nombre) extracted.nombre = nombre
       const monto = this.extractMontoDe(message)
       if (monto) extracted.monto = monto
@@ -1482,7 +1498,7 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       // (si usáramos "del" primero capturaría "negocio con María").
       let nombre = this.extractNombreAfter(message, /\bcon\b/i) || this.extractNombreAfter(message, /\b(?:de|del)\b/i)
       // Recortar el destino: "María a 7000€" → "María"
-      if (nombre) nombre = nombre.split(/\s+(?:a|al|en)\s+(?:\d|etapa|prioridad|€|alta|media|baja)/i)[0].trim() || null
+      if (nombre) nombre = nombre.split(new RegExp(`\\s+(?:a|al|en)\\s+(?:\\d|etapa|prioridad|${PATRON_MENCION_MONEDA}|alta|media|baja)`, 'i'))[0].trim() || null
       if (nombre) extracted.nombre = nombre
       const etapa = this.extractEtapaDe(message)
       if (etapa) extracted.etapa = etapa
@@ -1527,7 +1543,7 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       const beforeColon = message.split(/\s*:\s*/)[0]
       let nombre = this.extractNombreAfter(beforeColon, /\b(?:contacto|lead|cliente)\b/i) ||
         this.extractNombreAfter(beforeColon, /\b(?:con|de|del|a)\b/i)
-      if (nombre) nombre = nombre.split(/\s+(?:a|al)\s+(?:\d|tel|€)/i)[0].trim() || null
+      if (nombre) nombre = nombre.split(new RegExp(`\\s+(?:a|al)\\s+(?:\\d|tel|${PATRON_MENCION_MONEDA})`, 'i'))[0].trim() || null
       if (nombre) extracted.nombre = nombre
 
       // Teléfono: primero con keyword, luego "a 555-1234" ("actualiza el teléfono de X a 555")
@@ -1846,10 +1862,15 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     // "gasto de 300€ en software, categoría herramientas") ═══
     const GASTO_ENTITY = /\b(?:gastos?|egresos?|gast[ée])\b/i
     const REGISTRO_GASTO_VERB = /\b(?:registra|registrar|registro|nuev[oa]|crea|crear|anota|anotar|agrega|agregar)\b/i
-    const MONTO_SIGNAL = /\b(?:de|por|en)\s+\d+(?:[.,]\d{1,2})?\s*(?:€|euros?|eur|pesos|dolares|usd|mxn)?\b|\b\d+(?:[.,]\d{1,2})?\s*(?:€|euros?|eur)\b/i
+    const MONTO_SIGNAL = new RegExp(
+      `\\b(?:de|por|en)\\s+\\d+(?:[.,]\\d{1,2})?${DIVISA_TRAS_CIFRA}\\b|\\b\\d+(?:[.,]\\d{1,2})?\\s*${PATRON_MENCION_MONEDA}\\b`,
+      'i'
+    )
     if (GASTO_ENTITY.test(message) && (REGISTRO_GASTO_VERB.test(message) || MONTO_SIGNAL.test(message))) {
       // Monto: el que sigue a la keyword de gasto ("gasto de 45.90"), o con divisa
-      const gAmount = message.match(/(?:gasto|egreso|pago|compra|gast[éeoó])\s*(?::|de|por|en)?\s*(\d+(?:[.,]\d{1,2})?)\s*(?:€|euros?|eur)?/i)
+      const gAmount = message.match(
+        new RegExp(`(?:gasto|egreso|pago|compra|gast[éeoó])\\s*(?::|de|por|en)?\\s*(\\d+(?:[.,]\\d{1,2})?)${DIVISA_TRAS_CIFRA}`, 'i')
+      )
       const monto = gAmount ? parseFloat(gAmount[1].replace(',', '.')) : this.extractMontoDe(message)
       if (monto !== null && Number.isFinite(monto)) extracted.monto = monto
       const concepto = this.extractConceptoDe(message)
@@ -2668,7 +2689,7 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
   private extractMontoFacturaDe(message: string): number | null {
     // (?!\w) en vez de \b: "€" es un carácter no-palabra, así que \b tras él
     // nunca matchea al final de la cadena ("5000€" → null).
-    const withCur = message.match(/(\d+(?:[.,]\d{1,2})?)\s*(?:€|euros?|eur)(?!\w)/i)
+    const withCur = message.match(new RegExp(`${CIFRA_CON_DIVISA}(?!\\w)`, 'i'))
     if (withCur) {
       const v = parseFloat(withCur[1].replace(',', '.'))
       if (Number.isFinite(v)) return v
@@ -3203,7 +3224,9 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
   private extractConceptoDe(message: string): string | null {
     // Texto posterior al monto de la frase de gasto. Primero con monto
     // ("gasto de 45.90 en comida"), luego sin monto ("gasto en comida").
-    const gWith = message.match(/(?:gasto|egreso|pago|compra|gast[éeoó])\s*(?::|de|por|en)?\s*\d+(?:[.,]\d{1,2})?\s*(?:€|euros?|eur)?/i)
+    const gWith = message.match(
+      new RegExp(`(?:gasto|egreso|pago|compra|gast[éeoó])\\s*(?::|de|por|en)?\\s*\\d+(?:[.,]\\d{1,2})?${DIVISA_TRAS_CIFRA}`, 'i')
+    )
     // "del" solo en gNoAmount: "gasto del 15/05…" → tras "del" viene un dígito
     // (el (?!\s*\d) mira más allá de los espacios) → el match falla y no se
     // captura la fecha como concepto.
@@ -3496,7 +3519,7 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
    * Extrae el monto monetario de "por 5000€" / "a 7000€" / "3000 euros".
    */
   private extractMontoDe(message: string): number | null {
-    const m = message.match(/(\d+(?:[.,]\d{1,2})?)\s*(?:€|euros?|eur|pesos|dolares|usd|mxn)/i)
+    const m = message.match(new RegExp(CIFRA_CON_DIVISA, 'i'))
     if (!m) return null
     const v = parseFloat(m[1].replace(',', '.'))
     return Number.isFinite(v) ? v : null
@@ -3831,7 +3854,9 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       const facturaMonto = this.extractMontoFacturaDe(message)
       if (facturaMonto !== null && facturaMonto !== withKeyword) return String(facturaMonto)
       // Respuesta desnuda del usuario: "45.90" / "300"
-      const bare = message.match(/^(?:\s*)(\d+(?:[.,]\d{1,2})?)\s*(?:€|euros?)?\s*$/i)
+      const bare = message.match(
+        new RegExp(`^(?:\\s*)(\\d+(?:[.,]\\d{1,2})?)${DIVISA_TRAS_CIFRA}\\s*$`, 'i')
+      )
       return bare ? String(parseFloat(bare[1].replace(',', '.'))) : null
     }
     if (param === 'concepto' || param === 'description') {
