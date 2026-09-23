@@ -92,7 +92,7 @@ jobs:
             fi
           done
 
-      - name: Run integration & deploy guards (scopes, webhooks, UI stubs, deploy scripts, clasificador)
+      - name: Run integration & deploy guards (scopes, webhooks, UI stubs, deploy scripts, clasificador, dinero, base de datos, permisos de Hospitality)
         # Guardias de integración, ejecutadas explícitamente (y antes de la suite
         # completa) para que corran en cada push aunque algún día se filtre la
         # invocación principal de vitest:
@@ -109,7 +109,21 @@ jobs:
         #   - intent-determinista: las frases que deben resolverse SIN LLM se
         #     comprueban contra el detector determinista (no contra classify()):
         #     en CI no hay claves y caían a consulta_general sin que se notara
-        run: npx vitest run tests/api-key-scopes.test.ts tests/outgoing-webhook-events-guard.test.ts tests/client-catalog-stubs-guard.test.ts tests/deploy-docker-templates-guard.test.ts tests/deploy-scripts-syntax-guard.test.ts tests/intent-determinista-guard.test.ts
+        #   - moneda-plataforma: `lib/moneda.ts` es el único archivo que puede
+        #     contener un código de divisa o un formato de dinero; el resto escribe
+        #     los importes con `formatearImporte` (Hospitality ya sin deuda, el resto
+        #     con inventario que solo puede bajar)
+        #   - guardia-base-datos-produccion: la suite se detiene si DATABASE_URL apunta
+        #     a la base de producción (el 11-ago-2026 una tanda de tests dejó 9 tenants
+        #     y 14 claves de prueba dentro de la base real)
+        #   - hospitality-permissions: todo método de /api/hospitality exige permiso por
+        #     acción del rol (§27), la capacidad exigida existe en el catálogo y el editor
+        #     de roles puede concederla (un endpoint sin permiso abre la puerta a cualquiera
+        #     del tenant sin que nada falle)
+        #   - hospitality-ui-permissions: la otra mitad de lo mismo — toda acción del
+        #     dashboard que escribe pasa por <AccionHospitality>, así que la interfaz no
+        #     ofrece un botón que el backend va a rechazar con 403
+        run: npx vitest run tests/api-key-scopes.test.ts tests/outgoing-webhook-events-guard.test.ts tests/client-catalog-stubs-guard.test.ts tests/deploy-docker-templates-guard.test.ts tests/deploy-scripts-syntax-guard.test.ts tests/intent-determinista-guard.test.ts tests/moneda-plataforma-guard.test.ts tests/guardia-base-datos-produccion.test.ts tests/hospitality-permissions-guard.test.ts tests/hospitality-ui-permissions-guard.test.ts tests/hospitality-acciones-ui.test.tsx
 
       - name: Run unit tests
         run: npx vitest run

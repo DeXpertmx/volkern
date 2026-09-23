@@ -12,6 +12,9 @@ export default defineConfig({
       '@': path.resolve(__dirname, './'),
     },
     setupFiles: ['./tests/setup.ts'],
+    // Aborta la suite antes del primer archivo si `DATABASE_URL` apunta a la base
+    // de producción (ver tests/global-setup.ts y su guardia de tests).
+    globalSetup: ['./tests/global-setup.ts'],
     exclude: [
       '**/node_modules/**', // recursive: cubre gemma-app/node_modules/, mcp-server/node_modules/, etc.
       'app-movil/**',
