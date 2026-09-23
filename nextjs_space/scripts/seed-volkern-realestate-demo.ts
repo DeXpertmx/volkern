@@ -49,8 +49,10 @@ async function main() {
   // 2. Crear los Roles para el Tenant
   console.log('🌱 Creando roles predefinidos para el tenant...');
   const ROLE_PERMISSIONS = {
+    // `leads.ver_todos` es el alcance del pipeline: el administrador ve la
+    // cuenta entera; «Sales Agent» no la lleva y solo ve sus leads asignados.
     Admin: {
-      leads: { ver: true, crear: true, editar: true, eliminar: true, asignar: true, exportar: true },
+      leads: { ver: true, crear: true, editar: true, eliminar: true, asignar: true, exportar: true, ver_todos: true },
       citas: { ver: true, crear: true, editar: true, eliminar: true, gestionar: true, exportar: true },
       pipeline: { ver: true, crear: true, editar: true, eliminar: true, gestionar: true, exportar: true },
       contactos: { ver: true, crear: true, editar: true, eliminar: true, exportar: true },

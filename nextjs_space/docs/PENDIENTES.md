@@ -32,3 +32,32 @@ Anotado el 2026-08-11. Estado real de cada tema para retomar donde se quedó.
 
 - La BD de desarrollo apunta a **Neon** (nube), no local — cualquier script que escriba tenant/usuarios lo hace en la nube; limpiar siempre después.
 - `tsconfig.tsbuildinfo` y `.checkpoints/` son del entorno; no se tocan.
+
+---
+
+# 2026-09-12 — Pendientes nuevos (dejados aquí para retomar al día siguiente)
+
+Salió de la revisión de las páginas legales, del cobro por verticales y del despliegue a producción del 12 sep. **Nada de esta lista está hecho**: son hallazgos verificados contra el código y contra producción, pendientes de decisión o de arreglo.
+
+## Estado al cierre del 12 sep (para no repetir trabajo)
+
+- **`master` = `origin/master` = `b7c5b758`**, árbol limpio. CI en verde (Vitest 341 archivos, E2E Reconciliation).
+- **Desplegado al VPS** con `deploy-local.sh --skip-migrator`: build `0a2ca23a5e48`, smoke 12/12, servicio `1/1`.
+- **Verificado en vivo**: las 4 páginas legales ya sirven `3 de septiembre de 2026 · Versión 2026-09`, la tabla nueva está en la privacidad y el lenguaje de borrador es 0 en las cuatro.
+- El paso **`[4b/5]`** (verificación del image ID) se validó en su primer despliegue real: `0a2ca23a5e48 = 0a2ca23a5e48`.
+- Ojo: **`volkern.app` lo sirve el VPS**, no Vercel (`admin.volkern.app` sí es Vercel). Un push a master **no** publica las páginas públicas.
+
+## Pendientes por orden de valor
+
+1. **Decidir qué proveedores de IA quedan vivos.** El código puede llamar a **cinco**: OpenRouter, DeepSeek, OpenAI, Anthropic y Google (`api.deepseek.com` incluido). DeepSeek tiene sede en **China**: una llamada real es transferencia internacional a un país sin decisión de adecuación y exige cláusulas contractuales tipo **y** evaluación de impacto. **No se arregla redactando**; hay que confirmar cuáles están en uso, apagar los que no, y solo entonces ajustar la política.
+2. **Error del chatbot que falla en silencio en producción.** `[ChatbotService] Error extrayendo facts (fire-and-forget): PrismaClientKnownRequestError: Invalid \`prisma.conversation.update()\` invocation`. 2 apariciones en 400 líneas de log del contenedor nuevo. Es **previo** al despliegue del 12 sep y es *fire-and-forget*, así que falla sin que el usuario lo note.
+3. **Planes huérfanos en producción.** Hay **11 valores de plan** distintos y ninguno es una vertical: `basico` 6, `pro-accounting` 4, `growth` 3, `accounting-slot` 2, `infinity` 2, `enterprise` 1, `premium` 1, `pro-agency` 1, `profesional` 1, `trial` 3, `agency-slot` 7. **`growth` (3 tenants) y `enterprise` (1) no existen en el código**: `getPlanConfig` devuelve precio 0 y cae **en silencio** a los límites de Esencial. Decidir: migrarlos a la vertical o a los límites correctos, **sin cambiar su importe**.
+4. **Bug de precio en el motor dinámico.** Calcula el año como **80 % del importe MENSUAL** y lo cobra como anual: un descuento del ~92 %, casi con seguridad un error. Cambiarlo altera importes, por eso no se tocó.
+5. **Falta el proveedor del VPS como encargado en la política de privacidad.** La política nombra Vercel, pero la aplicación corre en un VPS y ahí viven la base de datos y los documentos. Un proveedor de infraestructura que aloja datos personales **es un encargado** y debe figurar. Marcado como **bloqueante** en `docs/compliance/ENCARGADOS-DPA-PENDIENTES.md`, con la fila deliberadamente sin nombre en lugar de publicar un dato inventado. **Lo primero: averiguar quién aloja el VPS.**
+6. **Correos dispares entre páginas legales.** Conviven `privacidad@volkern.app`, `soporte@volkern.app`, `security@dimensionexpert.com` y `dpo@volkern.app` (este último definido en otros documentos legales pero ausente de la política). Es anterior a los cambios del 12 sep, pero en una revisión legal se nota.
+7. **Confirmar por escrito la retención de los proveedores de IA.** La política afirma que no se usan datos para entrenar modelos de terceros; con proveedores externos reales eso depende de la retención configurada en cada contrato. Es una comprobación contractual, no de código.
+
+## Referencia
+
+- Comprobaciones pendientes de DPA, con el antes y el después de cada fila: `docs/compliance/ENCARGADOS-DPA-PENDIENTES.md`.
+- Guardias que ya protegen esto (no romperlas): `tests/legal-pages-consistency.test.ts`, `tests/vertical-plans.test.ts`, `tests/deploy-docker-templates-guard.test.ts`, `tests/deploy-scripts-syntax-guard.test.ts`.
