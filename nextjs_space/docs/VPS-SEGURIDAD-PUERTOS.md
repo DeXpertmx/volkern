@@ -229,3 +229,38 @@ Regla para lo que venga: cloud-init nunca con `ssh_pwauth: true`; y si
 algun dia se toca `sshd_config.d`, recordar que el orden alfabetico decide
 el ganador — el `60-cloudimg-settings.conf` de la imagen no te salva del
 `50-cloud-init.conf`.
+
+## 9. Auditoria completa de puertos y firewall (2026-09-23)
+
+Superficie antes de la auditoria (nodo unico, ufw INACTIVO, iptables ACCEPT):
+
+- **Abiertos desde Internet**: 22 (ssh), 80/443 (traefik), 9000 (minio S3,
+  intencional) y —el hallazgo— **2377 y 7946 del plano de control Swarm**
+  (raft y gossip, sin ninguna razon legitima en un nodo unico).
+- **Bases de datos: ninguna expuesta.** 5432 ya cerrado (§1–§3); postgres
+  14/16/17, redis, pgvector y mariadb solo escuchan en la red overlay.
+- **Paneles tras traefik, todos con autenticacion verificada sin credenciales**:
+  Portainer inicializado (login), consola MinIO (login), Evolution (401 sin
+  api key), Apprise (basic auth), N8N/Chatwoot/Libresign (login propio),
+  ss3/notify responden 401/403 a anonimos.
+
+Lo hecho: **ufw activo y persistente** (default deny incoming / allow
+outgoing) con solo seis permisos: lo, la IP del propio nodo (raft/gossip/
+vxlan hablan por ahi), 22, 80, 443 y 9000. Verificado con conexion nueva:
+2377/7946 cerrados desde fuera, nodo `Ready/Leader`, servicios `1/1` y las
+11 apps de traefik con el mismo codigo HTTP que antes del cambio.
+
+Advertencia structural: **ufw no filtra los puertos que Docker publica**
+(los chains DOCKER de iptables bypassean INPUT). La primera linea de defensa
+sigue siendo §6: un puerto se publica o no se publica, y la decision vive en
+el stack. Para filtrar trafico publicado a posta, la cadena correcta es
+`DOCKER-USER`. El firewall de host cubre lo que Docker no toca (2377/7946
+incluidos), que es justo lo que faltaba.
+
+Como re-auditarlo en 3 comandos:
+
+```bash
+for s in $(docker service ls --format '{{.Name}}'); do P=$(docker service inspect "$s" --format '{{json .Endpoint.Ports}}'); [ "$P" != "null" ] && [ "$P" != "[]" ] && echo "$s: $P"; done
+ss -lntp | grep -v docker-proxy | grep LISTEN
+ufw status numbered
+```
