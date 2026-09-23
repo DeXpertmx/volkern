@@ -25,6 +25,7 @@ import {
   CANAL_BOOKING_ENGINE,
   referenciaBookingEngine,
 } from '@/lib/hospitality/booking-engine';
+import { crearReservaDeBookingDirecto } from '@/lib/hospitality/reservations';
 import { crearCobroReserva } from '@/lib/stripe/connect';
 import { dispatchConnectivityPush } from '@/lib/hospitality/sync';
 import { dispararComunicacionReserva } from '@/lib/hospitality/comunicaciones';
@@ -337,38 +338,32 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
     );
 
     // El flujo común: la reserva pública es indistinguible de una de OTA
-    // (criterio 1) — misma tabla, canal "Directa", línea de desglose.
-    const reserva = await prisma.hospitalityReservation.create({
-      data: {
-        tenantId,
-        propertyId: propiedad.id,
-        unitId: unidad.id,
-        contactId: contact.id,
-        channel: CANAL_BOOKING_ENGINE,
-        externalBookingId: referencia,
-        action: 'book',
-        estado: 'confirmed',
-        checkIn: ci,
-        checkOut: co,
-        bookedOn: new Date(),
-        segment: 'Directa',
-        specialRequests: notas || null,
-        pah: false,
-        amountAfterTax: linea.precioTotal,
-        currency: unidad.moneda,
-        // El idioma en que reservó el huésped viaja en guestData: es lo que
-        // las comunicaciones automáticas (§21) leen para enviarle confirmación,
-        // pre-llegada y post-estancia en su idioma. "es" para cualquier valor
-        // raro (defecto del motor de i18n).
-        guestData: {
-          firstName: String(huespedNombre).trim(),
-          email: huespedEmail,
-          phone: huespedTelefono || null,
-          idioma: idiomaDeValor(lang),
-          ...(documentaAlgo && titularDocumentado ? { viajeros: [titularDocumentado] } : {}),
-        } as unknown as Prisma.InputJsonValue,
-      },
-      select: { id: true, externalBookingId: true },
+    // (criterio 1) — misma tabla, canal "Directa", línea de desglose. La
+    // escritura la hace el Reservation Engine compartido, nunca la ruta: una
+    // reserva del motor directo pasa por el mismo camino que una de OTA.
+    const reserva = await crearReservaDeBookingDirecto({
+      tenantId,
+      propertyId: propiedad.id,
+      unitId: unidad.id,
+      contactId: contact.id,
+      canal: CANAL_BOOKING_ENGINE,
+      referencia,
+      checkIn: ci,
+      checkOut: co,
+      notas: notas || null,
+      precioTotal: linea.precioTotal,
+      moneda: unidad.moneda,
+      // El idioma en que reservó el huésped viaja en guestData: es lo que
+      // las comunicaciones automáticas (§21) leen para enviarle confirmación,
+      // pre-llegada y post-estancia en su idioma. "es" para cualquier valor
+      // raro (defecto del motor de i18n).
+      guestData: {
+        firstName: String(huespedNombre).trim(),
+        email: huespedEmail,
+        phone: huespedTelefono || null,
+        idioma: idiomaDeValor(lang),
+        ...(documentaAlgo && titularDocumentado ? { viajeros: [titularDocumentado] } : {}),
+      } as unknown as Prisma.InputJsonValue,
     });
 
     // Enlace de check-in desde el minuto uno: el huésped puede completar los

@@ -522,6 +522,11 @@ model Tenant {
   hospitalityCommunicationTemplates HospitalityCommunicationTemplate[] @relation("HospitalityCommunicationTemplates")
   // Registro de viajeros (MIR / SES Hospedajes, RD 933/2021, art. 6).
   hospitalityMirConfigs         HospitalityMirConfig[]            @relation("HospitalityMirConfigs")
+  hospitalityComplianceConfigs  HospitalityComplianceConfig[]     @relation("HospitalityComplianceConfigs")
+  hospitalityTravelers          HospitalityTraveler[]             @relation("HospitalityTravelers")
+  hospitalityCompliances        HospitalityCompliance[]           @relation("HospitalityCompliances")
+  hospitalityComplianceEvents   HospitalityComplianceEvent[]      @relation("HospitalityComplianceEvents")
+  hospitalityBookingConfig      HospitalityBookingConfig?         @relation("HospitalityBookingConfig")
   hospitalityGuestRegistry      HospitalityGuestRegistryCommunication[] @relation("HospitalityGuestRegistry")
   hospitalityCheckinPreguntas   HospitalityCheckinPregunta[]      @relation("HospitalityCheckinPreguntas")
   hospitalityReviews            HospitalityReview[]               @relation("HospitalityReviews")
@@ -8148,6 +8153,12 @@ model HospitalityProperty {
   latitud        Float?
   longitud       Float?
   fotos          Json?
+  /**
+   * Datos del establecimiento ante SES.HOSPEDAJES: el código oficial que el
+   * Ministerio asigna al darlo de alta (y, opcionalmente, su municipio INE).
+   * Es referencia externa, nunca identidad interna de Volkern.
+   */
+  sesHospedajes  Json?
   timezone       String    @default("America/Mexico_City")
   estado         String    @default("activa")
   // Penalización por no-show de esta propiedad: ninguna|primera_noche|estancia_completa.
@@ -8331,6 +8342,8 @@ model HospitalityReservation {
   // estancia y solo esa. Vive aquí y no en la reseña porque el cron lo genera
   // ANTES de que exista reseña (la reseña nace cuando el huésped envía).
   tokenResena           String?   @unique
+  travelers             HospitalityTraveler[]     @relation("HospitalityReservationTravelers")
+  compliance            HospitalityCompliance?    @relation("HospitalityReservationCompliance")
   fechaCreacion         DateTime  @default(now())
   fechaEdicion          DateTime  @updatedAt
   tenant                Tenant    @relation("HospitalityReservations", fields: [tenantId], references: [id], onDelete: Cascade)
@@ -8786,6 +8799,168 @@ model HospitalityGuestRegistryCommunication {
 // score ordena bien y ajustar pesos y cortes con datos reales en vez de con
 // hipótesis. Nace con la etiqueta de desenlace NULL y el PATCH del deal la
 // rellena al cerrar — los snapshots anteriores a un cierre nunca se recrean.
+model HospitalityBookingConfig {
+  id                    String   @id @default(cuid())
+  tenantId              String   @unique
+  // Segmento público de la URL (/reservar/<slug>): identifica al tenant ante
+  // cualquiera. Único en toda la plataforma, no solo dentro del tenant.
+  slug                  String   @unique
+  titulo                String?
+  descripcion           String?
+  emailContacto         String?
+  telefonoContacto      String?
+  // Divisa con la que se publican los precios. Nulo = la del tenant
+  // (`Tenant.moneda`), que es la fuente autoritativa: el valor por defecto del
+  // esquema nunca decide aquí (regla del módulo único de dinero).
+  moneda                String?
+  politicaCancelacion   String?
+  // Anticipo a cobrar en el momento de reservar, en porcentaje del total.
+  // 0 = sin anticipo.
+  anticipoPorcentaje    Int      @default(0)
+  // Tarifa de limpieza por estancia del canal directo. Nula = no se cobra:
+  // null es "no aplica", no un cero que parecería una decisión de negocio.
+  tarifaLimpieza        Float?
+  // Si se exige cobro online para confirmar. En falso, la reserva entra como
+  // pendiente y el alojamiento cobra por su cuenta.
+  requierePagoOnline    Boolean  @default(false)
+  // Propiedades publicadas en la página pública. Vacío = no hay nada publicado.
+  propiedadesPublicadas String[] @default([])
+  activo                Boolean  @default(true)
+  fechaCreacion         DateTime @default(now())
+  fechaEdicion          DateTime @updatedAt
+  tenant                Tenant   @relation("HospitalityBookingConfig", fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("hospitality_booking_config")
+}
+
+model HospitalityCompliance {
+  id                 String    @id @default(cuid())
+  tenantId           String
+  reservationId      String    @unique
+  estadoReserva      String    @default("pendiente") // Comunicación RH
+  estadoViajeros     String    @default("pendiente") // Comunicación PV
+  codigoComunicacion String?
+  loteId             String?
+  enviadoEn          DateTime?
+  procesadoEn          DateTime?
+  codigoError        String?
+  mensajeError       String?
+  fechaCreacion      DateTime  @default(now())
+  fechaEdicion       DateTime  @updatedAt
+  tenant             Tenant    @relation("HospitalityCompliances", fields: [tenantId], references: [id], onDelete: Cascade)
+  reservation        HospitalityReservation @relation("HospitalityReservationCompliance", fields: [reservationId], references: [id], onDelete: Cascade)
+  eventos            HospitalityComplianceEvent[]
+
+  @@index([tenantId])
+  @@index([estadoReserva])
+  @@index([estadoViajeros])
+  @@map("hospitality_compliance")
+}
+
+model HospitalityComplianceConfig {
+  id             String    @id @default(cuid())
+  tenantId       String    @unique
+  activo         Boolean   @default(false)
+  entorno        String    @default("pruebas") // pruebas|produccion
+  entidadNombre  String?
+  entidadNif     String?
+  usuarioEnc     String?
+  passwordEnc    String?
+  /**
+   * Certificado digital de la entidad (el .p12/.pfx de la FNMT) en Base64 y su
+   * contraseña, ambos cifrados en reposo. El certificado viaja presentado en el TLS
+   * de cada comunicación: es lo que le dice al Ministerio quién comunica.
+   */
+  certificadoEnc         String? @db.Text
+  certificadoPasswordEnc String?
+  /**
+   * Lo que el certificado dice de sí mismo, para que el administrador vea qué
+   * instaló sin volver a subirlo. Son datos públicos del certificado (no secretos).
+   */
+  certificadoTitular String?
+  certificadoNif     String?
+  certificadoEmisor  String?
+  certificadoHuella  String?
+  certificadoVence   DateTime?
+  /**
+   * Código de arrendador de la entidad: lo asigna el Ministerio en el registro
+   * (cabecera del lote SOAP, obligatoria para comunicar).
+   */
+  codigoArrendador String?
+  estadoConexion   String    @default("sin_configurar")
+  ultimoEnvio      DateTime?
+  ultimoCodigo     String?
+  ultimoError      String?
+  fechaCreacion    DateTime  @default(now())
+  fechaEdicion     DateTime  @updatedAt
+  tenant           Tenant    @relation("HospitalityComplianceConfigs", fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([estadoConexion])
+  @@map("hospitality_compliance_config")
+}
+
+model HospitalityComplianceEvent {
+  id                 String   @id @default(cuid())
+  tenantId           String
+  reservationId      String
+  complianceId       String?
+  tipo               String // reserva|viajeros|anulacion|acceso
+  estado             String // enviado|procesando|ok|error|anulado
+  codigoComunicacion String?
+  codigoError        String?
+  mensajeError       String?
+  detalle            String?
+  usuarioId          String?
+  fechaCreacion      DateTime @default(now())
+  tenant             Tenant   @relation("HospitalityComplianceEvents", fields: [tenantId], references: [id], onDelete: Cascade)
+  compliance         HospitalityCompliance? @relation(fields: [complianceId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([reservationId])
+  @@index([complianceId])
+  @@index([tipo])
+  @@map("hospitality_compliance_events")
+}
+
+model HospitalityTraveler {
+  id               String    @id @default(cuid())
+  tenantId         String
+  reservationId    String
+  esTitular        Boolean   @default(false)
+  orden            Int       @default(0)
+  nombre           String
+  apellido1        String
+  apellido2        String?
+  tipoDocumento    String?
+  numeroDocumento  String?
+  soporteDocumento String?
+  fechaNacimiento  DateTime?
+  nacionalidad     String?
+  /**
+   * Domicilio del viajero: el parte de viajeros (PV) lo exige por persona
+   * (vía, municipio y código postal, país ISO alfa-3 según el XSD).
+   */
+  direccion        String?
+  municipio        String?
+  codigoMunicipio  String?
+  codigoPostal     String?
+  paisDireccion    String?
+  estado           String    @default("pendiente")
+  // Seguimiento del enlace de WhatsApp (pedir/reenviar datos al viajero).
+  enlaceEnviadoEn  DateTime?
+  enlaceEnviados   Int       @default(0)
+  datosRecibidosEn DateTime?
+  fechaCreacion    DateTime  @default(now())
+  fechaEdicion     DateTime @updatedAt
+  tenant           Tenant    @relation("HospitalityTravelers", fields: [tenantId], references: [id], onDelete: Cascade)
+  reservation      HospitalityReservation @relation("HospitalityReservationTravelers", fields: [reservationId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([reservationId])
+  @@index([estado])
+  @@map("hospitality_travelers")
+}
+
 model HealthSnapshot {
   id           String    @id @default(cuid())
   tenantId     String
