@@ -440,7 +440,13 @@ export async function resolveMapping(payload: WebhookReservationPayload): Promis
  */
 export async function upsertGuest(
   tenantId: string,
-  payload: WebhookReservationPayload
+  payload: WebhookReservationPayload,
+  /**
+   * Cliente de Prisma sobre el que escribir. El Booking Engine pasa el de su
+   * transacción para que el huésped y su reserva se escriban juntos: si la
+   * reserva no llega a crearse, no queda un contacto suelto en el CRM.
+   */
+  cliente: typeof prisma = prisma
 ): Promise<string | null> {
   const g = payload.guest;
   const roomGuestName = firstRoom(payload)?.guestName;
@@ -457,18 +463,18 @@ export async function upsertGuest(
   // Buscar contacto existente del tenant por email o teléfono.
   let contact = null;
   if (email) {
-    contact = await prisma.contact.findFirst({
+    contact = await cliente.contact.findFirst({
       where: { tenantId, email },
     });
   }
   if (!contact && telefono) {
-    contact = await prisma.contact.findFirst({
+    contact = await cliente.contact.findFirst({
       where: { tenantId, telefono },
     });
   }
 
   if (contact) {
-    return prisma.contact
+    return cliente.contact
       .update({
         where: { id: contact.id },
         data: {
@@ -482,7 +488,7 @@ export async function upsertGuest(
       .then((c) => c.id);
   }
 
-  return prisma.contact
+  return cliente.contact
     .create({
       data: {
         tenantId,
@@ -497,6 +503,53 @@ export async function upsertGuest(
       },
     })
     .then((c) => c.id);
+}
+
+/**
+ * Crea la reserva del Booking Engine público (canal «Directa»).
+ *
+ * Existe para que la ruta pública NO escriba la reserva por su cuenta: la
+ * escritura vive en el Reservation Engine, el mismo que procesa el webhook de
+ * la conectividad, así que una reserva del motor directo es indistinguible de
+ * una de OTA (misma tabla, misma línea de desglose, mismos eventos). La ruta
+ * calcula (huésped, disponibilidad, precio); aquí solo se persiste.
+ */
+export async function crearReservaDeBookingDirecto(input: {
+  tenantId: string;
+  propertyId: string;
+  unitId: string;
+  contactId: string | null;
+  canal: string;
+  referencia: string;
+  checkIn: Date;
+  checkOut: Date;
+  notas: string | null;
+  precioTotal: number | null;
+  moneda: string;
+  guestData: Prisma.InputJsonValue;
+}): Promise<{ id: string; externalBookingId: string | null }> {
+  return prisma.hospitalityReservation.create({
+    data: {
+      tenantId: input.tenantId,
+      propertyId: input.propertyId,
+      unitId: input.unitId,
+      contactId: input.contactId,
+      channel: input.canal,
+      externalBookingId: input.referencia,
+      action: 'book',
+      estado: 'confirmed',
+      checkIn: input.checkIn,
+      checkOut: input.checkOut,
+      bookedOn: new Date(),
+      segment: 'Directa',
+      specialRequests: input.notas,
+      pah: false,
+      amountAfterTax: input.precioTotal,
+      currency: input.moneda,
+      guestData: input.guestData,
+    },
+    select: { id: true, externalBookingId: true },
+  });
 }
 
 /** Extrae el importe del payload según el contrato. */

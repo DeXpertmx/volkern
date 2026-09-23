@@ -237,13 +237,23 @@ describe('Contratos del flujo común', () => {
   it('GUARDIA de un solo motor: el booking engine no reimplementa la regla §8', async () => {
     const fs = await import('node:fs');
     const path = await import('node:path');
-    const fuente = fs.readFileSync(path.resolve(__dirname, '../lib/hospitality/booking-engine.ts'), 'utf8');
-    // Importa el motor central…
-    expect(fuente).toContain("from './availability'");
-    expect(fuente).toContain('unitAvailability(');
-    // …y no redefine la regla de ocupación (ni comparaciones de estancia propias).
-    expect(fuente).not.toMatch(/checkIn\.getTime\(\)\s*<=/);
-    expect(fuente).not.toContain('function unitOccupiedOnDay');
+    // Las DOS piezas del motor fusionado tienen que apoyarse en el mismo
+    // Availability Engine central: el motor de reserva directa (canonical) y
+    // la tarificación del flujo desplegado (booking-rates.ts). Cada una usa la
+    // función que le corresponde del módulo central; ninguna redefine la regla.
+    const motor = fs.readFileSync(path.resolve(__dirname, '../lib/hospitality/booking-engine.ts'), 'utf8');
+    expect(motor).toContain("from './availability'");
+    expect(motor).toMatch(/unitUnavailableOnDay\(|loadAvailabilityContext\(/);
+
+    const tarifas = fs.readFileSync(path.resolve(__dirname, '../lib/hospitality/booking-rates.ts'), 'utf8');
+    expect(tarifas).toContain("from './availability'");
+    expect(tarifas).toContain('unitAvailability(');
+
+    // …y ninguna redefine la regla de ocupación (ni comparaciones de estancia propias).
+    for (const fuente of [motor, tarifas]) {
+      expect(fuente).not.toMatch(/checkIn\.getTime\(\)\s*<=/);
+      expect(fuente).not.toContain('function unitOccupiedOnDay');
+    }
   });
 });
 
