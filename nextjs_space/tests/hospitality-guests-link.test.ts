@@ -20,7 +20,7 @@ vi.mock('@/lib/api-key-auth', () => ({
 
 import { POST } from '../app/api/hospitality/guests/link/route';
 
-const AUTH_OK = { valid: true, tenant: { id: 't1' }, user: { id: 'u1' } };
+const AUTH_OK = { valid: true, tenant: { id: 't1' }, user: { id: 'u1', role: { id: 'role_test', nombre: 'Superadmin', permisos: { all: true } } } };
 const CONTACTO = { id: 'c1', nombre: 'María García', email: 'maria@x.com', telefono: '+52' };
 
 function buildReq(body: any, url = 'https://volkern.app/api/hospitality/guests/link') {

@@ -19,6 +19,7 @@
 
 import { stripe } from '@/lib/stripe';
 import { prisma } from '@/lib/db';
+import { monedaEscritura } from '@/lib/moneda';
 
 export const HOSPITALITY_CONNECT_FEE_PCT = Number(process.env.HOSPITALITY_CONNECT_FEE_PCT || 0);
 
@@ -222,7 +223,10 @@ export async function conciliarPagoHospitality(session: {
       propertyId: reserva.propertyId,
       unitId: reserva.unitId,
       importe,
-      moneda: (session.currency || reserva.currency || 'MXN').toUpperCase(),
+      // La divisa del cobro: la que confirma Stripe (es la que se cobró de
+      // verdad), si no la de la reserva y, en último término, el mínimo del
+      // esquema —que es lo que exige la escritura y no una divisa elegida—.
+      moneda: monedaEscritura(session.currency, reserva.currency),
       metodo: 'stripe',
       estado: 'pagado',
       referenciaExterna: session.id,

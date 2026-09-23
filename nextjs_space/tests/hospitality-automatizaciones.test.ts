@@ -36,7 +36,7 @@ import { POST as POSTTest } from '../app/api/hospitality/automatizaciones/[id]/t
 import { EVENTS } from '../lib/types/events';
 import { HOSPITALITY_TRIGGERS } from '../app/api/hospitality/automatizaciones/route';
 
-const AUTH_OK = { valid: true, tenant: { id: 't1' }, user: { id: 'u1' } };
+const AUTH_OK = { valid: true, tenant: { id: 't1' }, user: { id: 'u1', role: { id: 'role_test', nombre: 'Superadmin', permisos: { all: true } } } };
 
 function buildReq(body?: any, url = 'https://volkern.app/api/hospitality/automatizaciones') {
   return new Request(url, {

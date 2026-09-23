@@ -247,6 +247,7 @@ export const DEFAULT_MODULE_PERMISSIONS: RBACModulePermissions = {
   enviar: false,
   responder: false,
   invitar: false,
+  cancelar: false,
 };
 
 /**
@@ -267,6 +268,14 @@ export const ALL_MODULES: RBACModule[] = [
   'whitelabel',
   'telefonia',
   'pages',
+  'hospitality_reservas',
+  'hospitality_operaciones',
+  'hospitality_mantenimiento',
+  'hospitality_integraciones',
+  'hospitality_finanzas',
+  'hospitality_comunicaciones',
+  'hospitality_automatizaciones',
+  'hospitality_misreservas',
 ];
 
 /**
@@ -286,6 +295,19 @@ export const ALL_PERMISSIONS: Permission[] = [
   'enviar',
   'responder',
   'invitar',
+  'cancelar',
+  // Alcance, no acceso: «ver» abre el módulo y «ver_todos» concede verlo
+  // entero. Sin ella solo se ve lo propio, que es el caso del pipeline de
+  // leads para un comercial.
+  'ver_todos',
+  // Acciones que existen porque dos trabajos distintos no deben compartir llave:
+  // entregar las llaves no es limpiar, firmar ante el Ministerio no es configurar
+  // un canal, ver el pasaporte no es ver la reserva, y repartir permisos no es
+  // gestionar el equipo.
+  'checkin',
+  'administrar',
+  'documento_completo',
+  'roles',
 ];
 
 /**
@@ -305,6 +327,12 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   enviar: 'Enviar',
   responder: 'Responder',
   invitar: 'Invitar',
+  cancelar: 'Cancelar',
+  ver_todos: 'Ver todo',
+  checkin: 'Check-in',
+  administrar: 'Administrar',
+  documento_completo: 'Ver documentos',
+  roles: 'Roles',
 };
 
 /**
@@ -325,6 +353,14 @@ export const MODULE_LABELS: Record<RBACModule, string> = {
   whitelabel: 'White Label',
   telefonia: 'Telefonía',
   pages: 'Páginas',
+  hospitality_reservas: 'Hospitality · Reservas y planning',
+  hospitality_operaciones: 'Hospitality · Operaciones (limpieza y check-in/out)',
+  hospitality_mantenimiento: 'Hospitality · Mantenimiento',
+  hospitality_integraciones: 'Hospitality · Integraciones y conectividad',
+  hospitality_finanzas: 'Hospitality · Finanzas y reportes',
+  hospitality_comunicaciones: 'Hospitality · Comunicaciones al huésped',
+  hospitality_automatizaciones: 'Hospitality · Automatizaciones',
+  hospitality_misreservas: 'Hospitality · Sus reservas (rol Huésped)',
 };
 
 /**

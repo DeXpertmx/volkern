@@ -217,10 +217,12 @@ describe('CommonSchemas', () => {
       expect(CommonSchemas.moneda.safeParse('EU').success).toBe(false);
     });
 
-    it('debe devolver EUR por defecto si no se pasa', () => {
-      // default se aplica solo si el campo es undefined
+    it('no inventa una divisa si no se pasa', () => {
+      // El campo es opcional a propósito: la divisa la resuelve quien escribe, con
+      // la del tenant. Un valor por defecto aquí ganaba sobre la del tenant y
+      // acababa guardado en órdenes y cotizaciones de cuentas de otra divisa.
       const schema = z.object({ moneda: CommonSchemas.moneda });
-      expect(schema.parse({}).moneda).toBe('EUR');
+      expect(schema.parse({}).moneda).toBeUndefined();
     });
   });
 

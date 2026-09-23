@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { formatearImporte, primeraMoneda } from "@/lib/moneda";
 import { PropertyCardComponent } from "./PropertyCard";
 import type { PropertyCardData } from "./PropertyCard";
 import { Loader2, SlidersHorizontal, Grid3X3, List } from "lucide-react";
@@ -92,6 +93,14 @@ export const PropertyGridComponent: React.FC<PropertyGridProps> = ({
   const [filterMinPrice, setFilterMinPrice] = useState("");
   const [filterMaxPrice, setFilterMaxPrice] = useState("");
   const [filterBedrooms, setFilterBedrooms] = useState("");
+
+  // La divisa del filtro es la de los inmuebles que se están mostrando: la
+  // portada pública no tiene sesión de la que leer el tenant, y el símbolo lo
+  // resuelve el formateador del módulo de dinero, no esta pantalla.
+  const monedaDeLaLista = useMemo(
+    () => primeraMoneda(...properties.map((p) => p.moneda)),
+    [properties]
+  );
 
   // Obtener slug del tenant desde la URL
   const effectiveSlug = useMemo(() => {
@@ -177,7 +186,7 @@ export const PropertyGridComponent: React.FC<PropertyGridProps> = ({
               <label className="text-xs text-muted-foreground">Precio mínimo</label>
               <Input
                 type="number"
-                placeholder="0 €"
+                placeholder={formatearImporte(0, monedaDeLaLista, 0)}
                 value={filterMinPrice}
                 onChange={(e) => setFilterMinPrice(e.target.value)}
               />

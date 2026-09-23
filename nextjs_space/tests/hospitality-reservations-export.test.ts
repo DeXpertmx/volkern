@@ -25,7 +25,7 @@ vi.mock('@/lib/hospitality/registro-viajeros-service', () => ({
 import { NextRequest } from 'next/server';
 import { GET } from '@/app/api/hospitality/reservations/export/route';
 
-const AUTH_OK = { valid: true, tenant: { id: 't1' }, user: { id: 'u1' } };
+const AUTH_OK = { valid: true, tenant: { id: 't1' }, user: { id: 'u1', role: { id: 'role_test', nombre: 'Superadmin', permisos: { all: true } } } };
 
 function peticion(query = '') {
   return new NextRequest(`http://localhost/api/hospitality/reservations/export${query}`);

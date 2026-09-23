@@ -47,7 +47,7 @@ import {
   RESPUESTA_PREGUNTAS_UMBRAL_ALERTA,
 } from '@/lib/hospitality/preguntas-metrics';
 
-const auth = { valid: true, tenant: { id: 'tenant_a' }, user: { id: 'user_a' } };
+const auth = { valid: true, tenant: { id: 'tenant_a' }, user: { id: 'user_a', role: { id: 'role_test', nombre: 'Superadmin', permisos: { all: true } } } };
 const d = (y: number, m: number, day: number) => new Date(y, m, day);
 
 beforeEach(() => {

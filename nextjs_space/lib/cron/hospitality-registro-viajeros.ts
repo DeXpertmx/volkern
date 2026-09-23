@@ -50,7 +50,7 @@ import {
 import {
   ESTADOS_ABANDONABLES,
   MAX_INTENTOS_PARTE,
-  esperaReintentoMs,
+  esperaReintentoConJitterMs,
 } from '../hospitality/parte-rechazo';
 import {
   TIPO_AVISO_PARTES,
@@ -184,11 +184,16 @@ export async function runRegistroViajerosScan(
     // (backoff): `limiteReintentoN` es la fecha antes de la cual el parte con
     // N-1 intentos todavía espera. La regla pura (`reintentoDisponible`) es la
     // misma; aquí se traduce a Prisma porque una consulta no puede llamarla.
-    const limiteReintento1 = new Date(ahora.getTime() - esperaReintentoMs(1));
-    const limiteReintento2 = new Date(ahora.getTime() - esperaReintentoMs(2));
-    const limiteReintento3 = new Date(ahora.getTime() - esperaReintentoMs(3));
-    const limiteReintento4 = new Date(ahora.getTime() - esperaReintentoMs(4));
-    const limiteReintento5 = new Date(ahora.getTime() - esperaReintentoMs(5));
+    // Cada peldaño lleva JITTER (±20 %): los límites de esta pasada no
+    // coinciden con los de la siguiente y las pasadas no golpean al servicio
+    // siempre en el mismo minuto. Es jitter POR PASADA (los límites viajan en
+    // SQL y el azar se tira una vez por barrido): todos los partes de esta
+    // pasada comparten el azar de esta pasada.
+    const limiteReintento1 = new Date(ahora.getTime() - esperaReintentoConJitterMs(1));
+    const limiteReintento2 = new Date(ahora.getTime() - esperaReintentoConJitterMs(2));
+    const limiteReintento3 = new Date(ahora.getTime() - esperaReintentoConJitterMs(3));
+    const limiteReintento4 = new Date(ahora.getTime() - esperaReintentoConJitterMs(4));
+    const limiteReintento5 = new Date(ahora.getTime() - esperaReintentoConJitterMs(5));
     // Un lote vencido (el servicio no lo resolvió en el plazo legal) deja de
     // estar «en vuelo»: la reserva vuelve a ser candidata y el parte se reenvía.
     const loteVencido = new Date(ahora.getTime() - VENTANA_LOTE_MS);

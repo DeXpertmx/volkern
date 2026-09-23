@@ -44,7 +44,7 @@ vi.mock('@/lib/hospitality/penalizaciones', () => ({
 import { PATCH } from '@/app/api/hospitality/reservations/[id]/route';
 import { ACCION_AUDIT_HOLD_CONFIRMADO } from '@/lib/hospitality/holds';
 
-const AUTH_OK = { valid: true, tenant: { id: 'tenant_a' }, user: { id: 'user_a' } };
+const AUTH_OK = { valid: true, tenant: { id: 'tenant_a' }, user: { id: 'user_a', role: { id: 'role_test', nombre: 'Superadmin', permisos: { all: true } } } };
 
 function reserva(overrides: Record<string, unknown> = {}) {
   return {

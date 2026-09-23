@@ -1,3 +1,5 @@
+import { VERTICAL_PLANS } from './vertical-plans'
+
 // prisma: solo import dinámico dentro de getPlanConfig()
 
 export const PLANS = {
@@ -284,6 +286,45 @@ export const PLAN_MODULES: Record<string, CrmModule[]> = {
     'white_label', 'custom_domain',
     'agency',
   ],
+  // ─── Verticales comerciales ────────────────────────────────────────────────
+  // El id de la vertical es también el valor de `plan` del tenant cuando la
+  // suscribe, así que los módulos vienen de la fuente única (lib/vertical-plans.ts),
+  // que a su vez los deriva del reparto que ya aplicaba el alta.
+  ...(Object.fromEntries(
+    VERTICAL_PLANS.map((v) => [v.id, v.modules as CrmModule[]]),
+  ) as Record<string, CrmModule[]>),
+}
+
+/**
+ * Límites del plan Esencial, extraídos a una constante a propósito: las
+ * verticales comerciales los heredan, porque es el plan de pago más cercano en
+ * precio (69 € frente a los 49–59 € de las verticales) y así no se duplican
+ * veinte números ni se inventa un reparto nuevo.
+ *
+ * Si algún día cada vertical necesita límites propios, se cambia la referencia
+ * del spread al final de PLAN_LIMITS y nada más.
+ */
+const LIMITES_ESENCIAL = {
+  leads: 1000,
+  users: 2,
+  emails_per_month: 2500,
+  automation_runs: 500,
+  whatsapp_messages: 500,
+  sms_messages: 250,
+  courses: 5,
+  students: 50,
+  storage_gb: 5,
+  ai_image_generations: 10,
+  business_emails: 0,
+  business_domains: 0,
+  business_email_gb: 0,
+  automations_count: 5,
+  pages: 5,
+  catalogo_items: 100,
+  published_pages: 3,
+  invoices: 50,
+  contratos_sign: 20,
+  compliance_mode: false,
 }
 
 export const PLAN_LIMITS = {
@@ -308,28 +349,7 @@ export const PLAN_LIMITS = {
     invoices: 5,
     contratos_sign: 2,
   },
-  [PLANS.ESENCIAL]: {
-    leads: 1000,
-    users: 2,
-    emails_per_month: 2500,
-    automation_runs: 500,
-    whatsapp_messages: 500,
-    sms_messages: 250,
-    courses: 5,
-    students: 50,
-    storage_gb: 5,
-    ai_image_generations: 10,
-    business_emails: 0,
-    business_domains: 0,
-    business_email_gb: 0,
-    automations_count: 5,
-    pages: 5,
-    catalogo_items: 100,
-    published_pages: 3,
-    invoices: 50,
-    contratos_sign: 20,
-    compliance_mode: false,
-  },
+  [PLANS.ESENCIAL]: LIMITES_ESENCIAL,
   [PLANS.PROFESIONAL]: {
     leads: 5000,
     users: 5,
@@ -545,8 +565,30 @@ export const PLAN_LIMITS = {
     invoices: -1,
     contratos_sign: -1,
   },
+  // ─── Verticales comerciales ────────────────────────────────────────────────
+  // Heredan los límites de Esencial. Ver la nota de LIMITES_ESENCIAL.
+  ...(Object.fromEntries(
+    VERTICAL_PLANS.map((v) => [v.id, LIMITES_ESENCIAL]),
+  ) as Record<string, typeof LIMITES_ESENCIAL>),
 }
 
+/**
+ * Precios por plan.
+ *
+ * OJO CON LA TABLA DE ABAJO: Esencial / Profesional / Infinity se conservan
+ * porque hay tenants vivos en esos planes y `lib/marketing/web-sync-service.ts`
+ * los lee, pero YA NO SE VENDEN. Sus Stripe Price IDs salen de variables de
+ * entorno (`NEXT_PUBLIC_STRIPE_PRICE_*`) que no existen en producción, así que
+ * ese camino devolvía un 500 al pulsar el plan. Lo que la plataforma ofrece y
+ * cobra son las verticales.
+ *
+ * La fuente única del precio de una vertical es `lib/vertical-plans.ts`. El
+ * descuento anual (12 mensualidades menos un 20 %) no se inventa aquí: es la
+ * convención que el resto de planes ya cumplía y que fija `tests/plans.test.ts`.
+ * Los Stripe Price IDs van vacíos a propósito: el cobro de una vertical se
+ * construye en línea con `price_data` —el mismo patrón que ya usaba el motor
+ * dinámico— así que no depende de ninguna variable de entorno.
+ */
 export const PLAN_PRICES = {
   [PLANS.ESENCIAL]: {
     monthly: 69,
@@ -583,6 +625,22 @@ export const PLAN_PRICES = {
     stripePriceId: '',
     stripePriceYearlyId: '',
   },
+  // ─── Verticales comerciales: el precio publicado, desde la fuente única ────
+  ...(Object.fromEntries(
+    VERTICAL_PLANS.map((v) => [
+      v.id,
+      {
+        monthly: v.price,
+        yearly: Math.round(v.price * 12 * 0.8),
+        currency: 'eur',
+        stripePriceId: '',
+        stripePriceYearlyId: '',
+      },
+    ]),
+  ) as Record<
+    string,
+    { monthly: number; yearly: number; currency: string; stripePriceId: string; stripePriceYearlyId: string }
+  >),
 }
 
 export const PLAN_FEATURES: Record<string, string[]> = {

@@ -45,7 +45,7 @@ function buildReq(method: string, body?: any, url = 'https://volkern.app/api/hos
   }) as any;
 }
 
-const AUTH_OK = { valid: true, tenant: { id: 't1' }, user: { id: 'u1' } };
+const AUTH_OK = { valid: true, tenant: { id: 't1' }, user: { id: 'u1', role: { id: 'role_test', nombre: 'Superadmin', permisos: { all: true } } } };
 
 describe('GET /api/hospitality/reservations (filtros)', () => {
   beforeEach(() => {

@@ -32,7 +32,7 @@ vi.mock('@/lib/api-key-auth', () => ({
   authenticateRequest: vi.fn().mockResolvedValue({
     valid: true,
     tenant: { id: 'tenant_a' },
-    user: { id: 'user_1' },
+    user: { id: 'user_1', role: { id: 'role_test', nombre: 'Superadmin', permisos: { all: true } } },
   }),
 }));
 

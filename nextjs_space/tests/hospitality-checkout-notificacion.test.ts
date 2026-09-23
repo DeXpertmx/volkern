@@ -35,7 +35,13 @@ const AVISO_OK = {
 describe('aviso del cambio de política de salida anticipada', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.user.findMany.mockResolvedValue([{ id: 'op-1' }, { id: 'op-2' }]);
+    // Los destinatarios se eligen por CAPACIDAD, no por nombre de rol: cada
+    // candidato llega con su rol y es la regla del servidor la que filtra.
+    const rolOperador = { id: 'role-op', nombre: 'Anfitrión', permisos: { all: true } };
+    mocks.user.findMany.mockResolvedValue([
+      { id: 'op-1', role: rolOperador },
+      { id: 'op-2', role: rolOperador },
+    ]);
     mocks.sendPushNotification.mockResolvedValue({ success: true });
   });
 

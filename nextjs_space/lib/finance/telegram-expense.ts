@@ -73,7 +73,9 @@ export function buildTelegramExpenseSummary(input: TelegramExpenseSummaryInput):
     `IVA: ${vat == null ? 'no leído' : vat}${vatRows ? ` (${vatRows} tramos)` : ''}`,
     `Recargo: ${surcharge == null ? '0' : surcharge}`,
     `IRPF: ${irpf == null ? '0' : irpf}`,
-    `Total: ${total == null ? 'no leído' : `${summaryValue(extracted.moneda, 'EUR')} ${total}`}`,
+    // La divisa solo se enseña si el OCR la leyó: antes se inventaba un euro
+    // cuando la factura no la traía.
+    `Total: ${total == null ? 'no leído' : `${total}${extracted.moneda ? ` ${summaryValue(extracted.moneda)}` : ''}`}`,
     ...(input.errorMessage ? [`Error: ${summaryValue(input.errorMessage)}`] : []),
     '',
     'Para corregir: /gasto_corregir ID campo valor',

@@ -169,7 +169,12 @@ beforeEach(() => {
   hoisted.hospitalitySyncLog.create.mockResolvedValue({ id: 'sync_1' });
   // La vinculación automática consulta primero si el hotel es de otra cuenta.
   hoisted.connectivityMapping.findFirst.mockResolvedValue(null);
-  hoisted.user.findMany.mockResolvedValue([{ id: 'u_admin' }]);
+  // Los destinatarios del aviso se eligen por CAPACIDAD (§27), no por el
+  // nombre del rol: cada candidato llega con su rol y lo filtra la misma regla
+  // que autoriza en el servidor.
+  hoisted.user.findMany.mockResolvedValue([
+    { id: 'u_admin', role: { id: 'role-admin', nombre: 'Anfitrión', permisos: { all: true } } },
+  ]);
   hoisted.sendPushNotification.mockResolvedValue({ success: true });
   hoisted.auditLog.create.mockResolvedValue({ id: 'audit_1' });
 });
@@ -774,9 +779,10 @@ describe('Hospitality — vinculación automática en el webhook', () => {
     expect(aviso.body).toContain('el código de la unidad coincide');
     expect(aviso.body).toContain('Revisa el vínculo');
     expect(aviso.url).toBe(`/dashboard/hospitality/onboarding?propertyId=${PROPERTY_A}`);
-    // Y se busca solo a quien decide (roles de administración).
+    // Y se busca solo en la plantilla del tenant: quién decide se resuelve por
+    // capacidad, no filtrando por el nombre del rol.
     expect(hoisted.user.findMany.mock.calls[0][0].where.tenantId).toBe(TENANT_A);
-    expect(hoisted.user.findMany.mock.calls[0][0].where.role.nombre.in).toContain('Admin');
+    expect(hoisted.user.findMany.mock.calls[0][0].select).toEqual({ id: true, role: true });
   });
 
   it('sin operadores a los que avisar, el vínculo se aplica igual', async () => {

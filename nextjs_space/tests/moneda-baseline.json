@@ -1,0 +1,474 @@
+{
+  "app/admin/analytics/neting/page.tsx": {
+    "divisa": 0,
+    "formato": 1
+  },
+  "app/admin/auditoria/[id]/page.tsx": {
+    "divisa": 0,
+    "formato": 1
+  },
+  "app/admin/auditoria/page.tsx": {
+    "divisa": 0,
+    "formato": 2
+  },
+  "app/admin/planes/page.tsx": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "app/admin/saas/tenants/page.tsx": {
+    "divisa": 5,
+    "formato": 0
+  },
+  "app/api/admin/plans/route.ts": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "app/api/admin/tenants/[id]/operations/route.ts": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "app/api/admin/tenants/route.ts": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "app/api/ai/chat/route.ts": {
+    "divisa": 0,
+    "formato": 2
+  },
+  "app/api/catalogo/[id]/route.ts": {
+    "divisa": 2,
+    "formato": 0
+  },
+  "app/api/catalogo/import/route.ts": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "app/api/catalogo/route.ts": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "app/api/contratos/[id]/send/route.ts": {
+    "divisa": 3,
+    "formato": 1
+  },
+  "app/api/contratos/[id]/volkernsign/route.ts": {
+    "divisa": 3,
+    "formato": 1
+  },
+  "app/api/contratos/route.ts": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "app/api/cotizaciones/[id]/send/route.ts": {
+    "divisa": 1,
+    "formato": 2
+  },
+  "app/api/cotizaciones/from-catalog/route.ts": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "app/api/cotizaciones/route.ts": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "app/api/cursos/route.ts": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "app/api/customer/chat/route.ts": {
+    "divisa": 0,
+    "formato": 1
+  },
+  "app/api/deals/route.ts": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "app/api/email-campanas/[id]/send/route.ts": {
+    "divisa": 0,
+    "formato": 1
+  },
+  "app/api/erp/expenses/scan/route.ts": {
+    "divisa": 5,
+    "formato": 0
+  },
+  "app/api/erp/projects/[id]/milestones/[milestoneId]/route.ts": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "app/api/leads/[id]/convert/route.ts": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "app/api/signup/route.ts": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "app/api/tenant/modules/route.ts": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "app/api/tenants/create/route.ts": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "app/api/v1/invoicing/external/route.ts": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "app/api/webhooks/anytimebot/citas/route.ts": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "app/api/webhooks/telegram/route.ts": {
+    "divisa": 2,
+    "formato": 0
+  },
+  "app/checkout/page.tsx": {
+    "divisa": 0,
+    "formato": 2
+  },
+  "app/contrato/[token]/ContratoPublicView.tsx": {
+    "divisa": 1,
+    "formato": 2
+  },
+  "app/cotizacion/[token]/CotizacionPublicView.tsx": {
+    "divisa": 1,
+    "formato": 2
+  },
+  "app/dashboard/aprobaciones/page.tsx": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "app/dashboard/catalogo/page.tsx": {
+    "divisa": 3,
+    "formato": 1
+  },
+  "app/dashboard/citas/[id]/page.tsx": {
+    "divisa": 0,
+    "formato": 2
+  },
+  "app/dashboard/contactos/[id]/page.tsx": {
+    "divisa": 2,
+    "formato": 2
+  },
+  "app/dashboard/contratos/[id]/page.tsx": {
+    "divisa": 1,
+    "formato": 2
+  },
+  "app/dashboard/contratos/nuevo/page.tsx": {
+    "divisa": 8,
+    "formato": 2
+  },
+  "app/dashboard/contratos/page.tsx": {
+    "divisa": 1,
+    "formato": 2
+  },
+  "app/dashboard/cotizaciones/[id]/page.tsx": {
+    "divisa": 1,
+    "formato": 2
+  },
+  "app/dashboard/cotizaciones/nueva/page.tsx": {
+    "divisa": 9,
+    "formato": 2
+  },
+  "app/dashboard/cotizaciones/page.tsx": {
+    "divisa": 2,
+    "formato": 2
+  },
+  "app/dashboard/cursos/[id]/page.tsx": {
+    "divisa": 16,
+    "formato": 0
+  },
+  "app/dashboard/cursos/nuevo/page.tsx": {
+    "divisa": 17,
+    "formato": 0
+  },
+  "app/dashboard/empresas/[id]/page.tsx": {
+    "divisa": 0,
+    "formato": 2
+  },
+  "app/dashboard/leads/[id]/page.tsx": {
+    "divisa": 1,
+    "formato": 2
+  },
+  "app/dashboard/pipeline/[id]/page.tsx": {
+    "divisa": 2,
+    "formato": 2
+  },
+  "app/dashboard/pipeline/page.tsx": {
+    "divisa": 10,
+    "formato": 2
+  },
+  "app/dashboard/telefonia/page.tsx": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "app/dashboard/ventas/ordenes/[id]/page.tsx": {
+    "divisa": 0,
+    "formato": 2
+  },
+  "app/dashboard/ventas/ordenes/page.tsx": {
+    "divisa": 9,
+    "formato": 1
+  },
+  "app/dashboard/ventas/pronosticos/page.tsx": {
+    "divisa": 1,
+    "formato": 2
+  },
+  "app/firma/[token]/FirmaPortalView.tsx": {
+    "divisa": 1,
+    "formato": 2
+  },
+  "app/orden/[token]/OrdenPublicView.tsx": {
+    "divisa": 0,
+    "formato": 2
+  },
+  "app/signup/page.tsx": {
+    "divisa": 0,
+    "formato": 1
+  },
+  "components/ads/AdABTestManager.tsx": {
+    "divisa": 0,
+    "formato": 3
+  },
+  "components/ads/AdsCampaignDetail.tsx": {
+    "divisa": 0,
+    "formato": 3
+  },
+  "components/ads/AdsInsightsCharts.tsx": {
+    "divisa": 0,
+    "formato": 3
+  },
+  "components/ads/AdsRecommendationsList.tsx": {
+    "divisa": 0,
+    "formato": 1
+  },
+  "components/automation/NodeConfigPanel.tsx": {
+    "divisa": 19,
+    "formato": 0
+  },
+  "components/calendar-view.tsx": {
+    "divisa": 0,
+    "formato": 1
+  },
+  "components/catalogo/CatalogSearchSelect.tsx": {
+    "divisa": 3,
+    "formato": 1
+  },
+  "components/catalogo/CatalogoSelector.tsx": {
+    "divisa": 2,
+    "formato": 1
+  },
+  "components/developers/WebhookTester.tsx": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "components/document-preview.tsx": {
+    "divisa": 0,
+    "formato": 2
+  },
+  "components/hr/expense-approval-feed.tsx": {
+    "divisa": 3,
+    "formato": 0
+  },
+  "components/hubs/AdsDashboard.tsx": {
+    "divisa": 0,
+    "formato": 4
+  },
+  "components/hubs/ConfiguracionDashboard.tsx": {
+    "divisa": 24,
+    "formato": 0
+  },
+  "components/hubs/GlobalCockpitDashboard.tsx": {
+    "divisa": 1,
+    "formato": 2
+  },
+  "components/hubs/ProyectosDashboard.tsx": {
+    "divisa": 5,
+    "formato": 0
+  },
+  "components/social/SocialAnalyticsWidget.tsx": {
+    "divisa": 0,
+    "formato": 1
+  },
+  "components/telephony/CallSummaryCards.tsx": {
+    "divisa": 2,
+    "formato": 0
+  },
+  "components/unified-timeline.tsx": {
+    "divisa": 2,
+    "formato": 3
+  },
+  "components/ventas/document-preview.tsx": {
+    "divisa": 0,
+    "formato": 2
+  },
+  "components/webcreator/blocks/components/BookingBlock.ts": {
+    "divisa": 2,
+    "formato": 0
+  },
+  "components/webcreator/blocks/components/CatalogBlock.ts": {
+    "divisa": 1,
+    "formato": 1
+  },
+  "components/webcreator/blocks/components/ServicesBlock.ts": {
+    "divisa": 4,
+    "formato": 0
+  },
+  "lib/ads/connectors/google-ads.ts": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "lib/ads/connectors/linkedin-ads.ts": {
+    "divisa": 3,
+    "formato": 0
+  },
+  "lib/agents/intents/insurance-intents.ts": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "lib/automation/actions/integrations.ts": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "lib/automation/actions/leads.ts": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "lib/automation-engine.ts": {
+    "divisa": 0,
+    "formato": 1
+  },
+  "lib/chat/chatbot-service.ts": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "lib/contratos/placeholders.ts": {
+    "divisa": 3,
+    "formato": 1
+  },
+  "lib/cotizaciones/cotizacion-pdf.ts": {
+    "divisa": 4,
+    "formato": 1
+  },
+  "lib/erp/aeat-nomina-adapter.ts": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "lib/erp/hr-service.ts": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "lib/import/import-catalog.ts": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "lib/import/parse-num.ts": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "lib/insurance/connectors/gnp/index.ts": {
+    "divisa": 5,
+    "formato": 0
+  },
+  "lib/insurance/connectors/gnp/mock-data.ts": {
+    "divisa": 12,
+    "formato": 0
+  },
+  "lib/insurance/connectors/qualitas/index.ts": {
+    "divisa": 5,
+    "formato": 0
+  },
+  "lib/insurance/connectors/qualitas/mock-data.ts": {
+    "divisa": 4,
+    "formato": 0
+  },
+  "lib/insurance/connectors/tirea/index.ts": {
+    "divisa": 5,
+    "formato": 0
+  },
+  "lib/insurance/connectors/tirea/mock-data.ts": {
+    "divisa": 8,
+    "formato": 0
+  },
+  "lib/insurance/csv-template.ts": {
+    "divisa": 4,
+    "formato": 0
+  },
+  "lib/insurance/currency.ts": {
+    "divisa": 12,
+    "formato": 0
+  },
+  "lib/invoicing-service.ts": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "lib/knowledge/embedding-service.ts": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "lib/knowledge/knowledge-service.ts": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "lib/marketing/web-sync-service.ts": {
+    "divisa": 3,
+    "formato": 0
+  },
+  "lib/open-api-v1.ts": {
+    "divisa": 2,
+    "formato": 0
+  },
+  "lib/openapi/spec.ts": {
+    "divisa": 2,
+    "formato": 0
+  },
+  "lib/openapi.ts": {
+    "divisa": 6,
+    "formato": 0
+  },
+  "lib/ordenes-venta/orden-pdf.ts": {
+    "divisa": 9,
+    "formato": 0
+  },
+  "lib/plans.ts": {
+    "divisa": 2,
+    "formato": 0
+  },
+  "lib/provisioning/partner-bulk-runner.ts": {
+    "divisa": 2,
+    "formato": 0
+  },
+  "lib/provisioning/tenant-provisioner.ts": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "lib/skills/catalog-skills.ts": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "lib/skills/deal-skills.ts": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "lib/skills/hr-management-skills.ts": {
+    "divisa": 1,
+    "formato": 1
+  },
+  "lib/skills/index.ts": {
+    "divisa": 3,
+    "formato": 2
+  },
+  "lib/skills/siniestros-skills.ts": {
+    "divisa": 1,
+    "formato": 0
+  },
+  "lib/types.ts": {
+    "divisa": 8,
+    "formato": 0
+  },
+  "lib/utils.ts": {
+    "divisa": 1,
+    "formato": 0
+  }
+}

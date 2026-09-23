@@ -288,7 +288,8 @@ export const HUBS: HubConfig[] = [
       '/dashboard/hospitality/registro-viajeros',
       '/dashboard/hospitality/automatizaciones',
       '/dashboard/hospitality/onboarding',
-      '/dashboard/hospitality/reportes'
+      '/dashboard/hospitality/reportes',
+      '/dashboard/hospitality/roles'
     ],
     items: [
       { name: 'Inicio', href: '/dashboard/hospitality', icon: Home, planModule: 'hospitality', description: 'Propiedades, unidades y resumen del módulo' },
@@ -307,6 +308,7 @@ export const HUBS: HubConfig[] = [
       { name: 'Automatizaciones', href: '/dashboard/hospitality/automatizaciones', icon: Zap, planModule: 'hospitality', description: 'Reglas sobre el Automation Engine: eventos → tareas, limpiezas y mensajes' },
       { name: 'Registro de viajeros', href: '/dashboard/hospitality/registro-viajeros', icon: ShieldCheck, planModule: 'hospitality', description: 'Comunicación de los viajeros al Ministerio del Interior (RD 933/2021): estado, configuración y partes pendientes' },
       { name: 'Reportes', href: '/dashboard/hospitality/reportes', icon: BarChart3, planModule: 'hospitality', description: 'Operación: ocupación, ADR, RevPAR, estancia media, no-shows · Ventas: canales, directa y antelación' },
+      { name: 'Equipo y roles', href: '/dashboard/hospitality/roles', icon: UserCog, planModule: 'hospitality', description: 'Anfitrión, Agente, Mantenimiento, Limpieza y Huésped: quién hace qué en la propiedad' },
     ]
   },
   {

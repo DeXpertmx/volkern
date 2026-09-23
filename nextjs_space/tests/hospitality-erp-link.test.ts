@@ -22,7 +22,7 @@ const mocks = vi.hoisted(() => ({
   supplier: { findUnique: vi.fn() },
   tenant: { findUnique: vi.fn() },
   configuracionFiscalEmisor: { findFirst: vi.fn() },
-  user: { findUnique: vi.fn(), findFirst: vi.fn() },
+  user: { findUnique: vi.fn(), findFirst: vi.fn(), role: { id: 'role_test', nombre: 'Superadmin', permisos: { all: true } } },
   create_expense: vi.fn(),
   authenticateRequest: vi.fn(),
   logAuditAction: vi.fn(),
@@ -57,7 +57,7 @@ import { GET, POST } from '@/app/api/hospitality/finanzas/route';
 import { POST as erpPOST, GET as erpGET } from '@/app/api/erp/expenses/route';
 import { calcularRentabilidad } from '@/lib/hospitality/finance';
 
-const auth = { valid: true, tenant: { id: 'tenant_a' }, user: { id: 'user_a' } };
+const auth = { valid: true, tenant: { id: 'tenant_a' }, user: { id: 'user_a', role: { id: 'role_test', nombre: 'Superadmin', permisos: { all: true } } } };
 const authErp = { ...auth, db: null };
 const request = (method: string, body?: unknown, url = 'http://test.local/api/hospitality/finanzas') =>
   new Request(url, {

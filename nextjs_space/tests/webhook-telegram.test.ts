@@ -204,7 +204,8 @@ describe('Telegram Webhook — correcciones de gastos OCR', () => {
 
     expect(summary).toContain('Proveedor S.L.');
     expect(summary).toContain('IVA: 87 (3 tramos)');
-    expect(summary).toContain('Total: EUR 718.2');
+    // La divisa se enseña detrás del importe y solo si el OCR la leyó.
+    expect(summary).toContain('Total: 718.2 EUR');
     expect(summary).toContain('/gasto_corregir ID campo valor');
     expect(summary).not.toContain('Proveedor\\nS.L.');
   });

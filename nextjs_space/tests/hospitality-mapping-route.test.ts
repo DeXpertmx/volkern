@@ -38,7 +38,7 @@ function reqConBody(body: unknown) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.authenticateRequest.mockResolvedValue({ valid: true, tenant: { id: 't1' }, user: { id: 'u1' } });
+  mocks.authenticateRequest.mockResolvedValue({ valid: true, tenant: { id: 't1' }, user: { id: 'u1', role: { id: 'role_test', nombre: 'Superadmin', permisos: { all: true } } } });
   mocks.hospitalityProperty.findFirst.mockResolvedValue({ id: 'p1', nombre: 'Villa Mar Azul' });
   mocks.hospitalityUnit.findMany.mockResolvedValue([{ id: 'unit_free', nombre: 'Penthouse' }]);
   mocks.connectivityMapping.findFirst.mockResolvedValue(null);

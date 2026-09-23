@@ -49,7 +49,7 @@ beforeEach(() => {
   mocks.authenticateRequest.mockResolvedValue({
     valid: true,
     tenant: { id: 't1' },
-    user: { id: 'u1', name: 'Anfitrión' },
+    user: { id: 'u1', name: 'Anfitrión', role: { id: 'role_test', nombre: 'Superadmin', permisos: { all: true } } },
   });
   mocks.hospitalityProperty.findFirst.mockResolvedValue(PROPIEDAD);
   mocks.hospitalityProperty.update.mockImplementation(({ data }: any) =>

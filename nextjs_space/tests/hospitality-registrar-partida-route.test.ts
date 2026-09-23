@@ -61,7 +61,7 @@ describe('POST /api/hospitality/incidencias/registrar-partida', () => {
     mocksAuth.authenticateRequest.mockResolvedValue({
       valid: true,
       tenant: { id: 't1' },
-      user: { id: 'u1' },
+      user: { id: 'u1', role: { id: 'role_test', nombre: 'Superadmin', permisos: { all: true } } },
     });
     mocks.hospitalityWebhookEvent.findUnique.mockResolvedValue(EVENTO);
     mocks.hospitalityWebhookEvent.update.mockResolvedValue({});

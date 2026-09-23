@@ -31,7 +31,7 @@ vi.mock('@/lib/api-key-auth', () => ({
 import { GET as GETGuests } from '../app/api/hospitality/guests/route';
 import { GET as GETDashboard } from '../app/api/hospitality/dashboard/route';
 
-const AUTH_OK = { valid: true, tenant: { id: 't1' }, user: { id: 'u1' } };
+const AUTH_OK = { valid: true, tenant: { id: 't1' }, user: { id: 'u1', role: { id: 'role_test', nombre: 'Superadmin', permisos: { all: true } } } };
 
 function buildReq(url = 'https://volkern.app/api/hospitality/guests') {
   return new Request(url) as any;
@@ -126,6 +126,30 @@ describe('GET /api/hospitality/guests', () => {
     expect(d.guests[0].nombre).toBe('Huésped sin datos');
   });
 
+  it('informa la divisa de los gastos: la de las reservas, no una fija', async () => {
+    prisma.hospitalityReservation.findMany.mockResolvedValue([
+      makeReservation({ id: 'r1', currency: 'EUR' }),
+      makeReservation({ id: 'r2', currency: 'EUR', checkIn: new Date('2026-08-01T15:00:00'), checkOut: new Date('2026-08-03T11:00:00') }),
+      makeReservation({ id: 'r3', currency: 'USD', checkIn: new Date('2026-07-01T15:00:00'), checkOut: new Date('2026-07-03T11:00:00') }),
+    ]);
+    const d = await (await GETGuests(buildReq())).json();
+    // Dos en euros y una en dólares: gana la predominante, no la primera fila.
+    expect(d.moneda).toBe('EUR');
+  });
+
+  it('sin reservas, la divisa es la del tenant; sin ninguna, no se inventa', async () => {
+    prisma.hospitalityReservation.findMany.mockResolvedValue([]);
+    const sinTenant = await (await GETGuests(buildReq())).json();
+    // El valor por defecto del esquema (`'MXN'`) no participa como primera
+    // opción: si nadie declara una divisa, la pantalla la pide en vez de
+    // escribir pesos en nombre del hotel.
+    expect(sinTenant.moneda).toBe('');
+
+    mockAuth.mockResolvedValue({ ...AUTH_OK, tenant: { id: 't1', moneda: 'USD' } });
+    const conTenant = await (await GETGuests(buildReq())).json();
+    expect(conTenant.moneda).toBe('USD');
+  });
+
   it('busca por q en nombre/email/teléfono', async () => {
     prisma.hospitalityReservation.findMany.mockResolvedValue([
       makeReservation({ id: 'r1', contactId: 'c1', contact: { id: 'c1', nombre: 'María García', email: 'maria@x.com', telefono: '+52' } }),
@@ -156,6 +180,25 @@ describe('GET /api/hospitality/dashboard', () => {
     mockAuth.mockResolvedValue({ valid: false, error: 'no auth' });
     const res = await GETDashboard(buildReq('https://volkern.app/api/hospitality/dashboard'));
     expect(res.status).toBe(401);
+  });
+
+  it('informa la divisa de los importes: la de las reservas del período', async () => {
+    prisma.hospitalityReservation.findMany.mockResolvedValue([
+      makeReservation({ id: 'r1', currency: 'EUR' }),
+      makeReservation({ id: 'r2', currency: 'USD' }),
+    ]);
+    const d = await (
+      await GETDashboard(buildReq('https://volkern.app/api/hospitality/dashboard'))
+    ).json();
+    // Empate: decide el orden alfabético, pero nunca una divisa fija.
+    expect(d.moneda).toBe('EUR');
+
+    prisma.hospitalityReservation.findMany.mockResolvedValue([]);
+    mockAuth.mockResolvedValue({ ...AUTH_OK, tenant: { id: 't1', moneda: 'COP' } });
+    const sinReservas = await (
+      await GETDashboard(buildReq('https://volkern.app/api/hospitality/dashboard'))
+    ).json();
+    expect(sinReservas.moneda).toBe('COP');
   });
 
   it('calcula KPIs: ocupación hoy, ingresos, ADR y mix de canales', async () => {

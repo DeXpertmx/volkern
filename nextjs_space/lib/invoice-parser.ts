@@ -1,5 +1,16 @@
 import type { OcrOverlay, OcrWord, VatRowTemplate } from '@/lib/finance/ocr-template'
+import { PATRON_CODIGOS_MONEDA, monedaDeSimbolo } from '@/lib/moneda'
 import { parseNum } from '@/lib/import/parse-num'
+
+/**
+ * Cómo se reconoce una divisa en el texto de una factura.
+ *
+ * Los códigos los dicta el catálogo de dinero; CHF va aparte porque una factura
+ * suiza puede mencionarlo aunque la plataforma no lo convierta. El patrón del
+ * final corta la coletilla de la moneda que queda pegada al nombre del emisor.
+ */
+const CODIGO_EN_TEXTO = new RegExp(`\\b(${PATRON_CODIGOS_MONEDA}|CHF)\\b`, 'i')
+const CODIGO_AL_FINAL = new RegExp(`\\s*[(（]?\\s*(?:${PATRON_CODIGOS_MONEDA}|CHF)\\s*[)）]?\\s*$`, 'i')
 
 export interface EmisorInfo {
   nombre: string | null
@@ -107,7 +118,9 @@ export function sanitizeSupplierName(raw: unknown): string | null {
   // finales si van precedidos de un marcador de cabecera ya recortado.
   name = name
     .replace(/\s+(?:\d{1,2})[/.-](?:\d{1,2})[/.-](?:\d{2,4})\b/g, '')
-    .replace(/\s*[(（]?\s*(?:EUR|USD|MXN|GBP|CHF|CAD|ARS|COP|CLP|PEN|BRL)\s*[)）]?\s*$/i, '')
+    // Los códigos salen del catálogo de divisas (más CHF, que una factura puede
+    // mencionar aunque la plataforma no lo convierta).
+    .replace(CODIGO_AL_FINAL, '')
     .replace(/\s+€\s*$/, '')
     .trim()
 
@@ -635,8 +648,12 @@ export function parseInvoiceText(text: string): VisionResult | null {
 
   // Moneda: conservar el código ISO cuando aparezca (EUR, USD, MXN…),
   // incluso si el documento solo muestra el símbolo €.
-  const currencyMatch = full.match(/\b(EUR|USD|MXN|GBP|CHF|CAD|ARS|COP|CLP|PEN|BRL)\b/i)
-  const moneda = currencyMatch ? currencyMatch[1].toUpperCase() : (full.includes('€') ? 'EUR' : null)
+  const currencyMatch = full.match(CODIGO_EN_TEXTO)
+  const moneda = currencyMatch
+    ? currencyMatch[1].toUpperCase()
+    : monedaDeSimbolo('€') && full.includes('€')
+      ? monedaDeSimbolo('€')
+      : null
 
   // Forma de pago: tomar solo el valor posterior a la etiqueta, sin absorber
   // la fecha de vencimiento ni el resto de la sección de condiciones.

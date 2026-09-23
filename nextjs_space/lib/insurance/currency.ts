@@ -20,7 +20,12 @@
  *   tests/currency.test.ts (puros)
  */
 
-export type Currency = 'USD' | 'EUR' | 'MXN' | 'GBP' | 'JPY' | 'CNY' | 'CAD' | 'BRL' | 'CLP' | 'ARS' | 'COP' | 'PEN';
+// La divisa y su catálogo se definen UNA vez, en `lib/moneda.ts`. Aquí se
+// reexportan para no romper los imports existentes de seguros, pero este módulo
+// ya no declara ningún código: solo las tasas de cambio, que sí son suyas.
+import { MONEDA_MINIMA_ESQUEMA, MONEDAS_SOPORTADAS, type Currency } from '@/lib/moneda';
+
+export type { Currency };
 
 /**
  * Rates expresados como: 1 unidad de MONEDA = X USD.
@@ -105,7 +110,10 @@ export function sumaEnMonedaTarget(
   return rows.reduce((acc, r) => {
     const m = Number(r.monto ?? 0);
     if (!m) return acc;
-    return acc + fxConvert(m, r.moneda ?? 'USD', targetCurrency);
+    // Sin divisa en la fila se asume que ya está en la de destino. Es lo mismo que
+    // hace `fxConvert` con una divisa desconocida (identidad), en vez de suponer
+    // dólares y multiplicar el importe por un cambio que nadie indicó.
+    return acc + fxConvert(m, r.moneda || targetCurrency, targetCurrency);
   }, 0);
 }
 
@@ -139,9 +147,10 @@ export function resumenMoneda(
   return { totalEnTarget, porMoneda: buckets, mezcla };
 }
 
-export const SUPPORTED_CURRENCIES = ['USD', 'EUR', 'MXN', 'GBP', 'JPY', 'CNY', 'CAD', 'BRL', 'CLP', 'ARS', 'COP', 'PEN'] as const;
+export const SUPPORTED_CURRENCIES = MONEDAS_SOPORTADAS;
 
 export const CURRENCY_CONSTANTS = {
-  DEFAULT_TENANT_CURRENCY: 'MXN',
+  /** Mismo mínimo del esquema que usa el resto de la plataforma, sin repetirlo. */
+  DEFAULT_TENANT_CURRENCY: MONEDA_MINIMA_ESQUEMA,
   FX_TO_USD,
 } as const;

@@ -97,7 +97,12 @@ export function fechaEstanciaDe(valor: unknown): Date | null {
   const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(texto);
   if (iso) {
     const d = new Date(`${iso[1]}-${iso[2]}-${iso[3]}T12:00:00Z`);
-    return Number.isNaN(d.getTime()) ? null : d;
+    // El rollover de Date RUEDA el desbordamiento al mes siguiente (32/01 →
+    // 1 de febrero; 2026-02-31 → 3 de marzo): una fecha imposible no se
+    // corrige sola, se rechaza — la reseña iría al mes equivocado.
+    if (Number.isNaN(d.getTime())) return null;
+    if (d.getUTCDate() !== Number(iso[3]) || d.getUTCMonth() !== Number(iso[2]) - 1) return null;
+    return d;
   }
   const eu = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/.exec(texto);
   if (eu) {
@@ -105,7 +110,9 @@ export function fechaEstanciaDe(valor: unknown): Date | null {
     const mes = Number(eu[2]);
     if (dia > 12 && mes <= 12) {
       const d = new Date(Date.UTC(Number(eu[3]), mes - 1, dia, 12));
-      return Number.isNaN(d.getTime()) ? null : d;
+      if (Number.isNaN(d.getTime())) return null;
+      if (d.getUTCDate() !== dia || d.getUTCMonth() !== mes - 1) return null; // 32/01 no es una fecha
+      return d;
     }
     // 05/06/2026: no se sabe si es mayo o junio — no se adivina.
     return null;
@@ -181,7 +188,7 @@ function normalizarCabecera(h: string): string {
 const CAMPOS = {
   canal: ['canal', 'channel', 'canal origen', 'source'],
   fecha: ['fecha', 'fecha estancia', 'fecha de estancia', 'date', 'stay date', 'checkin', 'check-in'],
-  nombre: ['nombre', 'nombre huesped', 'nombre del huesped', 'guest', 'guest name', 'name', 'autor'],
+  nombre: ['nombre', 'nombre huesped', 'nombre del huesped', 'huesped', 'guest', 'guest name', 'name', 'autor'],
   puntuacion: ['puntuacion', 'puntos', 'rating', 'score', 'estrellas', 'stars', 'nota'],
   comentario: ['comentario', 'resena', 'opinion', 'comment', 'review', 'comentarios'],
   respuesta: ['respuesta', 'respuesta hotel', 'respuesta del hotel', 'response', 'host response', 'reply'],

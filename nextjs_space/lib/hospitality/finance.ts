@@ -19,6 +19,8 @@
  * hay que cobrar. Ver `lib/hospitality/no-show.ts`.
  */
 
+import { monedaEscritura } from '@/lib/moneda';
+
 export type LineaTipo = 'alojamiento' | 'limpieza' | 'extra' | 'otro' | 'penalizacion';
 
 export type PagoMetodo = 'stripe' | 'transferencia' | 'efectivo' | 'manual' | 'otro';
@@ -127,6 +129,21 @@ export function calcularBruto(lineas: LineaReserva[]): number {
   );
 }
 
+/**
+ * Suma de **todas** las líneas de la reserva, penalizaciones incluidas.
+ *
+ * Es el total que necesita la pantalla de cobros —«por qué importe está la
+ * reserva»—, no el ingreso: para el ingreso está `calcularBruto`, que aparta la
+ * penalización por el motivo que explica su comentario. La agregación vive aquí
+ * y no en la ruta porque la analítica de la vertical se lee en un solo sitio
+ * (`tests/hospitality-analitica-invariants.test.ts`).
+ */
+export function totalDeLineas(lineas: LineaReserva[]): number {
+  return redondear(
+    lineas.reduce((total, linea) => total + (linea.importeTotal || 0), 0)
+  );
+}
+
 /** Suma de las penalizaciones por no-show emitidas en la reserva. */
 export function calcularPenalizacion(lineas: LineaReserva[]): number {
   return redondear(
@@ -168,6 +185,22 @@ export function calcularCobrado(pagos: PagoReserva[]): number {
     if (pago.estado === 'reembolsado') cobrado -= Math.abs(importe);
   }
   return redondear(cobrado);
+}
+
+/**
+ * Dinero devuelto al huésped: suma los pagos con estado `reembolsado`.
+ *
+ * Va aparte de `calcularCobrado` a propósito: el informe necesita ver por
+ * separado lo que se cobró y lo que se devolvió, aunque para el cierre de
+ * caja una cosa reste de la otra.
+ */
+export function calcularReembolsado(pagos: PagoReserva[]): number {
+  return redondear(
+    pagos.reduce(
+      (total, pago) => total + (pago.estado === 'reembolsado' ? Math.abs(pago.importe || 0) : 0),
+      0
+    )
+  );
 }
 
 /**
@@ -236,7 +269,7 @@ export function calcularRentabilidad(input: RentabilidadInput): RentabilidadRese
   const pendiente = Math.max(0, redondear(aCobrar - cobrado));
 
   return {
-    moneda: input.moneda || 'MXN',
+    moneda: monedaEscritura(input.moneda),
     bruto,
     desglose: desglosarLineas(input.lineas),
     penalizacion,

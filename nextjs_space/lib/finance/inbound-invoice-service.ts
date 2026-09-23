@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db';
+import { monedaEscritura } from '@/lib/moneda';
 import { createExpense, CreateExpenseInput } from '../skills/finance-skills';
 import { skillsLogger } from '../skills/observability';
 
@@ -74,7 +75,9 @@ export class VolkernStandardAdapter implements InvoiceAdapter {
       supplierId: data.supplierId,
       description: data.description || `Factura recuperada: ${data.invoiceNumber}`,
       amount: data.totalAmount,
-      currency: data.currency || 'EUR',
+      // La divisa la declara la factura del proveedor; si no la trae, el servicio
+      // resuelve la del tenant al crear el gasto.
+      currency: data.currency,
       date: data.issueDate ? new Date(data.issueDate) : new Date(),
       category: data.category || 'Recuperación Proactiva'
     }
@@ -109,7 +112,9 @@ export class VeriFactuAdapter implements InvoiceAdapter {
       supplierId: data.supplierId,
       description: data.description || `Factura Veri*factu: ${data.invoiceNumber}`,
       amount: data.totalAmount,
-      currency: data.currency || 'EUR',
+      // La divisa la declara la factura del proveedor; si no la trae, el servicio
+      // resuelve la del tenant al crear el gasto.
+      currency: data.currency,
       date: data.issueDate ? new Date(data.issueDate) : new Date(),
       category: data.category || 'Veri*factu'
     }
@@ -135,7 +140,9 @@ export class NexusAdapter implements InvoiceAdapter {
       supplierId: data.supplierId,
       description: data.description || `Factura Nexus: ${data.invoiceNumber}`,
       amount: data.totalAmount,
-      currency: data.currency || 'EUR',
+      // La divisa la declara la factura del proveedor; si no la trae, el servicio
+      // resuelve la del tenant al crear el gasto.
+      currency: data.currency,
       date: data.issueDate ? new Date(data.issueDate) : new Date(),
       category: data.category || 'Nexus'
     }
@@ -283,9 +290,17 @@ export class InboundInvoiceService {
 
     const expenseData = adapter.parse(data, tenantId);
 
+    // El adaptador reporta la divisa que leyó en la factura; la del tenant es el
+    // respaldo, no un euro escrito en el adaptador.
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { moneda: true },
+    });
+
     // Utilizamos el skill nativo que ya realiza el encadenamiento de Veri*factu
     const expense = await createExpense({
       ...expenseData,
+      currency: monedaEscritura(expenseData.currency, tenant?.moneda),
       tenantId,
       createdById: bot.id,
       status: 'PAID' // Marcar como pagada si viene de recuperación proactiva (o según lógica de negocio)

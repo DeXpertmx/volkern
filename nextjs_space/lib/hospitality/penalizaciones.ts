@@ -31,6 +31,7 @@
 
 import { prisma } from '@/lib/db';
 import { nightsBetween } from './calendar';
+import { monedaEscritura, MONEDA_MINIMA_ESQUEMA } from '@/lib/moneda';
 import {
   calcularPenalizacionNoShow,
   politicaEfectiva,
@@ -79,7 +80,9 @@ export async function aplicarPenalizacionNoShow(
     ok: true,
     emitida: false,
     importe: 0,
-    moneda: 'MXN',
+    // El valor del esquema, no una divisa elegida: hasta que se lea la reserva
+    // no hay dato del que sacarla (ver `lib/moneda.ts`).
+    moneda: MONEDA_MINIMA_ESQUEMA,
     nochesPenalizadas: 0,
     politica: opts?.politica ?? politicaEfectiva(null),
   };
@@ -109,7 +112,7 @@ export async function aplicarPenalizacionNoShow(
       return { ...base, ok: false, motivo: 'reserva_no_encontrada', error: 'Reserva no encontrada' };
     }
 
-    const moneda = reserva.currency || 'MXN';
+    const moneda = monedaEscritura(reserva.currency);
     const politica = opts?.politica ?? politicaEfectiva(reserva.property?.politicaNoShow);
 
     // Ya emitida: se devuelve la existente (idempotencia).
@@ -238,7 +241,7 @@ export async function facturarPenalizacionNoShow(
   tenantId: string,
   reservationId: string
 ): Promise<ResultadoFacturaPenalizacion> {
-  const base = { ok: true, facturada: false, importe: 0, moneda: 'MXN' };
+  const base = { ok: true, facturada: false, importe: 0, moneda: MONEDA_MINIMA_ESQUEMA };
 
   try {
     const reserva = await prisma.hospitalityReservation.findFirst({
@@ -260,7 +263,7 @@ export async function facturarPenalizacionNoShow(
     }
 
     const item = reserva.items[0];
-    const moneda = reserva.currency || 'MXN';
+    const moneda = monedaEscritura(reserva.currency);
     const importe = item.importeTotal || 0;
 
     // Ya facturada: se devuelve la misma (no se factura dos veces).

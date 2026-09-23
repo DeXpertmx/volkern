@@ -133,10 +133,12 @@ describe('formatCurrency', () => {
     expect(result).toContain('US$');
   });
 
-  it('debe formatear MXN', () => {
+  it('debe formatear MXN en la convención de su divisa', () => {
     const result = formatCurrency(100, 'MXN');
-    // El símbolo puede ser MX$ o MXN según la versión de ICU
-    expect(result).toMatch(/MX/);
+    // El peso sigue su propia convención (símbolo delante y punto decimal), no la
+    // española: el formato acompaña a la divisa del tenant.
+    expect(result).toContain('$');
+    expect(result).toContain('100.00');
   });
 
   it('debe formatear cero', () => {

@@ -43,7 +43,7 @@ function req(url = 'https://volkern.app/api/hospitality/incidencias') {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.authenticateRequest.mockResolvedValue({ valid: true, tenant: { id: 't1' }, user: { id: 'u1' } });
+  mocks.authenticateRequest.mockResolvedValue({ valid: true, tenant: { id: 't1' }, user: { id: 'u1', role: { id: 'role_test', nombre: 'Superadmin', permisos: { all: true } } } });
   mocks.hospitalityProperty.findMany.mockResolvedValue([PROPIEDAD]);
   mocks.hospitalityWebhookEvent.findMany.mockResolvedValue([]);
   mocks.hospitalityReservation.findMany.mockResolvedValue([]);

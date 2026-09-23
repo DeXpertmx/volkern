@@ -83,7 +83,7 @@ const reserva = {
   review: null as unknown,
 };
 
-const AUTH_OK = { valid: true, tenant: { id: 't1' }, user: { id: 'u1' } };
+const AUTH_OK = { valid: true, tenant: { id: 't1' }, user: { id: 'u1', role: { id: 'role_test', nombre: 'Superadmin', permisos: { all: true } } } };
 
 const reqToken = (method: string, body?: unknown, token = 'tok_res_1') =>
   new Request(`http://test.local/api/public/reviews/${token}`, {

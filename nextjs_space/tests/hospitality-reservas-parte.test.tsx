@@ -12,6 +12,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { toast } from 'sonner';
+import { olvidarRolCacheado } from '@/hooks/use-capacidades-hospitality';
 
 // Polyfill PointerEvent para Radix UI en jsdom (mismo apaño que el resto de
 // tests de páginas con Select).
@@ -236,6 +237,16 @@ const RECHAZADO_CONFIG = reserva({
 
 function montarFetch(reservas: unknown[]) {
   return vi.fn(async (url: string, init?: RequestInit) => {
+    // La pantalla decide qué acciones ofrece según el rol de la sesión
+    // (`useCapacidadesHospitality`). Aquí el operador puede todo: esta prueba
+    // vigila el aviso del parte, no los permisos (de eso se encargan las
+    // guardias de permisos).
+    if (String(url).includes('/api/users/me')) {
+      return {
+        ok: true,
+        json: async () => ({ role: { id: 'rol-1', nombre: 'Admin', permisos: { all: true } } }),
+      };
+    }
     if (String(url).includes('/api/hospitality/reservations')) {
       return { ok: true, json: async () => ({ reservations: reservas }) };
     }
@@ -255,6 +266,8 @@ function montarFetch(reservas: unknown[]) {
 describe('Pantalla de reservas: aviso del parte de viajeros', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // El rol se cachea en el módulo del hook: cada prueba parte sin rol.
+    olvidarRolCacheado();
     global.fetch = montarFetch([SIN_DATOS, COMUNICADA, CANCELADA]) as unknown as typeof fetch;
   });
 
@@ -446,7 +459,7 @@ describe('Pantalla de reservas: aviso del parte de viajeros', () => {
     render(<HospitalityReservasPage />);
     await screen.findByText('Ana Pérez');
 
-    await usuario.click(screen.getByTitle('Copiar el enlace de check-in del huésped'));
+    await usuario.click(await screen.findByTitle('Copiar el enlace de check-in del huésped'));
 
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('Enlace de check-in copiado')));
     // El GET de montaje (preguntas del check-in) no lleva init: solo vale el

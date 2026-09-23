@@ -11,6 +11,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { formatearImporte } from "@/lib/moneda";
 import {
   Home,
   DollarSign,
@@ -45,6 +46,11 @@ import {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface DashboardStats {
+  /**
+   * Moneda de reporte del tenant: con la que el servidor calcula los importes
+   * de este panel. Antes el panel escribía todo en euros a mano.
+   */
+  moneda?: string;
   stats: {
     total: number;
     available: number;
@@ -81,12 +87,8 @@ interface DashboardStats {
 
 const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"];
 
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat("es-ES", {
-    style: "currency",
-    currency: "EUR",
-    maximumFractionDigits: 0,
-  }).format(value);
+const formatCurrency = (value: number, moneda?: string) =>
+  formatearImporte(value, moneda || "", 0);
 
 // ─── API Hook ─────────────────────────────────────────────────────────────────
 
@@ -150,6 +152,7 @@ export const RealEstateStatsWidget: React.FC<RealEstateStatsWidgetProps> = ({
   }
 
   const { stats } = data;
+  const moneda = data.moneda || "";
 
   const kpis = [
     {
@@ -161,10 +164,10 @@ export const RealEstateStatsWidget: React.FC<RealEstateStatsWidgetProps> = ({
     },
     {
       label: "Precio Promedio",
-      value: showAvgPrice ? formatCurrency(stats.avgPrice) : "",
+      value: showAvgPrice ? formatCurrency(stats.avgPrice, moneda) : "",
       icon: DollarSign,
       color: "emerald",
-      sub: showAvgM2 ? `${formatCurrency(stats.avgPricePerM2)}/m²` : "",
+      sub: showAvgM2 ? `${formatCurrency(stats.avgPricePerM2, moneda)}/m²` : "",
     },
     {
       label: "Vendidas / Alquiladas",
@@ -528,7 +531,7 @@ export const RealEstateRecentWidget: React.FC<RealEstateRecentWidgetProps> = ({
                 </div>
                 <div className="text-right flex-shrink-0">
                   <p className="text-sm font-bold text-primary">
-                    {formatCurrency(prop.precioBase)}
+                    {formatCurrency(prop.precioBase, data.moneda)}
                   </p>
                   <p className="text-[10px] text-muted-foreground">
                     {new Date(prop.fechaCreacion).toLocaleDateString("es-ES", {

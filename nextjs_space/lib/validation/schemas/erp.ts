@@ -94,7 +94,8 @@ export const ProjectCreateSchema = z.object({
   description: z.string().optional(),
   leadId: z.string().optional(),
   budget: z.coerce.number().optional().default(0),
-  currency: z.string().optional().default('EUR'),
+  // Sin divisa por defecto: la ruta del proyecto la resuelve con la del tenant.
+  currency: z.string().optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
 });

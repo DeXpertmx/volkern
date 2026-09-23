@@ -1,7 +1,18 @@
 import { prisma } from '@/lib/db';
-import { differenceInDays } from 'date-fns';
+import { differenceInDays, differenceInHours } from 'date-fns';
 
 export type HealthStatus = 'HEALTHY' | 'WARNING' | 'CRITICAL' | 'ZOMBIE';
+
+/**
+ * Instantáneas para calibración (dataset de C6): cada recálculo con cambios
+ * deja una fila con SUS entradas y el desenlace queda a NULL hasta que el
+ * deal se cierra — entonces el PATCH del deal marca la última ('ganado' /
+ * 'perdido'). El historial nunca se recrea ni se re-etiqueta en bloque: el
+ * snapshot ANTERIOR al cierre conserva el score de entonces, que es lo que
+ * hay que comparar con el desenlace. El dedupe de 24 h evita convertir el
+ * barrido diario en un dataset inflado de filas idénticas.
+ */
+export const SNAPSHOT_DEDUPE_HORAS = 24;
 
 export class PipelineHealthService {
   /**
@@ -55,6 +66,46 @@ export class PipelineHealthService {
     else if (score < 50) status = 'CRITICAL';
     else if (score < 75) status = 'WARNING';
 
+    // Entradas del score (para la instantánea de calibración)
+    const diasSinMovimiento = Math.max(0, differenceInDays(new Date(), deal.fechaActualizacion));
+    const diasSinActividad = lastActivity
+      ? Math.max(0, differenceInDays(new Date(), lastActivity))
+      : 0;
+    const maxDiasSLA = deal.prioridad === 'urgente' ? 5 : deal.prioridad === 'alta' ? 10 : 20;
+    const slaVencido = deal.diasEnPipeline > maxDiasSLA;
+
+    // DATASET DE CALIBRACIÓN: instantánea solo si el score cambió o la última
+    // es vieja (> SNAPSHOT_DEDUPE_HORAS). El desenlace queda NULL: lo pone el
+    // cierre del deal (marcarDesenlaceEnSnapshots) y nunca se recrea.
+    try {
+      const ultima = await prisma.healthSnapshot.findFirst({
+        where: { dealId },
+        orderBy: { createdAt: 'desc' },
+        select: { healthScore: true, createdAt: true },
+      });
+      const scoreCambio = !ultima || ultima.healthScore !== score;
+      const suficientementeVieja =
+        ultima &&
+        differenceInHours(new Date(), ultima.createdAt) >= SNAPSHOT_DEDUPE_HORAS;
+      if (!ultima || scoreCambio || suficientementeVieja) {
+        await prisma.healthSnapshot.create({
+          data: {
+            tenantId: deal.tenantId,
+            dealId,
+            healthScore: score,
+            healthStatus: status,
+            diasSinMovimiento,
+            diasSinActividad,
+            slaVencido,
+            desenlace: null,
+          },
+        });
+      }
+    } catch (err) {
+      // La instantánea no puede tumbar el recálculo del score.
+      console.error('[HealthService] Error guardando snapshot de calibración:', err);
+    }
+
     // Persistir
     return await prisma.deal.update({
       where: { id: dealId },
@@ -63,6 +114,25 @@ export class PipelineHealthService {
         healthStatus: status,
         lastHealthUpdate: new Date()
       }
+    });
+  }
+
+  /**
+   * Al cerrar un deal (ganado/perdido): marca el DESENLACE en el snapshot
+   * más reciente — el score de ese momento es el que se evalúa contra lo que
+   * pasó. Los anteriores quedan como historial, sin tocar.
+   */
+  static async marcarDesenlaceEnSnapshots(dealId: string, desenlace: 'ganado' | 'perdido') {
+    const ultimo = await prisma.healthSnapshot.findFirst({
+      where: { dealId },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    });
+    if (!ultimo) return null;
+
+    return prisma.healthSnapshot.update({
+      where: { id: ultimo.id },
+      data: { desenlace, fechaCierre: new Date() },
     });
   }
 

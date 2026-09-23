@@ -18,6 +18,7 @@
  */
 
 import type { BulkParsedRow } from './csv-bulk';
+import { MONEDAS_SOPORTADAS } from '@/lib/moneda';
 
 // ─── Tipos públicos ────────────────────────────────────────────────────────────
 
@@ -53,7 +54,8 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Strict subdomain: alphanumeric blocks separated by single dashes; no
 // leading/trailing dashes, no consecutive dashes, length 3-40.
 const SUBDOMAIN_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const VALID_MONEDAS = new Set(['USD', 'EUR', 'MXN', 'GBP', 'JPY', 'CNY', 'CAD', 'BRL', 'CLP', 'ARS', 'COP', 'PEN']);
+// El catálogo se define una vez en `lib/moneda.ts`; aquí solo se indexa.
+const VALID_MONEDAS = new Set<string>(MONEDAS_SOPORTADAS);
 const VALID_VERTICALS = new Set(['insurance', 'real_estate', 'accounting', 'hospitality', 'general']);
 
 /**

@@ -11,6 +11,8 @@
 
 import { SkillRegistry, SkillOutput } from './skill-registry';
 import { ChatbotAuditLogger } from './audit-logger';
+import { formatearImporte, monedaEfectiva } from '@/lib/moneda';
+import { monedaDeLaConversacion } from './moneda-tenant';
 
 export interface ExecutionStep {
   action: string;
@@ -30,6 +32,14 @@ export interface ExecutionInput {
    *  en safeParams para que los skills (create_task, create_note…) liguen la
    *  entidad nueva al lead del chat, no solo al userId. */
   leadId?: string;
+  /**
+   * Divisa con la que escribir los importes de la respuesta (`Tenant.moneda`).
+   *
+   * El llamador que ya tiene el tenant cargado —el chatbot lo lee en la misma
+   * petición— la pasa para no repetir la consulta; si no llega, el motor la
+   * resuelve él mismo. Nunca se supone una divisa.
+   */
+  moneda?: string | null;
 }
 
 export interface ExecutionOutput {
@@ -43,13 +53,52 @@ export interface ExecutionOutput {
 const SKILL_TIMEOUT_MS = 10000; // 10 segundos por skill
 const MAX_RETRIES = 1;
 
+/**
+ * Importe que hay que escribir, o `null` si el skill no trajo el dato.
+ *
+ * Los skills devuelven el importe unas veces como número y otras como cadena
+ * ('2100.00'), y a veces no lo devuelven. `Number(null)` vale `0`, así que
+ * convertirlo a ciegas transformaría «sin dato» en «cero», que es justo lo que
+ * un mensaje de dinero no debe inventar.
+ */
+function importeDe(valor: unknown): number | null {
+  if (valor === null || valor === undefined || valor === '') return null;
+  const numero = Number(valor);
+  return Number.isFinite(numero) ? numero : null;
+}
+
+/**
+ * El dato del skill, sin el envoltorio con el que algunos lo devuelven.
+ *
+ * Los skills de Volkern que devuelven texto y payload a la vez lo hacen como
+ * `{ content, data }`. El formateador espera el payload, así que sin desenvolverlo
+ * busca `revenue` en un objeto que solo tiene `content` y `data`, no encuentra
+ * nada, y el mensaje sale con «—» en todos los importes —el dinero del skill se
+ * quedaba a un nivel de profundidad de distancia—.
+ *
+ * Se reconoce por su forma exacta, texto más payload, para no confundirlo con los
+ * skills que devuelven un `data` propio dentro del suyo: a esos desenveloparlos
+ * les vaciaría el mensaje.
+ */
+function datoDelSkill(resultado: any): any {
+  if (!resultado || typeof resultado !== 'object') return resultado;
+
+  const esEnvoltorio =
+    typeof resultado.content === 'string' &&
+    resultado.data !== null &&
+    typeof resultado.data === 'object' &&
+    Object.keys(resultado).every((clave) => clave === 'content' || clave === 'data' || clave === 'metadata');
+
+  return esEnvoltorio ? resultado.data : resultado;
+}
+
 export const ExecutionEngine = {
   /**
    * Ejecuta un plan de steps
    */
   async run(input: ExecutionInput): Promise<ExecutionOutput> {
     const startTime = Date.now();
-    const { plan, userId, tenantId, sessionId, leadId } = input;
+    const { plan, userId, tenantId, sessionId, leadId, moneda: monedaSolicitada } = input;
 
     if (!plan.steps || plan.steps.length === 0) {
       return {
@@ -199,8 +248,13 @@ export const ExecutionEngine = {
       }
     }
 
-    // 8. Construir respuesta final
-    const response = this.buildResponse(results);
+    // 8. Construir respuesta final.
+    // El dinero se escribe en la divisa de la cuenta: los skills devuelven
+    // importes, y quien sabe en qué divisa están es el tenant.
+    const response = this.buildResponse(
+      results,
+      await monedaDeLaConversacion(tenantId, monedaSolicitada)
+    );
     response.executionTimeMs = Date.now() - startTime;
 
     // 9. Loggear éxito
@@ -271,10 +325,23 @@ export const ExecutionEngine = {
    * Formatea un mensaje amigable para skills de creación/actualización de CRM.
    * Retorna '' si el skill no tiene formateador (se usa la respuesta del skill).
    */
-  formatSkillResult(skillName: string, data: any): string {
+  formatSkillResult(skillName: string, data: any, monedaTenant?: string | null): string {
     if (!data) return '';
     const nombre = this.escapeMarkdown(String(data.nombre || data.name || data.titulo || ''));
     const email = data.email ? ` (${this.escapeMarkdown(String(data.email))})` : '';
+
+    /**
+     * Importe del resultado, en la divisa que le corresponde.
+     *
+     * Manda la del dato —una factura, un inmueble o un negocio guardan la suya—
+     * y si no la declara se usa la de la cuenta, que es la moneda de reporte del
+     * tenant. El valor por defecto del esquema nunca entra aquí: escribir euros
+     * porque nadie preguntó era exactamente el defecto que esto cierra.
+     */
+    const dinero = (valor: unknown, monedaDato?: string | null): string =>
+      this.escapeMarkdown(
+        formatearImporte(importeDe(valor), monedaEfectiva([monedaDato], monedaTenant))
+      );
 
     switch (skillName) {
       case 'create_lead':
@@ -333,14 +400,14 @@ export const ExecutionEngine = {
       // ─── Ventas: pipeline de deals ───
       case 'create_deal': {
         const t = this.escapeMarkdown(String(data?.titulo || ''));
-        const v = data?.valor ? ` por ${this.escapeMarkdown(String(data.valor))}${data?.moneda ? ` ${this.escapeMarkdown(String(data.moneda))}` : ''}` : '';
+        const v = data?.valor ? ` por ${dinero(data.valor, data?.moneda)}` : '';
         const e = data?.etapa ? ` · etapa ${this.escapeMarkdown(String(data.etapa))}` : '';
         return `📊 *Negocio creado:* ${t}${v}${e}`;
       }
       case 'update_deal': {
         const t = this.escapeMarkdown(String(data?.titulo || ''));
         const e = data?.etapa ? `\n📍 Etapa: ${this.escapeMarkdown(String(data.etapa))}` : '';
-        const v = data?.valor ? `\n💰 Valor: ${this.escapeMarkdown(String(data.valor))}${data?.moneda ? ` ${this.escapeMarkdown(String(data.moneda))}` : ''}` : '';
+        const v = data?.valor ? `\n💰 Valor: ${dinero(data.valor, data?.moneda)}` : '';
         const p = data?.prioridad ? `\n⚡ Prioridad: ${this.escapeMarkdown(String(data.prioridad))}` : '';
         return `✏️ *Negocio actualizado:* ${t}${e}${v}${p}`;
       }
@@ -351,7 +418,7 @@ export const ExecutionEngine = {
         const lines = deals.slice(0, 5).map((d: any) => {
           const t = this.escapeMarkdown(String(d?.titulo || ''));
           const l = d?.lead?.nombre ? ` — ${this.escapeMarkdown(String(d.lead.nombre))}` : '';
-          const v = d?.valor ? ` · ${this.escapeMarkdown(String(d.valor))}${d?.moneda ? ` ${this.escapeMarkdown(String(d.moneda))}` : ''}` : '';
+          const v = d?.valor ? ` · ${dinero(d.valor, d?.moneda)}` : '';
           const e = d?.etapa ? ` · ${this.escapeMarkdown(String(d.etapa))}` : '';
           return `• ${t}${l}${v}${e}`;
         });
@@ -477,7 +544,7 @@ export const ExecutionEngine = {
         if (!Array.isArray(items) || items.length === 0) return '📋 El catálogo está vacío.';
         const lines = items.slice(0, 8).map((i: any) => {
           const n = this.escapeMarkdown(String(i?.nombre || ''));
-          const p = i?.precioBase !== undefined && i?.precioBase !== null ? `${this.escapeMarkdown(String(i.precioBase))} ${this.escapeMarkdown(String(i.moneda || 'EUR'))}` : '';
+          const p = i?.precioBase !== undefined && i?.precioBase !== null ? dinero(i.precioBase, i?.moneda) : '';
           const t = i?.tipo ? ` · ${this.escapeMarkdown(String(i.tipo))}` : '';
           return `• ${n}${p ? ` — ${p}` : ''}${t}`;
         });
@@ -506,10 +573,10 @@ export const ExecutionEngine = {
         return `🏢 *Proveedores (${total}):*\n${lines.join('\n')}${suffix}`;
       }
       case 'create_expense': {
-        const monto = data?.amount !== undefined && data?.amount !== null ? this.escapeMarkdown(String(data.amount)) : '';
+        const monto = data?.amount !== undefined && data?.amount !== null ? dinero(data.amount, data?.moneda) : '';
         const desc = data?.description ? this.escapeMarkdown(String(data.description)) : '';
         const cat = data?.category ? ` · ${this.escapeMarkdown(String(data.category))}` : '';
-        return `💳 *Gasto registrado:* ${monto}€${desc ? ` — ${desc}` : ''}${cat}.`;
+        return `💳 *Gasto registrado:* ${monto}${desc ? ` — ${desc}` : ''}${cat}.`;
       }
 
       // ─── Inventario: stock, salud y consumo ───
@@ -563,11 +630,11 @@ export const ExecutionEngine = {
       case 'calculate_production_cost': {
         const product = data?.productName ? this.escapeMarkdown(String(data.productName)) : 'Producto';
         const qty = Number(data?.quantity ?? 1);
-        const total = data?.totalCost != null ? this.escapeMarkdown(Number(data.totalCost).toLocaleString('es-ES')) : '—';
-        const unit = data?.unitCost != null ? this.escapeMarkdown(Number(data.unitCost).toFixed(2)) : '—';
-        const material = data?.materialCost != null ? this.escapeMarkdown(Number(data.materialCost).toLocaleString('es-ES')) : '—';
-        const labor = data?.laborCost != null ? this.escapeMarkdown(Number(data.laborCost).toLocaleString('es-ES')) : '—';
-        return `🏭 *Costo de producción — ${product} (${qty}u):*\n🧱 Materiales: ${material}€\n👷 Mano de obra: ${labor}€\n💰 Costo total: ${total}€ (${unit}€/u)`;
+        const total = dinero(data?.totalCost);
+        const unit = dinero(data?.unitCost);
+        const material = dinero(data?.materialCost);
+        const labor = dinero(data?.laborCost);
+        return `🏭 *Costo de producción — ${product} (${qty}u):*\n🧱 Materiales: ${material}\n👷 Mano de obra: ${labor}\n💰 Costo total: ${total} (${unit}/u)`;
       }
       case 'detect_quality_anomalies': {
         if (data?.status === 'OPTIMAL') return `✅ ${this.escapeMarkdown(String(data?.message || 'Sin anomalías de calidad.'))}`;
@@ -598,14 +665,14 @@ export const ExecutionEngine = {
         return `✅ *Inspección de calidad registrada.*${hash ? `\n🔐 Hash SHA-256: ${this.escapeMarkdown(hash)}` : ''}\n${data?.message ? this.escapeMarkdown(String(data.message)) : ''}`;
       }
       case 'get_project_profitability': {
-        const income = data?.totalIncome != null ? this.escapeMarkdown(Number(data.totalIncome).toLocaleString('es-ES')) : '—';
-        const expenses = data?.totalExpenses != null ? this.escapeMarkdown(Number(data.totalExpenses).toLocaleString('es-ES')) : '—';
-        const materials = data?.materialCosts != null ? this.escapeMarkdown(Number(data.materialCosts).toLocaleString('es-ES')) : '—';
-        const net = data?.netProfit != null ? this.escapeMarkdown(Number(data.netProfit).toLocaleString('es-ES')) : '—';
+        const income = dinero(data?.totalIncome);
+        const expenses = dinero(data?.totalExpenses);
+        const materials = dinero(data?.materialCosts);
+        const net = dinero(data?.netProfit);
         const margin = data?.margin != null ? this.escapeMarkdown(String(data.margin)) : '—';
         const status = String(data?.status || '');
         const statusLabel: Record<string, string> = { HEALTHY: '🟢', WARNING: '🟡', CRITICAL: '🔴' };
-        return `📐 *Rentabilidad del proyecto:*\n💰 Ingresos: ${income}€\n💸 Gastos: ${expenses}€\n🧱 Materiales: ${materials}€\n📈 Resultado: ${net}€ (margen ${margin}%) ${statusLabel[status] || ''}`;
+        return `📐 *Rentabilidad del proyecto:*\n💰 Ingresos: ${income}\n💸 Gastos: ${expenses}\n🧱 Materiales: ${materials}\n📈 Resultado: ${net} (margen ${margin}%) ${statusLabel[status] || ''}`;
       }
       case 'detect_project_drifting': {
         const projects = Array.isArray(data?.projects) ? data.projects : [];
@@ -682,9 +749,9 @@ export const ExecutionEngine = {
       case 'analyze_burn_rate': {
         const months = Number(data?.periodMonths ?? 3);
         const periodo = months === 1 ? '1 mes' : `${months} meses`;
-        const income = data?.totalIncome !== undefined ? this.escapeMarkdown(String(data.totalIncome)) : '0';
-        const expense = data?.totalExpense !== undefined ? this.escapeMarkdown(String(data.totalExpense)) : '0';
-        const net = data?.netProfit !== undefined ? this.escapeMarkdown(String(data.netProfit)) : '0';
+        const income = dinero(data?.totalIncome);
+        const expense = dinero(data?.totalExpense);
+        const net = dinero(data?.netProfit);
         const status = String(data?.burnRateStatus || 'HEALTHY');
         const statusLabel: Record<string, string> = {
           HEALTHY: '🟢 Estable',
@@ -692,13 +759,13 @@ export const ExecutionEngine = {
           CRITICAL: '🔴 Crítico',
         };
         const rec = data?.recommendation ? `\n💡 ${this.escapeMarkdown(String(data.recommendation))}` : '';
-        return `📊 *Análisis financiero (${this.escapeMarkdown(periodo)}):*\n💰 Ingresos: ${income}€\n💸 Gastos: ${expense}€\n📈 Resultado: ${net}€\n🩺 Estado: ${statusLabel[status] || status}${rec}`;
+        return `📊 *Análisis financiero (${this.escapeMarkdown(periodo)}):*\n💰 Ingresos: ${income}\n💸 Gastos: ${expense}\n📈 Resultado: ${net}\n🩺 Estado: ${statusLabel[status] || status}${rec}`;
       }
       case 'project_financial_forecast': {
-        const expectedIn = data?.expectedIn != null ? this.escapeMarkdown(Number(data.expectedIn).toLocaleString('es-ES')) : '—';
-        const committedOut = data?.committedOut != null ? this.escapeMarkdown(Number(data.committedOut).toLocaleString('es-ES')) : '—';
+        const expectedIn = dinero(data?.expectedIn);
+        const committedOut = dinero(data?.committedOut);
         const runway = data?.runwayDays != null ? this.escapeMarkdown(Number(data.runwayDays).toFixed(0)) : '—';
-        return `🔮 *Proyección a 30 días:*\n📥 Ingreso esperado: ${expectedIn}€\n📤 Gasto comprometido: ${committedOut}€\n🛟 Runway: ${runway} días estimados.`;
+        return `🔮 *Proyección a 30 días:*\n📥 Ingreso esperado: ${expectedIn}\n📤 Gasto comprometido: ${committedOut}\n🛟 Runway: ${runway} días estimados.`;
       }
       case 'tax_prospector': {
         const region = String(data?.region || 'MX');
@@ -707,9 +774,9 @@ export const ExecutionEngine = {
           ES: 'España',
           USA_LLC: 'USA (LLC)',
         };
-        const liability = data?.estimatedLiability != null ? this.escapeMarkdown(Number(data.estimatedLiability).toLocaleString('es-ES')) : '—';
+        const liability = dinero(data?.estimatedLiability);
         const advice = data?.advice ? `\n💡 ${this.escapeMarkdown(String(data.advice))}` : '';
-        return `🧾 *Provisión de impuestos (${regionLabel[region] || region}):*\n💰 Estimación: ${liability}€${advice}`;
+        return `🧾 *Provisión de impuestos (${regionLabel[region] || region}):*\n💰 Estimación: ${liability}${advice}`;
       }
       // ─── Impuestos & Declaraciones (Décimo octavo entrenamiento) ───
       case 'tax_overview': {
@@ -717,7 +784,7 @@ export const ExecutionEngine = {
         const overdue: any[] = data?.overdue || [];
         const fmtAmount = (a: any) =>
           a != null && Number(a) !== 0
-            ? ` · 💰 ${this.escapeMarkdown(Number(a).toLocaleString('es-ES'))}€`
+            ? ` · 💰 ${dinero(a)}`
             : '';
         const fmtDeadline = (d: any) => {
           const model = this.escapeMarkdown(String(d?.model || ''));
@@ -743,7 +810,6 @@ export const ExecutionEngine = {
         const periodo = data?.trimestre
           ? `T${this.escapeMarkdown(String(data.trimestre))} ${this.escapeMarkdown(String(data.año || new Date().getFullYear()))}`
           : `Anual ${this.escapeMarkdown(String(data.año || new Date().getFullYear()))}`;
-        const eur = (n: any) => this.escapeMarkdown(Number(n || 0).toLocaleString('es-ES'));
         const report: any = data?.report || {};
         const header = `🧾 *Modelo ${modelo} — ${nombre} (${periodo}):*`;
         if (modelo === '303') {
@@ -751,35 +817,35 @@ export const ExecutionEngine = {
           const inn = report.inputVat?.amount || 0;
           const sur = report.equivalenceSurcharge?.amount || 0;
           const result = Number(report.result ?? out - inn);
-          return `${header}\n📤 IVA repercutido: ${eur(out)}€\n📥 IVA soportado: ${eur(inn)}€${sur ? `\n➕ Recargo equiv.: ${eur(sur)}€` : ''}\n💰 Resultado: ${eur(result)}€${result > 0 ? ' a ingresar' : result < 0 ? ' a compensar' : ''}`;
+          return `${header}\n📤 IVA repercutido: ${dinero(out)}\n📥 IVA soportado: ${dinero(inn)}${sur ? `\n➕ Recargo equiv.: ${dinero(sur)}` : ''}\n💰 Resultado: ${dinero(result)}${result > 0 ? ' a ingresar' : result < 0 ? ' a compensar' : ''}`;
         }
         if (modelo === '111') {
           const total = Number(report.totalRetentions ?? report.retentions?.amount ?? 0);
-          return `${header}\n📥 Base retenciones: ${eur(report.retentions?.base)}€\n💰 Retenciones a ingresar: ${eur(total)}€`;
+          return `${header}\n📥 Base retenciones: ${dinero(report.retentions?.base)}\n💰 Retenciones a ingresar: ${dinero(total)}`;
         }
         if (modelo === '115') {
           if (report.hasActivity === false) return `${header}\nℹ️ Sin retenciones por arrendamientos en el periodo.`;
-          return `${header}\n🏠 Rentas base: ${eur(report.totalRentBase)}€\n💰 Retenciones (${Number(report.retentionRate ?? 19)}%): ${eur(report.totalRetentions)}€`;
+          return `${header}\n🏠 Rentas base: ${dinero(report.totalRentBase)}\n💰 Retenciones (${Number(report.retentionRate ?? 19)}%): ${dinero(report.totalRetentions)}`;
         }
         if (modelo === '130') {
           if (report.hasActivity === false) return `${header}\nℹ️ Sin actividad en el periodo.`;
-          return `${header}\n💰 Ingresos: ${eur(report.totalIncome)}€\n💸 Gastos: ${eur(report.totalExpenses)}€\n📈 Pago fraccionado (${Number(report.paymentRate ?? 20) * 100}%): ${eur(report.resultToPay)}€`;
+          return `${header}\n💰 Ingresos: ${dinero(report.totalIncome)}\n💸 Gastos: ${dinero(report.totalExpenses)}\n📈 Pago fraccionado (${Number(report.paymentRate ?? 20) * 100}%): ${dinero(report.resultToPay)}`;
         }
         if (modelo === '349') {
           if (report.hasOperations === false) return `${header}\nℹ️ Sin operaciones intracomunitarias en el periodo.`;
-          return `${header}\n📤 Entregas: ${report.deliveryCount ?? 0} · ${eur(report.totalDeliveries)}€\n📥 Adquisiciones: ${report.acquisitionCount ?? 0} · ${eur(report.totalAcquisitions)}€`;
+          return `${header}\n📤 Entregas: ${report.deliveryCount ?? 0} · ${dinero(report.totalDeliveries)}\n📥 Adquisiciones: ${report.acquisitionCount ?? 0} · ${dinero(report.totalAcquisitions)}`;
         }
         if (modelo === '347') {
           if (report.hasOperations === false) return `${header}\nℹ️ Sin operaciones que reportar.`;
-          return `${header}\n👥 Contrapartes: ${report.totalOperations ?? 0}\n💰 Importe total: ${eur(report.totalAmount)}€`;
+          return `${header}\n👥 Contrapartes: ${report.totalOperations ?? 0}\n💰 Importe total: ${dinero(report.totalAmount)}`;
         }
         if (modelo === '390') {
           if (report.hasActivity === false) return `${header}\nℹ️ Sin actividad anual.`;
-          return `${header}\n📤 IVA repercutido: ${eur(report.annualOutputVatAmount)}€\n📥 IVA soportado: ${eur(report.annualInputVatAmount)}€\n💰 Resultado anual: ${eur(report.annualResult)}€`;
+          return `${header}\n📤 IVA repercutido: ${dinero(report.annualOutputVatAmount)}\n📥 IVA soportado: ${dinero(report.annualInputVatAmount)}\n💰 Resultado anual: ${dinero(report.annualResult)}`;
         }
         if (modelo === '180') {
           if (report.hasActivity === false) return `${header}\nℹ️ Sin retenciones por arrendamientos en el año.`;
-          return `${header}\n🏠 Arrendadores: ${report.totalLandlords ?? 0}\n💰 Retenciones totales: ${eur(report.totalRetentions)}€`;
+          return `${header}\n🏠 Arrendadores: ${report.totalLandlords ?? 0}\n💰 Retenciones totales: ${dinero(report.totalRetentions)}`;
         }
         return `${header}\nℹ️ Resumen disponible.`;
       }
@@ -795,8 +861,7 @@ export const ExecutionEngine = {
       // ─── Contabilidad (Décimo noveno entrenamiento) ───
       case 'balance_sheet': {
         const report: any = data?.report || {};
-        const eur = (n: any) => this.escapeMarkdown(Number(n || 0).toLocaleString('es-ES'));
-        const fmtSection = (sec: any) => `\n▪ ${this.escapeMarkdown(String(sec?.label || ''))}: ${eur(sec?.total)}€`;
+        const fmtSection = (sec: any) => `\n▪ ${this.escapeMarkdown(String(sec?.label || ''))}: ${dinero(sec?.total)}`;
         const activo = report.activo || {};
         const pasivo = report.pasivo || {};
         const activoSections = Array.isArray(activo.sections) ? activo.sections.map(fmtSection).join('') : '';
@@ -804,22 +869,20 @@ export const ExecutionEngine = {
         const totalActivo = Number(activo.total ?? 0);
         const totalPasivo = Number(pasivo.total ?? 0);
         const diferencia = Math.round((totalActivo - totalPasivo) * 100) / 100;
-        return `📊 *Balance General:*\n🟢 *Activo:* ${eur(totalActivo)}€${activoSections}\n🔴 *Pasivo + Patrimonio:* ${eur(totalPasivo)}€${pasivoSections}\n${diferencia !== 0 ? `⚖️ Diferencia: ${eur(diferencia)}€ (debe cuadrar a 0)` : '✅ Cuadra (activo = pasivo + patrimonio neto).'}`;
+        return `📊 *Balance General:*\n🟢 *Activo:* ${dinero(totalActivo)}${activoSections}\n🔴 *Pasivo + Patrimonio:* ${dinero(totalPasivo)}${pasivoSections}\n${diferencia !== 0 ? `⚖️ Diferencia: ${dinero(diferencia)} (debe cuadrar a 0)` : '✅ Cuadra (activo = pasivo + patrimonio neto).'}`;
       }
       case 'profit_loss': {
         const report: any = data?.report || {};
-        const eur = (n: any) => this.escapeMarkdown(Number(n || 0).toLocaleString('es-ES'));
         const ingresos = Number(report.totalIngresos ?? 0);
         const gastos = Number(report.totalGastos ?? 0);
         const resultado = Number(report.resultadoEjercicio ?? 0);
         const secciones = Array.isArray(report.sections) && report.sections.length > 0
-          ? '\n' + report.sections.map((s: any) => `▪ ${this.escapeMarkdown(String(s?.label || ''))}: ${eur(s?.total)}€`).join('\n')
+          ? '\n' + report.sections.map((s: any) => `▪ ${this.escapeMarkdown(String(s?.label || ''))}: ${dinero(s?.total)}`).join('\n')
           : '';
-        return `📈 *Cuenta de Resultados:*\n💰 Ingresos: ${eur(ingresos)}€\n💸 Gastos: ${eur(gastos)}€\n📊 Resultado del ejercicio: ${eur(resultado)}€${resultado >= 0 ? ' (beneficio)' : ' (pérdida)'}${secciones}`;
+        return `📈 *Cuenta de Resultados:*\n💰 Ingresos: ${dinero(ingresos)}\n💸 Gastos: ${dinero(gastos)}\n📊 Resultado del ejercicio: ${dinero(resultado)}${resultado >= 0 ? ' (beneficio)' : ' (pérdida)'}${secciones}`;
       }
       case 'trial_balance': {
         const report: any = data?.report || {};
-        const eur = (n: any) => this.escapeMarkdown(Number(n || 0).toLocaleString('es-ES'));
         const rows: any[] = report.rows || [];
         if (rows.length === 0) return '🧮 El balance de comprobación está vacío (no hay cuentas).';
         const lines = rows.slice(0, 10).map((r: any) => {
@@ -827,17 +890,17 @@ export const ExecutionEngine = {
           const name = this.escapeMarkdown(String(r?.name || ''));
           const d = Number(r?.debit ?? 0);
           const c = Number(r?.credit ?? 0);
-          return `• ${code} ${name} — debe ${eur(d)}€ / haber ${eur(c)}€`;
+          return `• ${code} ${name} — debe ${dinero(d)} / haber ${dinero(c)}`;
         });
         const suffix = rows.length > 10 ? `\n… y ${rows.length - 10} cuentas más` : '';
         const totalDebit = Number(report.totalDebit ?? 0);
         const totalCredit = Number(report.totalCredit ?? 0);
         const cuadra = Math.abs(totalDebit - totalCredit) < 0.01;
-        return `🧮 *Balance de Comprobación (${rows.length} cuentas):*\n${lines.join('\n')}${suffix}\n\nΣ Debe: ${eur(totalDebit)}€ · Σ Haber: ${eur(totalCredit)}€\n${cuadra ? '✅ Sumas cuadradas.' : '⚠️ Las sumas NO cuadran.'}`;
+        return `🧮 *Balance de Comprobación (${rows.length} cuentas):*\n${lines.join('\n')}${suffix}\n\nΣ Debe: ${dinero(totalDebit)} · Σ Haber: ${dinero(totalCredit)}\n${cuadra ? '✅ Sumas cuadradas.' : '⚠️ Las sumas NO cuadran.'}`;
       }
       case 'analyze_global_profitability': {
-        const income = data?.revenue != null ? this.escapeMarkdown(Number(data.revenue).toLocaleString('es-ES')) : '—';
-        const expenses = data?.expenses != null ? this.escapeMarkdown(Number(data.expenses).toLocaleString('es-ES')) : '—';
+        const income = dinero(data?.revenue);
+        const expenses = dinero(data?.expenses);
         const margin = data?.margin != null ? this.escapeMarkdown(String(data.margin)) : '—';
         const status = String(data?.status || '');
         const statusLabel: Record<string, string> = {
@@ -846,7 +909,7 @@ export const ExecutionEngine = {
           CRITICO: '🔴 CRÍTICO',
         };
         const statusTxt = statusLabel[status] || (status ? this.escapeMarkdown(status) : '');
-        return `📊 *Rentabilidad global:*\n💰 Ingresos: ${income}€\n💸 Gastos: ${expenses}€\n📈 Margen: ${margin}%\n${statusTxt ? `🩺 Estado: ${statusTxt}` : ''}`;
+        return `📊 *Rentabilidad global:*\n💰 Ingresos: ${income}\n💸 Gastos: ${expenses}\n📈 Margen: ${margin}%\n${statusTxt ? `🩺 Estado: ${statusTxt}` : ''}`;
       }
 
       // ─── Citas & Bookings ───
@@ -978,10 +1041,9 @@ export const ExecutionEngine = {
       // ─── Facturación & Veri*factu (Décimo entrenamiento) ───
       case 'create_invoice': {
         const numero = this.escapeMarkdown(String(data?.numero || data?.sequenceNumber || ''));
-        const monto = data?.monto !== undefined && data?.monto !== null ? this.escapeMarkdown(String(data.monto)) : '';
-        const moneda = data?.moneda ? ` ${this.escapeMarkdown(String(data.moneda))}` : '';
+        const monto = data?.monto !== undefined && data?.monto !== null ? ` por ${dinero(data.monto, data?.moneda)}` : '';
         const sello = data?.isSealed || data?.verifactuVersion === 2 ? ' · sello Veri*factu ✅' : '';
-        return `🧾 *Factura creada:* ${numero}${monto ? ` por ${monto}${moneda}` : ''}${sello}.`;
+        return `🧾 *Factura creada:* ${numero}${monto}${sello}.`;
       }
       case 'cancel_invoice': {
         const numero = this.escapeMarkdown(String(data?.numero || ''));
@@ -998,7 +1060,7 @@ export const ExecutionEngine = {
       }
       case 'rectify_invoice': {
         const numero = this.escapeMarkdown(String(data?.numero || ''));
-        const monto = data?.monto !== undefined && data?.monto !== null ? ` por ${this.escapeMarkdown(String(data.monto))} ${this.escapeMarkdown(String(data?.moneda || 'EUR'))}` : '';
+        const monto = data?.monto !== undefined && data?.monto !== null ? ` por ${dinero(data.monto, data?.moneda)}` : '';
         return `🔄 *Factura rectificada:* ${numero}${monto}. La factura anterior queda anulada.`;
       }
 
@@ -1164,12 +1226,12 @@ export const ExecutionEngine = {
       }
       case 'suggest_price_based_on_market': {
         if (data?.message && data.suggestedPrice == null) return `🏠 ${this.escapeMarkdown(String(data.message))}`;
-        const precio = data?.suggestedPrice != null ? this.escapeMarkdown(Number(data.suggestedPrice).toLocaleString('es-ES')) : '—';
+        const precio = dinero(data?.suggestedPrice, data?.moneda);
         const conf = String(data?.confidence || 'low');
         const confLabel: Record<string, string> = { high: 'alta', medium: 'media', low: 'baja' };
         const muestra = data?.sampleSize != null ? ` (basado en ${this.escapeMarkdown(String(data.sampleSize))} similares)` : '';
         const op = data?.operationType ? ` · ${this.escapeMarkdown(String(data.operationType))}` : '';
-        return `🏠 *Precio sugerido:* ${precio}€${op}\n🎯 Confianza: ${confLabel[conf] || conf}${muestra}`;
+        return `🏠 *Precio sugerido:* ${precio}${op}\n🎯 Confianza: ${confLabel[conf] || conf}${muestra}`;
       }
       case 'calculate_property_quality_score': {
         const score = data?.score != null ? this.escapeMarkdown(String(data.score)) : '—';
@@ -1186,7 +1248,7 @@ export const ExecutionEngine = {
         const lines = items.slice(0, 6).map((p: any) => {
           const nombre = this.escapeMarkdown(String(p?.nombre || p?.propertyType || 'Inmueble'));
           const op = p?.operationType ? ` · ${this.escapeMarkdown(String(p.operationType))}` : '';
-          const precio = p?.precioBase != null ? ` · ${this.escapeMarkdown(Number(p.precioBase).toLocaleString('es-ES'))}€` : '';
+          const precio = p?.precioBase != null ? ` · ${dinero(p.precioBase, p?.moneda)}` : '';
           const zona = p?.city ? ` · ${this.escapeMarkdown(String(p.city))}` : '';
           const habs = p?.bedrooms ? ` · ${this.escapeMarkdown(String(p.bedrooms))} habs` : '';
           return `• ${nombre}${op}${precio}${zona}${habs}`;
@@ -1208,11 +1270,11 @@ export const ExecutionEngine = {
       }
       case 'calculate_franchise_commissions': {
         if (data?.success === false) return `💼 ${this.escapeMarkdown(String(data?.error || 'No pude calcular la comisión.'))}`;
-        const monto = data?.montoCalculado != null ? this.escapeMarkdown(Number(data.montoCalculado).toLocaleString('es-ES')) : '—';
+        const monto = dinero(data?.montoCalculado, data?.moneda);
         const desglose = Array.isArray(data?.desglose) && data.desglose.length > 0
           ? `\n${data.desglose.map((d: any) => `• ${this.escapeMarkdown(String(d))}`).join('\n')}`
           : '';
-        return `💼 *Comisión calculada:* ${monto}€${desglose}`;
+        return `💼 *Comisión calculada:* ${monto}${desglose}`;
       }
       default:
         return '';
@@ -1222,7 +1284,10 @@ export const ExecutionEngine = {
   /**
    * Construye la respuesta final desde los resultados
    */
-  buildResponse(results: Array<{ action: string; output: SkillOutput }>): ExecutionOutput {
+  buildResponse(
+    results: Array<{ action: string; output: SkillOutput }>,
+    monedaTenant?: string | null
+  ): ExecutionOutput {
     if (!results.length) {
       return {
         message: 'No se pudo completar la acción.',
@@ -1233,7 +1298,9 @@ export const ExecutionEngine = {
     const last = results[results.length - 1];
 
     // Prioridad 1: mensaje formateado amigable para skills de CRM
-    const formatted = this.formatSkillResult(last.action, last.output?.data);
+    // El formateador recibe el payload del skill, no su envoltorio (ver
+    // `datoDelSkill`); el `data` del resultado se deja intacto para quien audita.
+    const formatted = this.formatSkillResult(last.action, datoDelSkill(last.output?.data), monedaTenant);
     if (formatted) {
       return {
         message: formatted,

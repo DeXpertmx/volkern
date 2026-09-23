@@ -32,6 +32,12 @@ export interface ApiKeyAuthResult {
     plan: string;
     accountType?: string;
     parentId?: string | null;
+    /**
+     * Moneda de reporte del tenant (`Tenant.moneda`). Es la fuente autoritativa
+     * para los valores por defecto: el esquema trae 'MXN' y usarlo como respaldo
+     * deja a una cuenta europea creando y mostrando pesos.
+     */
+    moneda?: string | null;
   };
   user?: {
     id: string;
@@ -39,6 +45,12 @@ export interface ApiKeyAuthResult {
     email: string;
     tenantId: string | null;
     roleId: string | null;
+    /**
+     * El contacto del CRM al que está vinculado el usuario, cuando es el huésped
+     * de una reserva (`rol Huésped`, §20). Es lo que decide qué reservas ve: sin
+     * él, «solo lo mío» no tiene sujeto y no se ve ninguna.
+     */
+    contactId?: string | null;
     role?: {
       id: string;
       nombre: string;
@@ -82,6 +94,7 @@ async function resolveHierarchicalContext(
     subdomain?: string | null
     plan: string
     accountType?: string
+    moneda?: string | null
   },
   targetTenantId?: string | null
 ): Promise<{ 
@@ -93,6 +106,7 @@ async function resolveHierarchicalContext(
     subdomain?: string | null
     plan: string
     accountType?: string
+    moneda?: string | null
   };
   agencyContext: boolean;
   error?: string;
@@ -105,7 +119,8 @@ async function resolveHierarchicalContext(
     slug: requesterTenant.slug,
     subdomain: requesterTenant.subdomain,
     plan: requesterTenant.plan,
-    accountType: requesterTenant.accountType
+    accountType: requesterTenant.accountType,
+    moneda: requesterTenant.moneda
   };
   let agencyContext = false;
 
@@ -117,7 +132,7 @@ async function resolveHierarchicalContext(
   // Si hay un target ID diferente, validamos permisos
   const impTenant = await prisma.tenant.findUnique({
     where: { id: targetTenantId },
-    select: { id: true, nombre: true, slug: true, subdomain: true, plan: true, estado: true, parentId: true, accountType: true }
+    select: { id: true, nombre: true, slug: true, subdomain: true, plan: true, estado: true, parentId: true, accountType: true, moneda: true }
   });
 
   if (!impTenant) {
@@ -142,7 +157,9 @@ async function resolveHierarchicalContext(
       slug: impTenant.slug,
       subdomain: impTenant.subdomain,
       plan: impTenant.plan,
-      accountType: impTenant.accountType
+      accountType: impTenant.accountType,
+      // Al impersonar manda la moneda del tenant de destino, no la del que entra.
+      moneda: impTenant.moneda
     };
     agencyContext = true;
   } else {
@@ -175,10 +192,10 @@ export async function validateApiKey(
         activo: true,
         expiraEn: true,
         tenant: {
-          select: { id: true, nombre: true, slug: true, subdomain: true, plan: true, accountType: true, parentId: true }
+          select: { id: true, nombre: true, slug: true, subdomain: true, plan: true, accountType: true, parentId: true, moneda: true }
         },
         user: {
-          select: { id: true, name: true, email: true, tenantId: true, roleId: true, role: true }
+          select: { id: true, name: true, email: true, tenantId: true, roleId: true, contactId: true, role: true }
         }
       }
     });
@@ -224,6 +241,9 @@ export async function validateApiKey(
         email: dbApiKey.user.email,
         tenantId: dbApiKey.user.tenantId,
         roleId: dbApiKey.user.roleId,
+        // Sin esto, el rol Huésped no sabe de qué contacto es y no ve ninguna
+        // reserva: el ámbito `propias` se resuelve con este campo.
+        contactId: dbApiKey.user.contactId,
         role: dbApiKey.user.role,
         accountType: dbApiKey.tenant.accountType,
         parentId: dbApiKey.tenant.parentId
@@ -284,8 +304,11 @@ export async function authenticateRequest(
           email: true,
           tenantId: true,
           roleId: true,
+          // El contacto al que está vinculado el usuario, si es el huésped de una
+          // reserva: es lo que filtra la vista del rol Huésped.
+          contactId: true,
           role: { select: { id: true, nombre: true, permisos: true } },
-          tenant: { select: { id: true, nombre: true, slug: true, subdomain: true, plan: true, accountType: true } }
+          tenant: { select: { id: true, nombre: true, slug: true, subdomain: true, plan: true, accountType: true, moneda: true } }
         }
       });
 
@@ -324,6 +347,9 @@ export async function authenticateRequest(
           email: user.email,
           tenantId: user.tenantId,
           roleId: user.roleId,
+          // El vínculo con el contacto del CRM viaja con el usuario: es lo que
+          // convierte el rol Huésped en «ve solo las reservas de este huésped».
+          contactId: user.contactId,
           role: user.role,
           accountType: user.tenant.accountType
         },
@@ -354,7 +380,7 @@ export async function authenticateRequest(
           // Cargar tenant
           const tenant = await prisma.tenant.findUnique({
             where: { id: decoded.tid },
-            select: { id: true, nombre: true, slug: true, subdomain: true, plan: true, accountType: true }
+            select: { id: true, nombre: true, slug: true, subdomain: true, plan: true, accountType: true, moneda: true }
           });
 
           if (!tenant) {
@@ -366,6 +392,7 @@ export async function authenticateRequest(
           let userData: {
             id: string; name: string | null; email: string;
             tenantId: string | null; roleId: string | null;
+            contactId?: string | null;
             role?: { id: string; nombre: string; permisos?: unknown } | null;
           } | null = null;
 
@@ -381,6 +408,8 @@ export async function authenticateRequest(
               email: customerUser.email,
               tenantId: customerUser.tenantId,
               roleId: null,
+              // Un cliente de la app móvil no es el huésped de una reserva.
+              contactId: null,
               role: { id: '', nombre: customerUser.role, permisos: null }
             };
           } else {
@@ -388,6 +417,7 @@ export async function authenticateRequest(
               where: { id: decoded.uid },
               select: {
                 id: true, name: true, email: true, tenantId: true, roleId: true,
+                contactId: true,
                 role: { select: { id: true, nombre: true, permisos: true } }
               }
             });
@@ -414,6 +444,7 @@ export async function authenticateRequest(
               email: userData.email,
               tenantId: userData.tenantId,
               roleId: userData.roleId,
+              contactId: userData.contactId ?? null,
               role: userData.role,
               accountType: tenant.accountType
             },
