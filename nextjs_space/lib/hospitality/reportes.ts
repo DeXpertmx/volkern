@@ -17,6 +17,17 @@
 import { coversNight } from './analytics';
 import { nightsBetween, toIsoDate } from './calendar';
 import { redondear } from './finance';
+// Multimoneda (H11/H22): el informe se escribe en UNA divisa y los importes de
+// las otras no se suman a los suyos; se informan por separado. Ver
+// `multimoneda.ts` para la decisión y el porqué de no convertir.
+import {
+  agruparPorMoneda,
+  describirMultimoneda,
+  estaEnMonedaDelInforme,
+  monedaDelInforme,
+  type GrupoMoneda,
+  type Multimoneda,
+} from './multimoneda';
 import {
   desglosePorCanal,
   esReservaConVenta,
@@ -125,7 +136,71 @@ function nochesOcupadas(
   return { noches, porDia };
 }
 
+/** Ingresos del período en UNA divisa (las demás van en su propia entrada). */
+export interface MonedaReporte {
+  moneda: string;
+  reservas: number;
+  reservasConVenta: number;
+  nochesVendidas: number;
+  ingresos: number;
+  neto: number;
+  ticketMedio: number;
+  adr: number | null;
+}
+
+/**
+ * Parte el informe en su divisa y las demás. Devuelve también las reservas de
+ * la divisa del informe, que son las únicas que entran en sus totales.
+ */
+function partirPorMoneda(
+  reservas: ReservaNormalizada[],
+  monedaTenant?: string | null
+): {
+  moneda: string;
+  grupos: Array<GrupoMoneda<ReservaNormalizada>>;
+  delInforme: ReservaNormalizada[];
+} {
+  const moneda = monedaDelInforme(reservas.map((r) => r.moneda), monedaTenant);
+  const grupos = agruparPorMoneda(reservas, moneda);
+  const delInforme = reservas.filter((r) => estaEnMonedaDelInforme(r, moneda));
+  return { moneda, grupos, delInforme };
+}
+
+/** Totales de una lista de reservas normalizadas (dinero ya sin mezclar). */
+function totalesDe(reservas: ReservaNormalizada[]): MonedaReporte {
+  const conVenta = reservas.filter((r) => esReservaConVenta(r.estado));
+  const totales = resumenFinanciero(filasFinancieras(conVenta));
+  const noches = conVenta.reduce((t, r) => t + nightsBetween(r.checkInDate, r.checkOutDate), 0);
+  return {
+    moneda: '',
+    reservas: reservas.length,
+    reservasConVenta: conVenta.length,
+    nochesVendidas: noches,
+    ingresos: totales.bruto,
+    neto: totales.neto,
+    ticketMedio: totales.ticketMedio,
+    adr: noches > 0 ? redondear(totales.bruto / noches) : null,
+  };
+}
+
+/** Una entrada por divisa presente, con la del informe siempre la primera. */
+function monedasDelInforme(
+  grupos: Array<GrupoMoneda<ReservaNormalizada>>,
+  moneda: string
+): MonedaReporte[] {
+  return grupos
+    .slice()
+    .sort((a, b) => (a.moneda === moneda ? -1 : b.moneda === moneda ? 1 : 0))
+    .map((grupo) => ({ ...totalesDe(grupo.items), moneda: grupo.moneda }));
+}
+
 export interface ReporteOperacion {
+  /** Divisa en la que están escritos los importes del informe. */
+  moneda: string;
+  /** Aviso de mezcla: cuántas reservas quedan fuera de los totales. */
+  multimoneda: Multimoneda;
+  /** Ingresos y noches de cada divisa presente. */
+  porMoneda: MonedaReporte[];
   nochesDisponibles: number;
   nochesOcupadas: number;
   ocupacion: number; // 0..1
@@ -157,6 +232,8 @@ export function reporteOperacion(params: {
   hasta: Date;
   /** Unidades del inventario activas; por defecto todas las recibidas. */
   unidadesActivas?: string[];
+  /** Moneda de reporte del tenant, usada cuando no hay dato de divisa. */
+  monedaTenant?: string | null;
 }): ReporteOperacion {
   const { desde, hasta } = params;
   const reservas = normalizar(params.reservas);
@@ -169,7 +246,10 @@ export function reporteOperacion(params: {
 
   const { noches: ocupadas, porDia } = nochesOcupadas(reservas, desde, hasta);
 
-  const conVenta = reservas.filter((r) => esReservaConVenta(r.estado));
+  // La ocupación no depende de la divisa: se calcula sobre todas las reservas.
+  // El dinero sí: solo entra en los totales el de la divisa del informe.
+  const { moneda, grupos, delInforme } = partirPorMoneda(reservas, params.monedaTenant);
+  const conVenta = delInforme.filter((r) => esReservaConVenta(r.estado));
   const totales = resumenFinanciero(filasFinancieras(conVenta));
   const ingresos = totales.bruto;
 
@@ -178,6 +258,13 @@ export function reporteOperacion(params: {
   const enRango = (fecha: Date) => fecha.getTime() >= desdeMs && fecha.getTime() < hastaMs;
 
   return {
+    moneda,
+    multimoneda: describirMultimoneda({
+      monedaInforme: moneda,
+      grupos,
+      totalFilas: reservas.length,
+    }),
+    porMoneda: monedasDelInforme(grupos, moneda),
     nochesDisponibles,
     nochesOcupadas: ocupadas,
     ocupacion: nochesDisponibles > 0 ? redondearRatio(ocupadas / nochesDisponibles) : 0,
@@ -212,6 +299,10 @@ export interface CanalVentas {
 }
 
 export interface ReporteVentas {
+  /** Divisa en la que están escritos los importes del informe. */
+  moneda: string;
+  multimoneda: Multimoneda;
+  porMoneda: MonedaReporte[];
   canales: CanalVentas[];
   directas: { reservas: number; ingresos: number; pctReservas: number; pctIngresos: number };
   antelacionMedia: number | null;
@@ -234,9 +325,16 @@ function antelacionDias(reserva: ReservaNormalizada): number | null {
  * Reporte de ventas: mix de canales, peso de la reserva directa y antelación
  * media con la que reservan los huéspedes.
  */
-export function reporteVentas(params: { reservas: ReporteReserva[] }): ReporteVentas {
+export function reporteVentas(params: {
+  reservas: ReporteReserva[];
+  monedaTenant?: string | null;
+}): ReporteVentas {
   const reservas = normalizar(params.reservas);
-  const conVenta = reservas.filter((r) => esReservaConVenta(r.estado));
+  // Los canales son una tabla de dinero: se calculan en la divisa del informe.
+  // La antelación es comportamiento, no dinero, así que va sobre todas.
+  const { moneda, grupos, delInforme } = partirPorMoneda(reservas, params.monedaTenant);
+  const conVentaTodas = reservas.filter((r) => esReservaConVenta(r.estado));
+  const conVenta = delInforme.filter((r) => esReservaConVenta(r.estado));
   const filas = filasFinancieras(conVenta);
   const totalBruto = redondear(filas.reduce((t, f) => t + f.bruto, 0));
 
@@ -267,11 +365,18 @@ export function reporteVentas(params: { reservas: ReporteReserva[] }): ReporteVe
   });
 
   const filasDirectas = filas.filter((f) => esCanalDirecto(f.channel));
-  const antelaciones = conVenta
+  const antelaciones = conVentaTodas
     .map(antelacionDias)
     .filter((dias): dias is number => dias !== null);
 
   return {
+    moneda,
+    multimoneda: describirMultimoneda({
+      monedaInforme: moneda,
+      grupos,
+      totalFilas: reservas.length,
+    }),
+    porMoneda: monedasDelInforme(grupos, moneda),
     canales,
     directas: {
       reservas: filasDirectas.length,
@@ -297,6 +402,10 @@ export function reporteVentas(params: { reservas: ReporteReserva[] }): ReporteVe
 export interface PropiedadReporte {
   propertyId: string;
   nombre: string;
+  /** Divisa con la que se escriben sus importes (la del informe). */
+  moneda: string;
+  /** Reservas de esa propiedad en OTRAS divisas, aparte de los totales. */
+  otrasMonedas: MonedaReporte[];
   unidades: number;
   nochesDisponibles: number;
   nochesOcupadas: number;
@@ -318,10 +427,12 @@ export function reportePropiedades(params: {
   reservas: ReporteReserva[];
   desde: Date;
   hasta: Date;
+  monedaTenant?: string | null;
 }): PropiedadReporte[] {
   const { desde, hasta, propiedades, unidades } = params;
   const reservas = normalizar(params.reservas);
   const noches = nochesDelRango(desde, hasta);
+  const { moneda } = partirPorMoneda(reservas, params.monedaTenant);
 
   return propiedades
     .map((propiedad) => {
@@ -329,13 +440,20 @@ export function reportePropiedades(params: {
       const reservasPropiedad = reservas.filter((r) => r.propertyId === propiedad.id);
 
       const { noches: ocupadas } = nochesOcupadas(reservasPropiedad, desde, hasta);
-      const conVenta = reservasPropiedad.filter((r) => esReservaConVenta(r.estado));
+      const { grupos: gruposPropiedad } = partirPorMoneda(reservasPropiedad, moneda);
+      const conVenta = reservasPropiedad.filter(
+        (r) => esReservaConVenta(r.estado) && estaEnMonedaDelInforme(r, moneda),
+      );
       const totales = resumenFinanciero(filasFinancieras(conVenta));
       const nochesDisponibles = unidadesPropiedad.length * noches;
 
       return {
         propertyId: propiedad.id,
         nombre: propiedad.nombre,
+        moneda,
+        // Las divisas que no son la del informe no se suman a la fila: se
+        // listan aparte, para que un cero nunca sea un misterio.
+        otrasMonedas: monedasDelInforme(gruposPropiedad, moneda).filter((m) => m.moneda !== moneda),
         unidades: unidadesPropiedad.length,
         nochesDisponibles,
         nochesOcupadas: ocupadas,
@@ -353,16 +471,31 @@ export function reportePropiedades(params: {
 }
 
 /** Totales financieros del período, para la pestaña de finanzas del informe. */
-export function reporteFinanciero(params: { reservas: ReporteReserva[] }): {
+export function reporteFinanciero(params: {
+  reservas: ReporteReserva[];
+  monedaTenant?: string | null;
+}): {
   totales: TotalesFinancieros;
   porCanal: ReturnType<typeof desglosePorCanal>;
   filas: FilaFinanciera[];
+  moneda: string;
+  multimoneda: Multimoneda;
+  porMoneda: MonedaReporte[];
 } {
-  const filas = filasFinancieras(normalizar(params.reservas));
+  const reservas = normalizar(params.reservas);
+  const { moneda, grupos, delInforme } = partirPorMoneda(reservas, params.monedaTenant);
+  const filas = filasFinancieras(delInforme);
   return {
     totales: resumenFinanciero(filas),
     porCanal: desglosePorCanal(filas),
     filas,
+    moneda,
+    multimoneda: describirMultimoneda({
+      monedaInforme: moneda,
+      grupos,
+      totalFilas: reservas.length,
+    }),
+    porMoneda: monedasDelInforme(grupos, moneda),
   };
 }
 

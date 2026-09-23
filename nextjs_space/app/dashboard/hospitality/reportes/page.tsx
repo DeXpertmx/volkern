@@ -123,10 +123,33 @@ interface ResenasMetrics {
   lectura: string;
 }
 
+interface MonedaReporte {
+  moneda: string;
+  reservas: number;
+  reservasConVenta: number;
+  nochesVendidas: number;
+  ingresos: number;
+  neto: number;
+  ticketMedio: number;
+  adr: number | null;
+}
+
+interface Multimoneda {
+  mixto: boolean;
+  moneda: string;
+  monedas: string[];
+  reservasFuera: number;
+  nota: string | null;
+}
+
 interface DashboardPayload {
   /** Divisa de los importes del informe: la de las reservas del período y, si
    *  no hay ninguna, la moneda de reporte del tenant. La resuelve la API. */
   moneda: string;
+  /** Aviso de mezcla de divisas y reservas que quedan fuera de los totales. */
+  multimoneda?: Multimoneda;
+  /** Ingresos y noches de cada divisa presente, sin convertir. */
+  porMoneda?: MonedaReporte[];
   kpis: { ingresos: number; nochesVendidas: number };
   mixCanales: MixCanal[];
   ocupacionGlobal: OcupacionGlobal;
@@ -195,6 +218,12 @@ export default function HospitalityReportes() {
   // de las reservas del período y, si no hay ninguna, la del tenant—: esta
   // pantalla no fija ninguna.
   const money = (valor: number | null | undefined) => formatearImporte(valor, data?.moneda || '', 0);
+  // Cada divisa de la tabla multimoneda se escribe con la suya, no con la del
+  // informe: son importes de monedas distintas y no se convierten.
+  const moneyEn = (valor: number | null | undefined, moneda: string) =>
+    formatearImporte(valor, moneda, 0);
+  const multimoneda = data?.multimoneda;
+  const otrasMonedas = (data?.porMoneda || []).filter((m) => m.moneda !== data?.moneda);
 
   const k = data?.reportesKpis;
   const holds = data?.holds;
@@ -328,6 +357,26 @@ export default function HospitalityReportes() {
 
           {/* ── Operación ─────────────────────────────────────────────── */}
           <TabsContent value="operacion" className="space-y-4">
+            {multimoneda?.nota && (
+              <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">
+                <span className="font-medium">Multimoneda (sin convertir). </span>
+                {multimoneda.nota}
+                {otrasMonedas.length > 0 && (
+                  <ul className="mt-2 space-y-1">
+                    {otrasMonedas.map((m) => (
+                      <li key={m.moneda} className="flex flex-wrap justify-between gap-2">
+                        <span className="font-medium">{m.moneda}</span>
+                        <span>
+                          {moneyEn(m.ingresos, m.moneda)} · {m.reservasConVenta} reservas con venta ·{' '}
+                          {m.nochesVendidas} noches
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <KpiCard titulo="ADR" valor={money(k?.adr)} sub="Ingreso medio por noche vendida" icono={<TrendingUp className="h-3.5 w-3.5" />} />
               <KpiCard titulo="RevPAR" valor={money(k?.revpar)} sub="Ingreso por unidad disponible" icono={<Percent className="h-3.5 w-3.5" />} />
