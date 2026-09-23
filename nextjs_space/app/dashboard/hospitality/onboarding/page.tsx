@@ -85,6 +85,8 @@ interface PasoOnboarding {
   descripcion: string;
   estado: EstadoPaso;
   detalle?: string;
+  /** Requisito de un tercero (el catálogo no existe hasta activar el canal). */
+  requisitoExterno?: { quien: string; titulo: string; detalle: string };
 }
 
 interface Snapshot {
@@ -1133,6 +1135,20 @@ export default function HospitalityOnboardingPage() {
           {/* ── Paso 5 ── */}
           <PasoCard paso={paso('mapping_externo')} icon={<Link2 className="h-4 w-4" />}>
             <div className="space-y-3">
+              {paso('mapping_externo')?.requisitoExterno && (
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong>{paso('mapping_externo')!.requisitoExterno!.titulo}</strong>
+                    <span className="mt-1 block">
+                      {paso('mapping_externo')!.requisitoExterno!.detalle}
+                    </span>
+                    <span className="mt-1 block text-xs text-slate-500">
+                      Lo ejecuta: {paso('mapping_externo')!.requisitoExterno!.quien}.
+                    </span>
+                  </AlertDescription>
+                </Alert>
+              )}
               <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
                 <div>
                   <Label>Código de propiedad del proveedor (hotelCode)</Label>

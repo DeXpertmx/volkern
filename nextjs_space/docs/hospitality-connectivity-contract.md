@@ -98,6 +98,31 @@ https://live.aiosell.com/api/v2/cm
 > `*-s-cp`, `*-d-cp`). Un partner deshabilitado responde
 > `400 {"success":false,"message":"Partner is disabled!"}`.
 
+## Antes del catálogo: la activación en la OTA (pata ①)
+
+Este contrato documenta la pata **②** del triángulo (proveedor ↔ Volkern). La
+pata **①** (OTA ↔ proveedor) la ejecuta **el hotel** en la extranet de cada
+canal, y es una **precondición de este contrato**: `property_details` no devuelve
+catálogo hasta que el proveedor esté habilitado en la OTA y haya mapeado sus
+habitaciones. Sin catálogo no hay `hotelCode`, `roomCode` ni `rateplanCode` que
+vincular (paso 5 del wizard).
+
+- Booking.com y Expedia son **autoservicio** en su extranet; Airbnb es una
+  **URL de autorización del proveedor**
+  (`{baseUrl}/airbnb_authorize`, mismo prefijo v2); el resto de canales
+  (Tiket, Ctrip, Agoda, Traveloka…) exigen **correo al account manager** del
+  canal.
+- El **mapeo habitación a habitación del canal lo crea el equipo del proveedor**
+  (Booking pide enviarle el Hotel ID + el mapeo). Nuestros vínculos copian lo que
+  acabe publicando el catálogo, no lo que la OTA llame a la habitación.
+- **Booking.com**: borrar los planes de tarifa extra por defecto (NON REFUNDABLE,
+  LONGSTAY…) antes de mapear, para que las tarifas del canal coincidan.
+- `marknoshow` sigue limitado a booking.com y gommt: **Airbnb no está cubierto**,
+  y su no-show queda en manos del `PATCH` del operador.
+
+Procedimiento completo, canal por canal, en
+[`hospitality-conexion-otas-activacion.md`](./hospitality-conexion-otas-activacion.md).
+
 ## Endpoints (PMS → proveedor)
 
 | Endpoint | Método | URL | Propósito |

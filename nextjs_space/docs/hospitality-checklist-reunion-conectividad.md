@@ -7,7 +7,10 @@ compromisos de la **Etapa 0** de la guía de go-live sobre la mesa y firmados:
 sin ellos no hay integración posible, con ellos el ensayo puede empezar esa
 semana. **Fuente técnica:** [`hospitality-connectivity-contract.md`](./hospitality-connectivity-contract.md)
 — este checklist no redefine nada del contrato; lista lo que hay que pedirle
-al proveedor para poblarlo con valores reales.
+al proveedor para poblarlo con valores reales. La activación del canal **dentro
+de cada OTA** (la pata que no es su API) está en
+[`hospitality-conexion-otas-activacion.md`](./hospitality-conexion-otas-activacion.md)
+y es la que decide cuándo existe catálogo que vincular.
 
 **Regla de marca:** material técnico; sin nombres comerciales del proveedor.
 
@@ -54,6 +57,8 @@ nada en claro en BD ni logs.
 | 1.5 | **roomCode y rateplanCode del catálogo** | Son los que devuelve `property_details` y los únicos válidos como vínculo de unidad y plan de tarifa | Que no nos den códigos de otra fuente: los del catálogo son los que la resolución de reservas espera |
 | 1.6 | **Capacidades min/max por tipo de habitación** | La publicación no puede salir del catálogo del proveedor (checklist del contrato) | Confirmar min/max_occ de cada roomCode del piloto |
 | 1.7 | **Acceso al sandbox** de su documentación | Los push de inventario y tarifas se pueden probar antes del onboarding | Que nos digan si el sandbox sigue activo y con qué partner de prueba |
+| 1.8 | **Plazo del mapeo de habitaciones en cada OTA** | El catálogo de `property_details` **no existe** hasta que el proveedor esté habilitado en la OTA y haya creado la correspondencia habitación a habitación. Es la precondición del paso 1.4/1.5 | Quién ejecuta el mapeo, por qué canal de contacto y en cuánto tiempo. **Pídelo como plazo, no como un clic** |
+| 1.9 | **Vía de activación de cada canal del piloto** | Booking.com y Expedia son autoservicio en la extranet; Airbnb es una URL de autorización del proveedor; otros canales exigen correo al account manager | Que confirmen, canal por canal, cuál de las tres vías aplica y quién la ejecuta (el hotel, ellos o los dos) |
 
 **Endpoints a confirmar que existen** (los que el adaptador llama; el contrato
 prohíbe inventar): `property_details/{hotelCode}`, `update/{pms}`
@@ -139,7 +144,8 @@ La reunión está bien si estos 7 puntos están en la mesa:
 
 1. URL base byte a byte + los 4 endpoints del contrato confirmados.
 2. Partner ID + credenciales Basic (o fecha de emisión).
-3. hotelCode del piloto + roomCode/rateplanCode de `property_details` cruzados.
+3. hotelCode del piloto + roomCode/rateplanCode de `property_details` cruzados,
+   con el **plazo del mapeo en cada OTA** (bloque 1.8).
 4. URL del webhook + credenciales nuestras entregadas por canal seguro.
 5. `no_show` emitido o no — decidido y documentado en el proveedor.
 6. Fecha de ventana de ensayo + contacto técnico con canal de soporte.
@@ -159,3 +165,5 @@ programar su emisor. Con 5–7 el ensayo tiene fecha, dueño y salida.
   [`hospitality-connectivity-contract.md`](./hospitality-connectivity-contract.md)
 - Guía del emisor (para su equipo):
   [`hospitality-webhook-emisor-guia.md`](./hospitality-webhook-emisor-guia.md)
+- Email de preguntas al proveedor (versión enviable, en inglés):
+  [`hospitality-email-proveedor-conectividad.md`](./hospitality-email-proveedor-conectividad.md)
