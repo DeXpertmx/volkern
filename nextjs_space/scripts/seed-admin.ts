@@ -34,7 +34,9 @@ async function main() {
       descripcion: 'Acceso total al sistema',
       tenantId: tenant.id,
       permisos: {
-        leads: { ver: true, crear: true, editar: true, eliminar: true },
+        // La última llave es el alcance: sin ella, quien entra al pipeline
+        // solo ve sus leads asignados.
+        leads: { ver: true, crear: true, editar: true, eliminar: true, ver_todos: true },
         citas: { ver: true, crear: true, editar: true, eliminar: true },
         mensajes: { ver: true, crear: true, editar: true, eliminar: true },
         campanas: { ver: true, crear: true, editar: true, eliminar: true },
