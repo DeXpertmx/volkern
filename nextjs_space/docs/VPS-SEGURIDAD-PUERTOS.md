@@ -155,3 +155,36 @@ fuera). El 5432 ya no aparece en ninguna de las dos listas.
   un túnel SSH. Los respaldos ya funcionan así
   (`scripts/backup_volkern.sh`, `scripts/restore_volkern.sh`): los dos usan
   `docker exec` sobre el contenedor, no el puerto del host.
+
+## 7. Rotar la contrasena de `volkern-erp_postgres`
+
+Aplicada el 2026-09-23. La env `POSTGRES_PASSWORD` del contenedor oficial
+solo se usa al **inicializar el volumen** la primera vez: cambiarla no
+cambia la contrasena real. La rotacion de verdad es `ALTER USER`.
+
+1. **Antes**: verificar produccion (HTTP 200 en el ERP, servicios 1/1) y
+   anotar recuentos (`"Tenant"`, `hospitality_reservations`).
+2. **Snapshot**: `pg_dump -Fc` dentro del contenedor + `docker cp` a
+   `/root/backups/`.
+3. **Rotar**: `openssl rand -hex 24`, guardarlo con `umask 077` en
+   `/root/.pg_rotacion` y ejecutar `ALTER USER volkern_erp WITH PASSWORD
+   '...'` via `docker exec ... psql`.
+4. **Probar por RED** (la app entra por la red overlay, `scram-sha-256`):
+   `psql -h <IP_overlay> -U volkern_erp` con la nueva debe entrar y con la
+   vieja debe fallar. No te fies de `127.0.0.1`: el `pg_hba` confia en
+   loopback (trust) y ahi **cualquier** contrasena entra (falso positivo).
+5. **Propagar** al mismo valor exacto: la `DATABASE_URL` de
+   `volkern-erp_app` y la `POSTGRES_PASSWORD` de `volkern-erp_postgres`
+   (`docker service update --env-rm X --env-add X=...`), los ficheros de
+   `/root/volkern-erp/` (`.env`, `volkern-erp.yaml`, `postgres-only.yaml`,
+   `.bak`) y en el repo `deploy-vps/.env.vps` + `deploy-vps/.db_pass`
+   (checkout principal y worktree).
+6. **Despues**: esperar convergencia, confirmar que el contenedor de la app
+   lleva la nueva URL, recuentos identicos a los de antes y HTTP 200.
+
+Notas: el volumen del servicio persiste la recreacion de la tarea de
+postgres (los datos no se tocan). `generar-env-vps.sh` ya **no regenera**
+la contrasena: reutiliza `deploy-vps/.db_pass` si existe, y solo crea una
+nueva en el primer arranque o si se fuerza con `VOLKERN_DB_PASS` (cambiar
+entonces a mano con `ALTER USER`). Copia de seguridad previa quedo en
+`/root/backups/volkern_erp-pre-rotacion-20260923-184611.dump`.

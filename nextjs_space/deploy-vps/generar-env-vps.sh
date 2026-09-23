@@ -13,10 +13,18 @@ OUT=deploy-vps/.env.vps
 
 [ -f "$SRC" ] || { echo "No existe $SRC"; exit 1; }
 
-# Generar password del postgres y CRON_SECRET si no existen
-DB_PASS=${VOLKERN_DB_PASS:-$(openssl rand -hex 16)}
+# Password del postgres: reutilizar el existente si ya hay uno guardado (rotarlo
+# SOLO a mano con ALTER USER, ver docs/VPS-SEGURIDAD-PUERTOS.md). Solo se genera
+# uno nuevo en el primer arranque o si se fuerza con VOLKERN_DB_PASS.
+if [ -n "${VOLKERN_DB_PASS:-}" ]; then
+  DB_PASS="$VOLKERN_DB_PASS"
+elif [ -s deploy-vps/.db_pass ]; then
+  DB_PASS=$(cat deploy-vps/.db_pass)
+else
+  DB_PASS=$(openssl rand -hex 16)
+fi
 CRON_SECRET=${VOLKERN_CRON_SECRET:-$(openssl rand -hex 24)}
-echo "DB_PASS generado: ${#DB_PASS} chars | CRON_SECRET: ${#CRON_SECRET} chars"
+echo "DB_PASS: ${#DB_PASS} chars | CRON_SECRET: ${#CRON_SECRET} chars"
 
 # Copiar base
 cp "$SRC" "$OUT"
