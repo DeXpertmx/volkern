@@ -262,5 +262,49 @@ Como re-auditarlo en 3 comandos:
 ```bash
 for s in $(docker service ls --format '{{.Name}}'); do P=$(docker service inspect "$s" --format '{{json .Endpoint.Ports}}'); [ "$P" != "null" ] && [ "$P" != "[]" ] && echo "$s: $P"; done
 ss -lntp | grep -v docker-proxy | grep LISTEN
-ufw status numbered
+ufw status
 ```
+
+## 10. Auditoria recurrente automatica (2026-09-23)
+
+La auditoria manual de §9 se automatizo en `deploy-vps/auditar-superficie.sh`
+(bilingue: en el VPS audita todo; sin docker/volkern-erp_app, como en el
+puesto de trabajo, hace el sondeo externo real desde otra red + apps +
+comprobacion del `.env.vps` si se pasa `ENV_VPS=/ruta`). Compara contra el
+baseline esperado que vive EN el script (espejo de §9): puertos publicados
+por Swarm, escuchas del host, reglas ufw, sshd, huellas de las claves de
+root, sondeo tcp desde el origen (con lista de puertos PROHIBIDOS:
+cualquier BD, el plano Swarm, redis, etc.), HTTP de las 10 apps y
+propagacion de la credencial de BD (5 ficheros en /root/volkern-erp/).
+Exit 0 = conforme; exit 1 = DERIVA. No imprime secretos.
+
+**Instalado en el VPS** (2026-09-23):
+
+- `/root/auditar-superficie.sh` (700) — copia de `deploy-vps/`.
+- `/etc/cron.d/auditoria-superficie` — cada hora en el minuto 17;
+  conforme borra el marcador, deriva lo crea y lo anota en el log.
+- `/var/log/auditoria-superficie.log` + logrotate semanal (8 rotaciones).
+- `/root/DERIVA-AUDITORIA` — si este fichero existe, la ultima pasada
+  detecto deriva: mirar el log y actuar.
+
+Uso desde el puesto (ruta real de Internet + secreto local):
+
+```bash
+ENV_VPS=~/Proyectos/Volkern/nextjs_space/deploy-vps/.env.vps \
+  ssh -i ~/.ssh/CLAVE root@62.171.134.195 'bash -s' \
+  < deploy-vps/auditar-superficie.sh
+```
+
+**Cazó una deriva real en su primera pasada**: tras activar ufw en §9, la
+bomba de reversion de systemd se cancelo mal — se paro el *service*
+transient pero no el *timer* de `systemd-run`, y a los 240s ejecuto
+`ufw --force disable` igualmente. El auditor local detecto 2377/7946
+reabiertos antes que nadie; ufw fue reactivado y el baseline volvio a ser
+verde. Regla que queda: para cancelar una bomba de `systemd-run
+--on-active`, parar **el timer** (`systemctl stop <unidad>.timer`), no el
+service; y no crear la unidad si el plan es borrar su script.
+
+Cuando cambie la superficie a posta (nuevo servicio publicado, nueva app,
+rotacion con distinto numero de ficheros), actualizar §9/§10 y las listas
+de `auditar-superficie.sh` **en el mismo commit** — el auditor compara
+contra su propio baseline, no contra el git.
