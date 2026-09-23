@@ -24,6 +24,7 @@
     "test:e2e:reconciliation:browser": "bash scripts/run-e2e-reconciliation-browser.sh",
     "test:e2e:booking": "bash scripts/run-e2e-booking-engine.sh",
     "test:e2e:noshow": "bash scripts/run-e2e-no-show.sh",
+    "test:e2e:dia-h": "bash scripts/run-e2e-dia-h-conectividad.sh",
     "test:e2e:tab-sync": "bash scripts/run-e2e-tab-sync.sh",
     "test:e2e:tab-sync:ci": "bash scripts/run-e2e-tab-sync-ci.sh",
     "test:e2e": "bash scripts/run-e2e-all.sh",
