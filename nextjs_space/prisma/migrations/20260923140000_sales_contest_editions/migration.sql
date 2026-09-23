@@ -18,5 +18,5 @@ CREATE TABLE "sales_contest_editions" (
 CREATE UNIQUE INDEX "sales_contest_editions_tenantId_periodo_key" ON "sales_contest_editions"("tenantId", "periodo");
 CREATE INDEX "sales_contest_editions_tenantId_cerradoEn_idx" ON "sales_contest_editions"("tenantId", "cerradoEn");
 
-ALTER TABLE "sales_contest_editions" ADD CONSTRAINT "sales_contest_editions_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "sales_contest_editions" ADD CONSTRAINT "sales_contest_editions_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "sales_contest_editions" ADD CONSTRAINT "sales_contest_editions_ganadorId_fkey" FOREIGN KEY ("ganadorId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;

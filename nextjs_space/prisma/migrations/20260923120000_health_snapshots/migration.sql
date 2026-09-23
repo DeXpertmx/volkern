@@ -25,4 +25,4 @@ CREATE INDEX "health_snapshots_dealId_idx" ON "health_snapshots"("dealId");
 CREATE INDEX "health_snapshots_desenlace_idx" ON "health_snapshots"("desenlace");
 
 ALTER TABLE "health_snapshots" ADD CONSTRAINT "health_snapshots_dealId_fkey" FOREIGN KEY ("dealId") REFERENCES "deals"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "health_snapshots" ADD CONSTRAINT "health_snapshots_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "health_snapshots" ADD CONSTRAINT "health_snapshots_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
