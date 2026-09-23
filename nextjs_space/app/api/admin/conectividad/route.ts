@@ -12,6 +12,14 @@ import {
   type ConnectivityEstado,
 } from '@/lib/hospitality/connectivity';
 import { notifyDeveloperSensitiveAction } from '@/lib/telegram/developer-notify';
+// Preflight puro: valida el formato de lo que llega antes de escribir nada.
+// Un espacio de más o un `usuario:contraseña` mal pegado tiene que fallar AQUÍ,
+// con su arreglo, y no más tarde como un 401 indistinguible.
+import {
+  preflightConectividad,
+  resumenPreflight,
+  type AvisoPreflight,
+} from '@/lib/hospitality/connectivity-preflight';
 
 const ESTADOS_VALIDOS: ConnectivityEstado[] = ['sin_configurar', 'configurado', 'conectado', 'error'];
 
@@ -37,7 +45,19 @@ export async function GET() {
     if ('error' in auth) return auth.error;
 
     const data = await getConnectivityPublic();
-    return NextResponse.json(data);
+    // Preflight de la URL del servidor (variable de entorno): es el otro dato
+    // que llega en la respuesta del proveedor y el único que no se configura
+    // desde esta pantalla. Se revisa aquí para poder avisar sin llamar a nadie.
+    const revisionUrl = preflightConectividad({
+      baseUrl: process.env.CONNECTIVITY_BASE_URL ?? '',
+    });
+    return NextResponse.json({
+      ...data,
+      preflightBaseUrl: {
+        ok: revisionUrl.ok,
+        avisos: revisionUrl.avisos,
+      },
+    });
   } catch (error) {
     console.error('Error obteniendo conectividad:', error);
     return NextResponse.json({ error: 'Error al obtener configuración' }, { status: 500 });
@@ -78,12 +98,38 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Estado inválido' }, { status: 400 });
     }
 
+    // Preflight: formato del partner id y del Basic Auth antes de guardar.
+    // Ningún error bloqueante llega a la base de datos, y el guardado usa los
+    // valores ya normalizados (usuario y partner id sin espacios de pegado,
+    // contraseña byte a byte). Se ejecuta después de las comprobaciones de tipo
+    // para que un valor que no sea texto se rechace con su propio mensaje.
+    const revision = preflightConectividad({ partnerId, username, password });
+    if (!revision.ok) {
+      return NextResponse.json(
+        {
+          error: resumenPreflight(revision),
+          avisos: revision.bloqueantes,
+        },
+        { status: 400 }
+      );
+    }
+    const avisosPreflight: AvisoPreflight[] = revision.advertencias;
+
     const result = await saveConnectivityConfig({
-      partnerId,
-      username,
-      password,
+      partnerId: revision.valores.partnerId ?? undefined,
+      username: revision.valores.username ?? undefined,
+      password: revision.valores.password ?? undefined,
       estado,
     });
+
+    // Segunda pasada del preflight dentro del guardado: si algo se colara
+    // (p. ej. un valor imposible de cifrar) la escritura no ocurre y se dice.
+    if (!result.ok) {
+      return NextResponse.json(
+        { error: 'Las credenciales no pasan la validación', avisos: result.avisos },
+        { status: 400 }
+      );
+    }
 
     // Verificación de credenciales completas después de guardar
     const creds = await getConnectivityCredentials();
@@ -104,6 +150,9 @@ export async function PUT(request: NextRequest) {
       success: true,
       ...result,
       completo,
+      // Avisos no bloqueantes (caracteres poco habituales, http sin cifrado…):
+      // el guardado sigue adelante, pero el panel los muestra para revisarlos.
+      avisos: avisosPreflight,
     });
   } catch (error) {
     console.error('Error guardando conectividad:', error);
