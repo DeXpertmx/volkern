@@ -50,7 +50,7 @@
 ## FASE 0 — Casa en orden (solo nosotros; sin esto no hay día H)
 
 ### 0.1 - Commitear el trabajo acumulado en commits trazables
-- [ ] **PENDIENTE**
+- [x] **HECHO (23 sep 2026)** — 7 commits temáticos (`4423e43f`…`41241ed1`), árbol limpio, typecheck 0 y suite 8.178 en verde tras commitear.
 - **Acción**: agrupar el árbol sin commitear en commits por tema, en este orden:
   1. Migraciones + su esquema y código (`prisma/migrations/2026092*`, `schema.prisma`,
      `lib/sales/health-calibracion.ts`, `lib/sales/leaderboard.ts`,
@@ -69,7 +69,7 @@
 - **No hacer**: push, ni commitear `.env*` ni credenciales.
 
 ### 0.2 - Desplegar al VPS con backup previo y migraciones
-- [ ] **PENDIENTE**
+- [x] **HECHO (23 sep 2026)** — Backup completo previo (`volkern_erp-pre-hospitality-20260923-133737.sql.gz`, verificado con gzip -t). Migraciones: 3 fallos iniciales por FK con nomenclatura errónea (`"tenants"`/`"users"` vs `"Tenant"`/`"User"`), corregidos, commiteados (`1f2b3ada`, `fa238260`) y resueltos con `migrate resolve --rolled-back`. 101 migraciones aplicadas. Service update con la imagen del árbol (20a4626b9b77) y HTTP 200 en https://volkern.app.
 - **Acción**: localizar el procedimiento (`ls deploy-vps/`; leer el README o los commits
   del baseline de producción) y ejecutarlo completo: build de imágenes → export → subida →
   **BACKUP de la BD de producción** (obligatorio, anterior a cualquier migración) →
@@ -81,8 +81,9 @@
   esquema y producción, PARAR y mostrar el diff al usuario antes de aplicar nada.
 
 ### 0.3 - Verificación post-deploy (smoke funcional en producción)
-- [ ] **PENDIENTE**
-- **Acción**, en orden: (a) `/admin/hospitality` muestra el panel de crons con los jobs
+- [ ] **PENDIENTE (parcial)**
+- **Automatizado y VERIFICADO (23 sep 2026)**: smoke del clasificador determinista contra producción OK; sin errores en logs ajenos al propio smoke; sondas HTTP: páginas de dashboard 307 (a login), APIs 401 (sin sesión) — ninguna 404/500; 101 migraciones aplicadas.
+- **Acción** (requiere sesión de usuario en el navegador): recorrer los 4 puntos funcionales:, en orden: (a) `/admin/hospitality` muestra el panel de crons con los jobs
   nuevos; (b) la pantalla de registro de viajeros muestra «Entorno: pruebas» y el campo
   de credenciales vacío y cifrado; (c) crear una propiedad y unidad de PRUEBA y recorrer
   reserva → check-in online → parte `datos_incompletos` en la pantalla de reservas;
@@ -189,3 +190,6 @@
 | Fecha | Paso | Resultado | Nota |
 |---|---|---|---|
 | 23 sep 2026 | — | Ruta creada | Estado baseline: 8.178 verdes, §5.1 cerrado, ~495 ficheros sin commitear |
+| 23 sep 2026 | 0.1 | 7 commits temáticos en la rama del worktree | `4423e43f` deploy · `b2500af6` prisma · `e76daa3d` libs+guardias · `feb75688` pantallas · `9ead67cb` docs · `a60bd7a1` hook capacidades · `41241ed1` CA FNMT (pública). Sin secretos (verificado). Sin push. |
+| 23 sep 2026 | 0.2 | Deploy completo al VPS | Backup previo verificado · 2 defectos de FK cazados en producción y corregidos (`1f2b3ada`, `fa238260`) · 101 migraciones OK · imagen 20a4626b9b77 · volkern.app 200 |
+| 23 sep 2026 | 0.3 | Parcial: automatizado OK | Clasificador OK, sondas 307/401 correctas, logs limpios. Faltan los 4 recorridos con sesión (panel crons, registro, ciclo reserva→checkin, Academia) |
