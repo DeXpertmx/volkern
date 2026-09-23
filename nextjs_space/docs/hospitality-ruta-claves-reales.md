@@ -30,7 +30,9 @@
 
 ## 1. Estado verificado al escribir esta ruta (23 sep 2026)
 
-- Suite completa: **8.178 pruebas en verde / 0 rojas**, typecheck 0, lint 0.
+- Suite completa: **8.365 pruebas en verde / 0 rojas** (472 ficheros), typecheck 0, lint con la deuda previa del repo (23 sep 2026, tras la FASE 0).
+- **FASE 0 COMPLETA** (0.1–0.5): desplegado, tenant de homologación listo y simulacro hecho. Lo que
+  queda de la FASE 0 es solo la prueba del panel de crons con sesión de Superadmin (§8-E).
 - Plan §5.1 de guardias del inventario de algoritmos: **CERRADO** (C1–C13, H15, H18).
 - Ensayo E2E del registro de viajeros: ciclo completo contra **mock** (160 comprobaciones).
 - Único pendiente de CÓDIGO: `NS_ALTA_RESERVA` y `FUENTE_NS_ALTA_RESERVA` en
@@ -81,33 +83,61 @@
   esquema y producción, PARAR y mostrar el diff al usuario antes de aplicar nada.
 
 ### 0.3 - Verificación post-deploy (smoke funcional en producción)
-- [ ] **PENDIENTE (parcial)**
-- **Automatizado y VERIFICADO (23 sep 2026)**: smoke del clasificador determinista contra producción OK; sin errores en logs ajenos al propio smoke; sondas HTTP: páginas de dashboard 307 (a login), APIs 401 (sin sesión) — ninguna 404/500; 101 migraciones aplicadas.
-- **Acción** (requiere sesión de usuario en el navegador): recorrer los 4 puntos funcionales:, en orden: (a) `/admin/hospitality` muestra el panel de crons con los jobs
-  nuevos; (b) la pantalla de registro de viajeros muestra «Entorno: pruebas» y el campo
-  de credenciales vacío y cifrado; (c) crear una propiedad y unidad de PRUEBA y recorrer
-  reserva → check-in online → parte `datos_incompletos` en la pantalla de reservas;
-  (d) la Academia muestra el Ranking de Cerradores con su sección «Ediciones cerradas»
-  (vacía es correcto).
-- **Verificado cuando**: los cuatro puntos constan en el §9. Limpiar los datos de prueba
-  de (c) si ensucian el tenant elegido.
+- [x] **HECHO (23 sep 2026)** — automatizado y con sesión real (tenant de prueba del paso 0.4).
+- **Automatizado**: smoke del clasificador determinista contra producción OK; sin errores en logs ajenos al propio smoke; sondas HTTP sin sesión: páginas de dashboard 307 (a login), APIs 401 — ninguna 404/500; 101 migraciones aplicadas.
+- **Resultado con sesión (tenant `homologación-mir`, rol `Administrador`)**:
+  - **(a) Panel de crons — NO verificable con rol de tenant, y es correcto**: `/admin/hospitality` responde 200 porque la guardia del área `admin` es de cliente (redirige a quien no se
+    llame `Superadmin`), y su API `/api/admin/hospitality/holds` responde **401 «requiere rol de Superadmin de la plataforma»**. La prueba del panel necesita una sesión de Superadmin, que no tenemos: **queda pendiente para el operador** (no bloquea el día H).
+  - **(b) Registro de viajeros**: 200. La pantalla lee `config: { configurado: false, activo: false, entorno: 'pre', tieneCredenciales: false }` — el entorno de PRUEBAS del Ministerio ya es el valor por defecto y no hay credenciales. El módulo está operativo y vacío.
+  - **(c) Ciclo reserva → check-in online → parte**, completo y con datos reales de producción: propiedad `Hotel Homologación MIR` (estado `conectada`, 2 unidades, tarifa 120/135 EUR) → cotización pública por el motor (`/api/public/booking/<id>`, 3 noches = 360 EUR) → **reserva real `BE-MUEA5FOF`** con enlace de check-in (`/checkin/<token>` → 200) → la reserva aparece en la API interna con `parteViajeros: { aplica: true, completo: false, viajeros: 0 }`: el parte sale incompleto y el aviso lo dice. Moneda del tenant: **EUR**.
+  - **(d) Academia**: `/dashboard/academia` 200 y `/api/analytics/training/leaderboard` 200 con `concurso: { tipo: 'mensual', periodoActual: '2026-09', cerradas: [] }` — la liga mensual está viva y sin ediciones cerradas, que es lo correcto en un tenant nuevo.
+  - Todas las pantallas del módulo responden 200: `hospitality`, `registro-viajeros`, `reservas`, `calendar`, `reportes`, `resenas`, `booking-engine`, `finanzas`.
+- **Verificado cuando**: los cuatro puntos constan en el §9. Los datos del simulacro (c) **se quedan a propósito** en el tenant aislado: son la propiedad y la reserva con las que el día H se probará el parte real.
 
 ### 0.4 - Preparar el tenant de homologación y congelar la traza de partida
-- [ ] **PENDIENTE**
-- **Acción**: decidir con el usuario (pregunta §8-A) si se usa un tenant aislado o el del
-  piloto; crear/limpiar; exportar copia de `HospitalityGuestRegistryCommunication` y de
-  `HospitalityMirConfig` del tenant elegido como «traza de partida» (guardar en el VPS,
-  nunca commitear datos).
+- [x] **HECHO (23 sep 2026)** — tenant **aislado** (decisión §8-A), creado por el mecanismo propio de provisión.
+- **Alta, tal como la haría el cliente**: `POST /api/tenants/create` (público, en producción) →
+  tenant **Homologación MIR** · id `cmue9dkb0002fn001amk4pbg5` · slug `homologacion-mir` ·
+  plan `trial` · moneda **EUR** · vertical `hospitality` (13 módulos, `hospitality` entre ellos).
+  Cuenta de Chatwoot creada por el provisioner (id 31, se acepta como efecto secundario del alta real).
+- **Hallazgo (defecto real del provisioner)**: `provisionTenant()` crea el tenant y su usuario,
+  pero **no le asigna rol** — y en esta plataforma las capacidades se conceden por rol
+  (`lib/hospitality/capacidades.ts`: «si falta el permiso, se deniega»). El administrador
+  recién provisionado entra y no puede nada. Se añadió el script de operador
+  `scripts/asignar-rol-admin-tenant.ts` (idempotente, `--tenant <slug> [--email]`), que crea el
+  rol `Administrador` con el wildcard `{ all: true }` (convención de `bootstrap-admin.ts`) y lo
+  enlaza al usuario. Es el paso que en un alta acompañada da el operador.
+- **Credenciales del usuario de prueba**: guardadas **solo en el VPS**, root y 600,
+  `/root/backups/homologacion-mir-credenciales.txt` (nunca en el repo ni en este documento).
+- **Traza de partida**: `/root/backups/homologacion-mir-traza-partida-20260923-1809.txt` en el VPS
+  (nunca commiteada). Contenido: **config MIR inexistente, 0 partes registrados, propiedad del
+  simulacro sin código de establecimiento** — el punto de partida más limpio posible.
 - **Verificado cuando**: la copia está guardada con fecha y el tenant está sin
-  configuración MIR activa (o con la previa respaldada).
+  configuración MIR activa (o con la previa respaldada). ✔ Ambos.
 
 ### 0.5 - Simulacro de configuración con datos ficticios
-- [ ] **PENDIENTE**
-- **Acción**: en el tenant de homologación, recorrer `accion: 'configurar'` con valores
-  ficticios SIN `activo: true`; verificar que `accion: 'estado'` devuelve el endpoint
-  `https://hospedajes.pre-ses.mir.es/...` al elegir entorno pruebas; borrar los datos
-  ficticios.
-- **Verificado cuando**: el flujo completo funcionó sin errores y quedó limpio.
+- [x] **HECHO (23 sep 2026)** — recorrido completo contra producción, y destapó un defecto real.
+- **Simulacro**: `accion: 'configurar'` con `codigoArrendador: 'SIMULACRO-0000'`,
+  `aplicacion: 'SIMULACRO-APP'`, `entorno: 'pre'`, usuario/contraseña ficticios, **sin activar**
+  (`activo: false`) y el código de establecimiento ficticio de la propiedad. `accion: 'estado'`
+  devolvió lo esperado: `configurado: true`, `activo: false`, `entorno: 'pre'` (el entorno de
+  pruebas es el que selecciona los endpoints `hospedajes.pre-ses.mir.es` de `lib/hospitality/mir-espec.ts`),
+  `tieneCredenciales: true`. La pantalla de configuración es operable de punta a punta.
+- **Defecto destapado y ARREGLADO (23 sep 2026)**: la limpieza no funcionaba — **una cadena vacía
+  se ignoraba en silencio** en `saveMirConfig`. El hotel que borra una credencial en la pantalla,
+  guarda y cree que la dejó en blanco seguía con la credencial pegada (y `listoParaEnviar`
+  diciendo que sí). Arreglo: convención explícita **ausente = sin cambio, vacío = se borra**
+  (credenciales a `null`, código y aplicación a vacío/valor por defecto), sin inventar un
+  marcador de código de arrendador (`SIN-CODIGO` retirado: un código inventado viajaría en la
+  cabecera del parte al Ministerio), y `configurado` pasa a significar «tiene código de
+  arrendador» en vez de «tiene fila», para que una configuración vaciada se lea como no
+  configurada. Guardia: 3 pruebas nuevas en `tests/hospitality-registro-viajeros-service.test.ts`.
+- **Limpieza hecha**: la fila de configuración ficticia se borró y el código de establecimiento
+  de la propiedad se dejó a `null` (se hizo con el cliente Prisma de la app viva, porque el
+  arreglo **todavía no está desplegado**).
+- **Pendiente por eso**: desplegar el arreglo al VPS en el próximo despliegue (FASE 2 lo hará de
+  todos modos; no bloquea el día H porque la pantalla ya se usa con datos reales).
+- **Verificado cuando**: el flujo completo funcionó sin errores y quedó limpio. ✔
 - **Nota**: este paso demuestra que las pantallas desplegadas son operables — es el ensayo
   general del día H.
 
@@ -180,10 +210,11 @@
 
 | # | Pregunta | Cuándo |
 |---|---|---|
-| A | ¿Tenant aislado para homologación o el del piloto? | Paso 0.4 |
+| A | ¿Tenant aislado para homologación o el del piloto? | **RESUELTO (23 sep 2026): aislado** — «Homologación MIR» |
 | B | ¿Multimoneda: convertir o mostrar por moneda? | Paso 3.1 (o antes si el hotel mira Reportes) |
-| C | ¿Se autoriza este despliegue ahora o hay ventana acordada? | Paso 0.2 si hay usuarios activos |
+| C | ¿Se autoriza este despliegue ahora o hay ventana acordada? | **RESUELTO (23 sep 2026): desplegado**, con backup previo |
 | D | El XSD no llegó / no trae namespace de RH | Paso 2.2 — RH queda documentado como no homologado |
+| E | ¿Sesión de Superadmin para probar el panel de crons (`/admin/hospitality`)? | Paso 0.3 (a) — pendiente; solo lo ve el operador de la plataforma |
 
 ## 9. Registro de avance (rellenar al marcar cada paso)
 
@@ -192,4 +223,9 @@
 | 23 sep 2026 | — | Ruta creada | Estado baseline: 8.178 verdes, §5.1 cerrado, ~495 ficheros sin commitear |
 | 23 sep 2026 | 0.1 | 7 commits temáticos en la rama del worktree | `4423e43f` deploy · `b2500af6` prisma · `e76daa3d` libs+guardias · `feb75688` pantallas · `9ead67cb` docs · `a60bd7a1` hook capacidades · `41241ed1` CA FNMT (pública). Sin secretos (verificado). Sin push. |
 | 23 sep 2026 | 0.2 | Deploy completo al VPS | Backup previo verificado · 2 defectos de FK cazados en producción y corregidos (`1f2b3ada`, `fa238260`) · 101 migraciones OK · imagen 20a4626b9b77 · volkern.app 200 |
-| 23 sep 2026 | 0.3 | Parcial: automatizado OK | Clasificador OK, sondas 307/401 correctas, logs limpios. Faltan los 4 recorridos con sesión (panel crons, registro, ciclo reserva→checkin, Academia) |
+| 23 sep 2026 | — | **Fusión de las dos líneas de Hospitality** | `master` había seguido en paralelo (150 commits: booking engine público, permisos por acción, acceso del huésped). Merge con criterio explícito: gana la versión desplegada en los conflictos add/add; se incorporan los modelos de master que producción ya tiene; el motor de master queda como `booking-engine.ts` y re-exporta el nuestro; la ruta pública delega la creación en el Reservation Engine. Commit `7c8b802a`; **master avanzado a él** (fast-forward, árbol limpio). Typecheck 0 y 8.362 verdes en el árbol fusionado. |
+| 23 sep 2026 | 0.3 | **HECHO** (3 de 4 puntos; el (a) queda para el operador) | Con sesión del tenant de prueba: las 8 pantallas del módulo 200; registro de viajeros en entorno `pre` sin credenciales; **ciclo completo real** (propiedad → cotización → reserva `BE-MUEA5FOF` → enlace de check-in 200 → parte `completo: false` visible en la API interna); Academia con la liga mensual viva. El panel de crons es de Superadmin (401 en su API): §8-E. |
+| 23 sep 2026 | 0.4 | **HECHO** | Tenant aislado creado por `POST /api/tenants/create` (el mecanismo real): `cmue9dkb0002fn001amk4pbg5`, EUR, vertical hospitality, 13 módulos. **Defecto del provisioner**: no asigna rol → nuevo script de operador `scripts/asignar-rol-admin-tenant.ts` (rol `Administrador`, wildcard `{ all: true }`). Credenciales y traza solo en el VPS (`/root/backups/homologacion-mir-*`). |
+| 23 sep 2026 | 0.5 | **HECHO** — y destapó un defecto | Simulacro `configurar` + `estado` con datos ficticios y `activo: false`: operativo, entorno `pre` correcto. **Defecto real**: una cadena vacía se ignoraba en silencio — las credenciales no se podían borrar. Arreglado con la convención «ausente = sin cambio, vacío = se borra», sin código inventado, y 3 guardias nuevas. Datos ficticios limpiados. **Pendiente: desplegar el arreglo** (no bloquea el día H). |
+| 23 sep 2026 | — | Estado de calidad tras los arreglos | Typecheck **0** · suite **8.365 en verde / 0 rojas** (472 ficheros) · lint con la deuda previa del repo |
+| 23 sep 2026 | — | **Hallazgo de infraestructura (no es del módulo)** | El stack **heredado** (`volkern_postgres`, base `volkern_table`) publica su **5432 en la IP pública del VPS**: una base de datos accesible desde Internet. La BD de producción (`volkern-erp_postgres`) **no** está expuesta. Conviene cerrarlo o borrar el stack muerto. |
