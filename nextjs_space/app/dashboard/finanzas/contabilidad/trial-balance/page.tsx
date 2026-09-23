@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { formatearImporte } from '@/lib/moneda'
+import { useMonedaTenant } from '@/lib/use-moneda-tenant'
 import { FileText, Download, Search } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -28,6 +30,7 @@ export default function TrialBalancePage() {
   const [data, setData] = useState<TrialBalanceReport | null>(null)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const moneda = useMonedaTenant()
 
   useEffect(() => {
     fetchData()
@@ -55,8 +58,7 @@ export default function TrialBalancePage() {
     </div>
   )
 
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(value)
+  const formatCurrency = (value: number) => formatearImporte(value, moneda)
 
   const filteredRows = data?.rows.filter(
     (r) =>

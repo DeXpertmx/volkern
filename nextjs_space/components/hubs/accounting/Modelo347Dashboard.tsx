@@ -8,6 +8,8 @@ import {
   CardTitle, 
   CardDescription 
 } from "@/components/ui/card";
+import { formatearImporte } from "@/lib/moneda";
+import { useMonedaTenant } from "@/lib/use-moneda-tenant";
 import { Button } from "@/components/ui/button";
 import { 
   FileText, 
@@ -27,6 +29,7 @@ import { cn } from "@/lib/utils";
 const THRESHOLD = 3005.06;
 
 export function Modelo347Dashboard() {
+  const moneda = useMonedaTenant();
   const [loading, setLoading] = useState(true);
   const [report, setReport] = useState<any>(null);
   const [year, setYear] = useState(new Date().getFullYear());
@@ -88,7 +91,9 @@ export function Modelo347Dashboard() {
     const bom = '\uFEFF';
     const lines: string[] = [];
 
-    lines.push(`Modelo 347 - ${year} - Operaciones con Terceros (Umbral: ${THRESHOLD.toFixed(2)} €)`);
+    // El CSV va sin símbolo de divisa: los importes del cuerpo tampoco lo llevan y
+    // un separador de miles rompería el archivo que se presenta.
+    lines.push(`Modelo 347 - ${year} - Operaciones con Terceros (Umbral: ${THRESHOLD.toFixed(2)})`);
     lines.push("Tipo,NIF/VAT,Razón Social,País,Nº Operaciones,Importe Total");
     
     filtered.forEach((op: any) => {
@@ -97,9 +102,9 @@ export function Modelo347Dashboard() {
     });
 
     lines.push("");
-    lines.push(`Total Clientes,,${report.totalClientAmount.toFixed(2)} €`);
-    lines.push(`Total Proveedores,,${report.totalSupplierAmount.toFixed(2)} €`);
-    lines.push(`Total General,,${report.totalAmount.toFixed(2)} €`);
+    lines.push(`Total Clientes,,${report.totalClientAmount.toFixed(2)}`);
+    lines.push(`Total Proveedores,,${report.totalSupplierAmount.toFixed(2)}`);
+    lines.push(`Total General,,${report.totalAmount.toFixed(2)}`);
 
     const csv = lines.join('\n');
     const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
@@ -126,9 +131,7 @@ export function Modelo347Dashboard() {
     );
   }
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(amount);
-  };
+  const formatCurrency = (amount: number) => formatearImporte(amount, moneda);
 
   const hasOps = report?.hasOperations || false;
   const filteredOps = getFilteredOps();
@@ -383,12 +386,12 @@ export function Modelo347Dashboard() {
           <h4 className="font-bold text-rose-900 text-sm">Información sobre el Modelo 347</h4>
           <p className="text-xs text-rose-700 font-medium leading-relaxed">
             Este reporte recoge todas las operaciones anuales con cada cliente y proveedor que superen 
-            los <strong>{formatCurrency(THRESHOLD)}€</strong> en el ejercicio. Se genera automáticamente 
+            los <strong>{formatCurrency(THRESHOLD)}</strong> en el ejercicio. Se genera automáticamente 
             a partir de las facturas emitidas (clientes) y los gastos registrados (proveedores) en Volkern.
           </p>
           <ul className="text-xs text-rose-700 font-medium leading-relaxed list-disc list-inside mt-1 space-y-0.5">
-            <li><strong>Clientes:</strong> Se agrupan por su NIF/CIF del perfil fiscal. Umbral: facturación anual &gt; {formatCurrency(THRESHOLD)}€.</li>
-            <li><strong>Proveedores:</strong> Se agrupan por su NIF del registro de proveedores. Umbral: compras anuales &gt; {formatCurrency(THRESHOLD)}€.</li>
+            <li><strong>Clientes:</strong> Se agrupan por su NIF/CIF del perfil fiscal. Umbral: facturación anual &gt; {formatCurrency(THRESHOLD)}.</li>
+            <li><strong>Proveedores:</strong> Se agrupan por su NIF del registro de proveedores. Umbral: compras anuales &gt; {formatCurrency(THRESHOLD)}.</li>
           </ul>
           <p className="text-xs text-rose-700 font-medium leading-relaxed mt-1">
             Plazo de presentación: <strong>Febrero</strong> del año siguiente al ejercicio declarado.

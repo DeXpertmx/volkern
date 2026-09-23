@@ -43,6 +43,7 @@ import {
   currencyChip,
   type CurrencyMenuOption,
 } from '@/lib/insurance/currency-prompt';
+import { MONEDA_MINIMA_ESQUEMA, MONEDAS_SOPORTADAS } from '@/lib/moneda';
 import {
   VERTICAL_DEFINITIONS,
   type Vertical,
@@ -187,7 +188,7 @@ export default function PartnerOnboardingPage() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
       });
-      const data: CreateResponse = await res.json().catch((): CreateResponse => ({ success: false, moneda: 'MXN' }));
+      const data: CreateResponse = await res.json().catch((): CreateResponse => ({ success: false, moneda: MONEDA_MINIMA_ESQUEMA }));
       if (!res.ok || !data.success) {
         setError(data?.error?.message ?? `Error HTTP ${res.status}`);
         setResult(null);
@@ -573,9 +574,9 @@ function CurrencyStep({
     <div className="space-y-3">
       <Field label="Moneda preferida del broker">
         <p className="text-xs text-slate-500 mb-2">
-          Esta moneda alimentará el chip del portfolio ejecutivo. Si dejas MXN
-          (default) y luego suben pólizas en EUR, el auto-fix lo corrige
-          automáticamente al primer import.
+          Esta moneda alimentará el chip del portfolio ejecutivo. Si dejas la
+          moneda mínima del sistema y luego suben pólizas en otra divisa, el
+          auto-fix lo corrige automáticamente al primer import.
         </p>
       </Field>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -605,7 +606,7 @@ function CurrencyStep({
         </summary>
         <input
           type="text"
-          placeholder="USD / EUR / GBP / ... (o número 1..12)"
+          placeholder={`${MONEDAS_SOPORTADAS.slice(0, 3).join(' / ')} / … (o número 1..${MONEDAS_SOPORTADAS.length})`}
           onKeyDown={e => {
             if (e.key === 'Enter') {
               onPickByNumber((e.target as HTMLInputElement).value);

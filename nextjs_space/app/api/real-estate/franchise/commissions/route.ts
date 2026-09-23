@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
+import { monedaEfectiva } from '@/lib/moneda';
 
 /**
  * GET /api/real-estate/franchise/commissions
@@ -132,7 +133,9 @@ export const GET = withTenantAuth(async (req, auth) => {
         aprobadas,
         pagadas,
         cantidad: comisiones.length,
-        moneda: comisiones[0]?.moneda || 'EUR',
+        // Divisa del resumen: la de las comisiones listadas y, si aún no hay
+        // ninguna, la de reporte del tenant. Antes caía siempre a 'EUR'.
+        moneda: monedaEfectiva([comisiones[0]?.moneda], auth.tenant?.moneda),
       },
       byAgent,
     });

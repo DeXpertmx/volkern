@@ -11,6 +11,20 @@ import {
   Star, Quote, Building2, MapPin, Key,
 } from 'lucide-react';
 
+import { MONEDA_PLATAFORMA, formatearImporte } from '@/lib/moneda';
+import { getVerticalPlanPrice } from '@/lib/vertical-plans';
+
+/**
+ * Precio mensual publicado de la vertical, en la divisa de la plataforma.
+ *
+ * Sale de `lib/vertical-plans.ts`, la misma fuente que usa el cobro: la portada
+ * no puede anunciar un precio distinto del que se factura. Antes era un literal
+ * `€NN/mes` repetido en cuatro sitios de la página.
+ */
+const PRECIO_MES = getVerticalPlanPrice('inmobiliaria') ?? 0;
+const PRECIO_MES_TEXTO = formatearImporte(PRECIO_MES, MONEDA_PLATAFORMA, 0);
+const CON_VOLKERN = `${PRECIO_MES_TEXTO}/mes`;
+
 /* ─── Data ────────────────────────────────────────────────────────────────── */
 
 const PAIN_POINTS = [
@@ -66,7 +80,7 @@ const USE_CASES = [
 const TESTIMONIALS = [
   { quote: 'Con 45 propiedades en cartera, Volkern nos dio el orden que necesitábamos. Cada lead tiene seguimiento y cada propiedad su estado.', name: 'Fernando Rojas', role: 'Director, Inmobiliaria Rojas', avatar: 'FR' },
   { quote: 'Antes perdíamos el 20% de los leads por falta de seguimiento. Ahora todo está automatizado. Cerramos un 35% más.', name: 'Lucía Montes', role: 'Agente Inmobiliaria, Premium Homes', avatar: 'LM' },
-  { quote: 'CRM + propiedades + firma digital en un solo sitio. Por €59/mes reemplazamos 4 herramientas.', name: 'Óscar Núñez', role: 'CEO, Grupo Habitat', avatar: 'ON' },
+  { quote: `CRM + propiedades + firma digital en un solo sitio. Por ${CON_VOLKERN} reemplazamos 4 herramientas.`, name: 'Óscar Núñez', role: 'CEO, Grupo Habitat', avatar: 'ON' },
 ];
 
 const COMPETITOR_TOOLS = [
@@ -132,7 +146,7 @@ export default function RealEstateLanding() {
               Centraliza leads, propiedades, seguimiento y comunicación en un solo sistema.
             </p>
             <p className="text-lg text-slate-500 max-w-2xl mx-auto mb-10">
-              Desde <span className="text-white font-bold">€59/mes</span>. 14 días gratis. Sin tarjeta.
+              Desde <span className="text-white font-bold">{CON_VOLKERN}</span>. 14 días gratis. Sin tarjeta.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link href="/signup?vertical=inmobiliaria">
@@ -331,14 +345,14 @@ export default function RealEstateLanding() {
                 <motion.div key={tool.name} initial={{ opacity: 0, x: -10 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.3, delay: i * 0.05 }}
                   className="grid grid-cols-3 gap-4 px-6 py-4 border-b border-slate-800/50 last:border-b-0 hover:bg-slate-800/30 transition-colors">
                   <span className="text-slate-300 font-medium">{tool.name}</span>
-                  <span className="text-red-400 text-right font-mono font-semibold">€{tool.price}</span>
+                  <span className="text-red-400 text-right font-mono font-semibold">{formatearImporte(tool.price, MONEDA_PLATAFORMA, 0)}</span>
                   <span className="text-emerald-400 text-right font-mono font-semibold flex items-center justify-end gap-2"><Check className="w-4 h-4" /> Incluido</span>
                 </motion.div>
               ))}
               <div className="grid grid-cols-3 gap-4 px-6 py-5 bg-slate-800/50 border-t-2 border-emerald-500/30">
                 <span className="text-white font-bold text-lg">Total</span>
-                <span className="text-red-400 text-right font-bold text-lg font-mono">€{TOTAL_COMPETITOR}+</span>
-                <span className="text-emerald-400 text-right font-bold text-lg font-mono">€59/mes</span>
+                <span className="text-red-400 text-right font-bold text-lg font-mono">{formatearImporte(TOTAL_COMPETITOR, MONEDA_PLATAFORMA, 0)}+</span>
+                <span className="text-emerald-400 text-right font-bold text-lg font-mono">{CON_VOLKERN}</span>
               </div>
             </div>
             <p className="text-center text-slate-500 text-sm mt-4">14 días de prueba gratis. Sin compromiso. Cancela cuando quieras.</p>
@@ -409,7 +423,7 @@ export default function RealEstateLanding() {
               <p className="text-lg text-slate-400 mb-4 max-w-xl mx-auto">
                 <span className="text-white font-bold">14 días gratis</span>. Sin tarjeta. Sin compromiso.
               </p>
-              <p className="text-slate-500 text-sm mb-10">Luego €59/mes. Incluye CRM, propiedades, firma digital y más.</p>
+              <p className="text-slate-500 text-sm mb-10">Luego {CON_VOLKERN}. Incluye CRM, propiedades, firma digital y más.</p>
               <Link href="/signup?vertical=inmobiliaria">
                 <Button size="lg" className="bg-emerald-600 hover:bg-emerald-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-emerald-600/30 group">
                   Probar 14 días gratis

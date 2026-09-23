@@ -42,11 +42,11 @@ import {
   TEXTOS,
   interpolar,
   idiomaDesdeUrl,
-  localeDeIdioma,
   IDIOMAS,
   IDIOMA_POR_DEFECTO,
   type Idioma,
 } from '@/lib/hospitality/booking-i18n';
+import { formatearImporte } from '@/lib/moneda';
 import { textosResena } from '@/lib/hospitality/resenas-i18n';
 import type { ResenaPublica } from '@/lib/hospitality/resenas';
 import type { ExtraPublico } from '@/lib/hospitality/booking-extras';
@@ -150,11 +150,11 @@ function BookingCliente() {
   // Etiquetas de los campos del registro de viajeros: las mismas que usa el
   // check-in online (una sola lista de textos en los dos idiomas).
   const cd = CHECKIN_TEXTOS[idioma].campos;
-  const moneda = useCallback(
-    (valor: number, currency: string) =>
-      new Intl.NumberFormat(localeDeIdioma(idioma), { style: 'currency', currency }).format(valor),
-    [idioma],
-  );
+  // El importe se escribe con la divisa del dato (`lib/moneda`): el formato del
+  // dinero acompaña a la moneda, no al idioma del visitante —un precio de 1.200
+  // EUR se lee igual en las dos versiones de la página, y no en dos formatos
+  // distintos según por dónde entró el huésped—.
+  const moneda = (valor: number, currency: string) => formatearImporte(valor, currency);
 
   const [cargando, setCargando] = useState(true);
   const [noDisponible, setNoDisponible] = useState(false);
@@ -574,8 +574,7 @@ function SelectorExtras({
     const resto = seleccion.filter((s) => s.extraId !== id);
     onChange(cantidad > 0 ? [...resto, { extraId: id, cantidad }] : resto);
   };
-  const precioDe = (e: ExtraPublico) =>
-    new Intl.NumberFormat(localeDeIdioma(idioma), { style: 'currency', currency: e.moneda, maximumFractionDigits: 0 }).format(e.precio);
+  const precioDe = (e: ExtraPublico) => formatearImporte(e.precio, e.moneda, 0);
 
   return (
     <div className="rounded-md border p-3 space-y-3">

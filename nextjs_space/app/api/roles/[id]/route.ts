@@ -4,6 +4,11 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { hasPermission } from '@/lib/permissions';
+import {
+  esRolDeCatalogoEnUso,
+  permisosTocanHospitality,
+  puedeGestionarRolesDeHospitality,
+} from '@/lib/hospitality/roles';
 
 export async function PATCH(
   req: NextRequest,
@@ -35,6 +40,32 @@ export async function PATCH(
     const targetRole = await prisma.role.findUnique({ where: { id: params.id } });
     if (targetRole?.nombre === 'Superadmin') {
       return NextResponse.json({ error: 'No se puede editar el rol Superadmin' }, { status: 403 });
+    }
+
+    // Un rol de Hospitality —el que toca hoy o el que va a tocar con este
+    // cambio— no lo reparte cualquiera. La llave es `equipo.roles`, y el
+    // Anfitrión del catálogo la tiene.
+    const tocaHospitality =
+      permisosTocanHospitality(targetRole?.permisos) || permisosTocanHospitality(permisos);
+    if (tocaHospitality && !puedeGestionarRolesDeHospitality(currentUser.role)) {
+      return NextResponse.json(
+        {
+          error: 'Solo quien administra los roles de Hospitality puede cambiar este rol',
+          permisoRequerido: 'equipo.roles',
+        },
+        { status: 403 }
+      );
+    }
+
+    // El vocabulario del producto no se renombra: hay textos y reglas que lo
+    // nombran. Sus capacidades, en cambio, se ajustan — para eso está la matriz.
+    if (esRolDeCatalogoEnUso(targetRole?.nombre, targetRole?.permisos) && nombre && nombre !== targetRole?.nombre) {
+      return NextResponse.json(
+        {
+          error: `«${targetRole?.nombre}» es parte del vocabulario de Hospitality: no se renombra, pero se le ajustan las capacidades`,
+        },
+        { status: 409 }
+      );
     }
 
     const updatedRole = await prisma.role.update({
@@ -79,6 +110,26 @@ export async function DELETE(
     const targetRole = await prisma.role.findUnique({ where: { id: params.id } });
     if (targetRole?.nombre === 'Superadmin' || targetRole?.nombre === 'Admin') {
       return NextResponse.json({ error: 'No se pueden eliminar roles protegidos' }, { status: 403 });
+    }
+
+    // Quitar un rol de Hospitality deja a sus usuarios sin poder entrar al
+    // módulo. Es tan delicado como cambiarlo, así que pide la misma llave.
+    if (permisosTocanHospitality(targetRole?.permisos) && !puedeGestionarRolesDeHospitality(currentUser.role)) {
+      return NextResponse.json(
+        {
+          error: 'Solo quien administra los roles de Hospitality puede eliminar este rol',
+          permisoRequerido: 'equipo.roles',
+        },
+        { status: 403 }
+      );
+    }
+
+    // Y los del catálogo no se borran: se aplican.
+    if (esRolDeCatalogoEnUso(targetRole?.nombre, targetRole?.permisos)) {
+      return NextResponse.json(
+        { error: `«${targetRole?.nombre}» es un rol del vocabulario de Hospitality y no se elimina` },
+        { status: 409 }
+      );
     }
 
     await prisma.role.delete({ where: { id: params.id } });

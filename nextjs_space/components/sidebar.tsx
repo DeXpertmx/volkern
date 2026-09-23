@@ -144,7 +144,10 @@ export function Sidebar() {
       const effectiveAccountType = sessionAccountType || userAccountType;
       const roleName = (session?.user as any)?.roleName;
       if (item.requiredAccountType === 'SUPERADMIN') {
-        if (roleName !== 'Superadmin' && roleName !== 'Admin') return false
+        // Misma regla que el backend: el control plane es de Superadmin. Un
+        // rol llamado "Admin" ve el resto de hubs por su cuenta de tipo, no
+        // por el nombre.
+        if (roleName !== 'Superadmin') return false
       } else if (item.requiredAccountType === 'AGENCY') {
         // AGENCY items only visible if the tenant IS an agency (not just because the user is Admin)
         if (effectiveAccountType !== 'AGENCY' && roleName !== 'Superadmin') return false
@@ -416,12 +419,16 @@ export function Sidebar() {
 
                   const reqAccountType = hub.requiredAccountType as string;
                   if (reqAccountType === 'SUPERADMIN') {
-                    return roleName === 'Superadmin' || roleName === 'Admin';
+                    // El backend (lib/auth-helpers.ts) solo deja pasar Superadmin
+                    // al control plane: el menú no anuncia un enlace que va a
+                    // terminar en 403. Un rol que se llame "Admin" no es el
+                    // propietario de la plataforma.
+                    return roleName === 'Superadmin';
                   }
 
                   // Mientras carga, permitir ver hubs si no hay accountType aún
                   if (isLoadingModules && !effectiveAccountType) {
-                    return reqAccountType !== 'SUPERADMIN' || roleName === 'Superadmin' || roleName === 'Admin';
+                    return reqAccountType !== 'SUPERADMIN' || roleName === 'Superadmin';
                   }
 
                   if (reqAccountType === 'AGENCY') {
@@ -431,7 +438,10 @@ export function Sidebar() {
                   }
 
                   if (reqAccountType === 'BUSINESS') {
-                    const isBusiness = effectiveAccountType === 'BUSINESS' || effectiveAccountType === 'AGENCY' || roleName === 'Superadmin' || roleName === 'Admin' || roleName === 'Administrador';
+                    // Lo que decide es el tipo de cuenta, no el nombre del rol:
+                    // un BUSINESS la ve, un rol que se llame "Admin" en otro
+                    // tipo de cuenta no tiene por qué verla.
+                    const isBusiness = effectiveAccountType === 'BUSINESS' || effectiveAccountType === 'AGENCY' || roleName === 'Superadmin';
                     if (!isBusiness) return false;
                     
                     // Si requiere un módulo específico, verificarlo

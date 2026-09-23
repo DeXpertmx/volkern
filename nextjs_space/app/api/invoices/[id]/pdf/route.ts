@@ -3,14 +3,18 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { generatePdf } from '@/lib/pdf-generator';
-import { authenticateRequest } from '@/lib/api-key-auth';
+import { authenticateRequest } from '@/lib/api-key-auth'
+import {
+  formatearImporte,
+  localeDeMoneda,
+  nombreMoneda,
+  primeraMoneda,
+} from '@/lib/moneda';
 
 // ─── Helpers ───────────────────────────────────────────────────
 
 function formatCurrency(amount: number, currency: string): string {
-  const symbols: Record<string, string> = { EUR: '€', USD: '$', MXN: '$' };
-  const symbol = symbols[currency] || '€';
-  return `${amount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${symbol}`;
+  return formatearImporte(amount, currency);
 }
 
 function formatISODate(date: Date | string): string {
@@ -21,11 +25,13 @@ function formatISODate(date: Date | string): string {
   });
 }
 
-function amountInWords(amount: number): string {
-  // Simplificación: devuelve el número en formato legible
-  const euros = Math.floor(amount);
-  const cents = Math.round((amount - euros) * 100);
-  return `${euros.toLocaleString('es-ES')} euros con ${cents} céntimos`;
+function amountInWords(amount: number, moneda: string): string {
+  // Simplificación: devuelve el número en formato legible con el nombre de su
+  // divisa. Antes decía "euros" para cualquier factura, incluida una en pesos.
+  const enteros = Math.floor(amount);
+  const cents = Math.round((amount - enteros) * 100);
+  const nombre = moneda ? ` ${nombreMoneda(moneda).toLowerCase()}` : '';
+  return `${enteros.toLocaleString(localeDeMoneda(moneda))}${nombre} con ${cents} céntimos`;
 }
 
 function escapeHtml(str: string): string {
@@ -61,7 +67,8 @@ function generateInvoiceHTML(invoice: any, tenant: any): string {
   const meta = (invoice.metadata || {}) as InvoiceMetadata;
   const items = meta.items || [];
 
-  const moneda = invoice.moneda || 'EUR';
+  // La divisa de la factura manda; si no la trae, la del tenant.
+  const moneda = primeraMoneda(invoice.moneda, tenant?.moneda);
 
   // Datos del cliente: prioridad metadata, luego contact/lead
   const clienteNombre = meta.clienteNombre || invoice.contact?.nombre || invoice.lead?.nombre || 'Cliente';
@@ -473,7 +480,7 @@ function generateInvoiceHTML(invoice: any, tenant: any): string {
         </div>
         <div class="total-row text-muted">
           <span>Importe en letra:</span>
-          <span>${amountInWords(total)}</span>
+          <span>${amountInWords(total, moneda)}</span>
         </div>
       </div>
     </div>

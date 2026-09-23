@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { skills } from '@/lib/skills';
+import { monedaEscritura } from '@/lib/moneda';
 
 /**
  * GET /api/erp/projects - Listar proyectos del tenant
@@ -56,7 +57,9 @@ export const POST = withTenantAuth(async (request, auth) => {
           description: body.description,
           leadId: body.leadId,
           budget: body.budget ? parseFloat(body.budget) : 0,
-          currency: body.currency || 'EUR',
+          // Divisa del usuario y, si no la indica, la del tenant: el valor por
+          // defecto de la columna ('EUR') la guardaba en euros a un tenant en pesos.
+          currency: monedaEscritura(body.currency, auth.tenant?.moneda),
           status: 'PLANNING',
           startDate: body.startDate ? new Date(body.startDate) : new Date(),
           endDate: body.endDate ? new Date(body.endDate) : undefined

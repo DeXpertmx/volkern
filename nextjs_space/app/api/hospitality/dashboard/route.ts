@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
+import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
 import { startOfDay, ventanaDeDiaLocal } from '@/lib/hospitality/calendar';
 import { esMovimientoDelDia, esReservaViva, estadosSinMovimiento } from '@/lib/hospitality/estados';
 import {
@@ -16,6 +17,7 @@ import {
   metricasRespuestaPreguntas,
 } from '@/lib/hospitality/preguntas-metrics';
 import { metricasResenas } from '@/lib/hospitality/resenas-metrics';
+import { monedaEfectiva } from '@/lib/moneda';
 import {
   comparacionIdiomasDirectas,
   lecturaComparacionIdiomas,
@@ -59,6 +61,9 @@ export async function GET(req: NextRequest) {
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
+    const sinPermiso = exigirPermisoHospitality(auth, 'reservas.ver');
+    if (sinPermiso) return sinPermiso;
 
     const { searchParams } = new URL(req.url);
     const dias = Math.min(Math.max(parseInt(searchParams.get('dias') || '30') || 30, 1), 90);
@@ -398,6 +403,14 @@ export async function GET(req: NextRequest) {
     const lecturaIdiomas = lecturaComparacionIdiomas(comparacionIdiomas);
 
     return NextResponse.json({
+      // La divisa con la que se escriben los importes de este informe: la de las
+      // reservas del período (si hay más de una, la predominante) y, si no hay
+      // ninguna, la moneda de reporte del tenant. Las pantallas no escriben
+      // dinero: piden la divisa aquí y formatean con `formatearImporte`.
+      moneda: monedaEfectiva(
+        reservations.map((r) => r.currency),
+        auth.tenant?.moneda
+      ),
       kpis: {
         totalUnidades,
         unidadesPorEstado,

@@ -39,6 +39,7 @@ import {
   Legend,
 } from 'recharts';
 import { channelStyle, statusLabel } from '@/lib/hospitality/calendar';
+import { formatearImporte } from '@/lib/moneda';
 import AvisoIncidenciasConectividad from '@/components/hospitality/aviso-incidencias-conectividad';
 
 interface Kpis {
@@ -85,6 +86,9 @@ interface IngresoCanalSerie {
 }
 
 interface DashboardData {
+  /** Divisa con la que se escriben los importes (la de las reservas del período
+   *  y, si no hay, la moneda de reporte del tenant). La resuelve la API. */
+  moneda: string;
   kpis: Kpis;
   mixCanales: CanalMix[];
   proximos7: DiaOcupacion[];
@@ -107,8 +111,8 @@ function pct(v: number): string {
   return `${Math.round(v * 100)}%`;
 }
 
-function money(v: number): string {
-  return v.toLocaleString('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 });
+function money(v: number, moneda: string): string {
+  return formatearImporte(v, moneda, 0);
 }
 
 export default function HospitalityDashboardPage() {
@@ -156,7 +160,7 @@ export default function HospitalityDashboardPage() {
     );
   }
 
-  const { kpis, mixCanales, proximos7, ocupacionPropiedades, ingresosPorCanal, operaciones, movimientoManana } = data;
+  const { kpis, mixCanales, proximos7, ocupacionPropiedades, ingresosPorCanal, operaciones, movimientoManana, moneda } = data;
   const limpiezaPendiente = (operaciones.limpieza.pending || 0) + (operaciones.limpieza.in_progress || 0);
   const mantenimientoAbierto = (operaciones.mantenimiento.abierta || 0) + (operaciones.mantenimiento.en_proceso || 0);
 
@@ -231,14 +235,14 @@ export default function HospitalityDashboardPage() {
     },
     {
       label: 'Ingresos (30 días)',
-      value: kpis.ingresos > 0 ? money(kpis.ingresos) : '—',
+      value: kpis.ingresos > 0 ? money(kpis.ingresos, moneda) : '—',
       sub: `${kpis.nochesVendidas} noches vendidas`,
       icon: DollarSign,
       color: 'text-emerald-600 bg-emerald-50',
     },
     {
       label: 'ADR',
-      value: kpis.adr != null ? money(kpis.adr) : '—',
+      value: kpis.adr != null ? money(kpis.adr, moneda) : '—',
       sub: kpis.adr != null ? 'Ingreso medio por noche' : 'Sin base para calcular',
       icon: TrendingUp,
       color: 'text-violet-600 bg-violet-50',
@@ -387,7 +391,7 @@ export default function HospitalityDashboardPage() {
                       </span>
                       <span className="text-muted-foreground">
                         {c.reservas} res.
-                        {c.ingresos > 0 && <> · {money(c.ingresos)}</>}
+                        {c.ingresos > 0 && <> · {money(c.ingresos, moneda)}</>}
                       </span>
                     </div>
                   ))}
@@ -510,7 +514,7 @@ export default function HospitalityDashboardPage() {
                       <YAxis tick={{ fontSize: 10 }} width={48} tickFormatter={(v: number) => (v >= 1000 ? `${Math.round(v / 1000)}k` : String(v))} />
                       <Tooltip
                         labelFormatter={(_, payload: any) => payload?.[0]?.payload?.fechaCompleta || ''}
-                        formatter={(value: any, name: any) => [money(Number(value)), String(name)]}
+                        formatter={(value: any, name: any) => [money(Number(value), moneda), String(name)]}
                       />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
                       {ingresoCanalSeries.map((s) => (
@@ -532,7 +536,7 @@ export default function HospitalityDashboardPage() {
                 <div className="mt-3 flex flex-wrap gap-2">
                   {ingresoCanalSeries.map((s) => (
                     <Badge key={s.key} className="bg-emerald-50 text-emerald-700 border-0 text-xs">
-                      {s.label}: {money(s.total)}
+                      {s.label}: {money(s.total, moneda)}
                     </Badge>
                   ))}
                 </div>

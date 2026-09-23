@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
+import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
+import { monedaEscritura } from '@/lib/moneda';
 import { logAuditAction } from '@/lib/permissions';
 import { politicaEfectiva } from '@/lib/hospitality/no-show';
 import { politicaSalidaAnticipadaEfectiva } from '@/lib/hospitality/checkout';
@@ -14,6 +16,9 @@ export async function GET(req: NextRequest) {
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
+    const sinPermiso = exigirPermisoHospitality(auth, 'reservas.ver');
+    if (sinPermiso) return sinPermiso;
 
     const { searchParams } = new URL(req.url);
     const estado = searchParams.get('estado');
@@ -48,6 +53,9 @@ export async function POST(req: NextRequest) {
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
+    const sinPermiso = exigirPermisoHospitality(auth, 'reservas.crear');
+    if (sinPermiso) return sinPermiso;
 
     const data = await req.json();
     const {
@@ -100,7 +108,8 @@ export async function POST(req: NextRequest) {
           tipo: u.tipo || 'apartamento',
           capacidad: Number(u.capacidad) || 2,
           tarifaBase: u.tarifaBase != null && u.tarifaBase !== '' ? Number(u.tarifaBase) : null,
-          moneda: u.moneda || 'MXN',
+          // Divisa de cada unidad del alta: la indicada, si no la del tenant.
+          moneda: monedaEscritura(u.moneda, auth.tenant!.moneda),
         })),
       });
     }

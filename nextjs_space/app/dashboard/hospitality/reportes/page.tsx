@@ -36,6 +36,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { formatearImporte } from '@/lib/moneda';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   construirCsv,
@@ -123,6 +124,9 @@ interface ResenasMetrics {
 }
 
 interface DashboardPayload {
+  /** Divisa de los importes del informe: la de las reservas del período y, si
+   *  no hay ninguna, la moneda de reporte del tenant. La resuelve la API. */
+  moneda: string;
   kpis: { ingresos: number; nochesVendidas: number };
   mixCanales: MixCanal[];
   ocupacionGlobal: OcupacionGlobal;
@@ -146,11 +150,6 @@ const RANGOS = [
 
 function pct(valor: number | null | undefined, decimales = 1): string {
   return valor == null ? '—' : `${(valor * 100).toFixed(decimales)}%`;
-}
-
-function money(valor: number | null | undefined): string {
-  if (valor == null) return '—';
-  return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(valor);
 }
 
 function KpiCard({ titulo, valor, sub, icono }: { titulo: string; valor: string; sub?: string; icono: React.ReactNode }) {
@@ -191,6 +190,11 @@ export default function HospitalityReportes() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Los importes del informe se escriben con la divisa que devuelve la API —la
+  // de las reservas del período y, si no hay ninguna, la del tenant—: esta
+  // pantalla no fija ninguna.
+  const money = (valor: number | null | undefined) => formatearImporte(valor, data?.moneda || '', 0);
 
   const k = data?.reportesKpis;
   const holds = data?.holds;

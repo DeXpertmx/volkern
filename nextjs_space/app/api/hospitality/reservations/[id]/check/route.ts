@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/api-key-auth';
+import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
 import { performCheckOperation } from '@/lib/hospitality/operations';
 
 interface Params {
@@ -14,6 +15,9 @@ export async function POST(req: NextRequest, ctx: Params) {
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
+    const sinPermiso = exigirPermisoHospitality(auth, 'operaciones.checkin');
+    if (sinPermiso) return sinPermiso;
 
     const { id } = await ctx.params;
     const body = await req.json().catch(() => ({}));

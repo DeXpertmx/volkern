@@ -5,6 +5,8 @@ import useSWR from 'swr'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { FileText, ArrowLeft, RefreshCw, Scan, Clock3, CheckCircle2, AlertTriangle } from 'lucide-react'
+import { formatearImporte } from '@/lib/moneda'
+import { useMonedaTenant } from '@/lib/use-moneda-tenant'
 
 const fetcher = (url: string) => fetch(url).then(response => response.json())
 
@@ -35,6 +37,8 @@ function StatusIcon({ status }: { status: string }) {
 export default function GastosInboxPage() {
   const { data, isLoading, mutate } = useSWR('/api/erp/expenses/inbox', fetcher)
   const documents = data?.documents || []
+  // La divisa del documento es la que leyó el OCR y, si no, la del tenant.
+  const moneda = useMonedaTenant()
 
   const restoreDocument = async (id: string) => {
     const response = await fetch('/api/erp/expenses/inbox', {
@@ -98,7 +102,7 @@ export default function GastosInboxPage() {
                           <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">IVA:</span>
                           {document.extractedData.totales.desglose_iva.map((row: any, i: number) => (
                             <span key={i} className="inline-flex items-center gap-1 rounded-full border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 tabular-nums">
-                              {Number(row.tipo)}% · €{Number(row.base).toFixed(2)} → €{Number(row.cuota).toFixed(2)}
+                              {Number(row.tipo)}% · {formatearImporte(Number(row.base), document.extractedData?.moneda || moneda)} → {formatearImporte(Number(row.cuota), document.extractedData?.moneda || moneda)}
                             </span>
                           ))}
                         </div>

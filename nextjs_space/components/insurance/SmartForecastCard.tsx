@@ -28,6 +28,11 @@ export interface ConsideredEventFE {
 
 export interface SmartForecastFE {
   generado: string;
+  /**
+   * Divisa de reporte del tenant, heredada del forecast base: sus importes ya
+   * están convertidos a ella, así que la tarjeta no puede escribir otra.
+   */
+  tenantMoneda?: string;
   ventana: Array<{ mes: string; label: string; primaTotal: number; polizasCount: number }>;
   slope: number;
   r2: number;
@@ -81,6 +86,7 @@ export function SmartForecastCard({ data, loading }: SmartForecastCardProps) {
     );
   }
 
+  const moneda = data.tenantMoneda ?? '';
   const delta = data.proyectadoAjustado - data.proyectadoBase;
   const deltaPct = data.proyectadoBase > 0
     ? ((delta / data.proyectadoBase) * 100)
@@ -97,7 +103,7 @@ export function SmartForecastCard({ data, loading }: SmartForecastCardProps) {
             Forecast base
           </p>
           <p className="text-2xl font-bold mt-1 tabular-nums text-slate-700">
-            {formatCurrency(data.proyectadoBase)}
+            {formatCurrency(data.proyectadoBase, moneda)}
           </p>
           <p className="text-[10px] text-slate-500 mt-1">regresión lineal 6m</p>
         </div>
@@ -108,7 +114,7 @@ export function SmartForecastCard({ data, loading }: SmartForecastCardProps) {
             Forecast ajustado
           </p>
           <p className="text-2xl font-bold mt-1 tabular-nums text-indigo-700">
-            {formatCurrency(data.proyectadoAjustado)}
+            {formatCurrency(data.proyectadoAjustado, moneda)}
           </p>
           <p className="text-[10px] text-indigo-600 mt-1">
             mejora MAPE esperada: {data.mejoraMapeEstimada}%
@@ -130,7 +136,7 @@ export function SmartForecastCard({ data, loading }: SmartForecastCardProps) {
             delta >= 0 ? 'text-emerald-700' : 'text-amber-700'
           }`}>
             {delta >= 0 ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />}
-            {formatCurrency(Math.abs(delta))}
+            {formatCurrency(Math.abs(delta), moneda)}
           </p>
           <p className={`text-[10px] mt-1 ${delta >= 0 ? 'text-emerald-700' : 'text-amber-700'}`}>
             {delta >= 0 ? '+' : '-'}{Math.abs(deltaPct).toFixed(1)}% vs base (×{data.ajusteTotal.toFixed(2)})

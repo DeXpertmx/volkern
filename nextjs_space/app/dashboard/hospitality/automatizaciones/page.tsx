@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { AccionHospitality } from '@/components/hospitality/AccionHospitality';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -489,9 +490,11 @@ export default function HospitalityAutomatizacionesPage() {
                         <Button size="icon" variant="ghost" className="h-7 w-7" title="Editar" onClick={() => openEdit(r)}>
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
-                        <Button size="icon" variant="ghost" className="h-7 w-7" title={r.isActive ? 'Desactivar' : 'Activar'} onClick={() => toggleActivo(r)}>
-                          {r.isActive ? <Power className="h-3.5 w-3.5" /> : <PowerOff className="h-3.5 w-3.5" />}
-                        </Button>
+                        <AccionHospitality capacidad="automatizaciones.gestionar">
+                          <Button size="icon" variant="ghost" className="h-7 w-7" title={r.isActive ? 'Desactivar' : 'Activar'} onClick={() => toggleActivo(r)}>
+                            {r.isActive ? <Power className="h-3.5 w-3.5" /> : <PowerOff className="h-3.5 w-3.5" />}
+                          </Button>
+                        </AccionHospitality>
                         <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" title="Eliminar" onClick={() => setDeleteTarget(r)}>
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
@@ -606,10 +609,12 @@ export default function HospitalityAutomatizacionesPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={save} disabled={saving}>
-              {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {editing ? 'Guardar cambios' : 'Crear automatización'}
-            </Button>
+            <AccionHospitality capacidad="automatizaciones.gestionar">
+              <Button onClick={save} disabled={saving}>
+                {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                {editing ? 'Guardar cambios' : 'Crear automatización'}
+              </Button>
+            </AccionHospitality>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -625,7 +630,9 @@ export default function HospitalityAutomatizacionesPage() {
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancelar</Button>
-            <Button variant="destructive" onClick={confirmDelete}>Eliminar</Button>
+            <AccionHospitality capacidad="automatizaciones.gestionar">
+              <Button variant="destructive" onClick={confirmDelete}>Eliminar</Button>
+            </AccionHospitality>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -647,10 +654,12 @@ export default function HospitalityAutomatizacionesPage() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setTestTarget(null)}>Cerrar</Button>
-            <Button onClick={runTest} disabled={testing}>
-              {testing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Disparar ahora
-            </Button>
+            <AccionHospitality capacidad="automatizaciones.gestionar">
+              <Button onClick={runTest} disabled={testing}>
+                {testing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Disparar ahora
+              </Button>
+            </AccionHospitality>
           </DialogFooter>
         </DialogContent>
       </Dialog>

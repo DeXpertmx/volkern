@@ -5,6 +5,8 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
 
+import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
+import { primeraMoneda, monedaEscritura } from '@/lib/moneda';
 /**
  * Planes de tarifa y restricciones de venta (plan maestro §6, §15).
  *
@@ -18,6 +20,9 @@ export async function GET(req: NextRequest) {
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
+    const sinPermiso = exigirPermisoHospitality(auth, 'reservas.ver');
+    if (sinPermiso) return sinPermiso;
 
     const { searchParams } = new URL(req.url);
     const propertyId = searchParams.get('propertyId') || undefined;
@@ -49,6 +54,9 @@ export async function POST(req: NextRequest) {
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
+    const sinPermiso = exigirPermisoHospitality(auth, 'reservas.editar');
+    if (sinPermiso) return sinPermiso;
 
     const tenantId = auth.tenant!.id;
     const body = await req.json().catch(() => ({}));
@@ -65,13 +73,21 @@ export async function POST(req: NextRequest) {
     }
 
     // La unidad debe existir y pertenecer al tenant (aislamiento multi-tenant).
+    // Se trae su divisa: un plan tarifario hereda la de la unidad que tarifa.
     const unit = await prisma.hospitalityUnit.findFirst({
       where: { id: unitId, tenantId, propertyId },
-      select: { id: true },
+      select: { id: true, moneda: true },
     });
     if (!unit) {
       return NextResponse.json({ error: 'La unidad no existe en este tenant' }, { status: 404 });
     }
+
+    // Divisa del plan, por precedencia: la indicada gana sobre la de su unidad,
+    // y sin ninguna de las dos cae a la moneda de reporte del tenant. El orden
+    // importa —un plan en dólares sobre una unidad en euros es una decisión del
+    // hotel, no un empate que se resuelva solo—, así que se usa `primeraMoneda`
+    // y no `monedaPredominante`.
+    const monedaDelPlan = primeraMoneda(moneda, unit.moneda) || auth.tenant!.moneda;
 
     const plan = await prisma.hospitalityRatePlan.create({
       data: {
@@ -81,7 +97,7 @@ export async function POST(req: NextRequest) {
         nombre: String(nombre).trim(),
         codigo: codigo ? String(codigo).trim() : null,
         tarifa,
-        moneda: moneda || 'MXN',
+        moneda: monedaEscritura(monedaDelPlan),
         minNoches: Math.max(1, parseInt(minNoches) || 1),
         maxNoches: maxNoches != null ? parseInt(maxNoches) : null,
         checkInDias: Array.isArray(checkInDias) && checkInDias.length ? checkInDias : Prisma.JsonNull,

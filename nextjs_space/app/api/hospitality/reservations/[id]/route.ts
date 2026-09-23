@@ -3,6 +3,10 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
+import {
+  exigirPermisoHospitality,
+  capacidadDeCambioDeReserva,
+} from '@/lib/hospitality/permissions';
 import { logAuditAction } from '@/lib/permissions';
 import { dispatchConnectivityPush } from '@/lib/hospitality/sync';
 import { toIsoDate } from '@/lib/hospitality/calendar';
@@ -21,6 +25,9 @@ export async function GET(_req: NextRequest, ctx: Params) {
   try {
     const auth = await authenticateRequest(_req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+
+    const sinPermiso = exigirPermisoHospitality(auth, 'reservas.ver');
+    if (sinPermiso) return sinPermiso;
 
     const { id } = await ctx.params;
     const reservation = await prisma.hospitalityReservation.findFirst({
@@ -61,6 +68,15 @@ export async function PATCH(req: NextRequest, ctx: Params) {
 
     const body = await req.json();
     const { unitId, canal, checkin, checkout, estado, importe, moneda, notas } = body || {};
+
+    // Modificar no es cancelar: anular una reserva exige el permiso propio
+    // (`hospitality_reservas.cancelar`). El resto de cambios basta con poder
+    // editarla.
+    const sinPermiso = exigirPermisoHospitality(
+      auth,
+      capacidadDeCambioDeReserva(estado, existing.estado)
+    );
+    if (sinPermiso) return sinPermiso;
 
     const data: any = {};
 

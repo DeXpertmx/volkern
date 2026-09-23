@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { monedaDePais, monedaEscritura } from '@/lib/moneda'
 import { withTenantAuth } from '@/lib/api-key-auth'
 import { validateFiscalId } from '@/lib/fiscal-validation'
 
@@ -59,7 +60,7 @@ export const POST = withTenantAuth(async (req, auth) => {
       telefono,
       email,
       sitioWeb,
-      monedaPredeterminada = 'EUR',
+      monedaPredeterminada,
       serieFactura = 'F',
       logoUrl,
       colorPrimario,
@@ -121,7 +122,13 @@ export const POST = withTenantAuth(async (req, auth) => {
         telefono,
         email,
         sitioWeb,
-        monedaPredeterminada,
+        // La divisa la elige el usuario; si no, la del país del emisor y, en
+        // último término, la del tenant que lo da de alta.
+        monedaPredeterminada: monedaEscritura(
+          monedaPredeterminada,
+          monedaDePais(pais)?.codigo,
+          auth.tenant?.moneda
+        ),
         serieFactura,
         logoUrl,
         colorPrimario,

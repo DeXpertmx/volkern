@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { AccionHospitality } from '@/components/hospitality/AccionHospitality';
+import { capacidadDeTarea } from '@/lib/hospitality/capacidades';
 import { toast } from 'sonner';
 import {
   colorTipoBloqueo,
@@ -700,32 +702,33 @@ export default function HospitalityCalendar() {
                         const endCol = end < 0 ? days.length : end;
                         if (endCol <= 0 || startCol >= days.length || endCol <= startCol) return null;
                         return (
-                          <button
-                            key={`block-${block.id}`}
-                            type="button"
-                            onClick={() => deleteBlock(block)}
-                            className="z-20 rounded-md border px-2 py-1 text-left text-[11px] shadow-sm hover:brightness-95"
-                            style={{
-                              gridColumn: `${startCol + 1} / span ${Math.max(1, endCol - startCol)}`,
-                              gridRow: 1,
-                              marginLeft: 2,
-                              marginRight: 2,
-                              marginTop: 5,
-                              marginBottom: 5,
-                              borderColor: colorTipoBloqueo(block.tipo),
-                              backgroundColor: `${colorTipoBloqueo(block.tipo)}1f`,
-                              color: colorTipoBloqueo(block.tipo),
-                            }}
-                            title={`Bloqueo: ${etiquetaTipoBloqueo(block.tipo)} · pulsa para eliminar`}
-                          >
-                            <div className="flex items-center gap-1 truncate font-medium">
-                              <Ban className="h-3 w-3 shrink-0" />
-                              <span className="truncate">
-                                {etiquetaTipoBloqueo(block.tipo)}
-                                {block.motivo ? ` · ${block.motivo}` : ''}
-                              </span>
-                            </div>
-                          </button>
+                          <AccionHospitality key={`block-${block.id}`} capacidad="reservas.editar">
+                            <button
+                              type="button"
+                              onClick={() => deleteBlock(block)}
+                              className="z-20 rounded-md border px-2 py-1 text-left text-[11px] shadow-sm hover:brightness-95"
+                              style={{
+                                gridColumn: `${startCol + 1} / span ${Math.max(1, endCol - startCol)}`,
+                                gridRow: 1,
+                                marginLeft: 2,
+                                marginRight: 2,
+                                marginTop: 5,
+                                marginBottom: 5,
+                                borderColor: colorTipoBloqueo(block.tipo),
+                                backgroundColor: `${colorTipoBloqueo(block.tipo)}1f`,
+                                color: colorTipoBloqueo(block.tipo),
+                              }}
+                              title={`Bloqueo: ${etiquetaTipoBloqueo(block.tipo)} · pulsa para eliminar`}
+                            >
+                              <div className="flex items-center gap-1 truncate font-medium">
+                                <Ban className="h-3 w-3 shrink-0" />
+                                <span className="truncate">
+                                  {etiquetaTipoBloqueo(block.tipo)}
+                                  {block.motivo ? ` · ${block.motivo}` : ''}
+                                </span>
+                              </div>
+                            </button>
+                          </AccionHospitality>
                         );
                       })}
                     </div>
@@ -922,46 +925,52 @@ export default function HospitalityCalendar() {
               {/* Acciones operativas (§18) */}
               {selected.estado === 'confirmed' && (
                 <div className="space-y-2">
+                  <AccionHospitality capacidad="operaciones.checkin">
+                    <Button
+                      className="w-full"
+                      disabled={checking?.id === selected.id}
+                      onClick={() => runCheck(selected, 'checkin')}
+                    >
+                      {checking?.id === selected.id && checking.tipo === 'checkin' ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                      ) : (
+                        <CheckCircle2 className="h-4 w-4 mr-1" />
+                      )}
+                      Registrar check-in
+                    </Button>
+                  </AccionHospitality>
+                  <AccionHospitality capacidad="operaciones.checkin">
+                    <Button
+                      className="w-full"
+                      variant="outline"
+                      disabled={checking?.id === selected.id}
+                      onClick={() => runCheck(selected, 'checkout')}
+                    >
+                      {checking?.id === selected.id && checking.tipo === 'checkout' ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                      ) : (
+                        <XCircle className="h-4 w-4 mr-1" />
+                      )}
+                      Registrar check-out
+                    </Button>
+                  </AccionHospitality>
+                </div>
+              )}
+              {selected.estado === 'checked_in' && (
+                <AccionHospitality capacidad="operaciones.checkin">
                   <Button
                     className="w-full"
-                    disabled={checking?.id === selected.id}
-                    onClick={() => runCheck(selected, 'checkin')}
-                  >
-                    {checking?.id === selected.id && checking.tipo === 'checkin' ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                    ) : (
-                      <CheckCircle2 className="h-4 w-4 mr-1" />
-                    )}
-                    Registrar check-in
-                  </Button>
-                  <Button
-                    className="w-full"
-                    variant="outline"
                     disabled={checking?.id === selected.id}
                     onClick={() => runCheck(selected, 'checkout')}
                   >
-                    {checking?.id === selected.id && checking.tipo === 'checkout' ? (
+                    {checking?.id === selected.id ? (
                       <Loader2 className="h-4 w-4 animate-spin mr-1" />
                     ) : (
                       <XCircle className="h-4 w-4 mr-1" />
                     )}
-                    Registrar check-out
+                    Registrar check-out · limpieza automática
                   </Button>
-                </div>
-              )}
-              {selected.estado === 'checked_in' && (
-                <Button
-                  className="w-full"
-                  disabled={checking?.id === selected.id}
-                  onClick={() => runCheck(selected, 'checkout')}
-                >
-                  {checking?.id === selected.id ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                  ) : (
-                    <XCircle className="h-4 w-4 mr-1" />
-                  )}
-                  Registrar check-out · limpieza automática
-                </Button>
+                </AccionHospitality>
               )}
 
               {/* Tareas desde la reserva */}
@@ -1069,10 +1078,14 @@ export default function HospitalityCalendar() {
                 <Button variant="outline" size="sm" onClick={() => setTaskForm(null)}>
                   Cancelar
                 </Button>
-                <Button size="sm" onClick={createTaskFromReservation} disabled={taskSaving}>
-                  {taskSaving && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
-                  Crear
-                </Button>
+                {/* La tarea puede ser limpieza o incidencia: el permiso lo
+                    decide el tipo, con la misma regla que usa la API. */}
+                <AccionHospitality capacidad={capacidadDeTarea(taskForm.tipo)}>
+                  <Button size="sm" onClick={createTaskFromReservation} disabled={taskSaving}>
+                    {taskSaving && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
+                    Crear
+                  </Button>
+                </AccionHospitality>
               </div>
             </div>
           )}
@@ -1155,10 +1168,12 @@ export default function HospitalityCalendar() {
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setBlockForm(null)}>Cancelar</Button>
-              <Button type="button" onClick={createBlock} disabled={blockSaving}>
-                {blockSaving && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
-                Crear bloqueo
-              </Button>
+              <AccionHospitality capacidad="reservas.editar">
+                <Button type="button" onClick={createBlock} disabled={blockSaving}>
+                  {blockSaving && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+                  Crear bloqueo
+                </Button>
+              </AccionHospitality>
             </div>
           </div>
         </div>
@@ -1446,13 +1461,17 @@ function OperationsBoard({ ops, loading, onRefresh, onSelectReservation, onCheck
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 {t.estado !== 'completed' ? (
-                  <Button size="sm" variant="outline" onClick={() => changeTask('cleaning', t.id, 'completed')}>
-                    Completar
-                  </Button>
+                  <AccionHospitality capacidad={capacidadDeTarea('cleaning')}>
+                    <Button size="sm" variant="outline" onClick={() => changeTask('cleaning', t.id, 'completed')}>
+                      Completar
+                    </Button>
+                  </AccionHospitality>
                 ) : null}
-                <Button size="icon" variant="ghost" onClick={() => deleteTask('cleaning', t.id)}>
-                  <Trash2 className="h-4 w-4 text-muted-foreground" />
-                </Button>
+                <AccionHospitality capacidad={capacidadDeTarea('cleaning')}>
+                  <Button size="icon" variant="ghost" onClick={() => deleteTask('cleaning', t.id)}>
+                    <Trash2 className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                </AccionHospitality>
               </div>
             </div>
           ))}
@@ -1493,18 +1512,24 @@ function OperationsBoard({ ops, loading, onRefresh, onSelectReservation, onCheck
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 {t.estado === 'abierta' ? (
-                  <Button size="sm" variant="outline" onClick={() => changeTask('maintenance', t.id, 'en_proceso')}>
-                    Iniciar
-                  </Button>
+                  <AccionHospitality capacidad={capacidadDeTarea('maintenance')}>
+                    <Button size="sm" variant="outline" onClick={() => changeTask('maintenance', t.id, 'en_proceso')}>
+                      Iniciar
+                    </Button>
+                  </AccionHospitality>
                 ) : null}
                 {t.estado === 'en_proceso' ? (
-                  <Button size="sm" variant="outline" onClick={() => changeTask('maintenance', t.id, 'resuelta')}>
-                    Resolver
-                  </Button>
+                  <AccionHospitality capacidad={capacidadDeTarea('maintenance')}>
+                    <Button size="sm" variant="outline" onClick={() => changeTask('maintenance', t.id, 'resuelta')}>
+                      Resolver
+                    </Button>
+                  </AccionHospitality>
                 ) : null}
-                <Button size="icon" variant="ghost" onClick={() => deleteTask('maintenance', t.id)}>
-                  <Trash2 className="h-4 w-4 text-muted-foreground" />
-                </Button>
+                <AccionHospitality capacidad={capacidadDeTarea('maintenance')}>
+                  <Button size="icon" variant="ghost" onClick={() => deleteTask('maintenance', t.id)}>
+                    <Trash2 className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                </AccionHospitality>
               </div>
             </div>
           ))}
@@ -1602,10 +1627,12 @@ function OperationsBoard({ ops, loading, onRefresh, onSelectReservation, onCheck
               <Button variant="outline" size="sm" onClick={() => setNewTask({ open: false, tipo: 'cleaning' })}>
                 Cancelar
               </Button>
-              <Button size="sm" onClick={createTask} disabled={saving}>
-                {saving && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
-                Crear
-              </Button>
+              <AccionHospitality capacidad={capacidadDeTarea(newTask.tipo)}>
+                <Button size="sm" onClick={createTask} disabled={saving}>
+                  {saving && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
+                  Crear
+                </Button>
+              </AccionHospitality>
             </div>
           </div>
         </div>

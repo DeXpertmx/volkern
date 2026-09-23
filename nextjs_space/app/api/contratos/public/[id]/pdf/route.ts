@@ -6,11 +6,16 @@ import { generatePdf } from '@/lib/pdf-generator';
 import { resolvePlaceholders } from '@/lib/contratos/placeholders';
 import { getEffectiveBranding } from '@/lib/branding';
 import { getPublicUrl } from '@/lib/s3-public-url';
+import { formatearImporte, primeraMoneda } from '@/lib/moneda';
 
+/**
+ * Importe del contrato con la divisa del propio contrato.
+ *
+ * Antes resolvía el símbolo a mano —`{ MXN: '$', USD: '$', EUR: '€' }`— y escribía
+ * siempre en convención mexicana: un contrato en euros salía como `$1.234,56`.
+ */
 function formatCurrency(amount: number, currency: string): string {
-  const symbols: Record<string, string> = { MXN: '$', USD: '$', EUR: '€' };
-  const symbol = symbols[currency] || '$';
-  return `${symbol}${amount.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
+  return formatearImporte(amount, currency, 2);
 }
 
 function formatDate(date: Date | string): string {
@@ -43,8 +48,8 @@ function hydrateTemplate(html: string, contrato: any, tenant: any): string {
               <div style="font-size: 10px; color: #666;">${item.descripcion || ''}</div>
             </td>
             <td style="padding: 10px; text-align: center;">${item.cantidad}</td>
-            <td style="padding: 10px; text-align: right;">${formatCurrency(item.precioUnitario, contrato.moneda)}</td>
-            <td style="padding: 10px; text-align: right;">${formatCurrency(item.cantidad * item.precioUnitario, contrato.moneda)}</td>
+            <td style="padding: 10px; text-align: right;">${formatCurrency(item.precioUnitario, primeraMoneda(contrato.moneda, tenant?.moneda))}</td>
+            <td style="padding: 10px; text-align: right;">${formatCurrency(item.cantidad * item.precioUnitario, primeraMoneda(contrato.moneda, tenant?.moneda))}</td>
           </tr>
         `).join('')}
       </tbody>
@@ -57,23 +62,23 @@ function hydrateTemplate(html: string, contrato: any, tenant: any): string {
       <div style="width: 250px;">
         <div style="display: flex; justify-content: space-between; padding: 5px 0;">
           <span>Subtotal</span>
-          <span>${formatCurrency(contrato.subtotal, contrato.moneda)}</span>
+          <span>${formatCurrency(contrato.subtotal, primeraMoneda(contrato.moneda, tenant?.moneda))}</span>
         </div>
         ${contrato.descuentoMonto > 0 ? `
           <div style="display: flex; justify-content: space-between; padding: 5px 0; color: #dc2626;">
             <span>Descuento</span>
-            <span>-${formatCurrency(contrato.descuentoMonto, contrato.moneda)}</span>
+            <span>-${formatCurrency(contrato.descuentoMonto, primeraMoneda(contrato.moneda, tenant?.moneda))}</span>
           </div>
         ` : ''}
         ${contrato.impuestos > 0 ? `
           <div style="display: flex; justify-content: space-between; padding: 5px 0;">
             <span>Impuestos (IVA)</span>
-            <span>${formatCurrency(contrato.impuestos, contrato.moneda)}</span>
+            <span>${formatCurrency(contrato.impuestos, primeraMoneda(contrato.moneda, tenant?.moneda))}</span>
           </div>
         ` : ''}
         <div style="display: flex; justify-content: space-between; padding: 10px 0; border-top: 2px solid #333; font-weight: bold; font-size: 14px;">
           <span>TOTAL</span>
-          <span>${formatCurrency(contrato.total, contrato.moneda)}</span>
+          <span>${formatCurrency(contrato.total, primeraMoneda(contrato.moneda, tenant?.moneda))}</span>
         </div>
       </div>
     </div>
@@ -92,8 +97,8 @@ function hydrateTemplate(html: string, contrato: any, tenant: any): string {
     '{{fecha.hoy}}': formatDate(new Date()),
     '{{items.tabla}}': itemsTableHTML,
     '{{totales.resumen}}': totalsSummaryHTML,
-    '{{totales.total}}': formatCurrency(contrato.total, contrato.moneda),
-    '{{totales.subtotal}}': formatCurrency(contrato.subtotal, contrato.moneda),
+    '{{totales.total}}': formatCurrency(contrato.total, primeraMoneda(contrato.moneda, tenant?.moneda)),
+    '{{totales.subtotal}}': formatCurrency(contrato.subtotal, primeraMoneda(contrato.moneda, tenant?.moneda)),
   };
 
   let hydrated = html;
@@ -158,8 +163,8 @@ function generateContratoHTML(contrato: any, tenant: any, opts: { logoUrl?: stri
               ${item.descripcion ? `<div style="font-size: 10px; color: #666;">${item.descripcion}</div>` : ''}
             </td>
             <td style="padding: 8px; text-align: center;">${item.cantidad}</td>
-            <td style="padding: 8px; text-align: right;">${formatCurrency(item.precioUnitario, contrato.moneda)}</td>
-            <td style="padding: 8px; text-align: right;">${formatCurrency((item.cantidad || 0) * (item.precioUnitario || 0), contrato.moneda)}</td>
+            <td style="padding: 8px; text-align: right;">${formatCurrency(item.precioUnitario, primeraMoneda(contrato.moneda, tenant?.moneda))}</td>
+            <td style="padding: 8px; text-align: right;">${formatCurrency((item.cantidad || 0) * (item.precioUnitario || 0), primeraMoneda(contrato.moneda, tenant?.moneda))}</td>
           </tr>
         `).join('')}
       </tbody>
@@ -229,10 +234,10 @@ function generateContratoHTML(contrato: any, tenant: any, opts: { logoUrl?: stri
       ${contrato.descripcion ? `<p style="white-space: pre-wrap; text-align: justify;">${contrato.descripcion}</p>` : ''}
       ${itemsTableHTML}
       <div class="totals">
-        <div><span>Subtotal</span><span>${formatCurrency(contrato.subtotal || 0, contrato.moneda)}</span></div>
-        ${descuentoMonto > 0 ? `<div style="color: #dc2626;"><span>Descuento</span><span>-${formatCurrency(descuentoMonto, contrato.moneda)}</span></div>` : ''}
-        ${impuestos > 0 ? `<div><span>Impuestos (IVA)</span><span>${formatCurrency(impuestos, contrato.moneda)}</span></div>` : ''}
-        <div class="total-row"><span>TOTAL</span><span>${formatCurrency(contrato.total || 0, contrato.moneda)}</span></div>
+        <div><span>Subtotal</span><span>${formatCurrency(contrato.subtotal || 0, primeraMoneda(contrato.moneda, tenant?.moneda))}</span></div>
+        ${descuentoMonto > 0 ? `<div style="color: #dc2626;"><span>Descuento</span><span>-${formatCurrency(descuentoMonto, primeraMoneda(contrato.moneda, tenant?.moneda))}</span></div>` : ''}
+        ${impuestos > 0 ? `<div><span>Impuestos (IVA)</span><span>${formatCurrency(impuestos, primeraMoneda(contrato.moneda, tenant?.moneda))}</span></div>` : ''}
+        <div class="total-row"><span>TOTAL</span><span>${formatCurrency(contrato.total || 0, primeraMoneda(contrato.moneda, tenant?.moneda))}</span></div>
       </div>
 
       ${condicionesPagoTexto ? `

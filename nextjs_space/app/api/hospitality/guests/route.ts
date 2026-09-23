@@ -3,7 +3,9 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
+import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
 import { agruparHuespedes, type HuespedReservaInput } from '@/lib/hospitality/guests';
+import { monedaEfectiva } from '@/lib/moneda';
 
 /**
  * GET /api/hospitality/guests — huéspedes del tenant con su historial de
@@ -21,6 +23,9 @@ export async function GET(req: NextRequest) {
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
+    const sinPermiso = exigirPermisoHospitality(auth, 'reservas.ver');
+    if (sinPermiso) return sinPermiso;
 
     const { searchParams } = new URL(req.url);
     const q = searchParams.get('q') || '';
@@ -44,7 +49,17 @@ export async function GET(req: NextRequest) {
       limit,
     });
 
-    return NextResponse.json({ guests, total });
+    // La divisa con la que se escriben los gastos del listado: la de las
+    // reservas (la predominante, si hay varias) y, si no hay ninguna, la moneda
+    // de reporte del tenant. La pantalla no fija ninguna.
+    return NextResponse.json({
+      guests,
+      total,
+      moneda: monedaEfectiva(
+        reservations.map((r) => r.currency),
+        auth.tenant?.moneda
+      ),
+    });
   } catch (error) {
     console.error('Error obteniendo huéspedes:', error);
     return NextResponse.json({ error: 'Error al obtener huéspedes' }, { status: 500 });

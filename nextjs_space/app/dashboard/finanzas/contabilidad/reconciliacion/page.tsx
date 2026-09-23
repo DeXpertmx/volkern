@@ -19,9 +19,14 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
+import { formatearImporte } from '@/lib/moneda';
+import { useMonedaTenant } from '@/lib/use-moneda-tenant';
 
 export default function ReconciliationPage() {
   const router = useRouter();
+  // La divisa del extracto es la de la cuenta bancaria y, si no la declara, la
+  // del tenant: la pantalla escribía euros a mano.
+  const moneda = useMonedaTenant();
   const [transactions, setTransactions] = useState<any[]>([]);
   const [selectedTx, setSelectedTx] = useState<any>(null);
   const [suggestions, setSuggestions] = useState<any[]>([]);
@@ -160,7 +165,7 @@ export default function ReconciliationPage() {
                           ? 'text-white' 
                           : Number(tx.amount) > 0 ? 'text-emerald-600' : 'text-rose-600'
                       }`}>
-                        {Number(tx.amount) > 0 ? '+' : ''}{Number(tx.amount).toFixed(2)} €
+                        {Number(tx.amount) > 0 ? '+' : ''}{formatearImporte(Number(tx.amount), tx.currency || moneda)}
                       </p>
                     </div>
                     <div className="flex items-center justify-between">
@@ -244,7 +249,7 @@ export default function ReconciliationPage() {
                                 </div>
                                 <div className="text-right">
                                   <p className="text-lg font-black">
-                                    {Math.abs(Number(selectedTx.amount)).toFixed(2)} €
+                                    {formatearImporte(Math.abs(Number(selectedTx.amount)), selectedTx.currency || moneda)}
                                   </p>
                                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                                     Monto Identificado
@@ -257,7 +262,7 @@ export default function ReconciliationPage() {
                                   <div key={i} className="bg-white/5 p-3 rounded-xl border border-white/5">
                                     <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">{line.account.name}</p>
                                     <p className="text-xs font-bold">
-                                      {line.debit > 0 ? `DEBE: ${Number(line.debit).toFixed(2)}€` : `HABER: ${Number(line.credit).toFixed(2)}€`}
+                                      {line.debit > 0 ? `DEBE: ${formatearImporte(Number(line.debit), moneda)}` : `HABER: ${formatearImporte(Number(line.credit), moneda)}`}
                                     </p>
                                   </div>
                                 ))}

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, Check, Zap, ShieldCheck, Users, BookOpen, BarChart3, ChevronDown, Sparkles, Monitor, TrendingUp, Settings, Rocket, Layers } from 'lucide-react';
 import { calcularPrecio, getMensajeLimite, getComparisonTable, type PlanTipo } from '@/lib/pricing-engine';
+import { MONEDA_PLATAFORMA, formatearImporte, formatearNumero } from '@/lib/moneda';
 import BackToTop from '@/components/public/BackToTop';
 import ScrollReveal from '@/components/public/ScrollReveal';
 
@@ -65,11 +66,12 @@ function fmtUsuarios(n: number) {
 function fmtContactos(n: number) {
   if (n >= SLIDER_CONTACTOS_MAX) return '99.000+'
   if (n >= 1000) return `${(n / 1000).toFixed(0)}.000`
-  return n.toLocaleString('es-ES')
+  return formatearNumero(n)
 }
 
+/** El precio del configurador se escribe con el formateador único, no a mano. */
 function fmtPrecio(n: number) {
-  return n.toLocaleString('es-ES')
+  return formatearImporte(n, MONEDA_PLATAFORMA, 0)
 }
 
 function PricingSlider() {
@@ -225,7 +227,7 @@ function PricingSlider() {
             </div>
 
             <div className="mb-2">
-              <span className="text-6xl font-black text-white tracking-tight">€{fmtPrecio(precioMostrar)}</span>
+              <span className="text-6xl font-black text-white tracking-tight">{fmtPrecio(precioMostrar)}</span>
               <span className="text-slate-400 text-lg ml-1">/mes</span>
             </div>
             {billingInterval === 'yearly' && (

@@ -33,6 +33,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AccionHospitality } from '@/components/hospitality/AccionHospitality';
+import { MONEDAS_SELECCIONABLES, monedaEfectiva } from '@/lib/moneda';
+import { useMonedaTenant } from '@/lib/use-moneda-tenant';
 import AvisoIncidenciasConectividad from '@/components/hospitality/aviso-incidencias-conectividad';
 import {
   POLITICAS_NO_SHOW,
@@ -134,11 +137,15 @@ const EMPTY_PROPERTY_FORM = {
 
 const EMPTY_UNIT_FORM = {
   propertyId: '', nombre: '', codigo: '', tipo: 'apartamento', capacidad: '2',
-  tarifaBase: '', moneda: 'MXN', descripcion: '', fotos: [] as string[],
+  // La divisa la pone `openNewUnit` con la moneda de reporte del tenant: el
+  // formulario no nace en una divisa que nadie eligió.
+  tarifaBase: '', moneda: '', descripcion: '', fotos: [] as string[],
   amenidades: [] as string[], estado: 'available',
 };
 
 export default function HospitalityPage() {
+  /** Moneda de reporte del tenant: la divisa con la que nace una unidad nueva. */
+  const monedaTenant = useMonedaTenant();
   const [tab, setTab] = useState('propiedades');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -319,7 +326,18 @@ export default function HospitalityPage() {
   };
 
   const openNewUnit = () => {
-    setUnitForm({ ...EMPTY_UNIT_FORM, propertyId: properties[0]?.id || '' });
+    setUnitForm({
+      ...EMPTY_UNIT_FORM,
+      propertyId: properties[0]?.id || '',
+      // La misma precedencia que aplica la API al crear una unidad (la del
+      // inventario que ya existe y, si no, la del tenant). Si no hay ninguna,
+      // el campo va vacío y la resuelve el servidor: el mínimo del esquema no
+      // viaja como si fuera una divisa elegida.
+      moneda: monedaEfectiva(
+        units.map((u) => u.moneda),
+        monedaTenant
+      ),
+    });
     setUnitDialog({ open: true, editing: null });
   };
 
@@ -855,10 +873,14 @@ export default function HospitalityPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPropertyDialog({ open: false, editing: null })}>Cancelar</Button>
-            <Button onClick={saveProperty} disabled={saving}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-              Guardar
-            </Button>
+            {/* Crear y editar no piden lo mismo: la API exige `reservas.crear`
+                para el alta y `reservas.editar` para la modificación. */}
+            <AccionHospitality capacidad={propertyDialog.editing ? 'reservas.editar' : 'reservas.crear'}>
+              <Button onClick={saveProperty} disabled={saving}>
+                {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                Guardar
+              </Button>
+            </AccionHospitality>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -932,7 +954,7 @@ export default function HospitalityPage() {
                 <Select value={unitForm.moneda} onValueChange={(v) => setUnitForm({ ...unitForm, moneda: v })}>
                   <SelectTrigger id="u-moneda"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {['MXN', 'USD', 'EUR'].map((m) => (
+                    {MONEDAS_SELECCIONABLES.map((m) => (
                       <SelectItem key={m} value={m}>{m}</SelectItem>
                     ))}
                   </SelectContent>
@@ -1004,10 +1026,12 @@ export default function HospitalityPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setUnitDialog({ open: false, editing: null })}>Cancelar</Button>
-            <Button onClick={saveUnit} disabled={saving}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-              Guardar
-            </Button>
+            <AccionHospitality capacidad={unitDialog.editing ? 'reservas.editar' : 'reservas.crear'}>
+              <Button onClick={saveUnit} disabled={saving}>
+                {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                Guardar
+              </Button>
+            </AccionHospitality>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1033,10 +1057,12 @@ export default function HospitalityPage() {
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancelar</Button>
-            <Button variant="destructive" onClick={confirmDelete}>
-              <Trash2 className="h-4 w-4 mr-2" />
-              Sí, eliminar
-            </Button>
+            <AccionHospitality capacidad="reservas.editar">
+              <Button variant="destructive" onClick={confirmDelete}>
+                <Trash2 className="h-4 w-4 mr-2" />
+                Sí, eliminar
+              </Button>
+            </AccionHospitality>
           </DialogFooter>
         </DialogContent>
       </Dialog>

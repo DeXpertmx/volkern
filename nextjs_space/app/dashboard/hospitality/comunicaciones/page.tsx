@@ -18,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { AccionHospitality } from '@/components/hospitality/AccionHospitality';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -384,9 +385,11 @@ export default function HospitalityComunicacionesPage() {
                           <Button size="icon" variant="ghost" className="h-7 w-7" title="Editar" onClick={() => openEdit(p)}>
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
-                          <Button size="icon" variant="ghost" className="h-7 w-7" title={p.activo ? 'Desactivar' : 'Activar'} onClick={() => toggleActivo(p)}>
-                            {p.activo ? <Power className="h-3.5 w-3.5" /> : <PowerOff className="h-3.5 w-3.5" />}
-                          </Button>
+                          <AccionHospitality capacidad="comunicaciones.gestionar">
+                            <Button size="icon" variant="ghost" className="h-7 w-7" title={p.activo ? 'Desactivar' : 'Activar'} onClick={() => toggleActivo(p)}>
+                              {p.activo ? <Power className="h-3.5 w-3.5" /> : <PowerOff className="h-3.5 w-3.5" />}
+                            </Button>
+                          </AccionHospitality>
                           <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" title="Eliminar" onClick={() => setDeleteTarget(p)}>
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
@@ -491,10 +494,12 @@ export default function HospitalityComunicacionesPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={save} disabled={saving}>
-              {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {editing ? 'Guardar cambios' : 'Crear plantilla'}
-            </Button>
+            <AccionHospitality capacidad="comunicaciones.gestionar">
+              <Button onClick={save} disabled={saving}>
+                {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                {editing ? 'Guardar cambios' : 'Crear plantilla'}
+              </Button>
+            </AccionHospitality>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -511,7 +516,9 @@ export default function HospitalityComunicacionesPage() {
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancelar</Button>
-            <Button variant="destructive" onClick={confirmDelete}>Eliminar</Button>
+            <AccionHospitality capacidad="comunicaciones.gestionar">
+              <Button variant="destructive" onClick={confirmDelete}>Eliminar</Button>
+            </AccionHospitality>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -546,10 +553,12 @@ export default function HospitalityComunicacionesPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setTestTarget(null)}>Cerrar</Button>
-            <Button onClick={sendTest} disabled={testSending}>
-              {testSending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Enviar prueba
-            </Button>
+            <AccionHospitality capacidad="comunicaciones.enviar">
+              <Button onClick={sendTest} disabled={testSending}>
+                {testSending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Enviar prueba
+              </Button>
+            </AccionHospitality>
           </DialogFooter>
         </DialogContent>
       </Dialog>

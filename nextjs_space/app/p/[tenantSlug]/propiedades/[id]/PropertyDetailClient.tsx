@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { InmuebleParsed } from '@/lib/real-estate/property-helpers';
+import { formatearImporte } from '@/lib/moneda';
 
 interface Props {
   property: InmuebleParsed;
@@ -182,7 +183,7 @@ export default function PropertyDetailClient({
               <div className="flex items-baseline justify-between mt-4">
                 <div>
                   <span className="text-4xl font-bold" style={{ color: brandingColor }}>
-                    {formattedPrice} {property.moneda}
+                    {formattedPrice}
                   </span>
                   {property.operationType === 'alquiler' && (
                     <span className="text-white/50 text-base">/mes</span>
@@ -477,7 +478,7 @@ export default function PropertyDetailClient({
                     <div className="p-4">
                       <h3 className="font-semibold text-gray-900 truncate">{rp.nombre}</h3>
                       <p className="text-lg font-bold mt-1" style={{ color: brandingColor }}>
-                        {rp.precioBase.toLocaleString('es-ES')} {rp.moneda}
+                        {formatearImporte(rp.precioBase, rp.moneda, 0)}
                         {rp.operationType === 'alquiler' && <span className="text-sm font-normal text-gray-500">/mes</span>}
                       </p>
                       <div className="flex items-center gap-3 mt-2 text-sm text-gray-500">

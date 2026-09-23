@@ -3,11 +3,13 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
+import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
 import {
   buildContextoPlantilla,
   renderPlantilla,
   enviarComunicacion,
 } from '@/lib/hospitality/comunicaciones';
+import { formatearImporte } from '@/lib/moneda';
 
 /**
  * POST /api/hospitality/comunicaciones/[id]/enviar-prueba
@@ -18,6 +20,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
+    const sinPermiso = exigirPermisoHospitality(auth, 'comunicaciones.enviar');
+    if (sinPermiso) return sinPermiso;
 
     const { id } = await params;
     const tenantId = auth.tenant!.id;
@@ -35,7 +40,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: 'destinatario es obligatorio (email o teléfono)' }, { status: 400 });
     }
 
-    // Contexto de ejemplo: la reserva más reciente del tenant (si existe).
+    // Contexto de ejemplo: la reserva más reciente del tenant (si existe), o una
+    // inventada si la cuenta aún no tiene ninguna.
     const reservaEjemplo = await prisma.hospitalityReservation.findFirst({
       where: { tenantId },
       orderBy: { fechaCreacion: 'desc' },
@@ -58,7 +64,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           checkIn: 'viernes, 15 de octubre',
           checkOut: 'domingo, 18 de octubre',
           noches: '3',
-          importe: '$6,900',
+          // El importe de ejemplo se escribe con la divisa del tenant: la
+          // previsualización de una plantilla enseña el dinero como lo verá el
+          // huésped, no como lo escribiría quien probó en otro país.
+          importe: formatearImporte(6900, auth.tenant!.moneda || '', 0),
           estado: 'confirmed',
         };
 

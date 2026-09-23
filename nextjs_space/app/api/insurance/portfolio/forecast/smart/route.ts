@@ -9,6 +9,8 @@ import {
   combinarMultipliers,
 } from '@/lib/insurance/seasonal-multiplier';
 import { persistSmartForecastLog } from '@/lib/insurance/forecast-persistence';
+import { CURRENCY_CONSTANTS, type Currency } from '@/lib/insurance/currency';
+import { GET as getForecastBase } from '../route';
 
 /**
  * GET /api/insurance/portfolio/forecast/smart
@@ -20,6 +22,7 @@ import { persistSmartForecastLog } from '@/lib/insurance/forecast-persistence';
  * Respuesta:
  *   {
  *     generado: ISO,
+ *     tenantMoneda: string,               // divisa de reporte, la de las cifras
  *     ventana: TimelinePoint[],          // 6 meses (mismo scope)
  *     proyectadoBase: number,             // forecast SIN multiplicadores
  *     proyectadoAjustado: number,         // forecast × multipliers compuesto
@@ -33,7 +36,8 @@ import { persistSmartForecastLog } from '@/lib/insurance/forecast-persistence';
  *   }
  *
  * Diferencias con /forecast:
- *  · Reusa TODO el motor lineal (sin duplicar lógica).
+ *  · Reusa TODO el motor lineal llamando a su propio handler en proceso (sin
+ *    duplicar lógica y sin salir a la red).
  *  · Lee/calcula multipliers seasonal (cacheado 30d).
  *  · Enriquece con Google Calendar si el broker tiene OAuth configurado.
  *  · Devuelve además proyectadoBase (sin ajuste) para comparabilidad.
@@ -46,6 +50,8 @@ import { persistSmartForecastLog } from '@/lib/insurance/forecast-persistence';
 
 interface SmartPayload {
   generado: string;
+  /** Divisa de reporte del tenant: todos los importes del payload están en ella. */
+  tenantMoneda: string;
   ventana: Array<{ mes: string; label: string; primaTotal: number; polizasCount: number; polizasNuevas: number; primaPromedio: number }>;
   slope: number;
   r2: number;
@@ -83,11 +89,11 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // ─── 1. Reutilizar el forecast base vía fetch interno ──────────
-    //   En lugar de duplicar la regresión lineal, hacemos una llamada al
-    //   propio endpoint /forecast con la misma auth. Esto garantiza que
+    // ─── 1. Reutilizar el forecast base ─────────────────────────────
+    //   En lugar de duplicar la regresión lineal, se invoca el handler de
+    //   /forecast en proceso con la misma auth. Esto garantiza que
     //   smart = base + multipliers sin divergencia.
-    const base = await fetchBaseForecast(request, auth.tenant!.id);
+    const base = await fetchBaseForecast(request);
     if (!base.ok) {
       return NextResponse.json(
         { error: 'No pude obtener el forecast base: ' + (base.error || 'desconocido') },
@@ -158,8 +164,14 @@ export async function GET(request: NextRequest) {
       mejorRacha: 0, experimental: false, bandaMultiplicador: 1,
     };
 
+    // La divisa la dicta el forecast base, que es de donde salen las cifras: si
+    // aquí se eligiera otra, la tarjeta escribiría los importes con el símbolo de
+    // una divisa que no es la suya.
+    const tenantMoneda = base.tenantMoneda ?? (CURRENCY_CONSTANTS.DEFAULT_TENANT_CURRENCY as Currency);
+
     const payload: SmartPayload = {
       generado: new Date().toISOString(),
+      tenantMoneda,
       ventana,
       slope,
       r2,
@@ -188,6 +200,7 @@ export async function GET(request: NextRequest) {
 interface BaseForecastResponse {
   ok: boolean;
   error?: string;
+  tenantMoneda?: string;
   ventana?: SmartPayload['ventana'];
   proyeccion?: number;
   slope?: number;
@@ -198,22 +211,29 @@ interface BaseForecastResponse {
 }
 
 /**
- * Llama internamente al endpoint /forecast con la misma autenticación.
- * Devuelve un shape normalizado o un error si falla.
+ * Obtiene el forecast base del mismo motor que sirve /forecast.
+ *
+ * Se llama a su handler **en proceso**. Antes se pedía por HTTP contra la URL
+ * pública copiando las cabeceras del cliente, y detrás del proxy eso no
+ * funciona: la petición viajaba con las cabeceras del proxy en su propio
+ * origen, el proxy la rechazaba y el endpoint devolvía 502, así que la tarjeta
+ * de forecast inteligente nunca mostraba datos en producción.
  */
-async function fetchBaseForecast(request: NextRequest, tenantId: string): Promise<BaseForecastResponse> {
+async function fetchBaseForecast(request: NextRequest): Promise<BaseForecastResponse> {
   try {
     const internalUrl = new URL(request.url);
     internalUrl.pathname = '/api/insurance/portfolio/forecast';
 
-    const headers = new Headers(request.headers);
-    const response = await fetch(internalUrl.toString(), { headers });
+    const response = await getForecastBase(
+      new NextRequest(internalUrl, { method: 'GET', headers: request.headers })
+    );
     if (!response.ok) {
       return { ok: false, error: `HTTP ${response.status}` };
     }
     const data = await response.json();
     return {
       ok: true,
+      tenantMoneda: typeof data.tenantMoneda === 'string' ? data.tenantMoneda : undefined,
       ventana: data.ventana,
       proyeccion: Math.max(0, Number(data.proyeccion) || 0),
       slope: Number(data.slope) || 0,

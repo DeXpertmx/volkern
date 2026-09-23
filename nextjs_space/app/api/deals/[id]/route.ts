@@ -268,6 +268,19 @@ export async function PATCH(
           },
         })
 
+        // DATASET DE CALIBRACIÓN (C6): marca el desenlace en el snapshot más
+        // reciente del deal. El historial anterior no se toca — el score de
+        // ANTES del cierre es lo que se compara con lo que pasó.
+        try {
+          const { PipelineHealthService } = await import('@/lib/sales/pipeline-health-service');
+          await PipelineHealthService.marcarDesenlaceEnSnapshots(
+            params.id,
+            estado as 'ganado' | 'perdido'
+          );
+        } catch (e: any) {
+          console.warn('⚠️ No se pudo marcar el desenlace en los snapshots:', e);
+        }
+
         // Si es ganado, generar comisión si aplica
         if (estado === 'ganado' && valorReal) {
           // Aquí se puede implementar lógica de comisiones automáticas

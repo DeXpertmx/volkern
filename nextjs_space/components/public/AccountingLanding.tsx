@@ -12,6 +12,20 @@ import {
   Star, Quote, Landmark, Scale, FileSpreadsheet,
 } from 'lucide-react';
 
+import { MONEDA_PLATAFORMA, formatearImporte } from '@/lib/moneda';
+import { getVerticalPlanPrice } from '@/lib/vertical-plans';
+
+/**
+ * Precio mensual publicado de la vertical, en la divisa de la plataforma.
+ *
+ * Sale de `lib/vertical-plans.ts`, la misma fuente que usa el cobro: la portada
+ * no puede anunciar un precio distinto del que se factura. Antes era un literal
+ * `€NN/mes` repetido en cuatro sitios de la página.
+ */
+const PRECIO_MES = getVerticalPlanPrice('asesoria_contable') ?? 0;
+const PRECIO_MES_TEXTO = formatearImporte(PRECIO_MES, MONEDA_PLATAFORMA, 0);
+const CON_VOLKERN = `${PRECIO_MES_TEXTO}/mes`;
+
 /* ─── Data ────────────────────────────────────────────────────────────────── */
 
 const PAIN_POINTS = [
@@ -68,7 +82,7 @@ const USE_CASES = [
 const TESTIMONIALS = [
   { quote: 'Antes perdíamos horas buscando documentos. Ahora todo está centralizado. Las auditorías ya no nos asustan.', name: 'Elena Torres', role: 'Socia Directora, Torres Asesores', avatar: 'ET' },
   { quote: 'Automatizamos recordatorios de impuestos y vencimientos. Nuestros clientes notan la diferencia en el servicio.', name: 'Ricardo Muñoz', role: 'CEO, Gestoría Muñoz', avatar: 'RM' },
-  { quote: 'Por €59/mes tenemos CRM + gestión documental + firma digital. Antes pagábamos más de €180.', name: 'Isabel Herrera', role: 'Directora, Contalia', avatar: 'IH' },
+  { quote: `Por ${CON_VOLKERN} tenemos CRM + gestión documental + firma digital. Antes pagábamos más de ${formatearImporte(180, MONEDA_PLATAFORMA, 0)}.`, name: 'Isabel Herrera', role: 'Directora, Contalia', avatar: 'IH' },
 ];
 
 const COMPETITOR_TOOLS = [
@@ -138,7 +152,7 @@ export default function AccountingLanding() {
               Gestiona clientes, documentos, pagos y procesos en un solo sistema.
             </p>
             <p className="text-lg text-slate-500 max-w-2xl mx-auto mb-10">
-              Desde <span className="text-white font-bold">€59/mes</span>. 14 días gratis. Sin tarjeta.
+              Desde <span className="text-white font-bold">{CON_VOLKERN}</span>. 14 días gratis. Sin tarjeta.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link href="/signup?vertical=asesoria_contable">
@@ -337,14 +351,14 @@ export default function AccountingLanding() {
                 <motion.div key={tool.name} initial={{ opacity: 0, x: -10 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.3, delay: i * 0.05 }}
                   className="grid grid-cols-3 gap-4 px-6 py-4 border-b border-slate-800/50 last:border-b-0 hover:bg-slate-800/30 transition-colors">
                   <span className="text-slate-300 font-medium">{tool.name}</span>
-                  <span className="text-red-400 text-right font-mono font-semibold">€{tool.price}</span>
+                  <span className="text-red-400 text-right font-mono font-semibold">{formatearImporte(tool.price, MONEDA_PLATAFORMA, 0)}</span>
                   <span className="text-blue-400 text-right font-mono font-semibold flex items-center justify-end gap-2"><Check className="w-4 h-4" /> Incluido</span>
                 </motion.div>
               ))}
               <div className="grid grid-cols-3 gap-4 px-6 py-5 bg-slate-800/50 border-t-2 border-blue-500/30">
                 <span className="text-white font-bold text-lg">Total</span>
-                <span className="text-red-400 text-right font-bold text-lg font-mono">€{TOTAL_COMPETITOR}+</span>
-                <span className="text-blue-400 text-right font-bold text-lg font-mono">€59/mes</span>
+                <span className="text-red-400 text-right font-bold text-lg font-mono">{formatearImporte(TOTAL_COMPETITOR, MONEDA_PLATAFORMA, 0)}+</span>
+                <span className="text-blue-400 text-right font-bold text-lg font-mono">{CON_VOLKERN}</span>
               </div>
             </div>
             <p className="text-center text-slate-500 text-sm mt-4">14 días de prueba gratis. Sin compromiso. Cancela cuando quieras.</p>
@@ -457,7 +471,7 @@ export default function AccountingLanding() {
               <p className="text-lg text-slate-400 mb-4 max-w-xl mx-auto">
                 <span className="text-white font-bold">14 días gratis</span>. Sin tarjeta. Sin compromiso.
               </p>
-              <p className="text-slate-500 text-sm mb-10">Luego €59/mes. Incluye CRM, gestión documental, firma digital y más.</p>
+              <p className="text-slate-500 text-sm mb-10">Luego {CON_VOLKERN}. Incluye CRM, gestión documental, firma digital y más.</p>
               <Link href="/signup?vertical=asesoria_contable">
                 <Button size="lg" className="bg-blue-600 hover:bg-blue-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-blue-600/30 group">
                   Probar 14 días gratis

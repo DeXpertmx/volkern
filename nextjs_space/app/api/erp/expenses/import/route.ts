@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { skills } from '@/lib/skills';
 import { parseNum } from '@/lib/import/parse-num';
+import { monedaEscritura } from '@/lib/moneda';
 
 // ─── Utilidades de parseo ─────────────────────────────────────────────────
 
@@ -433,7 +434,9 @@ export const POST = withTenantAuth(async (request, auth) => {
           supplierId: supplier.id,
           description: `Factura ${row.invoiceNumber || 'sin número'} - ${supplier.name}`,
           amount: total,
-          currency: 'EUR',
+          // El fichero no trae divisa: la del gasto es la del tenant con el que
+          // se leyó el formato numérico. Estaba fijada a 'EUR'.
+          currency: monedaEscritura(currency, auth.tenant?.moneda),
           date: row.date || new Date(),
           category: 'General',
           status: 'PAID',

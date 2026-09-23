@@ -100,7 +100,7 @@ export async function GET(request: NextRequest) {
     const resumen = resumenMoneda(
       polizasParaPrima.map(p => ({
         monto: Number(p.primaAnual ?? 0),
-        moneda: (p.moneda as string) ?? 'USD',
+        moneda: (p.moneda as string) ?? tenantMoneda,
       })),
       tenantMoneda
     );
@@ -122,7 +122,7 @@ export async function GET(request: NextRequest) {
     for (const p of polizasPorRamo) {
       const ramo = p.productoSeguro?.ramo ?? 'OTROS';
       const monto = Number(p.primaAnual ?? 0);
-      const enTarget = fxConvert(monto, (p.moneda as string) ?? 'USD', tenantMoneda);
+      const enTarget = fxConvert(monto, (p.moneda as string) ?? tenantMoneda, tenantMoneda);
       const entry = ramosAcumulado.get(ramo) ?? { ramo, count: 0, primaTotal: 0 };
       entry.count++;
       entry.primaTotal += enTarget;
@@ -166,7 +166,7 @@ export async function GET(request: NextRequest) {
       const entry = porAseg.get(p.aseguradoraId) ??
         { id: p.aseguradoraId, nombre: p.aseguradora?.nombre ?? 'Aseguradora', count: 0, primaTotal: 0 };
       entry.count++;
-      entry.primaTotal += fxConvert(Number(p.primaAnual ?? 0), (p.moneda as string) ?? 'USD', tenantMoneda);
+      entry.primaTotal += fxConvert(Number(p.primaAnual ?? 0), (p.moneda as string) ?? tenantMoneda, tenantMoneda);
       porAseg.set(p.aseguradoraId, entry);
     }
     const topAseguradoras = Array.from(porAseg.values())
@@ -198,8 +198,7 @@ export async function GET(request: NextRequest) {
       producto: p.productoSeguro?.nombre ?? null,
       ramo: p.productoSeguro?.ramo ?? null,
       estado: p.estado,
-      primaAnual: Number(p.primaAnual ?? 0),
-      moneda: p.moneda,    // ← preservamos la moneda nativa de la póliza
+      primaAnual: Number(p.primaAnual ?? 0),        moneda: p.moneda ?? tenantMoneda,  // ← la nativa de la póliza; si no la trae, la del tenant
       fechaVencimiento: p.fechaVencimiento.toISOString(),
       createdAt: p.createdAt.toISOString(),
     }));
@@ -228,7 +227,7 @@ export async function GET(request: NextRequest) {
         producto: p.productoSeguro?.nombre ?? null,
         primaAnual: Number(p.primaAnual ?? 0),
         moneda: p.moneda,
-        primaEnTarget: fxConvert(Number(p.primaAnual ?? 0), (p.moneda as string) ?? 'USD', tenantMoneda),
+        primaEnTarget: fxConvert(Number(p.primaAnual ?? 0), (p.moneda as string) ?? tenantMoneda, tenantMoneda),
       }))
       .sort((a, b) => b.primaEnTarget - a.primaEnTarget)
       .map(p => ({
