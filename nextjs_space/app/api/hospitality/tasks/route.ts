@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
+import { exigirPermisoHospitality, capacidadDeTarea } from '@/lib/hospitality/permissions';
 import { completeCleaningTask } from '@/lib/hospitality/operations';
 
 // POST /api/hospitality/tasks — crear tarea de limpieza o mantenimiento
@@ -18,6 +19,12 @@ export async function POST(req: NextRequest) {
     if (tipo !== 'cleaning' && tipo !== 'maintenance') {
       return NextResponse.json({ error: 'tipo debe ser cleaning o maintenance' }, { status: 400 });
     }
+
+    // Una limpieza y una incidencia no son el mismo trabajo ni el mismo
+    // permiso: el rol decide cuál de los dos puede abrir.
+    const sinPermiso = exigirPermisoHospitality(auth, capacidadDeTarea(tipo));
+    if (sinPermiso) return sinPermiso;
+
     if (!unitId) {
       return NextResponse.json({ error: 'unitId es requerido' }, { status: 400 });
     }
@@ -79,6 +86,9 @@ export async function PATCH(req: NextRequest) {
     }
     if (!id) return NextResponse.json({ error: 'id es requerido' }, { status: 400 });
 
+    const sinPermiso = exigirPermisoHospitality(auth, capacidadDeTarea(tipo));
+    if (sinPermiso) return sinPermiso;
+
     const body = await req.json();
     const data: any = {};
     if (body.estado !== undefined) data.estado = body.estado;
@@ -128,6 +138,9 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'tipo debe ser cleaning o maintenance' }, { status: 400 });
     }
     if (!id) return NextResponse.json({ error: 'id es requerido' }, { status: 400 });
+
+    const sinPermiso = exigirPermisoHospitality(auth, capacidadDeTarea(tipo));
+    if (sinPermiso) return sinPermiso;
 
     const existing = tipo === 'cleaning'
       ? await prisma.hospitalityCleaningTask.findFirst({ where: { id, tenantId: auth.tenant!.id } })

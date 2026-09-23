@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { formatearImporte } from '@/lib/moneda'
+import { useMonedaTenant } from '@/lib/use-moneda-tenant'
 import { Scale, Wallet, TrendingDown, TrendingUp, FileText, Download } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -28,6 +30,7 @@ interface BalanceReport {
 export default function BalanceSheetPage() {
   const [data, setData] = useState<BalanceReport | null>(null)
   const [loading, setLoading] = useState(true)
+  const moneda = useMonedaTenant()
 
   useEffect(() => {
     fetchData()
@@ -55,8 +58,9 @@ export default function BalanceSheetPage() {
     </div>
   )
 
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(value)
+  // El importe y la divisa van juntos: la divisa la pone el tenant y el formato
+  // lo decide el módulo de dinero.
+  const formatCurrency = (value: number) => formatearImporte(value, moneda)
 
   return (
     <div className="p-8 space-y-8 bg-[#F8FAFC] min-h-screen">

@@ -21,6 +21,9 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { AccionHospitality } from '@/components/hospitality/AccionHospitality';
+import { MONEDAS_SELECCIONABLES, formatearImporte, primeraMoneda } from '@/lib/moneda';
+import { useMonedaTenant } from '@/lib/use-moneda-tenant';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -59,7 +62,11 @@ interface RatePlan {
   property?: { id: string; nombre: string };
 }
 
-const MONEDAS = ['MXN', 'USD', 'EUR'];
+/**
+ * Divisas que el formulario ofrece. Salen del catálogo de la plataforma: la
+ * lista no se escribe aquí, porque una divisa nueva del catálogo no aparecería.
+ */
+const MONEDAS = MONEDAS_SELECCIONABLES;
 const DIAS_SEMANA = [
   { v: 0, label: 'Dom' },
   { v: 1, label: 'Lun' },
@@ -71,11 +78,13 @@ const DIAS_SEMANA = [
 ];
 
 const EMPTY_FORM = {
-  nombre: '', codigo: '', tarifa: '', moneda: 'MXN', minNoches: '1', maxNoches: '',
+  nombre: '', codigo: '', tarifa: '', moneda: '', minNoches: '1', maxNoches: '',
   checkInDias: [] as number[], checkOutDias: [] as number[], activo: true,
 };
 
 export default function HospitalityTarifasPage() {
+  /** Moneda de reporte del tenant: respaldo de la divisa de una tarifa nueva. */
+  const monedaTenant = useMonedaTenant();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -149,7 +158,12 @@ export default function HospitalityTarifasPage() {
     const defaultUnit = filteredUnits[0]?.id || '';
     setForm({
       ...EMPTY_FORM,
-      moneda: filteredUnits[0]?.moneda || 'MXN',
+      // La tarifa se cobra en la divisa de la unidad que la vende; si la unidad
+      // no declara ninguna, la de reporte del tenant — la misma precedencia que
+      // aplica la API al crear el plan (y sin el mínimo del esquema como
+      // primera opción: ese es la red de seguridad de la escritura, no una
+      // divisa elegida).
+      moneda: primeraMoneda(filteredUnits[0]?.moneda, monedaTenant),
       activo: true,
     });
     setDialogOpen(true);
@@ -347,10 +361,12 @@ export default function HospitalityTarifasPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={syncManual} disabled={syncing}>
-            {syncing ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <RefreshCcw className="h-4 w-4 mr-1" />}
-            Sincronizar tarifas
-          </Button>
+          <AccionHospitality capacidad="integraciones.gestionar">
+            <Button variant="outline" onClick={syncManual} disabled={syncing}>
+              {syncing ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <RefreshCcw className="h-4 w-4 mr-1" />}
+              Sincronizar tarifas
+            </Button>
+          </AccionHospitality>
           <Button onClick={openNew} disabled={filteredUnits.length === 0}>
             <Plus className="h-4 w-4 mr-2" /> Nuevo Plan
           </Button>
@@ -442,7 +458,7 @@ export default function HospitalityTarifasPage() {
                 <div className="flex items-center gap-4 text-sm">
                   <span className="flex items-center gap-1 font-semibold">
                     <DollarSign className="h-4 w-4 text-primary" />
-                    {p.tarifa.toLocaleString('es-MX')} {p.moneda}
+                    {formatearImporte(p.tarifa, p.moneda)}
                     <span className="text-xs text-muted-foreground font-normal">/noche</span>
                   </span>
                   <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -461,9 +477,11 @@ export default function HospitalityTarifasPage() {
                 </div>
 
                 <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="sm" onClick={() => duplicar(p)} title="Duplicar plan">
-                    <Copy className="h-3.5 w-3.5" />
-                  </Button>
+                  <AccionHospitality capacidad="reservas.editar">
+                    <Button variant="ghost" size="sm" onClick={() => duplicar(p)} title="Duplicar plan">
+                      <Copy className="h-3.5 w-3.5" />
+                    </Button>
+                  </AccionHospitality>
                   <Button variant="outline" size="sm" onClick={() => openEdit(p)}>
                     <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
                   </Button>
@@ -668,10 +686,12 @@ export default function HospitalityTarifasPage() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={save} disabled={saving}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-              Guardar
-            </Button>
+            <AccionHospitality capacidad="reservas.editar">
+              <Button onClick={save} disabled={saving}>
+                {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                Guardar
+              </Button>
+            </AccionHospitality>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -691,9 +711,11 @@ export default function HospitalityTarifasPage() {
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancelar</Button>
-            <Button variant="destructive" onClick={confirmDelete}>
-              <Trash2 className="h-4 w-4 mr-2" /> Sí, eliminar
-            </Button>
+            <AccionHospitality capacidad="reservas.editar">
+              <Button variant="destructive" onClick={confirmDelete}>
+                <Trash2 className="h-4 w-4 mr-2" /> Sí, eliminar
+              </Button>
+            </AccionHospitality>
           </DialogFooter>
         </DialogContent>
       </Dialog>

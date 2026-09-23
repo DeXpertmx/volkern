@@ -33,6 +33,7 @@ import { resumenPublicoResenas } from '@/lib/hospitality/resenas';
 import { catalogoPublico, resolverExtras, filasDeItemsExtras, totalDeExtras } from '@/lib/hospitality/booking-extras';
 import { normalizarViajero } from '@/lib/hospitality/guest-checkin';
 import { asegurarTokenCheckin, enlaceCheckin } from '@/lib/hospitality/checkin-service';
+import { monedaEfectiva } from '@/lib/moneda';
 
 const ESTADO_UNIDAD_NO_VENDIBLE = ['maintenance', 'out_of_service'];
 
@@ -40,7 +41,9 @@ async function propiedadPublicada(slug: string) {
   const propiedad = await prisma.hospitalityProperty.findFirst({
     where: { id: slug, estado: 'conectada' },
     include: {
-      tenant: { select: { id: true, nombre: true } },
+      // La moneda del tenant hace falta como respaldo de la divisa del catálogo
+      // público (una propiedad sin unidades con tarifa todavía no tiene divisa).
+      tenant: { select: { id: true, nombre: true, moneda: true } },
     },
   });
   return propiedad;
@@ -122,7 +125,12 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
           ciudad: propiedad.ciudad,
           pais: propiedad.pais,
           fotos: propiedad.fotos || [],
-          moneda: unidades[0]?.moneda || 'MXN',
+          // La divisa del catálogo: la de las unidades de la propiedad (la
+          // predominante) y, si aún no hay ninguna, la de reporte del hotel.
+          moneda: monedaEfectiva(
+            unidades.map((u) => u.moneda),
+            propiedad.tenant?.moneda
+          ),
         },
         resenas,
         extras,

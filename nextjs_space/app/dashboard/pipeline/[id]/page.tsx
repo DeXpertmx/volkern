@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { ETIQUETA_PUERTA, PUNTUACION_MINIMA, esContactoConCliente } from '@/lib/sales/training-gate'
+import { RoleplaySimulator } from '@/components/training/RoleplaySimulator'
 import { useSession } from 'next-auth/react'
 import { useParams, useRouter } from 'next/navigation'
 import { apiFetch } from '@/lib/api-client'
@@ -74,6 +76,7 @@ import {
   ScrollText,
   Briefcase,
   Filter,
+  GraduationCap,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { GemmaDealCoach } from '@/components/deals/GemmaDealCoach'
@@ -169,6 +172,8 @@ export default function DealDetailPage() {
   const router = useRouter()
   const { data: session } = useSession() || {}
   const [deal, setDeal] = useState<Deal | null>(null)
+  const [puertaActiva, setPuertaActiva] = useState(false)
+  const [simuladorAbierto, setSimuladorAbierto] = useState(false)
   const [timeline, setTimeline] = useState<TimelineItem[]>([])
   const [timelineStats, setTimelineStats] = useState<TimelineStats | null>(null)
   const [loading, setLoading] = useState(true)
@@ -197,6 +202,10 @@ export default function DealDetailPage() {
 
       const data = await response.json()
       setDeal(data.deal)
+      setPuertaActiva(
+        typeof data.deal.tags === 'string' &&
+          data.deal.tags.split(',').map((t: string) => t.trim()).includes(ETIQUETA_PUERTA)
+      )
     } catch (error) {
       console.error('Error:', error)
       toast.error('Error al cargar el deal')
@@ -439,6 +448,37 @@ export default function DealDetailPage() {
         </div>
       </div>
 
+      {/* Simulador de Roleplay (puerta de práctica) */}
+      {simuladorAbierto && deal.leadId && (
+        <RoleplaySimulator
+          leadId={deal.leadId}
+          leadName={deal.lead?.nombre ?? deal.titulo}
+          onClose={() => setSimuladorAbierto(false)}
+        />
+      )}
+
+      {/* PUERTA DE PRÁCTICA (bucle riesgo → roleplay): oportunidad en riesgo
+          crítico que exige ensayar con el cliente real antes de contactar. */}
+      {puertaActiva && deal.leadId && (
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 rounded-lg border border-amber-500/50 bg-amber-50 dark:bg-amber-950/40 p-4">
+          <GraduationCap className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+              Práctica requerida antes de contactar
+            </p>
+            <p className="text-sm text-amber-800/80 dark:text-amber-300/80">
+              Esta oportunidad está en riesgo crítico: las llamadas, citas e
+              interacciones están bloqueadas hasta que una sesión de práctica
+              con {deal.lead?.nombre ?? 'este cliente'} alcance {PUNTUACION_MINIMA} puntos.
+            </p>
+          </div>
+          <Button size="sm" onClick={() => setSimuladorAbierto(true)}>
+            <GraduationCap className="h-4 w-4 mr-2" />
+            Practicar ahora
+          </Button>
+        </div>
+      )}
+
       {/* Info Cards */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
@@ -592,6 +632,11 @@ export default function DealDetailPage() {
                 </DialogHeader>
                 <NewActivityForm
                   dealId={deal.id}
+                  puertaActiva={puertaActiva}
+                  onPracticar={() => {
+                    setShowNewActivityDialog(false)
+                    if (deal.leadId) setSimuladorAbierto(true)
+                  }}
                   onSuccess={() => {
                     setShowNewActivityDialog(false)
                     fetchTimeline()
@@ -868,9 +913,13 @@ export default function DealDetailPage() {
 function NewActivityForm({
   dealId,
   onSuccess,
+  puertaActiva,
+  onPracticar,
 }: {
   dealId: string
   onSuccess: () => void
+  puertaActiva?: boolean
+  onPracticar?: () => void
 }) {
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
@@ -896,6 +945,17 @@ function NewActivityForm({
       })
 
       if (!response.ok) {
+        // PUERTA DE PRÁCTICA: 423 — el contacto con el cliente está bloqueado.
+        // En vez de un error genérico, se avisa con el motivo del servidor y
+        // se ofrece la práctica en el mismo diálogo.
+        if (response.status === 423) {
+          const cuerpo = await response.json().catch(() => null)
+          toast.warning(
+            cuerpo?.error ?? 'Práctica requerida antes de contactar al cliente'
+          )
+          onPracticar?.()
+          return
+        }
         throw new Error('Error al crear actividad')
       }
 
@@ -929,6 +989,27 @@ function NewActivityForm({
           </SelectContent>
         </Select>
       </div>
+
+      {/* PUERTA DE PRÁCTICA: aviso proactivo — si el tipo elegido es contacto
+          y la puerta está activa, el envío devolverá 423. Se ofrece la
+          práctica aquí, antes del rechazo. */}
+      {puertaActiva && esContactoConCliente(formData.tipo) && (
+        <div className="flex items-start gap-3 rounded-md border border-amber-500/50 bg-amber-50 dark:bg-amber-950/40 p-3">
+          <GraduationCap className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm text-amber-900 dark:text-amber-200">
+              Este contacto está bloqueado: la oportunidad está en riesgo
+              crítico y exige practicar con el cliente antes de contactarlo.
+            </p>
+            {onPracticar && (
+              <Button type="button" size="sm" className="mt-2" onClick={onPracticar}>
+                <GraduationCap className="h-4 w-4 mr-2" />
+                Practicar ahora
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
 
       <div>
         <Label htmlFor="titulo">Título *</Label>

@@ -11,6 +11,20 @@ import {
   Star, Quote, Play, Monitor, Lightbulb,
 } from 'lucide-react';
 
+import { MONEDA_PLATAFORMA, formatearImporte } from '@/lib/moneda';
+import { getVerticalPlanPrice } from '@/lib/vertical-plans';
+
+/**
+ * Precio mensual publicado de la vertical, en la divisa de la plataforma.
+ *
+ * Sale de `lib/vertical-plans.ts`, la misma fuente que usa el cobro: la portada
+ * no puede anunciar un precio distinto del que se factura. Antes era un literal
+ * `€NN/mes` repetido en cuatro sitios de la página.
+ */
+const PRECIO_MES = getVerticalPlanPrice('academia') ?? 0;
+const PRECIO_MES_TEXTO = formatearImporte(PRECIO_MES, MONEDA_PLATAFORMA, 0);
+const CON_VOLKERN = `${PRECIO_MES_TEXTO}/mes`;
+
 /* ─── Data ────────────────────────────────────────────────────────────────── */
 
 const PAIN_POINTS = [
@@ -66,7 +80,7 @@ const USE_CASES = [
 const TESTIMONIALS = [
   { quote: 'Pasé de usar Teachable + Mailchimp + Stripe por separado a tenerlo todo en Volkern. Mis alumnos lo agradecen.', name: 'Carmen Díaz', role: 'Creadora de cursos online', avatar: 'CD' },
   { quote: 'Automaticé las inscripciones y pagos. Ahora los alumnos acceden al instante. Cero fricción.', name: 'Alberto Rubio', role: 'Director, Escuela de Negocios', avatar: 'AR' },
-  { quote: 'Por €49/mes tengo LMS + CRM + pagos integrados. Mi stack anterior costaba más de €220.', name: 'Marta Soler', role: 'Coach certificada', avatar: 'MS' },
+  { quote: `Por ${CON_VOLKERN} tengo LMS + CRM + pagos integrados. Mi stack anterior costaba más de ${formatearImporte(220, MONEDA_PLATAFORMA, 0)}.`, name: 'Marta Soler', role: 'Coach certificada', avatar: 'MS' },
 ];
 
 const COMPETITOR_TOOLS = [
@@ -132,7 +146,7 @@ export default function AcademyLanding() {
               Convierte tu conocimiento en ingresos recurrentes sin depender de múltiples herramientas.
             </p>
             <p className="text-lg text-slate-500 max-w-2xl mx-auto mb-10">
-              Desde <span className="text-white font-bold">€49/mes</span>. 14 días gratis. Sin tarjeta.
+              Desde <span className="text-white font-bold">{CON_VOLKERN}</span>. 14 días gratis. Sin tarjeta.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link href="/signup?vertical=academia">
@@ -331,14 +345,14 @@ export default function AcademyLanding() {
                 <motion.div key={tool.name} initial={{ opacity: 0, x: -10 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.3, delay: i * 0.05 }}
                   className="grid grid-cols-3 gap-4 px-6 py-4 border-b border-slate-800/50 last:border-b-0 hover:bg-slate-800/30 transition-colors">
                   <span className="text-slate-300 font-medium">{tool.name}</span>
-                  <span className="text-red-400 text-right font-mono font-semibold">€{tool.price}</span>
+                  <span className="text-red-400 text-right font-mono font-semibold">{formatearImporte(tool.price, MONEDA_PLATAFORMA, 0)}</span>
                   <span className="text-amber-400 text-right font-mono font-semibold flex items-center justify-end gap-2"><Check className="w-4 h-4" /> Incluido</span>
                 </motion.div>
               ))}
               <div className="grid grid-cols-3 gap-4 px-6 py-5 bg-slate-800/50 border-t-2 border-amber-500/30">
                 <span className="text-white font-bold text-lg">Total</span>
-                <span className="text-red-400 text-right font-bold text-lg font-mono">€{TOTAL_COMPETITOR}+</span>
-                <span className="text-amber-400 text-right font-bold text-lg font-mono">€49/mes</span>
+                <span className="text-red-400 text-right font-bold text-lg font-mono">{formatearImporte(TOTAL_COMPETITOR, MONEDA_PLATAFORMA, 0)}+</span>
+                <span className="text-amber-400 text-right font-bold text-lg font-mono">{CON_VOLKERN}</span>
               </div>
             </div>
             <p className="text-center text-slate-500 text-sm mt-4">14 días de prueba gratis. Sin compromiso. Cancela cuando quieras.</p>
@@ -452,7 +466,7 @@ export default function AcademyLanding() {
               <p className="text-lg text-slate-400 mb-4 max-w-xl mx-auto">
                 <span className="text-white font-bold">14 días gratis</span>. Sin tarjeta. Sin compromiso.
               </p>
-              <p className="text-slate-500 text-sm mb-10">Luego €49/mes. Incluye LMS, CRM, pagos y automatización.</p>
+              <p className="text-slate-500 text-sm mb-10">Luego {CON_VOLKERN}. Incluye LMS, CRM, pagos y automatización.</p>
               <Link href="/signup?vertical=academia">
                 <Button size="lg" className="bg-amber-600 hover:bg-amber-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-amber-600/30 group">
                   Probar 14 días gratis

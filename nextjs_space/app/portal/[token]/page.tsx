@@ -352,15 +352,15 @@ export default function SovereignPortalPage() {
                       <div className="space-y-2">
                         <div className="flex justify-between text-xs">
                           <span className="text-slate-500">Repercutido</span>
-                          <span className="font-bold text-blue-600">{fiscalData.vatSummary?.outputVat || '0,00 €'}</span>
+                          <span className="font-bold text-blue-600">{fiscalData.vatSummary?.outputVat || '—'}</span>
                         </div>
                         <div className="flex justify-between text-xs">
                           <span className="text-slate-500">Soportado</span>
-                          <span className="font-bold text-orange-600">{fiscalData.vatSummary?.inputVat || '0,00 €'}</span>
+                          <span className="font-bold text-orange-600">{fiscalData.vatSummary?.inputVat || '—'}</span>
                         </div>
                         <div className="border-t pt-2 flex justify-between text-xs">
                           <span className="font-bold text-slate-700">Resultado</span>
-                          <span className="font-black text-lg">{fiscalData.vatSummary?.result || '0,00 €'}</span>
+                          <span className="font-black text-lg">{fiscalData.vatSummary?.result || '—'}</span>
                         </div>
                       </div>
                     </CardContent>
@@ -377,7 +377,7 @@ export default function SovereignPortalPage() {
                           <Badge className="bg-amber-50 text-amber-600 border-none text-[10px]">Pendiente</Badge>
                         )}
                       </div>
-                      <p className="text-3xl font-black text-purple-600 mb-1">{fiscalData.irpfSummary?.totalWithholding || '0,00 €'}</p>
+                      <p className="text-3xl font-black text-purple-600 mb-1">{fiscalData.irpfSummary?.totalWithholding || '—'}</p>
                       <p className="text-xs text-slate-400 font-medium">Retenciones del trimestre</p>
                     </CardContent>
                   </Card>

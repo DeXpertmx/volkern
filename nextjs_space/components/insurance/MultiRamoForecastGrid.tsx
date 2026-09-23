@@ -46,6 +46,12 @@ export interface ByRamoData {
 interface MultiRamoForecastGridProps {
   data: ByRamoData[] | null;
   loading?: boolean;
+  /**
+   * Divisa de reporte del tenant, la misma a la que el endpoint convierte las
+   * cifras. Va como prop propia porque el endpoint la devuelve al lado de la
+   * lista de ramos, no dentro de cada ramo.
+   */
+  moneda?: string;
 }
 
 // ─── Sparkline SVG inline ────────────────────────────────────────────────
@@ -86,7 +92,7 @@ function MiniSparkline({ ventana, color, width = 200, height = 40 }: {
   );
 }
 
-export function MultiRamoForecastGrid({ data, loading }: MultiRamoForecastGridProps) {
+export function MultiRamoForecastGrid({ data, loading, moneda = '' }: MultiRamoForecastGridProps) {
   const [dialogRamo, setDialogRamo] = useState<ByRamoData | null>(null);
 
   /**
@@ -164,14 +170,14 @@ export function MultiRamoForecastGrid({ data, loading }: MultiRamoForecastGridPr
                 <div>
                   <p className="text-muted-foreground uppercase tracking-wide">Próximo mes</p>
                   <p className={`font-bold tabular-nums ${isFalling ? 'text-red-700' : 'text-emerald-700'}`}>
-                    {formatCurrency(ramo.proyeccion)}
+                    {formatCurrency(ramo.proyeccion, moneda)}
                   </p>
                 </div>
                 <div>
                   <p className="text-muted-foreground uppercase tracking-wide">Caída absoluta</p>
                   <p className={`font-bold tabular-nums ${isFalling ? 'text-red-700' : isRising ? 'text-emerald-700' : 'text-slate-700'}`}>
                     {isFalling ? '−' : isRising ? '+' : ''}
-                    {formatCurrency(Math.abs(ramo.caidaAbsoluta))}
+                    {formatCurrency(Math.abs(ramo.caidaAbsoluta), moneda)}
                   </p>
                 </div>
               </div>
@@ -214,7 +220,7 @@ export function MultiRamoForecastGrid({ data, loading }: MultiRamoForecastGridPr
                   </h2>
                   <p className="text-xs text-muted-foreground">
                     {dialogRamo.polizasProximaVencerCount} {dialogRamo.polizasProximaVencerCount === 1 ? 'póliza próxima a vencer' : 'pólizas próximas a vencer'} · Caída proyectada{' '}
-                    {formatCurrency(Math.abs(dialogRamo.caidaAbsoluta))}
+                    {formatCurrency(Math.abs(dialogRamo.caidaAbsoluta), moneda)}
                   </p>
                 </div>
               </div>
@@ -262,7 +268,7 @@ export function MultiRamoForecastGrid({ data, loading }: MultiRamoForecastGridPr
                           {p.producto ?? '—'}
                         </td>
                         <td className="py-2 px-2 text-right font-semibold tabular-nums">
-                          {formatCurrency(p.primaAnual)}
+                          {formatCurrency(p.primaAnual, moneda)}
                         </td>
                         <td className="py-2 px-2 text-center">
                           <Badge

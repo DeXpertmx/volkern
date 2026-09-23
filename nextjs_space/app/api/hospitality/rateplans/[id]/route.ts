@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
 
+import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
+import { monedaEscritura } from '@/lib/moneda';
 /**
  * PATCH /api/hospitality/rateplans/[id] — editar tarifa/restricciones.
  * DELETE /api/hospitality/rateplans/[id] — eliminar plan.
@@ -13,6 +15,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
+    const sinPermiso = exigirPermisoHospitality(auth, 'reservas.editar');
+    if (sinPermiso) return sinPermiso;
 
     const { id } = await params;
     const tenantId = auth.tenant!.id;
@@ -36,7 +41,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       }
       data.tarifa = body.tarifa;
     }
-    if (body.moneda !== undefined) data.moneda = body.moneda || 'MXN';
+    // El campo vacío significa «la del tenant», no una divisa en blanco: la
+    // columna no admite nulos y guardar cadena vacía dejaría la tarifa sin divisa.
+    if (body.moneda !== undefined) {
+      data.moneda = monedaEscritura(body.moneda, (auth.tenant as { moneda?: string | null }).moneda);
+    }
     if (body.minNoches !== undefined) data.minNoches = Math.max(1, parseInt(body.minNoches) || 1);
     if (body.maxNoches !== undefined) data.maxNoches = body.maxNoches != null ? parseInt(body.maxNoches) : null;
     if (body.checkInDias !== undefined) {
@@ -65,6 +74,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
+    const sinPermiso = exigirPermisoHospitality(auth, 'reservas.editar');
+    if (sinPermiso) return sinPermiso;
 
     const { id } = await params;
     const tenantId = auth.tenant!.id;

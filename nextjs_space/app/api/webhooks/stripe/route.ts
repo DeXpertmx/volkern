@@ -9,6 +9,8 @@ import { sendEmail } from '@/lib/ses-email'
 import { triggerAutomation } from '@/lib/automation-engine'
 import { StripeMXService } from '@/lib/finance/mexico/stripe-mx-service'
 import { DUNNING_NOTIFICATION_DAYS, checkIfEventProcessed } from '@/lib/stripe/webhook-helpers'
+import { registrarCobroConfirmado } from '@/lib/hospitality/booking-payments'
+import { importeDesdeUnidadMinima } from '@/lib/moneda'
 
 async function markEventProcessed(
   stripeEventId: string,
@@ -304,7 +306,28 @@ export async function POST(request: NextRequest) {
         case 'checkout.session.completed': {
           const session = event.data.object as any
 
-          if (session.mode === 'subscription') {
+          // Reserva directa de Hospitality (Booking Engine). El cobro se hace
+          // contra la cuenta conectada del tenant, así que llega a este mismo
+          // webhook de la plataforma: es el endpoint único, con un solo secreto
+          // de firma, en lugar de un segundo webhook que verificar por separado.
+          const reservaHospitality = session.metadata?.hospitalityReservationId
+          if (reservaHospitality) {
+            const cobro = await registrarCobroConfirmado({
+              sessionId: session.id,
+              reservaId: reservaHospitality,
+              tenantId: session.metadata?.hospitalityTenantId,
+              // `amount_total` viene en la unidad mínima de la divisa.
+              importe: importeDesdeUnidadMinima(session.amount_total || 0, session.currency),
+              moneda: (session.currency || '').toUpperCase(),
+              paymentIntentId: (session.payment_intent as string) || null,
+            })
+
+            if (!cobro.ok) {
+              console.error('[StripeWebhook] Cobro de Hospitality no aplicado:', cobro.motivo)
+            } else {
+              console.log(`[StripeWebhook] Reserva directa cobrada: ${reservaHospitality} (registrado=${cobro.registrado})`)
+            }
+          } else if (session.mode === 'subscription') {
             const { tenantId: subTenantId, plan: planKey, planId } = session.metadata || {}
             const resolvedPlan = planKey || planId
 

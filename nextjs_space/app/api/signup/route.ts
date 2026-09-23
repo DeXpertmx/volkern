@@ -294,7 +294,9 @@ export async function POST(request: NextRequest) {
           descripcion: 'Administrador del sistema',
           permisos: {
             usuarios: { crear: true, editar: true, eliminar: true, ver: true },
-            leads: { crear: true, editar: true, eliminar: true, ver: true },
+            // `ver_todos` es el alcance del pipeline: sin ella, el dueño de la
+            // cuenta recién creada vería solo los leads que él se asignara.
+            leads: { crear: true, editar: true, eliminar: true, ver: true, ver_todos: true },
             contactos: { crear: true, editar: true, eliminar: true, ver: true },
             deals: { crear: true, editar: true, eliminar: true, ver: true },
             automatizaciones: { crear: true, editar: true, eliminar: true, ver: true },

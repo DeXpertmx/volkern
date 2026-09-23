@@ -11,6 +11,20 @@ import {
   Star, Quote, Cog, PackageSearch, Gauge,
 } from 'lucide-react';
 
+import { MONEDA_PLATAFORMA, formatearImporte } from '@/lib/moneda';
+import { getVerticalPlanPrice } from '@/lib/vertical-plans';
+
+/**
+ * Precio mensual publicado de la vertical, en la divisa de la plataforma.
+ *
+ * Sale de `lib/vertical-plans.ts`, la misma fuente que usa el cobro: la portada
+ * no puede anunciar un precio distinto del que se factura. Antes era un literal
+ * `€NN/mes` repetido en cuatro sitios de la página.
+ */
+const PRECIO_MES = getVerticalPlanPrice('industria') ?? 0;
+const PRECIO_MES_TEXTO = formatearImporte(PRECIO_MES, MONEDA_PLATAFORMA, 0);
+const CON_VOLKERN = `${PRECIO_MES_TEXTO}/mes`;
+
 /* ─── Data ────────────────────────────────────────────────────────────────── */
 
 const PAIN_POINTS = [
@@ -66,7 +80,7 @@ const USE_CASES = [
 const TESTIMONIALS = [
   { quote: 'Teníamos procesos en papel y Excel. Volkern nos dio control real de la planta. Ahora sabemos qué pasa en cada turno.', name: 'Gonzalo Prieto', role: 'Director de Operaciones, MetalPack', avatar: 'GP' },
   { quote: 'Redujimos los errores operativos un 40% en 3 meses. Tener todo documentado cambió nuestra forma de trabajar.', name: 'Raquel Ibáñez', role: 'Gerente de Planta, TexIndustria', avatar: 'RI' },
-  { quote: 'Por €59/mes tenemos gestión de procesos + tareas + documentación. Nuestro ERP antiguo costaba 10 veces más.', name: 'Alberto Serrano', role: 'CEO, Logística Serrano', avatar: 'AS' },
+  { quote: `Por ${CON_VOLKERN} tenemos gestión de procesos + tareas + documentación. Nuestro ERP antiguo costaba 10 veces más.`, name: 'Alberto Serrano', role: 'CEO, Logística Serrano', avatar: 'AS' },
 ];
 
 const COMPETITOR_TOOLS = [
@@ -128,7 +142,7 @@ export default function IndustriaLanding() {
               Gestiona tareas, equipos, procesos y documentación desde un solo sistema.
             </p>
             <p className="text-lg text-slate-500 max-w-2xl mx-auto mb-10">
-              Desde <span className="text-white font-bold">€59/mes</span>. 14 días gratis. Sin tarjeta.
+              Desde <span className="text-white font-bold">{CON_VOLKERN}</span>. 14 días gratis. Sin tarjeta.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link href="/signup?vertical=industria">
@@ -327,14 +341,14 @@ export default function IndustriaLanding() {
                 <motion.div key={tool.name} initial={{ opacity: 0, x: -10 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.3, delay: i * 0.05 }}
                   className="grid grid-cols-3 gap-4 px-6 py-4 border-b border-slate-800/50 last:border-b-0 hover:bg-slate-800/30 transition-colors">
                   <span className="text-slate-300 font-medium">{tool.name}</span>
-                  <span className="text-red-400 text-right font-mono font-semibold">€{tool.price}</span>
+                  <span className="text-red-400 text-right font-mono font-semibold">{formatearImporte(tool.price, MONEDA_PLATAFORMA, 0)}</span>
                   <span className="text-orange-400 text-right font-mono font-semibold flex items-center justify-end gap-2"><Check className="w-4 h-4" /> Incluido</span>
                 </motion.div>
               ))}
               <div className="grid grid-cols-3 gap-4 px-6 py-5 bg-slate-800/50 border-t-2 border-orange-500/30">
                 <span className="text-white font-bold text-lg">Total</span>
-                <span className="text-red-400 text-right font-bold text-lg font-mono">€{TOTAL_COMPETITOR}+</span>
-                <span className="text-orange-400 text-right font-bold text-lg font-mono">€59/mes</span>
+                <span className="text-red-400 text-right font-bold text-lg font-mono">{formatearImporte(TOTAL_COMPETITOR, MONEDA_PLATAFORMA, 0)}+</span>
+                <span className="text-orange-400 text-right font-bold text-lg font-mono">{CON_VOLKERN}</span>
               </div>
             </div>
             <p className="text-center text-slate-500 text-sm mt-4">14 días de prueba gratis. Sin compromiso. Cancela cuando quieras.</p>
@@ -447,7 +461,7 @@ export default function IndustriaLanding() {
               <p className="text-lg text-slate-400 mb-4 max-w-xl mx-auto">
                 <span className="text-white font-bold">14 días gratis</span>. Sin tarjeta. Sin compromiso.
               </p>
-              <p className="text-slate-500 text-sm mb-10">Luego €59/mes. Incluye procesos, tareas, documentación y más.</p>
+              <p className="text-slate-500 text-sm mb-10">Luego {CON_VOLKERN}. Incluye procesos, tareas, documentación y más.</p>
               <Link href="/signup?vertical=industria">
                 <Button size="lg" className="bg-orange-600 hover:bg-orange-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-orange-600/30 group">
                   Probar 14 días gratis

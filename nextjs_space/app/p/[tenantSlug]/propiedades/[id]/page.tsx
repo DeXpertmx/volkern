@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { parseInmueble } from '@/lib/real-estate/property-helpers';
 import { resolveTenantBySlug } from '@/lib/real-estate/portal-utils';
 import { getEffectiveBranding } from '@/lib/branding';
+import { formatearImporte } from '@/lib/moneda';
 import PropertyDetailClient from './PropertyDetailClient';
 
 export const revalidate = 60;
@@ -113,8 +114,9 @@ export default async function PropertyDetailPage({ params }: Props) {
 
   const mainImage = images.length > 0 ? images[0].url : '';
 
-  // Formatear precio
-  const formattedPrice = property.precioBase.toLocaleString('es-ES');
+  // El precio se escribe en la divisa del inmueble (o la del portal), no en euros
+  // ni en la convención mexicana por defecto.
+  const formattedPrice = formatearImporte(property.precioBase, property.moneda || tenant.moneda, 0);
 
   return (
     <PropertyDetailClient

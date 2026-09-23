@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
+import { monedaEscritura } from '@/lib/moneda';
 
 // GET - Listar pólizas con filtros, búsqueda y paginación
 export async function GET(req: NextRequest) {
@@ -87,7 +88,7 @@ export async function POST(req: NextRequest) {
       sumaAsegurada,
       primaAnual,
       formaPago,
-      moneda = 'EUR',
+      moneda,
       fechaInicio,
       fechaVencimiento,
       comisionPct,
@@ -134,7 +135,10 @@ export async function POST(req: NextRequest) {
         sumaAsegurada: sumaAsegurada ? parseFloat(sumaAsegurada) : null,
         primaAnual: primaAnual ? parseFloat(primaAnual) : null,
         formaPago: formaPago || null,
-        moneda,
+        // Divisa de la póliza: la que indique el usuario y, si no la indica, la
+        // de reporte del tenant. Antes nacía en 'EUR' (el valor por defecto de
+        // la columna), así que un tenant en pesos guardaba pólizas en euros.
+        moneda: monedaEscritura(moneda, auth.tenant?.moneda),
         fechaInicio: new Date(fechaInicio),
         fechaVencimiento: new Date(fechaVencimiento),
         comisionPct: comisionPct ? parseFloat(comisionPct) : null,

@@ -53,7 +53,7 @@ export default function RefundPolicyPage() {
           <p className="text-xl text-blue-100 max-w-2xl mx-auto">
             Conoce nuestras condiciones de desistimiento, reembolso y cancelación.
           </p>
-          <p className="text-sm text-blue-200 mt-4">Última actualización: Junio 2026</p>
+          <p className="text-sm text-blue-200 mt-4">Última actualización: 3 de septiembre de 2026 · Versión 2026-09</p>
         </div>
       </section>
 
@@ -62,7 +62,14 @@ export default function RefundPolicyPage() {
         <div className="container mx-auto px-4">
           <div className="max-w-4xl mx-auto">
             <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 md:p-12 space-y-8">
-              
+
+              <p className="text-gray-600 leading-relaxed text-lg">
+                Volkern CRM, operado por <strong>Dimension eXpert LLC</strong>, ofrece una prueba gratuita de 14
+                días sin tarjeta y sin permanencia. Esta política explica el desistimiento, el reembolso y la
+                cancelación de los planes de pago, y complementa nuestros{' '}
+                <Link href="/terms" className="text-blue-600 hover:underline">Términos de Servicio</Link>.
+              </p>
+
               <section>
                 <h2 className="text-2xl font-bold text-gray-900 mb-4">1. Derecho de Desistimiento</h2>
                 <p className="text-gray-600 leading-relaxed">
@@ -83,10 +90,11 @@ export default function RefundPolicyPage() {
                   <li><strong>No aplica</strong> a renovaciones, suscripciones recurrentes ni pagos posteriores.</li>
                   <li><strong>No aplica</strong> a servicios personalizados, configuraciones (setup), consultorías 
                     u otros servicios que hayan sido iniciados o ejecutados.</li>
-                  <li>En caso de que el cliente haya solicitado el <strong>inicio inmediato del servicio</strong>, 
+                  <li>En caso de que el cliente haya solicitado el <strong>inicio inmediato del servicio</strong>,
                     reconoce expresamente que pierde su derecho de desistimiento sobre la parte del servicio ya ejecutada.</li>
-                  <li>Nos reservamos el derecho de rechazar solicitudes de reembolso en caso de uso indebido, 
+                  <li>Nos reservamos el derecho de rechazar solicitudes de reembolso en caso de uso indebido,
                     abuso del servicio o consumo significativo del mismo.</li>
+                  <li>La prueba gratuita de 14 días no genera ningún cargo ni da lugar a reembolso, ya que no se realiza ningún cobro durante la misma.</li>
                 </ul>
               </section>
 
@@ -128,6 +136,12 @@ export default function RefundPolicyPage() {
                     <strong>Sitio web:</strong> <a href="https://volkern.app" className="text-blue-600 hover:underline">https://volkern.app</a>
                   </p>
                 </div>
+                <p className="text-gray-600 leading-relaxed mt-4 text-sm">
+                  Para más detalle sobre planes, renovación y condiciones comerciales, consulta los{' '}
+                  <Link href="/terms" className="text-blue-600 hover:underline">Términos de Servicio</Link>;
+                  para el tratamiento de tus datos, la{' '}
+                  <Link href="/privacy" className="text-blue-600 hover:underline">Política de Privacidad</Link>.
+                </p>
               </section>
 
             </div>

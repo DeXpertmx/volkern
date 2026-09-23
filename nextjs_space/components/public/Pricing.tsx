@@ -4,6 +4,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Check, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { formatearImporte } from '@/lib/moneda';
 
 interface Plan {
   id: string;
@@ -29,13 +30,6 @@ interface PricingProps {
 const formatLimit = (val: number, label: string) => {
   if (val === -1) return `${label} ilimitados`
   return `${val} ${label}`
-}
-
-const currencySymbol = (moneda: string) => {
-  if (moneda === 'EUR') return '€'
-  if (moneda === 'MXN') return '$'
-  if (moneda === 'USD') return '$'
-  return moneda
 }
 
 export const Pricing = ({ plans }: PricingProps) => {
@@ -80,7 +74,7 @@ export const Pricing = ({ plans }: PricingProps) => {
               <p className="text-slate-400 text-sm mb-6 min-h-[40px]">{plan.descripcion}</p>
               
               <div className="mb-8">
-                <span className="text-4xl font-bold text-white">{currencySymbol(plan.moneda)}{plan.precio}</span>
+                <span className="text-4xl font-bold text-white">{formatearImporte(plan.precio, plan.moneda, 0)}</span>
                 <span className="text-slate-500 ml-2">/ {plan.intervalo === 'mensual' ? 'mes' : 'año'}</span>
               </div>
 

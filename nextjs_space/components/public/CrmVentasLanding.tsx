@@ -11,6 +11,20 @@ import {
   Star, Quote, Building2, Handshake, PhoneCall,
 } from 'lucide-react';
 
+import { MONEDA_PLATAFORMA, formatearImporte } from '@/lib/moneda';
+import { getVerticalPlanPrice } from '@/lib/vertical-plans';
+
+/**
+ * Precio mensual publicado de la vertical, en la divisa de la plataforma.
+ *
+ * Sale de `lib/vertical-plans.ts`, la misma fuente que usa el cobro: la portada
+ * no puede anunciar un precio distinto del que se factura. Antes era un literal
+ * `€NN/mes` repetido en cuatro sitios de la página.
+ */
+const PRECIO_MES = getVerticalPlanPrice('crm_ventas') ?? 0;
+const PRECIO_MES_TEXTO = formatearImporte(PRECIO_MES, MONEDA_PLATAFORMA, 0);
+const CON_VOLKERN = `${PRECIO_MES_TEXTO}/mes`;
+
 /* ─── Data ────────────────────────────────────────────────────────────────── */
 
 const PAIN_POINTS = [
@@ -67,7 +81,7 @@ const USE_CASES = [
 const TESTIMONIALS = [
   { quote: 'Pasamos de perder el 30% de los leads a tener todo bajo control. El pipeline nos da visibilidad que antes no teníamos.', name: 'Javier Medina', role: 'Director Comercial, TechSolutions', avatar: 'JM' },
   { quote: 'Mis vendedores saben exactamente qué hacer cada día. Ya no dependo de que me cuenten — lo veo todo en el dashboard.', name: 'Laura Castillo', role: 'CEO, Distribuidora Norte', avatar: 'LC' },
-  { quote: 'Integramos CRM, email y telefonía en un solo sitio. Antes pagábamos €190/mes en 3 herramientas. Ahora €49.', name: 'Diego Morales', role: 'Gerente de Ventas, Grupo Atlas', avatar: 'DM' },
+  { quote: `Integramos CRM, email y telefonía en un solo sitio. Antes pagábamos ${formatearImporte(190, MONEDA_PLATAFORMA, 0)}/mes en 3 herramientas. Ahora ${PRECIO_MES_TEXTO}.`, name: 'Diego Morales', role: 'Gerente de Ventas, Grupo Atlas', avatar: 'DM' },
 ];
 
 const COMPETITOR_TOOLS = [
@@ -133,7 +147,7 @@ export default function CrmVentasLanding() {
               Gestiona tus leads, controla tu pipeline y cierra más ventas sin perder oportunidades.
             </p>
             <p className="text-lg text-slate-500 max-w-2xl mx-auto mb-10">
-              Desde <span className="text-white font-bold">€49/mes</span>. 14 días gratis. Sin tarjeta.
+              Desde <span className="text-white font-bold">{CON_VOLKERN}</span>. 14 días gratis. Sin tarjeta.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link href="/signup?vertical=crm_ventas">
@@ -332,14 +346,14 @@ export default function CrmVentasLanding() {
                 <motion.div key={tool.name} initial={{ opacity: 0, x: -10 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.3, delay: i * 0.05 }}
                   className="grid grid-cols-3 gap-4 px-6 py-4 border-b border-slate-800/50 last:border-b-0 hover:bg-slate-800/30 transition-colors">
                   <span className="text-slate-300 font-medium">{tool.name}</span>
-                  <span className="text-red-400 text-right font-mono font-semibold">€{tool.price}</span>
+                  <span className="text-red-400 text-right font-mono font-semibold">{formatearImporte(tool.price, MONEDA_PLATAFORMA, 0)}</span>
                   <span className="text-cyan-400 text-right font-mono font-semibold flex items-center justify-end gap-2"><Check className="w-4 h-4" /> Incluido</span>
                 </motion.div>
               ))}
               <div className="grid grid-cols-3 gap-4 px-6 py-5 bg-slate-800/50 border-t-2 border-cyan-500/30">
                 <span className="text-white font-bold text-lg">Total</span>
-                <span className="text-red-400 text-right font-bold text-lg font-mono">€{TOTAL_COMPETITOR}+</span>
-                <span className="text-cyan-400 text-right font-bold text-lg font-mono">€49/mes</span>
+                <span className="text-red-400 text-right font-bold text-lg font-mono">{formatearImporte(TOTAL_COMPETITOR, MONEDA_PLATAFORMA, 0)}+</span>
+                <span className="text-cyan-400 text-right font-bold text-lg font-mono">{CON_VOLKERN}</span>
               </div>
             </div>
             <p className="text-center text-slate-500 text-sm mt-4">14 días de prueba gratis. Sin compromiso. Cancela cuando quieras.</p>
@@ -452,7 +466,7 @@ export default function CrmVentasLanding() {
               <p className="text-lg text-slate-400 mb-4 max-w-xl mx-auto">
                 <span className="text-white font-bold">14 días gratis</span>. Sin tarjeta. Sin compromiso.
               </p>
-              <p className="text-slate-500 text-sm mb-10">Luego €49/mes. Incluye CRM, pipeline, email, telefonía y más.</p>
+              <p className="text-slate-500 text-sm mb-10">Luego {CON_VOLKERN}. Incluye CRM, pipeline, email, telefonía y más.</p>
               <Link href="/signup?vertical=crm_ventas">
                 <Button size="lg" className="bg-cyan-600 hover:bg-cyan-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-cyan-600/30 group">
                   Probar 14 días gratis

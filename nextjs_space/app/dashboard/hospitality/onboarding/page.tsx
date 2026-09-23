@@ -21,6 +21,9 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { AccionHospitality } from '@/components/hospitality/AccionHospitality';
+import { MONEDAS_SELECCIONABLES, formatearImporte, monedaEfectiva } from '@/lib/moneda';
+import { useMonedaTenant } from '@/lib/use-moneda-tenant';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -266,14 +269,31 @@ export default function HospitalityOnboardingPage() {
   });
 
   // Paso 2 — nueva unidad
+  /**
+   * Moneda de reporte del tenant. Es la divisa con la que el paso de la unidad
+   * nace y a la que vuelve tras crearla: el asistente no empieza en una divisa
+   * que nadie eligió, y el campo se puede cambiar en el propio paso.
+   */
+  const monedaTenant = useMonedaTenant();
   const [nuevaUnidad, setNuevaUnidad] = useState({
     nombre: '',
     codigo: '',
     tipo: 'apartamento',
     capacidad: '2',
     tarifaBase: '',
-    moneda: 'MXN',
+    moneda: '',
   });
+  /**
+   * Divisa con la que nacerá una unidad nueva: la del inventario que ya existe
+   * (un hotel no mezcla divisas por descuido) y, si no hay ninguna, la moneda de
+   * reporte del tenant. Es la MISMA precedencia que aplica la API al crear una
+   * unidad, así que el paso enseña lo que se va a guardar; si no hay ninguna de
+   * las dos, el campo queda vacío y el servidor la resuelve.
+   */
+  const monedaDeUnidadNueva = useMemo(
+    () => monedaEfectiva((snapshot?.unidades || []).map((u) => u.moneda), monedaTenant),
+    [snapshot, monedaTenant]
+  );
 
   // Paso 5 — catálogo externo
   const [hotelCodeInput, setHotelCodeInput] = useState('');
@@ -586,7 +606,15 @@ export default function HospitalityOnboardingPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'No se pudo crear la unidad');
       toast.success('Unidad creada');
-      setNuevaUnidad({ nombre: '', codigo: '', tipo: 'apartamento', capacidad: '2', tarifaBase: '', moneda: 'MXN' });
+      setNuevaUnidad({
+        nombre: '',
+        codigo: '',
+        tipo: 'apartamento',
+        capacidad: '2',
+        tarifaBase: '',
+        // La divisa del paso vuelve a la que le tocaría a la próxima unidad.
+        moneda: monedaDeUnidadNueva,
+      });
       await cargar(snapshot.propiedad.id);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Error creando la unidad');
@@ -845,10 +873,12 @@ export default function HospitalityOnboardingPage() {
         />
       </div>
       <div className="sm:col-span-2">
-        <Button onClick={crearPropiedad} disabled={busy !== null}>
-          {busy === 'propiedad' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-          Crear propiedad y continuar
-        </Button>
+        <AccionHospitality capacidad="reservas.crear">
+          <Button onClick={crearPropiedad} disabled={busy !== null}>
+            {busy === 'propiedad' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+            Crear propiedad y continuar
+          </Button>
+        </AccionHospitality>
       </div>
     </div>
   );
@@ -1028,17 +1058,25 @@ export default function HospitalityOnboardingPage() {
                 </div>
                 <div>
                   <Label>Moneda</Label>
-                  <Input
-                    value={nuevaUnidad.moneda}
-                    onChange={(e) => setNuevaUnidad({ ...nuevaUnidad, moneda: e.target.value })}
-                    placeholder="MXN"
-                  />
+                  <Select
+                    value={nuevaUnidad.moneda || monedaDeUnidadNueva}
+                    onValueChange={(v) => setNuevaUnidad({ ...nuevaUnidad, moneda: v })}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Divisa" /></SelectTrigger>
+                    <SelectContent>
+                      {MONEDAS_SELECCIONABLES.map((m) => (
+                        <SelectItem key={m} value={m}>{m}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="sm:col-span-3">
-                  <Button onClick={crearUnidad} disabled={busy !== null} variant="secondary">
-                    {busy === 'unidad' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-                    Añadir unidad
-                  </Button>
+                  <AccionHospitality capacidad="reservas.crear">
+                    <Button onClick={crearUnidad} disabled={busy !== null} variant="secondary">
+                      {busy === 'unidad' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+                      Añadir unidad
+                    </Button>
+                  </AccionHospitality>
                 </div>
               </div>
             </div>
@@ -1104,10 +1142,14 @@ export default function HospitalityOnboardingPage() {
                     placeholder="El código que asigna el proveedor al onboarding"
                   />
                 </div>
-                <Button onClick={() => cargarCatalogo(false)} disabled={busy !== null || !hotelCodeInput.trim()}>
-                  {busy === 'catalogo' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-                  Obtener catálogo
-                </Button>
+                {/* Leer el catálogo del proveedor exige `integraciones.ver` (no
+                    `gestionar`): es una consulta, aunque se pida con POST. */}
+                <AccionHospitality capacidad="integraciones.ver">
+                  <Button onClick={() => cargarCatalogo(false)} disabled={busy !== null || !hotelCodeInput.trim()}>
+                    {busy === 'catalogo' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                    Obtener catálogo
+                  </Button>
+                </AccionHospitality>
               </div>
 
               {catalogoError && (
@@ -1236,10 +1278,12 @@ export default function HospitalityOnboardingPage() {
                       </div>
                     ))}
                   </div>
-                  <Button onClick={guardarMapping} disabled={busy !== null}>
-                    {busy === 'mapping' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Link2 className="mr-2 h-4 w-4" />}
-                    Guardar vínculos
-                  </Button>
+                  <AccionHospitality capacidad="integraciones.gestionar">
+                    <Button onClick={guardarMapping} disabled={busy !== null}>
+                      {busy === 'mapping' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Link2 className="mr-2 h-4 w-4" />}
+                      Guardar vínculos
+                    </Button>
+                  </AccionHospitality>
                 </>
               )}
 
@@ -1328,10 +1372,12 @@ export default function HospitalityOnboardingPage() {
                   </AlertDescription>
                 </Alert>
               ) : (
-                <Button onClick={activar} disabled={busy !== null || !snapshot.puedeActivar.ok}>
-                  {busy === 'activar' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Rocket className="mr-2 h-4 w-4" />}
-                  Activar propiedad
-                </Button>
+                <AccionHospitality capacidad="integraciones.gestionar">
+                  <Button onClick={activar} disabled={busy !== null || !snapshot.puedeActivar.ok}>
+                    {busy === 'activar' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Rocket className="mr-2 h-4 w-4" />}
+                    Activar propiedad
+                  </Button>
+                </AccionHospitality>
               )}
             </div>
           </PasoCard>
@@ -1412,16 +1458,18 @@ export default function HospitalityOnboardingPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => {
-                const unidad = unidadADeshacer;
-                setUnidadADeshacer(null);
-                if (unidad) void deshacerVinculo(unidad);
-              }}
-            >
-              Deshacer vínculo
-            </AlertDialogAction>
+            <AccionHospitality capacidad="integraciones.gestionar">
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => {
+                  const unidad = unidadADeshacer;
+                  setUnidadADeshacer(null);
+                  if (unidad) void deshacerVinculo(unidad);
+                }}
+              >
+                Deshacer vínculo
+              </AlertDialogAction>
+            </AccionHospitality>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -1847,7 +1895,7 @@ function IncidenciasPanel({
                     {n.unit && <span className="text-slate-500">· {n.unit}</span>}
                     {n.penalizacion ? (
                       <Badge variant="outline" className="border-amber-200 bg-amber-100 text-amber-800">
-                        Penalización {n.penalizacion.importe.toLocaleString('es-MX')} {n.penalizacion.moneda}
+                        Penalización {formatearImporte(n.penalizacion.importe, n.penalizacion.moneda)}
                         {n.penalizacion.facturada ? ' · facturada' : ' · sin facturar'}
                       </Badge>
                     ) : (

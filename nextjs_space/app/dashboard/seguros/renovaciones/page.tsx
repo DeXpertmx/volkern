@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api-client';
+import { formatCurrencyExact } from '@/components/insurance/portfolio-format';
 import {
   Calendar as CalendarIcon,
   AlertTriangle,
@@ -240,7 +241,7 @@ export default function RenovacionesPage() {
                             {dias <= 0 ? '¡VENCIDA!' : `${dias} días`}
                           </Badge>
                           {p.primaAnual && (
-                            <p className="text-xs mt-1">{p.primaAnual.toLocaleString('es-ES')} {p.moneda || 'EUR'}</p>
+                            <p className="text-xs mt-1">{formatCurrencyExact(p.primaAnual, p.moneda)}</p>
                           )}
                         </div>
                       </div>

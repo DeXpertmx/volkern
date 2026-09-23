@@ -120,19 +120,20 @@ export async function GET(request: NextRequest) {
           polizasEmitidas.map(p => ({
             fechaEmision: p.fechaEmision,
             primaAnual: p.primaAnual
-              ? fxConvert(Number(p.primaAnual), (p.moneda as string) ?? 'USD', tenantMoneda)
+              ? fxConvert(Number(p.primaAnual), (p.moneda as string) ?? tenantMoneda, tenantMoneda)
               : null,
           })),
           JSON.parse(JSON.stringify(skeleton))
         );
         const reg = computeRegressionForecast(ventana, WINDOW);
 
-        // Query 2: pólizas PROXIMA_A_VENCER de este ramo, top por prima
-        // Cast de include a `any` porque strict Prisma typing rechaza la combinación
-        // `where.productoSeguro.ramo` + `include.aseguradora` cuando el enum
-        // viene de un array tipado como string[]. La query funciona correctamente
-        // en runtime — es solo un quirk del tipado de Prisma 6.
-        const proximas: any[] = await prisma.poliza.findMany({
+        // Query 2: pólizas PROXIMA_A_VENCER de este ramo, top por prima.
+        // El cast a `any` que había aquí apagaba el comprobador de tipos y dejó
+        // pasar un `include` con un campo inexistente (`contacts` en vez de
+        // `cliente`): la query lanzaba en tiempo de ejecución y el endpoint
+        // devolvía 500, así que la cuadrícula por ramo nunca mostraba nada.
+        // Sin el cast, el compilador vigila esta query como las demás.
+        const proximas = await prisma.poliza.findMany({
           where: {
             tenantId: auth.tenant!.id,
             estado: 'PROXIMA_A_VENCER',
@@ -142,11 +143,11 @@ export async function GET(request: NextRequest) {
           orderBy: { primaAnual: 'desc' },
           take: TOP_PROXIMAS,
           include: {
-            contacts: { select: { nombre: true } },
+            cliente: { select: { nombre: true } },
             aseguradora: { select: { nombre: true } },
             productoSeguro: { select: { nombre: true } },
           },
-        } as any);
+        });
 
         const ultimoReal = ventana[ventana.length - 1]?.primaTotal ?? 0;
         const caidaAbsoluta = Math.round((ultimoReal - reg.proyeccion) * 100) / 100;
@@ -178,10 +179,17 @@ export async function GET(request: NextRequest) {
           polizasProximaVencerTop: proximas.map(p => ({
             polizaId: p.id,
             numeroPoliza: p.numeroPoliza,
-            cliente: p.contacts?.nombre ?? null,
+            cliente: p.cliente?.nombre ?? null,
             aseguradora: p.aseguradora?.nombre ?? null,
             producto: p.productoSeguro?.nombre ?? null,
-            primaAnual: Number(p.primaAnual ?? 0),
+            // La prima de cada póliza próxima a vencer se convierte a la divisa
+            // del tenant, que es la que declara `tenantMoneda` y con la que la
+            // cuadrícula la escribe.
+            primaAnual: fxConvert(
+              Number(p.primaAnual ?? 0),
+              (p.moneda as string) ?? tenantMoneda,
+              tenantMoneda
+            ),
             fechaVencimiento: p.fechaVencimiento.toISOString(),
             diasParaVencer: Math.ceil((p.fechaVencimiento.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)),
           })),

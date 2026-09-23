@@ -6,6 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { MONEDAS_SELECCIONABLES } from '@/lib/moneda';
+import { useMonedaTenant } from '@/lib/use-moneda-tenant';
 
 interface PolizaFormData {
   clienteId: string;
@@ -47,12 +49,20 @@ export function PolizaForm({ initialData, onSubmit, onCancel, loading }: PolizaF
   const [primaAnual, setPrimaAnual] = useState('');
   const [sumaAsegurada, setSumaAsegurada] = useState('');
   const [formaPago, setFormaPago] = useState('ANUAL');
-  const [moneda, setMoneda] = useState('EUR');
+  const [moneda, setMoneda] = useState('');
   const [fechaInicio, setFechaInicio] = useState(new Date().toISOString().split('T')[0]);
   const [fechaVencimiento, setFechaVencimiento] = useState('');
   const [descripcion, setDescripcion] = useState('');
   const [notas, setNotas] = useState('');
   const [comisionPct, setComisionPct] = useState('');
+
+  // La divisa por defecto es la del tenant, no una fija: se rellena cuando
+  // llega del servidor y solo si el usuario (o los datos iniciales) no han
+  // puesto ya una.
+  const monedaTenant = useMonedaTenant();
+  useEffect(() => {
+    setMoneda((actual) => actual || monedaTenant);
+  }, [monedaTenant]);
 
   // Cargar datos iniciales
   useEffect(() => {
@@ -204,9 +214,11 @@ export function PolizaForm({ initialData, onSubmit, onCancel, loading }: PolizaF
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="EUR">EUR (€)</SelectItem>
-              <SelectItem value="MXN">MXN ($)</SelectItem>
-              <SelectItem value="USD">USD ($)</SelectItem>
+              {MONEDAS_SELECCIONABLES.map((m) => (
+                <SelectItem key={m} value={m}>
+                  {m}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>

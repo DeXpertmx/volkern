@@ -11,6 +11,7 @@ import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { AIEngine } from '@/lib/event-engine/ai-engine/ai-engine';
 import { parseInmueble } from '@/lib/real-estate/property-helpers';
+import { formatearImporte } from '@/lib/moneda';
 
 const MAX_RAG_RESULTS = 8;
 
@@ -137,7 +138,7 @@ Formato JSON esperado:
     const contextData = rows.map((p, i) => {
       const parsed = parseInmueble(p);
       return `[${i + 1}] ${parsed.propertyType || 'Inmueble'} - ${parsed.operationType || ''}
-  Precio: ${parsed.precioBase?.toLocaleString('es-ES') || '?'} €
+  Precio: ${parsed.precioBase ? formatearImporte(parsed.precioBase, parsed.moneda) : '?'}
   Ubicación: ${parsed.city || 'No especificada'}
   Características: ${parsed.bedrooms ? parsed.bedrooms + ' habs' : ''} ${parsed.bathrooms ? '/ ' + parsed.bathrooms + ' baños' : ''} ${parsed.areaM2 ? '/ ' + parsed.areaM2 + ' m²' : ''}
   ${parsed.hasPool ? '✔️ Piscina' : ''} ${parsed.hasParking ? '✔️ Parking' : ''} ${parsed.hasElevator ? '✔️ Ascensor' : ''} ${parsed.hasGarden ? '✔️ Jardín' : ''}
@@ -185,7 +186,8 @@ ${rows.length > 0
         id: p.id,
         titulo: p.titulo || p.nombre || `${parsed.propertyType || 'Inmueble'}`,
         precio: parsed.precioBase,
-        precioFormateado: parsed.precioBase?.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' }) || 'Consultar',        ubicacion: parsed.city || '',
+        precioFormateado: parsed.precioBase ? formatearImporte(parsed.precioBase, parsed.moneda) : 'Consultar',
+        ubicacion: parsed.city || '',
         tipoOperacion: parsed.operationType,
         tipoInmueble: parsed.propertyType,
         habitaciones: parsed.bedrooms,

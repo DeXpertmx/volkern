@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
+import { monedaEscritura } from '@/lib/moneda';
 
 /**
  * GET /api/erp/finance/payroll - Listar registros de nómina
@@ -37,7 +38,9 @@ export const POST = withTenantAuth(async (request, auth) => {
         employeeName: body.employeeName,
         userId: body.userId,
         amount: parseFloat(body.amount),
-        currency: body.currency || 'EUR',
+        // La nómina hereda la moneda de reporte del tenant cuando no se indica
+        // divisa; antes se guardaba en 'EUR' aunque el tenant fuera de pesos.
+        currency: monedaEscritura(body.currency, auth.tenant?.moneda),
         period: body.period,
         status: body.status || 'PAID',
         date: body.date ? new Date(body.date) : new Date(),

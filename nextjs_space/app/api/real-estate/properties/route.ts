@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
+import { monedaEscritura } from '@/lib/moneda';
 import { parseInmueble, buildCustomFieldValues, getProperties, syncPropertyOwnerToContact, type InmuebleParsed } from '@/lib/real-estate/property-helpers';
 
 /**
@@ -224,7 +225,10 @@ export const POST = withTenantAuth(async (req, auth) => {
         descripcion: descripcion || null,
         tipo: 'inmueble',
         precioBase: parseFloat(precioBase),
-        moneda: moneda || 'EUR',
+        // Divisa del inmueble: la que indique el usuario y, si no la indica, la
+        // moneda de reporte del tenant. Antes caía a 'EUR' —el valor por defecto
+        // de la columna—, así que un inmueble de un tenant en pesos nacía en euros.
+        moneda: monedaEscritura(moneda, auth.tenant?.moneda),
         activo,
         destacado,
         media: media || null,

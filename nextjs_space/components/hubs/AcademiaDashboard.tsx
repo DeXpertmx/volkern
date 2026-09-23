@@ -5,6 +5,7 @@ import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianG
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { LivingPlaybook } from '@/components/training/LivingPlaybook'
+import { TrainingLeaderboard } from '@/components/analytics/TrainingLeaderboard'
 
 export function AcademiaDashboard() {
   const [metrics, setMetrics] = useState<any>(null)
@@ -166,6 +167,13 @@ export function AcademiaDashboard() {
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">BI Intelligence Dashboard</span>
             </div>
         </Card>
+      </div>
+
+      {/* Ranking de Cerradores (C5): la parte competitiva del roleplay — el dato existía en la API y nadie lo enseñaba */}
+      <div className="pt-8 border-t border-slate-100">
+        <h2 className="text-lg font-black tracking-tighter mb-1">Ranking de Cerradores</h2>
+        <p className="text-sm text-muted-foreground mb-4">Los mejores cierres del equipo en el simulador de roleplay</p>
+        <TrainingLeaderboard />
       </div>
 
       {/* Living Playbook Section (Harvested by IA) */}

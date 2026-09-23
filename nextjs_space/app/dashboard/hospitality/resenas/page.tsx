@@ -18,6 +18,7 @@ import { Check, Loader2, Star, Undo2, Upload, X } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { AccionHospitality } from '@/components/hospitality/AccionHospitality';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -285,9 +286,11 @@ export default function ResenasPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   {r.estado === 'pendiente' && (
                     <>
-                      <Button size="sm" onClick={() => moderar(r.id, 'publicar')} disabled={trabajando}>
-                        <Check className="mr-1 h-4 w-4" /> Publicar
-                      </Button>
+                      <AccionHospitality capacidad="comunicaciones.gestionar">
+                        <Button size="sm" onClick={() => moderar(r.id, 'publicar')} disabled={trabajando}>
+                          <Check className="mr-1 h-4 w-4" /> Publicar
+                        </Button>
+                      </AccionHospitality>
                       <Button
                         size="sm"
                         variant="outline"
@@ -299,15 +302,19 @@ export default function ResenasPage() {
                       >
                         Responder y publicar
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => moderar(r.id, 'rechazar')} disabled={trabajando}>
-                        <X className="mr-1 h-4 w-4" /> Rechazar
-                      </Button>
+                      <AccionHospitality capacidad="comunicaciones.gestionar">
+                        <Button size="sm" variant="ghost" onClick={() => moderar(r.id, 'rechazar')} disabled={trabajando}>
+                          <X className="mr-1 h-4 w-4" /> Rechazar
+                        </Button>
+                      </AccionHospitality>
                     </>
                   )}
                   {r.estado !== 'pendiente' && (
-                    <Button size="sm" variant="ghost" onClick={() => moderar(r.id, 'reponer')} disabled={trabajando}>
-                      <Undo2 className="mr-1 h-4 w-4" /> Volver a pendiente
-                    </Button>
+                    <AccionHospitality capacidad="comunicaciones.gestionar">
+                      <Button size="sm" variant="ghost" onClick={() => moderar(r.id, 'reponer')} disabled={trabajando}>
+                        <Undo2 className="mr-1 h-4 w-4" /> Volver a pendiente
+                      </Button>
+                    </AccionHospitality>
                   )}
                 </div>
 
@@ -321,9 +328,11 @@ export default function ResenasPage() {
                       maxLength={1000}
                     />
                     <div className="flex gap-2">
-                      <Button size="sm" onClick={() => moderar(r.id, 'publicar', textoRespuesta)} disabled={trabajando}>
-                        Publicar con respuesta
-                      </Button>
+                      <AccionHospitality capacidad="comunicaciones.gestionar">
+                        <Button size="sm" onClick={() => moderar(r.id, 'publicar', textoRespuesta)} disabled={trabajando}>
+                          Publicar con respuesta
+                        </Button>
+                      </AccionHospitality>
                       <Button size="sm" variant="ghost" onClick={() => setRespondiendo(null)} disabled={trabajando}>
                         Cancelar
                       </Button>
@@ -407,10 +416,12 @@ export default function ResenasPage() {
                 <Button variant="ghost" onClick={() => setImportAbierto(false)} disabled={importando}>
                   Cancelar
                 </Button>
-                <Button onClick={importar} disabled={importando || !propiedadId || !csv.trim()}>
-                  {importando && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
-                  Importar reseñas
-                </Button>
+                <AccionHospitality capacidad="comunicaciones.gestionar">
+                  <Button onClick={importar} disabled={importando || !propiedadId || !csv.trim()}>
+                    {importando && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+                    Importar reseñas
+                  </Button>
+                </AccionHospitality>
               </DialogFooter>
             </div>
           )}

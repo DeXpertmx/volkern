@@ -3,6 +3,8 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import { getVerticalPlanPrice } from '@/lib/vertical-plans';
+import { MONEDA_PLATAFORMA, formatearImporte } from '@/lib/moneda';
 import { Button } from '@/components/ui/button';
 import {
   ArrowRight, Zap, Home, GraduationCap, Calculator,
@@ -21,7 +23,6 @@ const VERTICALS = [
     description: 'Convierte más oportunidades en ventas con un proceso comercial estructurado.',
     target: 'Equipos comerciales B2B y pymes',
     icon: TrendingUp,
-    price: '49',
     borderClass: 'border-cyan-500/30 hover:border-cyan-400',
     bgGlow: 'bg-cyan-600/10',
     iconBg: 'bg-cyan-500/10 border-cyan-500/20',
@@ -37,7 +38,6 @@ const VERTICALS = [
     description: 'Lanza, automatiza y mide campañas sin cambiar de herramienta.',
     target: 'Agencias y equipos de marketing',
     icon: PenTool,
-    price: '49',
     borderClass: 'border-purple-500/30 hover:border-purple-400',
     bgGlow: 'bg-purple-600/10',
     iconBg: 'bg-purple-500/10 border-purple-500/20',
@@ -53,7 +53,6 @@ const VERTICALS = [
     description: 'Crea, vende y automatiza tu academia desde un solo sistema.',
     target: 'Creadores de cursos y escuelas',
     icon: GraduationCap,
-    price: '49',
     borderClass: 'border-amber-500/30 hover:border-amber-400',
     bgGlow: 'bg-amber-600/10',
     iconBg: 'bg-amber-500/10 border-amber-500/20',
@@ -69,7 +68,6 @@ const VERTICALS = [
     description: 'Centraliza tu despacho con trazabilidad total y control documental.',
     target: 'Despachos contables y asesorías',
     icon: Calculator,
-    price: '59',
     borderClass: 'border-blue-500/30 hover:border-blue-400',
     bgGlow: 'bg-blue-600/10',
     iconBg: 'bg-blue-500/10 border-blue-500/20',
@@ -85,7 +83,6 @@ const VERTICALS = [
     description: 'Gestiona tu equipo, documentos y procesos internos con orden.',
     target: 'Empresas con 10-200 empleados',
     icon: UserCheck,
-    price: '39',
     borderClass: 'border-rose-500/30 hover:border-rose-400',
     bgGlow: 'bg-rose-600/10',
     iconBg: 'bg-rose-500/10 border-rose-500/20',
@@ -101,7 +98,6 @@ const VERTICALS = [
     description: 'Centraliza leads, propiedades y seguimiento para vender más.',
     target: 'Inmobiliarias y agentes',
     icon: Home,
-    price: '59',
     borderClass: 'border-emerald-500/30 hover:border-emerald-400',
     bgGlow: 'bg-emerald-600/10',
     iconBg: 'bg-emerald-500/10 border-emerald-500/20',
@@ -117,7 +113,6 @@ const VERTICALS = [
     description: 'Controla tu operación industrial con procesos documentados.',
     target: 'Plantas, logística y manufactura',
     icon: Factory,
-    price: '59',
     borderClass: 'border-orange-500/30 hover:border-orange-400',
     bgGlow: 'bg-orange-600/10',
     iconBg: 'bg-orange-500/10 border-orange-500/20',
@@ -133,7 +128,6 @@ const VERTICALS = [
     description: 'Crea facturas en segundos y controla tus cobros sin complicaciones.',
     target: 'Autónomos y pequeños comercios',
     icon: Receipt,
-    price: '19',
     borderClass: 'border-green-500/30 hover:border-green-400',
     bgGlow: 'bg-green-600/10',
     iconBg: 'bg-green-500/10 border-green-500/20',
@@ -238,7 +232,9 @@ export default function ProductosLanding() {
                     {/* Price */}
                     <div className="mb-5">
                       <div className="flex items-baseline gap-1">
-                        <span className="text-3xl font-black text-white">€{v.price}</span>
+                        {/* El precio no se escribe aquí: sale de la fuente única
+                            (lib/vertical-plans.ts), la misma que usa el cobro. */}
+                        <span className="text-3xl font-black text-white">{formatearImporte(getVerticalPlanPrice(v.id) ?? 0, MONEDA_PLATAFORMA, 0)}</span>
                         <span className="text-sm text-slate-500">/mes</span>
                       </div>
                       <p className="text-[10px] text-slate-600 mt-0.5">Sin permanencia</p>

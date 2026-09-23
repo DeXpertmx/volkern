@@ -107,6 +107,9 @@ export const GET = withTenantAuth(async (req, auth) => {
       .slice(0, 10);
 
     return NextResponse.json({
+      // Moneda de reporte del tenant: con la que se deben escribir los importes
+      // de este panel. Antes el cliente los escribía siempre en euros.
+      moneda: auth.tenant?.moneda ?? "",
       stats,
       leads: {
         thisMonth: leadsThisMonth,

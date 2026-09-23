@@ -26,6 +26,8 @@ import {
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { AccionHospitality } from '@/components/hospitality/AccionHospitality';
+import { formatearImporte } from '@/lib/moneda';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -152,7 +154,7 @@ const COLOR_CUENTA: Record<CuentaCobro['estado'], string> = {
 };
 
 function fmtDinero(valor: number, moneda: string): string {
-  return new Intl.NumberFormat('es-MX', { style: 'currency', currency: moneda || 'MXN', maximumFractionDigits: 2 }).format(valor || 0);
+  return formatearImporte(valor, moneda, 2);
 }
 
 function fmtFecha(iso: string | null): string {
@@ -345,25 +347,33 @@ export default function HospitalityFinanzas() {
           </span>
           <div className="ml-auto flex items-center gap-2">
             {(!cuenta || cuenta.estado === 'sin_conectar') && (
-              <Button type="button" size="sm" onClick={conectarCuenta} disabled={cuentaBusy}>
-                {cuentaBusy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <ExternalLink className="mr-1 h-4 w-4" />}
-                Conectar con Stripe
-              </Button>
+              <AccionHospitality capacidad="finanzas.gestionar">
+                <Button type="button" size="sm" onClick={conectarCuenta} disabled={cuentaBusy}>
+                  {cuentaBusy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <ExternalLink className="mr-1 h-4 w-4" />}
+                  Conectar con Stripe
+                </Button>
+              </AccionHospitality>
             )}
             {cuenta && cuenta.estado !== 'sin_conectar' && cuenta.estado !== 'activo' && (
               <>
-                <Button type="button" size="sm" variant="outline" onClick={conectarCuenta} disabled={cuentaBusy}>
-                  <ExternalLink className="mr-1 h-4 w-4" /> Completar onboarding
-                </Button>
-                <Button type="button" size="sm" variant="outline" onClick={sincronizarCuenta} disabled={cuentaBusy}>
-                  {cuentaBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />} Verificar
-                </Button>
+                <AccionHospitality capacidad="finanzas.gestionar">
+                  <Button type="button" size="sm" variant="outline" onClick={conectarCuenta} disabled={cuentaBusy}>
+                    <ExternalLink className="mr-1 h-4 w-4" /> Completar onboarding
+                  </Button>
+                </AccionHospitality>
+                <AccionHospitality capacidad="finanzas.gestionar">
+                  <Button type="button" size="sm" variant="outline" onClick={sincronizarCuenta} disabled={cuentaBusy}>
+                    {cuentaBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />} Verificar
+                  </Button>
+                </AccionHospitality>
               </>
             )}
             {cuenta?.estado === 'activo' && (
-              <Button type="button" size="sm" variant="outline" onClick={sincronizarCuenta} disabled={cuentaBusy}>
-                {cuentaBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />} Verificar
-              </Button>
+              <AccionHospitality capacidad="finanzas.gestionar">
+                <Button type="button" size="sm" variant="outline" onClick={sincronizarCuenta} disabled={cuentaBusy}>
+                  {cuentaBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />} Verificar
+                </Button>
+              </AccionHospitality>
             )}
           </div>
         </CardContent>
@@ -440,7 +450,7 @@ export default function HospitalityFinanzas() {
                     <div key={canal} className="flex justify-between gap-2">
                       <span className="truncate text-muted-foreground">{canal}</span>
                       <span className="font-medium shrink-0">
-                        {fmtDinero(c.bruto, monedaPrincipal || 'MXN')}
+                        {fmtDinero(c.bruto, monedaPrincipal || '')}
                         {monedaPrincipal ? '' : ` ×${c.reservas}`}
                       </span>
                     </div>
@@ -550,16 +560,18 @@ export default function HospitalityFinanzas() {
                       <td className="px-3 py-2 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           {cuenta?.estado === 'activo' && r.pendiente > 0 && (
-                            <Button
-                              type="button"
-                              size="sm"
-                              onClick={() => cobrarReserva(r)}
-                              disabled={cobrandoId === r.id}
-                              title="Cobrar con tarjeta (Stripe): el dinero llega a tu cuenta"
-                            >
-                              {cobrandoId === r.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CreditCard className="h-3.5 w-3.5" />}
-                              Cobrar
-                            </Button>
+                            <AccionHospitality capacidad="finanzas.gestionar">
+                              <Button
+                                type="button"
+                                size="sm"
+                                onClick={() => cobrarReserva(r)}
+                                disabled={cobrandoId === r.id}
+                                title="Cobrar con tarjeta (Stripe): el dinero llega a tu cuenta"
+                              >
+                                {cobrandoId === r.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CreditCard className="h-3.5 w-3.5" />}
+                                Cobrar
+                              </Button>
+                            </AccionHospitality>
                           )}
                           <Button
                             type="button"
@@ -802,10 +814,12 @@ export default function HospitalityFinanzas() {
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setPagoForm(null)}>Cancelar</Button>
-                <Button onClick={registrarPago} disabled={pagoSaving}>
-                  {pagoSaving && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
-                  Registrar pago
-                </Button>
+                <AccionHospitality capacidad="finanzas.gestionar">
+                  <Button onClick={registrarPago} disabled={pagoSaving}>
+                    {pagoSaving && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+                    Registrar pago
+                  </Button>
+                </AccionHospitality>
               </DialogFooter>
             </>
           )}

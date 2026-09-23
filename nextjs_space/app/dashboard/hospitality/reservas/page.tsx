@@ -44,6 +44,11 @@ import { diaLocalIso } from '@/lib/hospitality/reservas-csv';
 import { resumenReservas } from '@/lib/hospitality/analytics';
 import { POLITICAS_NO_SHOW, ETIQUETA_POLITICA_NO_SHOW } from '@/lib/hospitality/no-show';
 import { Button } from '@/components/ui/button';
+import { AccionHospitality } from '@/components/hospitality/AccionHospitality';
+import { MONEDAS_SELECCIONABLES, formatearImporte, monedaEfectiva, primeraMoneda } from '@/lib/moneda';
+import { useMonedaTenant } from '@/lib/use-moneda-tenant';
+import { useCapacidadesHospitality } from '@/hooks/use-capacidades-hospitality';
+import { capacidadDeCambioDeReserva } from '@/lib/hospitality/capacidades';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -327,11 +332,16 @@ const EMPTY_FORM = {
   checkout: '',
   estado: 'confirmed',
   importe: '',
-  moneda: 'MXN',
+  // La divisa de una reserva nueva la resuelve la API con la moneda de reporte
+  // del tenant; este formulario solo la enseña cuando ya hay una.
+  moneda: '',
   notas: '',
 };
 
 export default function HospitalityReservasPage() {
+  const { puede } = useCapacidadesHospitality();
+  /** Moneda de reporte del tenant: respaldo de la divisa de una reserva nueva. */
+  const monedaTenant = useMonedaTenant();
   const [loading, setLoading] = useState(true);
   /** Los filtros activos de la lista, para el CSV de la lista del día. */
   const [filtrosCsv, setFiltrosCsv] = useState('');
@@ -455,7 +465,7 @@ export default function HospitalityReservasPage() {
       checkout: r.checkOut.slice(0, 10),
       estado: r.estado,
       importe: r.amountAfterTax != null ? String(r.amountAfterTax) : '',
-      moneda: r.currency || 'MXN',
+      moneda: primeraMoneda(r.currency, monedaTenant),
       notas: r.specialRequests || '',
     });
     setFormOpen(true);
@@ -521,7 +531,7 @@ export default function HospitalityReservasPage() {
         if (pen) {
           if (pen.emitida) {
             toast.info(
-              `Penalización emitida: ${pen.importe.toLocaleString('es-MX')} ${pen.moneda} (${pen.politica === 'estancia_completa' ? 'estancia completa' : `${pen.nochesPenalizadas} noche`}). ` +
+              `Penalización emitida: ${formatearImporte(pen.importe, pen.moneda)} (${pen.politica === 'estancia_completa' ? 'estancia completa' : `${pen.nochesPenalizadas} noche`}). ` +
                 `La unidad queda libre: el cargo se factura desde Finanzas.`
             );
           } else if (pen.motivo && MOTIVO_PENALIZACION[pen.motivo]) {
@@ -573,7 +583,7 @@ export default function HospitalityReservasPage() {
       if (!res.ok) {
         toast.error(data.error || 'No se pudo emitir la penalización');
       } else if (data.emitida) {
-        toast.success(`Penalización emitida: ${data.importe.toLocaleString('es-MX')} ${data.moneda}`);
+        toast.success(`Penalización emitida: ${formatearImporte(data.importe, data.moneda)}`);
       } else {
         toast.info(MOTIVO_PENALIZACION[data.motivo] || 'No procedía emitir penalización');
       }
@@ -600,7 +610,7 @@ export default function HospitalityReservasPage() {
       if (!res.ok) {
         toast.error(data.error || 'No se pudo facturar la penalización');
       } else if (data.facturada) {
-        toast.success(`Factura del ERP emitida: ${data.numero} (${data.importe.toLocaleString('es-MX')} ${data.moneda})`);
+        toast.success(`Factura del ERP emitida: ${data.numero} (${formatearImporte(data.importe, data.moneda)})`);
       } else {
         toast.info('La penalización ya estaba facturada');
       }
@@ -615,6 +625,15 @@ export default function HospitalityReservasPage() {
   // Totales de la lista filtrada: módulo puro (noches y producción con la
   // regla del módulo, no aritmética en la página).
   const resumen = useMemo(() => resumenReservas(reservas), [reservas]);
+
+  // La divisa con la que se escriben los importes de la lista: la de las
+  // reservas que se están viendo (la predominante, si hay varias) y, si no hay
+  // ninguna, la moneda de reporte del tenant — la misma precedencia que usa la
+  // API, para que la cabecera y las filas no puedan discrepar.
+  const monedaListado = useMemo(
+    () => monedaEfectiva(reservas.map((r) => r.currency), monedaTenant),
+    [reservas, monedaTenant]
+  );
 
   // Reservas a las que les falta el parte de viajeros por datos del huésped:
   // el aviso de cabecera y las acciones de cada fila salen de aquí.
@@ -715,7 +734,7 @@ export default function HospitalityReservasPage() {
             Reservas
           </h1>
           <p className="text-muted-foreground mt-1">
-            {reservas.length} reservas · {resumen.noches} noches · {resumen.ingresos > 0 ? resumen.ingresos.toLocaleString('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }) : '—'}
+            {reservas.length} reservas · {resumen.noches} noches · {resumen.ingresos > 0 ? formatearImporte(resumen.ingresos, monedaListado, 0) : '—'}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -918,20 +937,24 @@ export default function HospitalityReservasPage() {
                         <Button size="sm" onClick={() => setParteDe(r)}>
                           <UserPlus className="mr-2 h-4 w-4" /> Corregir los datos
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => void copiarEnlaceCheckin(r)}
-                        >
-                          <Link2 className="mr-2 h-4 w-4" /> Enlace de check-in
-                        </Button>
+                        <AccionHospitality capacidad="operaciones.gestionar">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => void copiarEnlaceCheckin(r)}
+                          >
+                            <Link2 className="mr-2 h-4 w-4" /> Enlace de check-in
+                          </Button>
+                        </AccionHospitality>
                       </>
                     ) : (
                       <>
-                        <Button size="sm" variant="outline" onClick={() => void reintentarEnvio(r)}>
-                          <RefreshCw className="mr-2 h-4 w-4" />{' '}
-                          {parteAbandonadoSinReintento(r) ? 'Reenviar el parte' : 'Reintentar el envío'}
-                        </Button>
+                        <AccionHospitality capacidad="operaciones.gestionar">
+                          <Button size="sm" variant="outline" onClick={() => void reintentarEnvio(r)}>
+                            <RefreshCw className="mr-2 h-4 w-4" />{' '}
+                            {parteAbandonadoSinReintento(r) ? 'Reenviar el parte' : 'Reintentar el envío'}
+                          </Button>
+                        </AccionHospitality>
                         <Button size="sm" variant="ghost" asChild>
                           <Link href="/dashboard/hospitality/registro-viajeros">
                             <Settings2 className="mr-2 h-4 w-4" /> Registro de viajeros
@@ -990,10 +1013,12 @@ export default function HospitalityReservasPage() {
                     </p>
                   )}
                   <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <Button size="sm" onClick={() => void reintentarEnvio(r)}>
-                      <RefreshCw className="mr-2 h-4 w-4" />{' '}
-                      {parteAbandonadoSinReintento(r) ? 'Reenviar el parte' : 'Reintentar el envío'}
-                    </Button>
+                    <AccionHospitality capacidad="operaciones.gestionar">
+                      <Button size="sm" onClick={() => void reintentarEnvio(r)}>
+                        <RefreshCw className="mr-2 h-4 w-4" />{' '}
+                        {parteAbandonadoSinReintento(r) ? 'Reenviar el parte' : 'Reintentar el envío'}
+                      </Button>
+                    </AccionHospitality>
                     <Button size="sm" variant="ghost" asChild>
                       <Link href="/dashboard/hospitality/registro-viajeros">
                         <Settings2 className="mr-2 h-4 w-4" /> Registro de viajeros
@@ -1124,7 +1149,7 @@ export default function HospitalityReservasPage() {
                           {r.amountAfterTax != null ? (
                             <span className="flex items-center gap-1">
                               <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
-                              {r.amountAfterTax.toLocaleString('es-MX')} {r.currency || ''}
+                              {formatearImporte(r.amountAfterTax, r.currency || monedaListado)}
                             </span>
                           ) : (
                             <span className="text-muted-foreground">—</span>
@@ -1136,6 +1161,17 @@ export default function HospitalityReservasPage() {
                           </Badge>
                         </td>
                         <td className="p-3 text-right whitespace-nowrap">
+                          {/* Los estados que se ofrecen son los que el rol puede
+                              aplicar: cancelar una reserva no es editarla, así que
+                              no se enseña «Cancelada» a quien solo puede corregir
+                              fechas o importe (la regla la resuelve
+                              `capacidadDeCambioDeReserva`, la misma que la API).
+                              Y si no puede aplicar ninguno, no hay desplegable. */}
+                          {ESTADOS.some(
+                            (e) =>
+                              e.value !== r.estado &&
+                              puede(capacidadDeCambioDeReserva(e.value, r.estado))
+                          ) ? (
                           <Select
                             value={r.estado}
                             onValueChange={(v) => cambiarEstadoRapido(r, v)}
@@ -1144,11 +1180,18 @@ export default function HospitalityReservasPage() {
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              {ESTADOS.filter((e) => e.value !== r.estado).map((e) => (
+                              {ESTADOS.filter(
+                                (e) =>
+                                  e.value !== r.estado &&
+                                  puede(capacidadDeCambioDeReserva(e.value, r.estado))
+                              ).map((e) => (
                                 <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
                           {/* El no-show no ocupa la unidad, pero sí se cobra: aquí
                               el operador emite el cargo y lo factura por el ERP. */}
                           {r.estado === 'no_show' && (
@@ -1173,14 +1216,16 @@ export default function HospitalityReservasPage() {
                               >
                                 <UserPlus className="h-4 w-4" />
                               </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => void copiarEnlaceCheckin(r)}
-                                title="Copiar el enlace de check-in del huésped"
-                              >
-                                <Link2 className="h-4 w-4" />
-                              </Button>
+                              <AccionHospitality capacidad="operaciones.gestionar">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => void copiarEnlaceCheckin(r)}
+                                  title="Copiar el enlace de check-in del huésped"
+                                >
+                                  <Link2 className="h-4 w-4" />
+                                </Button>
+                              </AccionHospitality>
                             </>
                           )}
                           {/* Rechazado: lo que toca depende de dónde esté el problema
@@ -1196,18 +1241,20 @@ export default function HospitalityReservasPage() {
                                 <UserPlus className="h-4 w-4" />
                               </Button>
                             ) : (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => void reintentarEnvio(r)}
-                                title={
-                                  parteAbandonadoSinReintento(r)
-                                    ? 'Reenviar el parte rechazado (el barrido ya no lo reintenta)'
-                                    : 'Reintentar el envío del parte rechazado'
-                                }
-                              >
-                                <RefreshCw className="h-4 w-4" />
-                              </Button>
+                              <AccionHospitality capacidad="operaciones.gestionar">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => void reintentarEnvio(r)}
+                                  title={
+                                    parteAbandonadoSinReintento(r)
+                                      ? 'Reenviar el parte rechazado (el barrido ya no lo reintenta)'
+                                      : 'Reintentar el envío del parte rechazado'
+                                  }
+                                >
+                                  <RefreshCw className="h-4 w-4" />
+                                </Button>
+                              </AccionHospitality>
                             ))}
                           <Button variant="ghost" size="sm" onClick={() => abrirEditar(r)} title="Editar">
                             <Pencil className="h-4 w-4" />
@@ -1264,7 +1311,7 @@ export default function HospitalityReservasPage() {
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">{penal.data.emitida.concepto}</span>
                     <Badge variant="secondary">
-                      {penal.data.emitida.importe.toLocaleString('es-MX')} {penal.data.emitida.moneda}
+                      {formatearImporte(penal.data.emitida.importe, penal.data.emitida.moneda)}
                     </Badge>
                   </div>
                   <p className="text-xs text-muted-foreground">
@@ -1278,7 +1325,7 @@ export default function HospitalityReservasPage() {
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">{penal.data.previsto.concepto}</span>
                     <Badge variant="secondary">
-                      {penal.data.previsto.importe.toLocaleString('es-MX')} {penal.reserva?.currency || ''}
+                      {formatearImporte(penal.data.previsto.importe, penal.reserva?.currency || monedaListado)}
                     </Badge>
                   </div>
                   <p className="text-xs text-muted-foreground">
@@ -1309,16 +1356,20 @@ export default function HospitalityReservasPage() {
               Cerrar
             </Button>
             {penal.data && !penal.data.emitida && penal.data.previsto.aplica && (
-              <Button onClick={emitirPenalizacion} disabled={penal.guardando}>
-                {penal.guardando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <DollarSign className="h-4 w-4 mr-2" />}
-                Emitir penalización
-              </Button>
+              <AccionHospitality capacidad="finanzas.gestionar">
+                <Button onClick={emitirPenalizacion} disabled={penal.guardando}>
+                  {penal.guardando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <DollarSign className="h-4 w-4 mr-2" />}
+                  Emitir penalización
+                </Button>
+              </AccionHospitality>
             )}
             {penal.data?.emitida && !penal.data.emitida.facturada && (
-              <Button onClick={facturarPenalizacion} disabled={penal.guardando}>
-                {penal.guardando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-                Facturar por el ERP
-              </Button>
+              <AccionHospitality capacidad="finanzas.gestionar">
+                <Button onClick={facturarPenalizacion} disabled={penal.guardando}>
+                  {penal.guardando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                  Facturar por el ERP
+                </Button>
+              </AccionHospitality>
             )}
           </DialogFooter>
         </DialogContent>
@@ -1410,7 +1461,7 @@ export default function HospitalityReservasPage() {
                   <Select value={form.moneda} onValueChange={(v) => setForm({ ...form, moneda: v })}>
                     <SelectTrigger id="r-moneda"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {['MXN', 'USD', 'EUR'].map((m) => (
+                      {MONEDAS_SELECCIONABLES.map((m) => (
                         <SelectItem key={m} value={m}>{m}</SelectItem>
                       ))}
                     </SelectContent>
@@ -1442,10 +1493,17 @@ export default function HospitalityReservasPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setFormOpen(false); setEditing(null); }}>Cancelar</Button>
-            <Button onClick={guardar} disabled={saving}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-              {editing ? 'Guardar cambios' : 'Crear reserva'}
-            </Button>
+            {/* El PATCH no pide lo mismo si el estado nuevo es «cancelada»
+                (`reservas.cancelar`) que si solo se corrigen fechas o importe;
+                se resuelve con la misma regla que la API. */}
+            <AccionHospitality
+              capacidad={editing ? capacidadDeCambioDeReserva(form.estado, editing.estado) : 'reservas.crear'}
+            >
+              <Button onClick={guardar} disabled={saving}>
+                {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                {editing ? 'Guardar cambios' : 'Crear reserva'}
+              </Button>
+            </AccionHospitality>
           </DialogFooter>
         </DialogContent>
       </Dialog>

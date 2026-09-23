@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
+import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
 import { startOfDay } from '@/lib/hospitality/calendar';
 import { unitOccupiedOnDay, type ActiveReservationSpan } from '@/lib/hospitality/availability';
 import { llegadasDelDia, salidasDelDia } from '@/lib/hospitality/analytics';
@@ -13,6 +14,9 @@ export async function GET(req: NextRequest) {
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
+    const sinPermiso = exigirPermisoHospitality(auth, 'operaciones.ver');
+    if (sinPermiso) return sinPermiso;
 
     const tenantId = auth.tenant!.id;
     const today = startOfDay(new Date());

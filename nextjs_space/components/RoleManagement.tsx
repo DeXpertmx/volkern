@@ -37,15 +37,47 @@ const MODULES = [
   { id: 'marketing', name: 'Marketing / Web', icon: 'Send' },
   { id: 'equipo', name: 'Gestión de Equipo', icon: 'UserCog' },
   { id: 'configuracion', name: 'Configuración Sistema', icon: 'Settings' },
+  // Hospitality se reparte en las cuatro áreas de trabajo de una propiedad
+  // real. Si no estuvieran aquí, la API las exige pero nadie podría concederlas.
+  { id: 'hospitality_reservas', name: 'Hospitality · Reservas y planning', icon: 'CalendarDays' },
+  { id: 'hospitality_operaciones', name: 'Hospitality · Operaciones (limpieza y check-in/out)', icon: 'Sparkles' },
+  { id: 'hospitality_mantenimiento', name: 'Hospitality · Mantenimiento', icon: 'Wrench' },
+  { id: 'hospitality_integraciones', name: 'Hospitality · Integraciones y conectividad', icon: 'Plug' },
+  { id: 'hospitality_finanzas', name: 'Hospitality · Finanzas y reportes', icon: 'Receipt' },
+  { id: 'hospitality_comunicaciones', name: 'Hospitality · Comunicaciones al huésped', icon: 'Send' },
+  { id: 'hospitality_automatizaciones', name: 'Hospitality · Automatizaciones', icon: 'Zap' },
+  // El huésped no ve el módulo de reservas recortado: ve el suyo. Es un módulo
+  // aparte para que conceder «ver reservas» —las de la cuenta entera— nunca sea
+  // el camino para dar acceso a un huésped.
+  { id: 'hospitality_misreservas', name: 'Hospitality · Sus reservas (rol Huésped)', icon: 'User' },
 ]
 
 const ACTIONS = [
   { id: 'ver', name: 'Ver' },
+  // Alcance, no acceso: «Ver» abre el módulo y «Ver todo» decide si además se
+  // ve lo de toda la cuenta o solo lo propio. Hoy solo lo lee el pipeline de
+  // leads —sin esta casilla, quien entra al pipeline ve sus leads asignados—,
+  // pero se concede por módulo como cualquier otra, para no tener dos
+  // mecanismos de permisos en la misma matriz.
+  { id: 'ver_todos', name: 'Ver todo (alcance completo)' },
   { id: 'crear', name: 'Crear' },
   { id: 'editar', name: 'Editar' },
+  // Cancelar no es eliminar: la reserva cancelada sigue existiendo con su
+  // historial. Es una acción propia y solo la usa Hospitality.
+  { id: 'cancelar', name: 'Cancelar' },
   { id: 'eliminar', name: 'Eliminar' },
   { id: 'exportar', name: 'Exportar' },
+  { id: 'gestionar', name: 'Gestionar' },
+  // Entregar las llaves no es limpiar la habitación, configurar un canal no es
+  // firmar en nombre del propietario, ni repartir permisos es gestionar el
+  // equipo. Cada una de estas es su propia casilla, con su propio nombre, para
+  // que el Anfitrión pueda concederla sin tener que conceder lo de al lado.
+  { id: 'checkin', name: 'Check-in' },
+  { id: 'administrar', name: 'Administrar' },
+  { id: 'documento_completo', name: 'Ver documentos' },
+  { id: 'roles', name: 'Roles' },
 ]
+
 
 export function RoleManagement() {
   const [roles, setRoles] = useState<Role[]>([])

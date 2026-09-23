@@ -80,6 +80,7 @@ import {
   type EditableColumn,
   EDITABLE_COLUMNS,
 } from '@/lib/insurance/csv-bulk-editor';
+import { MONEDA_MINIMA_ESQUEMA, MONEDA_PLATAFORMA, monedaEscritura } from '@/lib/moneda';
 import { VERTICAL_DEFINITIONS, VERTICALS, type Vertical } from '@/lib/plans';
 
 type BulkStep = 'upload' | 'preview' | 'simulated' | 'create' | 'done';
@@ -163,7 +164,7 @@ async function createRow(row: BulkRowState, signal: AbortSignal): Promise<BulkRo
       signal,
     });
     const data: CreateApiResponse = await res.json().catch(() => ({
-      success: false, moneda: 'MXN', error: { code: 'PARSE_ERROR', message: `HTTP ${res.status}` },
+      success: false, moneda: MONEDA_MINIMA_ESQUEMA, error: { code: 'PARSE_ERROR', message: `HTTP ${res.status}` },
     }));
     if (!res.ok || !data.success) {
       return {
@@ -316,7 +317,7 @@ export default function PartnerOnboardingBulkPage() {
       empresa: r.parsed.empresa,
       subdomain: r.parsed.subdomain,
       email: r.parsed.email,
-      moneda: r.moneda ?? r.parsed.moneda ?? 'MXN',
+      moneda: monedaEscritura(r.moneda, r.parsed.moneda),
       status: r.status === 'created' ? 'created'
             : r.status === 'error'  ? 'error'
             : 'pending',
@@ -586,7 +587,7 @@ export default function PartnerOnboardingBulkPage() {
               <textarea
                 value={csvText}
                 onChange={e => setCsvText(e.target.value)}
-                placeholder={'empresa,subdomain,email,password,moneda,vertical\nBrokers SL,brokers,admin@b.com,MagicPwd123,EUR,insurance\nOther,other-sa,info@o.com,,,real_estate'}
+                placeholder={`empresa,subdomain,email,password,moneda,vertical\nBrokers SL,brokers,admin@b.com,MagicPwd123,${MONEDA_PLATAFORMA},insurance\nOther,other-sa,info@o.com,,,real_estate`}
                 rows={6}
                 className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#1A365D]/30 text-xs font-mono"
               />

@@ -6,6 +6,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { stripe } from '@/lib/stripe'
 import { PLAN_PRICES, PLANS } from '@/lib/plans'
+import { VERTICAL_PLAN_IDS, getVerticalPlan } from '@/lib/vertical-plans'
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,7 +17,12 @@ export async function POST(request: NextRequest) {
 
     const { newPlanId } = await request.json()
 
-    const validPaidPlans = [PLANS.ESENCIAL, PLANS.PROFESIONAL, PLANS.INFINITY, PLANS.SCALE, PLANS.COMPLIANCE]
+    // Se puede cambiar a una vertical (lo que la plataforma vende) o a los planes
+    // legacy que un tenant ya tuviera contratados.
+    const validPaidPlans = [
+      ...VERTICAL_PLAN_IDS,
+      PLANS.ESENCIAL, PLANS.PROFESIONAL, PLANS.INFINITY, PLANS.SCALE, PLANS.COMPLIANCE,
+    ]
     if (!validPaidPlans.includes(newPlanId)) {
       return NextResponse.json({ error: 'Plan inválido' }, { status: 400 })
     }
@@ -51,7 +57,31 @@ export async function POST(request: NextRequest) {
 
     const subscription = subscriptions.data[0]
     const currentPriceId = subscription.items.data[0].price.id
-    const newPriceId = PLAN_PRICES[newPlanId as keyof typeof PLAN_PRICES].stripePriceId
+    let newPriceId = PLAN_PRICES[newPlanId as keyof typeof PLAN_PRICES]?.stripePriceId
+
+    // Las verticales se cobran con `price_data` en línea, así que no tienen un
+    // Price ID precreado. Para poder cambiar de vertical con prorrateo —sin
+    // duplicar la suscripción— se crea el precio en el momento, con el importe
+    // publicado y el intervalo que ya tuviera la suscripción.
+    if (!newPriceId) {
+      const vertical = getVerticalPlan(newPlanId)
+      if (!vertical) {
+        return NextResponse.json(
+          { error: 'Este plan no tiene precio configurado y no se puede cambiar desde aquí.' },
+          { status: 409 },
+        )
+      }
+
+      const interval = subscription.items.data[0].price.recurring?.interval === 'year' ? 'yearly' : 'monthly'
+      const priceInfo = PLAN_PRICES[vertical.id as keyof typeof PLAN_PRICES]
+      const createdPrice = await stripe.prices.create({
+        currency: 'eur',
+        unit_amount: Math.round((interval === 'yearly' ? priceInfo.yearly : priceInfo.monthly) * 100),
+        recurring: { interval: interval === 'yearly' ? 'year' : 'month' },
+        product_data: { name: `Volkern ${vertical.name}` },
+      })
+      newPriceId = createdPrice.id
+    }
 
     if (currentPriceId === newPriceId) {
       return NextResponse.json({ error: 'Ya estás en ese plan' }, { status: 400 })

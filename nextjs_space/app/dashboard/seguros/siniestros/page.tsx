@@ -2,6 +2,9 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from '@/lib/api-client';
+import { MONEDAS_SELECCIONABLES } from '@/lib/moneda';
+import { useMonedaTenant } from '@/lib/use-moneda-tenant';
+import { formatCurrencyExact } from '@/components/insurance/portfolio-format';
 import {
   ShieldAlert,
   Plus,
@@ -103,12 +106,30 @@ const fmtFecha = (iso?: string | null) => {
   return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
 };
 
-const fmtMoneda = (n: number | null | undefined, moneda: string) => {
-  if (n === null || n === undefined) return '—';
-  return `${n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${moneda || 'EUR'}`;
-};
+/**
+ * Importe en la divisa del registro: el formato y el símbolo los resuelve el
+ * módulo único de dinero, no esta pantalla.
+ */
+const fmtMoneda = (n: number | null | undefined, moneda: string) =>
+  n === null || n === undefined ? '—' : formatCurrencyExact(n, moneda);
+
+/**
+ * Estado inicial del alta de siniestro. La divisa por defecto es la del tenant
+ * y no un 'EUR' fijo.
+ */
+const formularioSiniestro = (moneda: string) => ({
+  polizaId: '',
+  numeroSiniestro: '',
+  descripcion: '',
+  fechaSuceso: new Date().toISOString().split('T')[0],
+  montoReclamado: '',
+  deducible: '',
+  moneda,
+  notas: '',
+});
 
 export default function SiniestrosPage() {
+  const monedaTenant = useMonedaTenant();
   const [siniestros, setSiniestros] = useState<SiniestroList[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -123,16 +144,7 @@ export default function SiniestrosPage() {
   const [isNewOpen, setIsNewOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [polizas, setPolizas] = useState<PolizaOption[]>([]);
-  const [form, setForm] = useState({
-    polizaId: '',
-    numeroSiniestro: '',
-    descripcion: '',
-    fechaSuceso: new Date().toISOString().split('T')[0],
-    montoReclamado: '',
-    deducible: '',
-    moneda: 'EUR',
-    notas: '',
-  });
+  const [form, setForm] = useState(() => formularioSiniestro(''));
 
   // Dialog de detalle / transiciones
   const [detail, setDetail] = useState<SiniestroDetalle | null>(null);
@@ -190,16 +202,7 @@ export default function SiniestrosPage() {
   };
 
   const openNewDialog = () => {
-    setForm({
-      polizaId: '',
-      numeroSiniestro: '',
-      descripcion: '',
-      fechaSuceso: new Date().toISOString().split('T')[0],
-      montoReclamado: '',
-      deducible: '',
-      moneda: 'EUR',
-      notas: '',
-    });
+    setForm(formularioSiniestro(monedaTenant));
     loadPolizas();
     setIsNewOpen(true);
   };
@@ -621,9 +624,11 @@ export default function SiniestrosPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="EUR">EUR (€)</SelectItem>
-                    <SelectItem value="MXN">MXN ($)</SelectItem>
-                    <SelectItem value="USD">USD ($)</SelectItem>
+                    {MONEDAS_SELECCIONABLES.map((m) => (
+                      <SelectItem key={m} value={m}>
+                        {m}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

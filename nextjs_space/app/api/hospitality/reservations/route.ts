@@ -4,12 +4,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
+import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
 import { logAuditAction } from '@/lib/permissions';
 import { dispatchConnectivityPush } from '@/lib/hospitality/sync';
 import { unitOccupiedOnDay, type ActiveReservationSpan } from '@/lib/hospitality/availability';
 import { toIsoDate, ventanaDeDiaLocal } from '@/lib/hospitality/calendar';
 import { esEstadoValido, esMovimientoDelDia, estadosSinMovimiento } from '@/lib/hospitality/estados';
 import { partesDeViajerosPorReserva } from '@/lib/hospitality/registro-viajeros-service';
+import { monedaEscritura } from '@/lib/moneda';
 
 const CANALES_COMUNES = ['Airbnb', 'Booking.com', 'Expedia', 'Directa', 'Volkern'];
 
@@ -20,6 +22,9 @@ export async function GET(req: NextRequest) {
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
+    const sinPermiso = exigirPermisoHospitality(auth, 'reservas.ver');
+    if (sinPermiso) return sinPermiso;
 
     const { searchParams } = new URL(req.url);
     const limit = Math.min(parseInt(searchParams.get('limit') || '500') || 500, 1000);
@@ -227,6 +232,9 @@ export async function POST(req: NextRequest) {
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
+    const sinPermiso = exigirPermisoHospitality(auth, 'reservas.crear');
+    if (sinPermiso) return sinPermiso;
 
     const body = await req.json();
     const {
@@ -329,7 +337,9 @@ export async function POST(req: NextRequest) {
         specialRequests: notas || null,
         pah: false,
         amountAfterTax: importe != null && importe !== '' ? Number(importe) : null,
-        currency: moneda || 'MXN',
+        // Divisa de la reserva: la indicada, si no la de reporte del tenant.
+        // El valor del esquema es solo la red de seguridad de la escritura.
+        currency: monedaEscritura(moneda, auth.tenant!.moneda),
         guestData: !contactId && (huespedNombre || huespedEmail || huespedTelefono)
           ? { firstName: huespedNombre || null, email: huespedEmail || null, phone: huespedTelefono || null }
           : undefined,

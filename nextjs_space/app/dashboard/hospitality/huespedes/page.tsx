@@ -6,11 +6,13 @@ import { useRouter } from 'next/navigation';
 import { Users, Search, Loader2, Mail, Phone, Moon, DollarSign, ExternalLink, CalendarDays, UserRound, Link2, UserPlus } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { AccionHospitality } from '@/components/hospitality/AccionHospitality';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { channelStyle, statusLabel } from '@/lib/hospitality/calendar';
+import { formatearImporte, formatearNumero } from '@/lib/moneda';
 
 interface Estancia {
   id: string;
@@ -73,6 +75,8 @@ export default function HospitalityHuespedesPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [guests, setGuests] = useState<Guest[]>([]);
+  /** Divisa de los gastos del listado (la resuelve la API: dato → tenant). */
+  const [moneda, setMoneda] = useState('');
   const [q, setQ] = useState('');
   const [order, setOrder] = useState<'ultima' | 'nombre'>('ultima');
   const [selected, setSelected] = useState<Guest | null>(null);
@@ -95,6 +99,7 @@ export default function HospitalityHuespedesPage() {
       if (res.ok) {
         const d = await res.json();
         setGuests(d.guests || []);
+        setMoneda(typeof d.moneda === 'string' ? d.moneda : '');
       } else {
         toast.error('Error al cargar huéspedes');
       }
@@ -243,9 +248,7 @@ export default function HospitalityHuespedesPage() {
           </h1>
           <p className="text-muted-foreground mt-1">
             {guests.length} huéspedes · {totales.estancias} estancias · {totales.noches} noches
-            {totales.gasto > 0 && (
-              <> · {totales.gasto.toLocaleString('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 })}</>
-            )}
+            {totales.gasto > 0 && <> · {formatearImporte(totales.gasto, moneda, 0)}</>}
           </p>
         </div>
       </div>
@@ -345,7 +348,7 @@ export default function HospitalityHuespedesPage() {
                   </div>
                   <div>
                     <p className="text-lg font-bold">
-                      {g.totalGasto > 0 ? g.totalGasto.toLocaleString('es-MX', { maximumFractionDigits: 0 }) : '—'}
+                      {g.totalGasto > 0 ? formatearNumero(g.totalGasto) : '—'}
                     </p>
                     <p className="text-[11px] text-muted-foreground">Gasto</p>
                   </div>
@@ -406,7 +409,7 @@ export default function HospitalityHuespedesPage() {
                     : 'Huésped sin datos de contacto'}
                   {' · '}
                   {selected.totalEstancias} estancia{selected.totalEstancias !== 1 ? 's' : ''} · {selected.totalNoches} noche{selected.totalNoches !== 1 ? 's' : ''}
-                  {selected.totalGasto > 0 && <> · {selected.totalGasto.toLocaleString('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 })}</>}
+                  {selected.totalGasto > 0 && <> · {formatearImporte(selected.totalGasto, moneda, 0)}</>}
                 </SheetDescription>
               </SheetHeader>
 
@@ -464,7 +467,7 @@ export default function HospitalityHuespedesPage() {
                             <p className="font-medium flex items-center gap-1">
                               <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
                               {r.amountAfterTax != null
-                                ? `${r.amountAfterTax.toLocaleString('es-MX')} ${r.currency || ''}`
+                                ? formatearImporte(r.amountAfterTax, r.currency || moneda)
                                 : '—'}
                             </p>
                           </div>
@@ -517,20 +520,22 @@ export default function HospitalityHuespedesPage() {
                   className="pl-10"
                 />
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={creatingContact}
-                onClick={crearContactoNuevo}
-                title="Crea un contacto en el CRM con los datos del huésped y lo vincula"
-              >
-                {creatingContact ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <UserPlus className="h-4 w-4 mr-1" />
-                )}
-                {creatingContact ? '' : 'Crear contacto nuevo'}
-              </Button>
+              <AccionHospitality capacidad="reservas.editar">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={creatingContact}
+                  onClick={crearContactoNuevo}
+                  title="Crea un contacto en el CRM con los datos del huésped y lo vincula"
+                >
+                  {creatingContact ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <UserPlus className="h-4 w-4 mr-1" />
+                  )}
+                  {creatingContact ? '' : 'Crear contacto nuevo'}
+                </Button>
+              </AccionHospitality>
             </div>
 
             <div className="max-h-72 overflow-y-auto space-y-2">
@@ -555,18 +560,20 @@ export default function HospitalityHuespedesPage() {
                           {[c.email, c.telefono].filter(Boolean).join(' · ') || 'Sin datos de contacto'}
                         </p>
                       </div>
-                      <Button
-                        size="sm"
-                        disabled={linkingId === c.id}
-                        onClick={() => vincular(c)}
-                      >
-                        {linkingId === c.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Link2 className="h-4 w-4 mr-1" />
-                        )}
-                        {linkingId === c.id ? '' : 'Vincular'}
-                      </Button>
+                      <AccionHospitality capacidad="reservas.editar">
+                        <Button
+                          size="sm"
+                          disabled={linkingId === c.id}
+                          onClick={() => vincular(c)}
+                        >
+                          {linkingId === c.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Link2 className="h-4 w-4 mr-1" />
+                          )}
+                          {linkingId === c.id ? '' : 'Vincular'}
+                        </Button>
+                      </AccionHospitality>
                     </CardContent>
                   </Card>
                 ))

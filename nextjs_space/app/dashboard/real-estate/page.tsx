@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { formatearImporte } from '@/lib/moneda';
 import {
   Home,
   DollarSign,
@@ -53,6 +54,8 @@ import {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface DashboardStats {
+  /** Divisa de reporte del tenant, tal como la devuelve la API. */
+  moneda?: string;
   stats: {
     total: number;
     available: number;
@@ -135,12 +138,8 @@ interface FranchiseData {
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat('es-ES', {
-    style: 'currency',
-    currency: 'EUR',
-    maximumFractionDigits: 0,
-  }).format(value);
+const formatCurrency = (value: number, moneda?: string) =>
+  formatearImporte(value, moneda || '', 0);
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -149,6 +148,9 @@ export default function RealEstateDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [franchiseData, setFranchiseData] = useState<FranchiseData | null>(null);
   const [franchiseAvailable, setFranchiseAvailable] = useState(false);
+  // Divisa de reporte del tenant: la misma con la que el servidor calcula los
+  // importes. Antes el panel los escribía siempre en euros.
+  const moneda = data?.moneda ?? '';
 
   const fetchData = async () => {
     setLoading(true);
@@ -257,9 +259,9 @@ export default function RealEstateDashboardPage() {
             <DollarSign className="h-4 w-4 text-emerald-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(stats.avgPrice)}</div>
+            <div className="text-2xl font-bold">{formatCurrency(stats.avgPrice, moneda)}</div>
             <p className="text-xs text-muted-foreground">
-              {formatCurrency(stats.avgPricePerM2)} / m²
+              {formatCurrency(stats.avgPricePerM2, moneda)} / m²
             </p>
           </CardContent>
         </Card>
@@ -466,7 +468,7 @@ export default function RealEstateDashboardPage() {
       {franchiseAvailable && franchiseData && franchiseData.commissions.length > 0 && (
         <CommissionSection
           franchiseData={franchiseData}
-          formatCurrency={formatCurrency}
+          formatCurrency={(v: number) => formatCurrency(v, moneda)}
         />
       )}
 
@@ -558,7 +560,7 @@ export default function RealEstateDashboardPage() {
                   </div>
                   <div className="text-right flex-shrink-0">
                     <p className="text-sm font-bold text-primary">
-                      {formatCurrency(prop.precioBase)}
+                      {formatCurrency(prop.precioBase, moneda)}
                     </p>
                     <p className="text-[10px] text-muted-foreground">
                       {new Date(prop.fechaCreacion).toLocaleDateString('es-ES', {

@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { AccionHospitality } from '@/components/hospitality/AccionHospitality';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -438,9 +439,11 @@ documentos
           <Button variant="outline" onClick={() => void cargar()}>
             <RefreshCw className="mr-2 h-4 w-4" /> Actualizar
           </Button>
-          <Button variant="outline" onClick={() => void consultarLotes()}>
-            <FileCheck2 className="mr-2 h-4 w-4" /> Consultar lotes
-          </Button>
+          <AccionHospitality capacidad="operaciones.gestionar">
+            <Button variant="outline" onClick={() => void consultarLotes()}>
+              <FileCheck2 className="mr-2 h-4 w-4" /> Consultar lotes
+            </Button>
+          </AccionHospitality>
         </div>
       </div>
 
@@ -585,9 +588,11 @@ documentos
               </div>
 
               <div className="flex items-center gap-3">
-                <Button onClick={() => void guardarConfiguracion()} disabled={guardando}>
-                  {guardando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Guardar
-                </Button>
+                <AccionHospitality capacidad="operaciones.gestionar">
+                  <Button onClick={() => void guardarConfiguracion()} disabled={guardando}>
+                    {guardando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Guardar
+                  </Button>
+                </AccionHospitality>
                 {estado?.config.listoParaEnviar ? (
                   <Badge className="bg-emerald-100 text-emerald-800">Listo para comunicar</Badge>
                 ) : (
@@ -710,9 +715,11 @@ documentos
                       <Button size="sm" variant="outline" onClick={() => setFormPregunta(null)}>
                         Cancelar
                       </Button>
-                      <Button size="sm" onClick={() => void guardarPregunta()} disabled={guardandoPregunta}>
-                        {guardandoPregunta && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Guardar
-                      </Button>
+                      <AccionHospitality capacidad="operaciones.gestionar">
+                        <Button size="sm" onClick={() => void guardarPregunta()} disabled={guardandoPregunta}>
+                          {guardandoPregunta && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Guardar
+                        </Button>
+                      </AccionHospitality>
                     </div>
                   </div>
                 </div>
@@ -756,9 +763,11 @@ documentos
                       Editar
                     </Button>
                     {p.activa && (
-                      <Button size="sm" variant="outline" onClick={() => void desactivarPregunta(p.id)}>
-                        Desactivar
-                      </Button>
+                      <AccionHospitality capacidad="operaciones.gestionar">
+                        <Button size="sm" variant="outline" onClick={() => void desactivarPregunta(p.id)}>
+                          Desactivar
+                        </Button>
+                      </AccionHospitality>
                     )}
                   </div>
                 </div>
@@ -827,20 +836,24 @@ documentos
                               <UserPlus className="mr-2 h-4 w-4" /> Corregir los datos
                             </Button>
                           )}
-                          <Button
-                            size="sm"
-                            variant={p.diagnostico?.ambito === 'datos' ? 'outline' : 'default'}
-                            onClick={() => void enviarReserva(p.reservationId)}
-                          >
-                            <RefreshCw className="mr-2 h-4 w-4" /> Reenviar el parte
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => void copiarEnlace(p.reservationId!)}
-                          >
-                            <Link2 className="mr-2 h-4 w-4" /> Enlace de check-in
-                          </Button>
+                          <AccionHospitality capacidad="operaciones.gestionar">
+                            <Button
+                              size="sm"
+                              variant={p.diagnostico?.ambito === 'datos' ? 'outline' : 'default'}
+                              onClick={() => void enviarReserva(p.reservationId)}
+                            >
+                              <RefreshCw className="mr-2 h-4 w-4" /> Reenviar el parte
+                            </Button>
+                          </AccionHospitality>
+                          <AccionHospitality capacidad="operaciones.gestionar">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => void copiarEnlace(p.reservationId!)}
+                            >
+                              <Link2 className="mr-2 h-4 w-4" /> Enlace de check-in
+                            </Button>
+                          </AccionHospitality>
                         </>
                       )}
                     </div>
@@ -874,13 +887,15 @@ documentos
                     </div>
                     <div className="flex items-center gap-2">
                       {c.reservationId && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => void copiarEnlace(c.reservationId!)}
-                        >
-                          <Link2 className="mr-2 h-4 w-4" /> Enlace de check-in
-                        </Button>
+                        <AccionHospitality capacidad="operaciones.gestionar">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => void copiarEnlace(c.reservationId!)}
+                          >
+                            <Link2 className="mr-2 h-4 w-4" /> Enlace de check-in
+                          </Button>
+                        </AccionHospitality>
                       )}
                       <Button
                         size="sm"
@@ -934,15 +949,17 @@ documentos
                             </span>
                           )}
                           {c.reservationId && c.estado !== 'aceptada' && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => void enviarReserva(c.reservationId)}
-                            >
-                              {/* Reenviar» cuando ya no lo hace el sistema: el
-                                  botón dice quién actúa, no lo que hacía el barrido. */}
-                              {sinReintentar ? 'Reenviar' : 'Reintentar'}
-                            </Button>
+                            <AccionHospitality capacidad="operaciones.gestionar">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => void enviarReserva(c.reservationId)}
+                              >
+                                {/* Reenviar» cuando ya no lo hace el sistema: el
+                                    botón dice quién actúa, no lo que hacía el barrido. */}
+                                {sinReintentar ? 'Reenviar' : 'Reintentar'}
+                              </Button>
+                            </AccionHospitality>
                           )}
                         </div>
                       </div>

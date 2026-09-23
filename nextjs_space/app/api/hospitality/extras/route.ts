@@ -16,6 +16,8 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
+import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
+import { monedaEscritura } from '@/lib/moneda';
 import { logAuditAction } from '@/lib/permissions';
 
 async function propiedadDelTenant(propertyId: string, tenantId: string) {
@@ -29,6 +31,9 @@ export async function GET(req: NextRequest) {
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
+    const sinPermiso = exigirPermisoHospitality(auth, 'reservas.ver');
+    if (sinPermiso) return sinPermiso;
 
     const { searchParams } = new URL(req.url);
     const propertyId = searchParams.get('propertyId') || '';
@@ -55,13 +60,22 @@ export async function POST(req: NextRequest) {
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
+    const sinPermiso = exigirPermisoHospitality(auth, 'reservas.editar');
+    if (sinPermiso) return sinPermiso;
     const tenantId = auth.tenant!.id;
 
     const body = await req.json().catch(() => null);
     const propertyId = typeof body?.propertyId === 'string' ? body.propertyId : '';
     const nombre = typeof body?.nombre === 'string' ? body.nombre.trim().slice(0, 120) : '';
     const precio = Number(body?.precio);
-    const moneda = typeof body?.moneda === 'string' && body.moneda.trim() ? body.moneda.trim().slice(0, 8) : 'MXN';
+    // Divisa del extra: la indicada, si no la de reporte del tenant. El valor
+    // del esquema queda solo como red de seguridad de la escritura.
+    const moneda =
+      typeof body?.moneda === 'string' && body.moneda.trim()
+        ? body.moneda.trim().slice(0, 8)
+        : '';
+    const monedaDelExtra = monedaEscritura(moneda, auth.tenant!.moneda);
     const precioPorNoche = body?.precioPorNoche === true;
     const descripcionEs = typeof body?.descripcionEs === 'string' ? body.descripcionEs.trim().slice(0, 500) || null : null;
     const descripcionEn = typeof body?.descripcionEn === 'string' ? body.descripcionEn.trim().slice(0, 500) || null : null;
@@ -86,7 +100,7 @@ export async function POST(req: NextRequest) {
       descripcionEs,
       descripcionEn,
       precio,
-      moneda,
+      moneda: monedaDelExtra,
       precioPorNoche,
       activo,
       orden,
@@ -112,9 +126,9 @@ export async function POST(req: NextRequest) {
       'hospitality_extra_guardar',
       'property',
       propertyId,
-      `${id ? 'Actualizado' : 'Creado'} extra «${nombre}» (${precio} ${moneda}${precioPorNoche ? '/noche' : ''}, ${activo ? 'activo' : 'inactivo'})`,
+      `${id ? 'Actualizado' : 'Creado'} extra «${nombre}» (${precio} ${monedaDelExtra}${precioPorNoche ? '/noche' : ''}, ${activo ? 'activo' : 'inactivo'})`,
       null,
-      { extraId: extra.id, nombre, precio, moneda, precioPorNoche, activo },
+      { extraId: extra.id, nombre, precio, moneda: monedaDelExtra, precioPorNoche, activo },
     ).catch(() => {});
 
     return NextResponse.json({ ok: true, extra });

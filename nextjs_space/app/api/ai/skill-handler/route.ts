@@ -215,12 +215,17 @@ export const POST = withTenantAuth(async (req, auth) => {
       }
 
       case 'generate_customer_response': {
-        const result = await (skills as any).generate_customer_response(
-          payload.leadId, 
-          tenantId, 
-          payload.agentMessage, 
-          payload.history
-        );
+        // C2 (corregido): la escalada de dificultad depende del RÉCORD DEL
+        // VENDEDOR que practica. El skill recibe el OBJETO que espera su firma
+        // (antes la llamada era posicional y nunca casaba) con el userId de
+        // la sesión. Sin sesión, sin récord: modo ESTÁNDAR, nunca el de otro.
+        const result = await (skills as any).generate_customer_response({
+          leadId: payload.leadId,
+          tenantId,
+          agentMessage: payload.agentMessage,
+          history: payload.history,
+          agentId: userId || undefined,
+        });
         return NextResponse.json({ success: true, data: result });
       }
 

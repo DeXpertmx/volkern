@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = "force-dynamic";
 import { prisma } from '@/lib/db'
 import { authenticateRequest } from '@/lib/api-key-auth'
+import { monedaEscritura } from '@/lib/moneda'
 import { InvoicingService } from '@/lib/invoicing-service'
 import { checkFeatureLimit } from '@/lib/subscription'
 
@@ -118,7 +119,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Calcular totales
-    const moneda = body.moneda || 'EUR'
+    // La divisa la dicta el cliente; si no la indica, la del tenant.
+    const moneda = monedaEscritura(body.moneda, auth.tenant?.moneda)
     const tipoDescuento = body.tipoDescuento || 'linea'
     const descuentoGlobal = body.descuentoGlobal || 0
 

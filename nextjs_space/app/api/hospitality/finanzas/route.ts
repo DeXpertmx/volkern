@@ -23,6 +23,8 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
+import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
+import { monedaEscritura } from '@/lib/moneda';
 import { logAuditAction } from '@/lib/permissions';
 import {
   calcularRentabilidad,
@@ -50,6 +52,9 @@ export async function GET(req: NextRequest) {
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
+    const sinPermiso = exigirPermisoHospitality(auth, 'finanzas.ver');
+    if (sinPermiso) return sinPermiso;
     const tenantId = auth.tenant!.id;
 
     const { searchParams } = new URL(req.url);
@@ -125,8 +130,9 @@ export async function GET(req: NextRequest) {
     const rows = reservations.map((r: any) => {
       // Líneas guardadas; si la reserva no tiene desglose, una sola línea de
       // alojamiento desde el importe externo de la OTA.
-      const lineas: LineaReserva[] = r.items.length
-        ? r.items.map((item: any) =>
+      const items: any[] = r.items ?? [];
+      const lineas: LineaReserva[] = items.length
+        ? items.map((item: any) =>
             normalizarLinea({
               tipo: item.tipo,
               concepto: item.concepto,
@@ -137,7 +143,7 @@ export async function GET(req: NextRequest) {
           )
         : lineasDesdeImporteExterno(r.amountAfterTax || 0);
 
-      const pagos: PagoReserva[] = r.payments.map((p: any) => ({
+      const pagos: PagoReserva[] = (r.payments ?? []).map((p: any) => ({
         importe: p.importe,
         estado: p.estado,
         metodo: p.metodo,
@@ -146,7 +152,7 @@ export async function GET(req: NextRequest) {
       // Enlace ERP (FASE 3.B): los gastos imputados entran al cálculo como
       // otrosGastos del módulo puro — el neto y el margen reflejan el coste
       // real. El IVA soportado viaja informativo (gastosErp), no descuenta.
-      const otrosGastos: GastoImputado[] = r.expenses.map((g: any) => ({
+      const otrosGastos: GastoImputado[] = (r.expenses ?? []).map((g: any) => ({
         concepto: g.description,
         importe: g.amount,
       }));
@@ -179,7 +185,7 @@ export async function GET(req: NextRequest) {
         // Desglose completo calculado por el módulo puro (incluye moneda).
         ...rent,
         // Gastos ERP atribuidos, con su desglose fiscal (IVA soportado).
-        gastosErp: r.expenses.map((g: any) => ({
+        gastosErp: (r.expenses ?? []).map((g: any) => ({
           id: g.id,
           descripcion: g.description,
           importe: g.amount,
@@ -191,7 +197,7 @@ export async function GET(req: NextRequest) {
           ivaCuota: g.vatAmount,
         })),
         lineas,
-        pagos: r.payments.map((p: any) => ({
+        pagos: (r.payments ?? []).map((p: any) => ({
           id: p.id,
           importe: p.importe,
           moneda: p.moneda,
@@ -247,6 +253,9 @@ export async function POST(req: NextRequest) {
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
+    const sinPermiso = exigirPermisoHospitality(auth, 'finanzas.gestionar');
+    if (sinPermiso) return sinPermiso;
     const tenantId = auth.tenant!.id;
 
     const body = await req.json();
@@ -280,7 +289,10 @@ export async function POST(req: NextRequest) {
         propertyId: reservation.propertyId,
         unitId: reservation.unitId,
         importe: importeNum,
-        moneda: moneda || reservation.currency || 'MXN',
+        // Divisa del pago, por precedencia: la indicada gana sobre la de la
+        // reserva, y sin ninguna de las dos cae a la moneda de reporte del
+        // tenant. El valor del esquema es la red de seguridad de la escritura.
+        moneda: monedaEscritura(moneda, reservation.currency, auth.tenant!.moneda),
         metodo: metodo || 'manual',
         estado: estadoFinal,
         referenciaExterna: referenciaExterna || null,

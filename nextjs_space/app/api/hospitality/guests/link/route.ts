@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
 
+import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
 /**
  * POST /api/hospitality/guests/link — vincular manualmente un huésped sin
  * contacto a un contacto existente del CRM (plan maestro §20).
@@ -24,6 +25,9 @@ export async function POST(req: NextRequest) {
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
+    const sinPermiso = exigirPermisoHospitality(auth, 'reservas.editar');
+    if (sinPermiso) return sinPermiso;
 
     const tenantId = auth.tenant!.id;
     const body = await req.json().catch(() => ({}));

@@ -16,6 +16,8 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
+import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
+import { monedaEscritura } from '@/lib/moneda';
 import { logAuditAction } from '@/lib/permissions';
 import { crearCobroReserva } from '@/lib/stripe/connect';
 import { aportaProduccion } from '@/lib/hospitality/estados';
@@ -24,6 +26,9 @@ export async function POST(req: NextRequest) {
   try {
     const auth = await authenticateRequest(req);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
+    // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
+    const sinPermiso = exigirPermisoHospitality(auth, 'finanzas.gestionar');
+    if (sinPermiso) return sinPermiso;
     const tenantId = auth.tenant!.id;
 
     const body = await req.json();
@@ -81,7 +86,7 @@ export async function POST(req: NextRequest) {
       tenantId,
       reservationId: reserva.id,
       importe: importeNum,
-      moneda: reserva.currency || 'MXN',
+      moneda: monedaEscritura(reserva.currency, auth.tenant!.moneda),
       concepto:
         concepto ||
         `Reserva ${reserva.externalBookingId}${reserva.unit?.nombre ? ` · ${reserva.unit.nombre}` : ''}`,

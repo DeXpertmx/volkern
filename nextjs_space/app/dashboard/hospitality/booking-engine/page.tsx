@@ -14,6 +14,9 @@ import { toast } from 'sonner';
 import { Check, Copy, ExternalLink, Globe, Loader2, Plus, RefreshCcw, ShoppingBag, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { AccionHospitality } from '@/components/hospitality/AccionHospitality';
+import { formatearImporte } from '@/lib/moneda';
+import { useMonedaTenant } from '@/lib/use-moneda-tenant';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -34,7 +37,9 @@ const EXTRA_VACIO = {
   id: null as string | null,
   nombre: '',
   precio: '',
-  moneda: 'MXN',
+  // Sin divisa: la resuelve la API con la moneda de reporte del tenant (el
+  // formulario no ofrece elegirla, así que no se inventa una por defecto).
+  moneda: '',
   precioPorNoche: false,
   descripcionEs: '',
   descripcionEn: '',
@@ -51,6 +56,8 @@ interface PropiedadBooking {
 }
 
 export default function BookingEngineConfig() {
+  /** Moneda de reporte del tenant: respaldo de la divisa de cada propiedad. */
+  const monedaTenant = useMonedaTenant();
   const [loading, setLoading] = useState(true);
   const [propiedades, setPropiedades] = useState<PropiedadBooking[]>([]);
   const [origen, setOrigen] = useState('');
@@ -79,8 +86,11 @@ export default function BookingEngineConfig() {
         estado: p.estado ?? 'activa',
         unidades: 0,
         tarifaDesde: null,
-        moneda: 'MXN',
+        moneda: '',
       }));
+      // Cada propiedad se escribe con la divisa de sus unidades (la de la más
+      // barata, que es la tarifa que se enseña) y, si no tiene ninguna con
+      // tarifa, con la moneda de reporte del tenant.
       for (const u of unitData.units || []) {
         const p = props.find((x) => x.id === u.propertyId);
         if (!p) continue;
@@ -91,13 +101,16 @@ export default function BookingEngineConfig() {
           p.moneda = u.moneda || p.moneda;
         }
       }
+      for (const p of props) {
+        if (!p.moneda) p.moneda = monedaTenant;
+      }
       setPropiedades(props);
     } catch {
       toast.error('Error al cargar las propiedades');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [monedaTenant]);
 
   useEffect(() => {
     setOrigen(window.location.origin);
@@ -240,7 +253,7 @@ export default function BookingEngineConfig() {
             <CardContent className="space-y-3">
               <div className="text-xs text-muted-foreground">
                 {p.unidades} {p.unidades === 1 ? 'unidad' : 'unidades'}
-                {p.tarifaDesde != null && ` · desde ${new Intl.NumberFormat('es-MX', { style: 'currency', currency: p.moneda }).format(p.tarifaDesde)}/noche`}
+                {p.tarifaDesde != null && ` · desde ${formatearImporte(p.tarifaDesde, p.moneda)}/noche`}
                 {p.ciudad ? ` · ${p.ciudad}` : ''}
               </div>
 
@@ -303,7 +316,7 @@ export default function BookingEngineConfig() {
                               <p className="text-sm font-medium truncate">
                                 {e.nombre}{' '}
                                 <span className="text-xs font-normal text-muted-foreground">
-                                  {new Intl.NumberFormat('es-MX', { style: 'currency', currency: e.moneda }).format(e.precio)}
+                                  {formatearImporte(e.precio, e.moneda)}
                                   {e.precioPorNoche ? '/noche' : ''}
                                 </span>
                               </p>
@@ -367,10 +380,12 @@ export default function BookingEngineConfig() {
                                   Cancelar
                                 </Button>
                               )}
-                              <Button size="sm" onClick={() => guardarExtra(p.id)} disabled={guardandoExtra}>
-                                <Plus className="mr-1 h-4 w-4" />
-                                {borrador.id ? 'Guardar cambios' : 'Crear extra'}
-                              </Button>
+                              <AccionHospitality capacidad="reservas.editar">
+                                <Button size="sm" onClick={() => guardarExtra(p.id)} disabled={guardandoExtra}>
+                                  <Plus className="mr-1 h-4 w-4" />
+                                  {borrador.id ? 'Guardar cambios' : 'Crear extra'}
+                                </Button>
+                              </AccionHospitality>
                             </div>
                           </div>
                           <p className="text-[11px] text-muted-foreground flex items-center gap-1">

@@ -83,7 +83,10 @@ export function PortfolioBriefing({
             AI Portfolio Manager
           </h2>
           <p className="text-xs text-muted-foreground">
-            Generado: {new Date(briefing.generado).toLocaleString('es-ES')}
+            Generado:{' '}
+            {new Intl.DateTimeFormat('es-ES', { dateStyle: 'short', timeStyle: 'short' }).format(
+              new Date(briefing.generado)
+            )}
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={onRefresh}>
