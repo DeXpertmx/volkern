@@ -193,10 +193,23 @@
 ## FASE 3 — Cierre y decisiones con datos reales
 
 ### 3.1 - Decisión de producto: multimoneda (H11/H22)
-- [ ] **PENDIENTE**
-- **Pregunta al usuario §8-B** ANTES de que el hotel vea Reportes con datos reales: ¿los
-  agregados convierten a una divisa o se muestran por moneda? Hoy suman sin tipo de
-  cambio (decisión pendiente documentada, no defecto).
+- [x] **HECHO (23 sep 2026): mostrar por moneda, sin convertir**
+- El defecto real no era «no convertir»: era que Reportes **sumaba divisas distintas bajo
+  una sola etiqueta** (`analytics.kpisVentana`, `reportes.ts`), es decir, un «ingreso del
+  período» que no era dinero de ningún sitio. Ya no se suma nunca: cada informe declara su
+  divisa (`moneda`), los importes de las otras no entran en sus totales y se informan en
+  `porMoneda`, con el aviso (`multimoneda.nota`) en la pantalla.
+- **Por qué no se convierte**: convertir exige un tipo de cambio y hoy no hay ninguno
+  autoritativo en el sistema. Un tipo inventado (constante, o el de otro día) produce una
+  cifra peor que un total que dice en qué divisa está. La regla ya existía en la casa
+  (`resumen.porMoneda` en Finanzas, `lib/insurance/currency.ts` en Seguros): Reportes era
+  el único que no la aplicaba.
+- La divisa del informe es la de los datos del período y, si no hay ninguno, la moneda de
+  reporte del tenant (`Tenant.moneda`). Una reserva sin divisa hereda la del informe: no se
+  inventa una nueva.
+- **Si el hotel exige un total único**: el tipo de cambio entra explícito y auditado por
+  `lib/hospitality/multimoneda.ts` (con fecha y origen), nunca como constante escondida.
+  Mientras eso no exista, el informe muestra las dos cifras separadas, que es la verdad.
 
 ### 3.2 - Cierre de la homologación
 - [ ] **PENDIENTE**
@@ -211,7 +224,7 @@
 | # | Pregunta | Cuándo |
 |---|---|---|
 | A | ¿Tenant aislado para homologación o el del piloto? | **RESUELTO (23 sep 2026): aislado** — «Homologación MIR» |
-| B | ¿Multimoneda: convertir o mostrar por moneda? | Paso 3.1 (o antes si el hotel mira Reportes) |
+| B | ¿Multimoneda: convertir o mostrar por moneda? | **RESUELTO (23 sep 2026): mostrar por moneda, sin convertir** — es la regla que ya aplicaban Finanzas y Seguros; ver §3.1 |
 | C | ¿Se autoriza este despliegue ahora o hay ventana acordada? | **RESUELTO (23 sep 2026): desplegado**, con backup previo |
 | D | El XSD no llegó / no trae namespace de RH | Paso 2.2 — RH queda documentado como no homologado |
 | E | ¿Sesión de Superadmin para probar el panel de crons (`/admin/hospitality`)? | Paso 0.3 (a) — pendiente; solo lo ve el operador de la plataforma |
@@ -232,5 +245,6 @@
 | 23 sep 2026 | 1.2 (parte de producto) | **HECHO** — el wizard ya dice de quién depende el catálogo | El paso 5 («Obtener el mapping externo») lleva pegado su requisito externo mientras no esté completo: quién lo ejecuta (el hotel, en la extranet del canal), que Booking.com y Expedia se activan por autoservicio y que Airbnb necesita abrir el enlace de autorización del proveedor, y que **esperar no lo resuelve**. Vive en el módulo puro (`REQUISITO_ACTIVACION_CANAL`, `lib/hospitality/onboarding.ts`) y la página solo lo pinta: nada copiado a mano. Congelado con 6 guardias (una de ellas lee la página y prohíbe el texto duplicado). Cierra la pregunta abierta «¿dónde ve el hotel esta información?»: en el paso, no en un documento interno. |
 | 23 sep 2026 | — | **Despliegue del arreglo de credenciales** | Imagen `8e103af70cce` en `volkern-erp_app`; sin migraciones nuevas (`--skip-migrator`). **Verificación funcional contra producción** en el tenant aislado: configurar con datos ficticios → `tieneCredenciales: true`; enviar los campos vacíos → `configurado: false`, `tieneCredenciales: false`, `codigoArrendador: ''`. En la imagen anterior ese vaciado no hacía nada. Smoke del clasificador en verde y sondas HTTP correctas (páginas 307, APIs 401). |
 | 23 sep 2026 | — | Estado de calidad tras los arreglos | Typecheck **0** · suite **8.365 en verde / 0 rojas** (472 ficheros) · lint con la deuda previa del repo |
+| 23 sep 2026 | 3.1 | **HECHO — bloqueo B cerrado: multimoneda se muestra por divisa, sin convertir** | El defecto no era la falta de conversión sino la suma: Reportes (`reportes.ts`) y los KPIs del dashboard (`analytics.kpisVentana`, `mixDeCanales`, `perChannelRevenueTrend`) sumaban importes de divisas distintas y los etiquetaban con una sola. Ahora ningún total mezcla: el informe declara su divisa, `porMoneda` da ingresos/noches/ADR de cada una y `multimoneda.nota` lo dice en pantalla (con el reparto por propiedad en `otrasMonedas`). Se eligió «mostrar por moneda» porque es lo que ya hacían Finanzas y Seguros y porque no hay ningún tipo de cambio autoritativo: inventarlo daría una cifra peor que un total con su divisa. 18 guardias nuevas (`tests/hospitality-multimoneda.test.ts`), incluidas las de que el informe con una sola divisa no cambia y de que no existe tasa en el módulo. |
 | 23 sep 2026 | — | **Preflight de credenciales de conectividad — HECHO** | Módulo puro `lib/hospitality/connectivity-preflight.ts`: valida formato de URL (esquema, host, sin credenciales embebidas, sin query/fragmento, ruta del contrato), ID de socio y Basic Auth (el usuario no puede traer `:`, la contraseña NO se recorta porque se compara byte a byte, se detectan comillas de PDF, invisibles y el mismo valor en dos campos). Con la respuesta completa se rellena en una sola pega. La API **rechaza antes de escribir** (400 con todos los avisos y su arreglo) y guarda los valores normalizados; el guardado ya no recorta la contraseña; «Probar conexión» deja de estallar/reventar en 404 con una URL mal pegada; el estado del panel revisa además la URL del servidor. La pantalla usa la MISMA función en vivo, marca el campo con error y bloquea el botón. Herramienta de operador: `npx tsx scripts/preflight-conectividad.ts --pegado "URL | ID | usuario | contraseña"` (compara con `CONNECTIVITY_BASE_URL` desplegada y no imprime la contraseña). 28 guardias. |
 | 23 sep 2026 | — | **Hallazgo de infraestructura (no es del módulo) — CERRADO** | El stack **heredado** (`volkern_postgres`, base `volkern_table`) publicaba su **5432 en la IP pública del VPS**: una base de datos accesible desde Internet. La BD de producción (`volkern-erp_postgres`) **nunca** estuvo expuesta, y `pg_stat_activity` no registró ni un cliente externo. La publicación se quitó del servicio, y los tres compose del VPS que la declaraban «solo en loopback» se corrigieron: **en Swarm `host_ip` no existe, el prefijo `127.0.0.1` se ignora en silencio** y el puerto acaba en `0.0.0.0` (comprobado con puertos de prueba). Antes/después verificado: `volkern.app` 200, 9 tenants, 14 reservas y `BE-MUEA5FOF` (360 EUR) intactos, app heredada 200 por overlay, `62.171.134.195:5432` → conexión rehusada. Detalle, evidencia y procedimiento: `docs/VPS-SEGURIDAD-PUERTOS.md`. |

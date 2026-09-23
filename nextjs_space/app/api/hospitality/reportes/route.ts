@@ -62,17 +62,22 @@ export async function GET(req: NextRequest) {
       .filter((u) => !NO_VENDIBLES.includes(u.estado))
       .map((u) => u.id);
 
+    // La moneda de reporte del tenant es la divisa del informe: la usan los
+    // cuatro bloques para no sumar divisas distintas (H11/H22).
+    const monedaTenant = auth.tenant?.moneda ?? null;
+
     const operacion = reporteOperacion({
       reservas,
       unidades: unidades.map((u) => ({ id: u.id, propertyId: u.propertyId })),
       desde,
       hasta,
       unidadesActivas,
+      monedaTenant,
     });
 
-    const ventas = reporteVentas({ reservas });
+    const ventas = reporteVentas({ reservas, monedaTenant });
 
-    const financiero = reporteFinanciero({ reservas });
+    const financiero = reporteFinanciero({ reservas, monedaTenant });
 
     const propiedadesReporte = reportePropiedades({
       propiedades: propertiesDe(reservas, propiedades),
@@ -80,6 +85,7 @@ export async function GET(req: NextRequest) {
       reservas,
       desde,
       hasta,
+      monedaTenant,
     });
 
     // Operaciones del período: limpiezas e incidencias (plan §23).
@@ -130,8 +136,11 @@ export async function GET(req: NextRequest) {
         incidencias: porEstado(incidencias),
       },
       // Igual que en Finanzas: la divisa la dictan las reservas del período y, si
-      // no hay, la del tenant.
-      moneda: monedaEfectiva(reservas.map((r) => r.moneda), auth.tenant?.moneda),
+      // no hay, la del tenant. Es la divisa en la que están escritos los
+      // importes del informe (los de las otras van en `porMoneda`, sin sumarse).
+      moneda: operacion.moneda || monedaEfectiva(reservas.map((r) => r.moneda), monedaTenant),
+      multimoneda: operacion.multimoneda,
+      porMoneda: operacion.porMoneda,
     });
   } catch (error) {
     console.error('Error obteniendo reportes de hospitality:', error);

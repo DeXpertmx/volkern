@@ -26,6 +26,17 @@
 import { aportaProduccion, esMovimientoDelDia } from './estados';
 import { nightsBetween, toIsoDate } from './calendar';
 import { finEstanciaReal } from './checkout';
+// Multimoneda (H11/H22): los importes de un informe se suman SOLO en su divisa;
+// las reservas en otra quedan fuera de los totales y se informan aparte. Se
+// aplica aquí, en el cálculo, para que ninguna pantalla pueda sumar divisas
+// distintas ni aunque le pase una lista mezclada.
+import {
+  agruparPorMoneda,
+  describirMultimoneda,
+  estaEnMonedaDelInforme,
+  monedaDelInforme,
+  type Multimoneda,
+} from './multimoneda';
 
 export interface AnalyticsReservationInput {
   id: string
@@ -72,12 +83,19 @@ export interface MixCanal {
  */
 export function mixDeCanales(
   reservations: Array<
-    Pick<AnalyticsReservationInput, 'channel' | 'estado' | 'amountAfterTax'>
+    Pick<AnalyticsReservationInput, 'channel' | 'estado' | 'amountAfterTax'> & {
+      currency?: string | null
+    }
   >,
+  /** Divisa del informe; sin ella se deriva de las propias filas. */
+  monedaInforme?: string | null,
 ): MixCanal[] {
+  const moneda = monedaInforme || monedaDelInforme(reservations.map((r) => r.currency))
   const porCanal = new Map<string, MixCanal>()
   for (const r of reservations) {
     if (!aportaProduccion(r.estado)) continue
+    // Los ingresos por canal se suman solo en la divisa del informe.
+    if (!estaEnMonedaDelInforme({ moneda: r.currency }, moneda)) continue
     const canal = r.channel || 'Otro'
     const entrada = porCanal.get(canal) || { canal, reservas: 0, ingresos: 0 }
     entrada.reservas += 1
@@ -293,7 +311,10 @@ export function perChannelRevenueTrend(params: {
   reservations: AnalyticsReservationInput[]
   dias?: number
   hasta?: Date
+  /** Divisa del informe; sin ella se deriva de las propias reservas. */
+  monedaInforme?: string | null
 }): ChannelRevenueSerie[] {
+  const moneda = params.monedaInforme || monedaDelInforme(params.reservations.map((r) => r.currency))
   const dias = Math.min(Math.max(params.dias || 30, 1), 365)
   const hasta = params.hasta || new Date()
   const hoyMs = startOfDayMs(hasta)
@@ -311,6 +332,8 @@ export function perChannelRevenueTrend(params: {
   for (const r of params.reservations) {
     if (!aportaProduccion(r.estado)) continue
     if (r.amountAfterTax == null || r.amountAfterTax <= 0) continue
+    // La tendencia diaria es dinero: solo la divisa del informe.
+    if (!estaEnMonedaDelInforme({ moneda: r.currency }, moneda)) continue
     const canal = r.channel || 'Otro'
 
     const noches = Math.max(0, Math.round((startOfDayMs(r.checkOut) - startOfDayMs(r.checkIn)) / 86_400_000))
@@ -378,6 +401,21 @@ export interface KpisVentana {
   antelacionMediaDias: number | null
   /** Mediana de la antelación, en días (más robusta que la media). */
   antelacionMedianaDias: number | null
+  /** Divisa en la que están escritos los importes del informe. */
+  moneda: string
+  /** Aviso de mezcla de divisas: cuántas reservas quedan fuera de los totales. */
+  multimoneda: Multimoneda
+  /** Ingresos y noches de cada divisa, para no perder de vista las demás. */
+  porMoneda: ResumenMonedaKpis[]
+}
+
+/** Ingresos del período en UNA divisa (las demás van en su propia entrada). */
+export interface ResumenMonedaKpis {
+  moneda: string
+  reservas: number
+  ingresos: number
+  nochesVendidas: number
+  adr: number | null
 }
 
 function nochesDe(r: Pick<AnalyticsReservationInput, 'checkIn' | 'checkOut'>): number {
@@ -428,6 +466,8 @@ export function kpisVentana(params: {
   totalUnidades: number
   dias?: number
   hasta?: Date
+  /** Moneda de reporte del tenant, usada cuando no hay dato de divisa. */
+  monedaTenant?: string | null
 }): KpisVentana {
   const dias = Math.min(Math.max(params.dias || 30, 1), 365)
   const hasta = params.hasta || new Date()
@@ -440,11 +480,42 @@ export function kpisVentana(params: {
     return llegada >= inicioMs && llegada < finMs
   })
 
+  // Multimoneda: el informe se escribe en UNA divisa (la de los datos del
+  // período y, si no hay, la del tenant). Los importes de las otras NO se suman
+  // aquí —se informan en `porMoneda`—, porque sumar divisas distintas da un
+  // número que no es dinero de ningún sitio.
+  const moneda = monedaDelInforme(
+    enVentana.map((r) => r.currency),
+    params.monedaTenant,
+  )
+  // Ojo con el nombre del campo: estas reservas traen la divisa en `currency`.
+  const grupos = agruparPorMoneda(enVentana, moneda, (r) => r.currency)
+
   const conIngreso = enVentana.filter(
-    (r) => aportaProduccion(r.estado) && r.amountAfterTax != null && r.amountAfterTax > 0,
+    (r) =>
+      aportaProduccion(r.estado) &&
+      r.amountAfterTax != null &&
+      r.amountAfterTax > 0 &&
+      estaEnMonedaDelInforme({ moneda: r.currency }, moneda),
   )
   const ingresos = conIngreso.reduce((total, r) => total + (r.amountAfterTax || 0), 0)
   const nochesVendidas = conIngreso.reduce((total, r) => total + nochesDe(r), 0)
+
+  const porMoneda: ResumenMonedaKpis[] = grupos.map((grupo) => {
+    const ventas = grupo.items.filter(
+      (r) =>
+        aportaProduccion(r.estado) && r.amountAfterTax != null && r.amountAfterTax > 0,
+    )
+    const bruto = ventas.reduce((total, r) => total + (r.amountAfterTax || 0), 0)
+    const noches = ventas.reduce((total, r) => total + nochesDe(r), 0)
+    return {
+      moneda: grupo.moneda,
+      reservas: grupo.items.length,
+      ingresos: bruto,
+      nochesVendidas: noches,
+      adr: noches > 0 ? bruto / noches : null,
+    }
+  })
 
   const nochesDisponibles = params.totalUnidades * dias
   const adr = nochesVendidas > 0 ? ingresos / nochesVendidas : null
@@ -488,5 +559,8 @@ export function kpisVentana(params: {
     cancelaciones,
     antelacionMediaDias,
     antelacionMedianaDias,
+    moneda,
+    multimoneda: describirMultimoneda({ monedaInforme: moneda, grupos, totalFilas: enVentana.length }),
+    porMoneda,
   }
 }

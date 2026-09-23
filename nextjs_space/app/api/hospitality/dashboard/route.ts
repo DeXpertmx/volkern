@@ -156,8 +156,17 @@ export async function GET(req: NextRequest) {
     const reservasActivas = reservations.filter((r) => esReservaViva(r.estado)).length;
     const cancelaciones = reservations.filter((r) => r.estado === 'cancelled').length;
 
+    // ── Divisa del informe (H11/H22) ──
+    // Los importes de este panel se suman SOLO en esta divisa; los de las demás
+    // no se convierten y se informan aparte (`multimoneda`), porque sumar
+    // divisas distintas da un número que no es dinero de ningún sitio.
+    const monedaInforme = monedaEfectiva(
+      reservations.map((r) => r.currency),
+      auth.tenant?.moneda
+    );
+
     // ── Mix de canales (módulo puro) ──
-    const mixCanales = mixDeCanales(reservasAnalytics);
+    const mixCanales = mixDeCanales(reservasAnalytics, monedaInforme);
 
     // ── Próximos 7 días: ocupación por día (módulo puro) ──
     // Las etiquetas `dia`/`mes` son presentación; el cálculo es del módulo.
@@ -208,6 +217,7 @@ export async function GET(req: NextRequest) {
     const ingresosPorCanal = perChannelRevenueTrend({
       reservations: reservasAnalytics,
       dias,
+      monedaInforme,
     });
 
     // ── KPIs de Reportes (FASE 3.E) — TODO el cálculo sale del módulo puro
@@ -219,6 +229,7 @@ export async function GET(req: NextRequest) {
       totalUnidades,
       dias,
       hasta: hoy,
+      monedaTenant: auth.tenant?.moneda,
     });
     // Compatibilidad con el dashboard existente: ingresos/noches/ADR ahora son
     // los del módulo puro (ADR coherente: sus noches son las de las reservas
@@ -407,10 +418,11 @@ export async function GET(req: NextRequest) {
       // reservas del período (si hay más de una, la predominante) y, si no hay
       // ninguna, la moneda de reporte del tenant. Las pantallas no escriben
       // dinero: piden la divisa aquí y formatean con `formatearImporte`.
-      moneda: monedaEfectiva(
-        reservations.map((r) => r.currency),
-        auth.tenant?.moneda
-      ),
+      moneda: monedaInforme,
+      // Multimoneda sin conversión: cuántas reservas quedan fuera de los
+      // totales, en qué divisas y con qué ingresos (H11/H22).
+      multimoneda: reportesKpis.multimoneda,
+      porMoneda: reportesKpis.porMoneda,
       kpis: {
         totalUnidades,
         unidadesPorEstado,
