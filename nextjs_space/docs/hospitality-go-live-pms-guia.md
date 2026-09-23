@@ -30,8 +30,18 @@ no es código: es ejecutar estas etapas con el partner real.
    ellos enviarán en el Basic Auth del webhook de reservas).
 3. Acordar una **ventana de ensayo**: fechas con calendario real del hotel
    pero tráfico controlado, antes de abrir al tráfico completo.
+4. **Habilitar al proveedor en las OTAs del hotel** (pata ① del triángulo):
+   Booking.com y Expedia se activan por **autoservicio en la extranet del
+   canal**; Airbnb por **URL de autorización del proveedor**; y otros canales
+   exigen **correo al account manager** del canal. El **mapeo habitación a
+   habitación lo crea el equipo del proveedor** a partir del Hotel ID. Hasta
+   que esto no ocurre, `property_details` no devuelve catálogo y la Etapa 1 no
+   se puede ejecutar. Procedimiento y detalles por canal:
+   [`hospitality-conexion-otas-activacion.md`](./hospitality-conexion-otas-activacion.md).
 
-**Verificación de etapa:** los tres datos existen y hay fecha de ensayo.
+**Verificación de etapa:** los tres datos existen, hay fecha de ensayo y está
+acordado **quién activa cada canal y con qué plazo**, con la evidencia
+(capturas, correo del mapeo) en el expediente.
 
 ## Diagrama de credenciales — quién emite qué y dónde se cifra
 
@@ -107,7 +117,18 @@ de viajeros guardan sus credenciales del Ministerio como `usuarioEnc` /
      qué eventos quedan fuera — el webhook responde 400 a acciones
      desconocidas y el operador sigue teniendo el PATCH manual.
 2. **Mapeos** (`ConnectivityMapping`): propiedad → `externalPropertyId`,
-   cada unidad → `externalUnitCode`, cada rate plan → `externalRatePlanCode`.
+   cada unidad → `externalUnitCode`, cada plan de tarifa →
+   `externalRatePlanCode`.
+   **Estos códigos solo existen después de la Etapa 0.4** (activación en la OTA
+   y mapeo del proveedor): no hay vínculo que crear antes, y los valores se
+   **copian** del catálogo que devuelve el proveedor — no de cómo la OTA llama
+   a la habitación. Si el proveedor rehace su mapeo, los vínculos dejan de
+   resolver y la reserva cae en `sin_mapping` (se ve en el panel, no se adivina
+   la unidad).
+   - En **Booking.com**, pedir al hotel que borre los planes de tarifa extra
+     por defecto (NON REFUNDABLE, LONGSTAY…) antes de mapear: un `rateplanCode`
+     que el proveedor no conoce no bloquea la reserva, pero la atribuye al plan
+     más antiguo en vez del contratado.
    - Validar **capacidad dentro de min/max_occ** del catálogo del proveedor
      (checklist del contrato); la resolución por `roomCode` con rateplan de
      desempate depende de que estos códigos sean los de `property_details`.
@@ -204,6 +225,7 @@ contrato queda firmado por ambos lados.
 - Resumen ejecutivo (para el cliente): [`hospitality-resumen-ejecutivo.md`](./hospitality-resumen-ejecutivo.md)
 - Checklist de la reunión con el proveedor: [`hospitality-checklist-reunion-conectividad.md`](./hospitality-checklist-reunion-conectividad.md)
 - Contrato técnico: [`hospitality-connectivity-contract.md`](./hospitality-connectivity-contract.md)
+- Activación del canal en las OTAs (pata ①): [`hospitality-conexion-otas-activacion.md`](./hospitality-conexion-otas-activacion.md)
 - Guía del emisor (proveedor): [`hospitality-webhook-emisor-guia.md`](./hospitality-webhook-emisor-guia.md)
 - Ensayos E2E: `docs/hospitality-booking-engine-e2e.md`, `docs/hospitality-no-show-e2e.md`
 - Reconciliación diaria: `lib/cron/hospitality-reconcile.ts` (§14 del contrato)

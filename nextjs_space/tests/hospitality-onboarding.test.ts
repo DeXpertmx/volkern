@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
 import {
   computeOnboardingSteps,
   puedeActivar,
@@ -7,10 +9,13 @@ import {
   esEmailDePrueba,
   estaConectada,
   etiquetaEstadoPropiedad,
+  REQUISITO_ACTIVACION_CANAL,
   ONBOARDING_TEST_BOOKING_PREFIX,
   ONBOARDING_TEST_EMAIL_PREFIX,
   type OnboardingEstado,
 } from '@/lib/hospitality/onboarding';
+
+const RAIZ = path.resolve(__dirname, '..');
 
 const base: OnboardingEstado = {
   estadoPropiedad: 'activa',
@@ -166,5 +171,65 @@ describe('Hospitality onboarding (§31) — reserva de prueba', () => {
     expect(esReservaDePrueba(null)).toBe(false);
     expect(esEmailDePrueba(`${ONBOARDING_TEST_EMAIL_PREFIX}123@onboarding.test`)).toBe(true);
     expect(esEmailDePrueba('cliente@real.com')).toBe(false);
+  });
+});
+
+// ─── Paso 5: el catálogo depende de un tercero ──────────────────────────────
+//
+// El catálogo externo NO existe hasta que el canal está activado en la extranet
+// de la OTA y el proveedor ha mapeado sus habitaciones. Sin este aviso, el
+// operador espera un código que nadie ha pedido a nadie y lo lee como un fallo
+// nuestro. El requisito viaja CON el paso pendiente y desaparece al completarlo.
+describe('onboarding paso 5 — activación del canal en la OTA (requisito externo)', () => {
+  const pasoMapping = (e: OnboardingEstado) =>
+    computeOnboardingSteps(e).find((p) => p.clave === 'mapping_externo')!;
+
+  it('el paso pendiente lleva el requisito externo', () => {
+    const paso = pasoMapping({ ...base, hotelCode: null });
+    expect(paso.estado).toBe('pendiente');
+    expect(paso.requisitoExterno).toEqual(REQUISITO_ACTIVACION_CANAL);
+  });
+
+  it('el paso bloqueado por nuestra conectividad también lo lleva', () => {
+    const paso = pasoMapping({ ...base, conectividadConfigurada: false, hotelCode: null });
+    expect(paso.estado).toBe('bloqueado');
+    expect(paso.requisitoExterno).toEqual(REQUISITO_ACTIVACION_CANAL);
+  });
+
+  it('el paso completado NO lo lleva: ya no hay nada que advertir', () => {
+    const paso = pasoMapping({ ...base, hotelCode: 'sandbox-pms' });
+    expect(paso.estado).toBe('completado');
+    expect(paso.requisitoExterno).toBeUndefined();
+  });
+
+  it('solo lo lleva el paso 5: los demás pasos no hablan de terceros', () => {
+    const pasos = computeOnboardingSteps({ ...base, hotelCode: null });
+    expect(pasos.filter((p) => p.requisitoExterno).map((p) => p.clave)).toEqual([
+      'mapping_externo',
+    ]);
+  });
+
+  it('nombra quién lo ejecuta y dice que esperar no lo resuelve', () => {
+    expect(REQUISITO_ACTIVACION_CANAL.quien).toContain('extranet');
+    // Los tres canales que documenta la fuente, con su vía real.
+    expect(REQUISITO_ACTIVACION_CANAL.detalle).toContain('Booking.com');
+    expect(REQUISITO_ACTIVACION_CANAL.detalle).toContain('Expedia');
+    expect(REQUISITO_ACTIVACION_CANAL.detalle).toContain('Airbnb');
+    // El punto que evita la espera infinita: el paso no se completa esperando.
+    expect(REQUISITO_ACTIVACION_CANAL.detalle).toContain('no se completa por esperar');
+    // Material de producto: nada de rutas de docs internos ni de «OTA».
+    expect(REQUISITO_ACTIVACION_CANAL.detalle).not.toContain('docs/');
+    expect(REQUISITO_ACTIVACION_CANAL.titulo).not.toMatch(/\bOTA\b/);
+  });
+
+  it('la pantalla del wizard pinta el requisito en el paso 5 (guardia de la página)', () => {
+    const fuente = fs.readFileSync(
+      path.join(RAIZ, 'app/dashboard/hospitality/onboarding/page.tsx'),
+      'utf8'
+    );
+    expect(fuente).toContain('requisitoExterno');
+    // Se pinta el texto del módulo, no uno copiado a mano en la pantalla.
+    expect(fuente).not.toContain('El código de propiedad y el catálogo los publica');
+    expect(fuente).toContain("paso('mapping_externo')");
   });
 });

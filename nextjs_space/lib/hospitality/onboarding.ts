@@ -37,6 +37,25 @@ export interface PasoOnboarding {
   estado: PasoEstado;
   /** Detalle legible del motivo (por qué está pendiente/error/bloqueado). */
   detalle?: string;
+  /**
+   * Requisito de un TERCERO del que depende este paso. Solo lo lleva el paso 5:
+   * sin él, el operador espera un catálogo que nadie ha pedido a nadie.
+   */
+  requisitoExterno?: RequisitoExterno;
+}
+
+/**
+ * Trabajo que no puede hacer ni el hotel desde nuestro panel ni nosotros: lo
+ * ejecuta otra empresa y con su propio plazo. El wizard lo enseña donde importa
+ * porque un paso que no avanza sin explicación se vive como un defecto nuestro.
+ */
+export interface RequisitoExterno {
+  /** Quién lo ejecuta, en lenguaje de hotel. */
+  quien: string;
+  /** Frase corta para el encabezado del aviso. */
+  titulo: string;
+  /** Qué hay que hacer y por qué no se resuelve esperando. */
+  detalle: string;
 }
 
 /** Resultado de una prueba del paso 7-9. `null` = todavía no se ejecutó. */
@@ -103,6 +122,28 @@ export const PASO_TITULOS: Record<PasoClave, { titulo: string; descripcion: stri
     titulo: 'Activar producción',
     descripcion: 'Marca la propiedad como conectada. Requiere todos los pasos anteriores.',
   },
+};
+
+/**
+ * Requisito del paso 5 (mapping externo): el catálogo NO existe hasta que el
+ * canal está activado en la OTA.
+ *
+ * Fuente: artículos de soporte oficiales del proveedor de conectividad
+ * (consultados el 23 sep 2026). El material con el clic a clic es INTERNO
+ * (`docs/hospitality-conexion-otas-activacion.md`); esta constante es lo único
+ * que llega al producto, con la jerga de hotel.
+ *
+ * Booking.com y Expedia se activan por autoservicio en la extranet del canal;
+ * Airbnb exige abrir el enlace de autorización del proveedor y enviarle la
+ * captura. En los tres casos el `hotelCode` y el `roomCode` los publica el
+ * proveedor DESPUÉS, cuando su equipo hace el mapeo de habitaciones: hay un
+ * salto humano de otra empresa entre activar y poder completar el paso.
+ */
+export const REQUISITO_ACTIVACION_CANAL: RequisitoExterno = {
+  quien: 'El hotel, en la extranet de cada canal',
+  titulo: 'Activa el canal antes de esperar el catálogo',
+  detalle:
+    'El código de propiedad y el catálogo los publica el proveedor después de que el canal esté activado en su extranet y de que su equipo haya mapeado las habitaciones. Booking.com y Expedia se activan desde la propia extranet del canal; Airbnb requiere abrir el enlace de autorización del proveedor y enviarle la captura. Si el canal todavía no está activado, este paso no se completa por esperar.',
 };
 
 const ORDEN: PasoClave[] = [
@@ -183,15 +224,19 @@ export function computeOnboardingSteps(e: OnboardingEstado): PasoOnboarding[] {
   );
 
   // 5. Mapping externo
-  if (!e.conectividadConfigurada) {
-    pasos.push(paso('mapping_externo', 'bloqueado', 'Requiere conectividad configurada.'));
-  } else if (e.hotelCode) {
-    pasos.push(paso('mapping_externo', 'completado', `hotelCode: ${e.hotelCode}`));
-  } else {
-    pasos.push(
-      paso('mapping_externo', 'pendiente', 'Obtén el código de propiedad y su catálogo.')
-    );
-  }
+  const pasoMapping = !e.conectividadConfigurada
+    ? paso('mapping_externo', 'bloqueado', 'Requiere conectividad configurada.')
+    : e.hotelCode
+      ? paso('mapping_externo', 'completado', `hotelCode: ${e.hotelCode}`)
+      : paso('mapping_externo', 'pendiente', 'Obtén el código de propiedad y su catálogo.');
+  // Mientras el paso no esté completo, el requisito viaja CON el paso: el
+  // catálogo depende de que el canal esté activado en la OTA, y el operador
+  // tiene que leerlo aquí, no en un documento interno.
+  pasos.push(
+    pasoMapping.estado === 'completado'
+      ? pasoMapping
+      : { ...pasoMapping, requisitoExterno: REQUISITO_ACTIVACION_CANAL }
+  );
 
   // 6. Vincular unidad ↔ room/rateplan
   if (!e.hotelCode) {
