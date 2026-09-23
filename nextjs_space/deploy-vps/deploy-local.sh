@@ -114,6 +114,23 @@ $SSH "$VPS" "mkdir -p /root/deploy-vps" >/dev/null 2>&1 || true
 $SCP $TARBALLS "$VPS:/tmp/"
 # Los scripts del repo son la fuente de verdad; se sincronizan en cada deploy
 $SCP deploy-vps/deploy-app.sh deploy-vps/run-migrations.sh "$VPS:/root/deploy-vps/"
+# El auditor de superficie tambien se sincroniza (el repo manda sobre la
+# copia del VPS) y su identidad se verifica abajo, antes de tocar nada más.
+$SCP deploy-vps/auditar-superficie.sh "$VPS:/root/auditar-superficie.sh"
+$SSH "$VPS" "chmod 700 /root/auditar-superficie.sh"
+
+# Verificación de identidad repo↔VPS del auditor: si las reglas del baseline
+# derivan entre copias, el cron horario del VPS compararía contra un runbook
+# viejo y la deriva real pasaría como conforme (docs/VPS-SEGURIDAD-PUERTOS.md §10).
+LOCAL_SHA=$(sha256sum deploy-vps/auditar-superficie.sh | cut -d' ' -f1)
+REMOTE_SHA=$($SSH "$VPS" "sha256sum /root/auditar-superficie.sh | cut -d' ' -f1")
+if [ "$LOCAL_SHA" != "$REMOTE_SHA" ]; then
+  echo "✗ El auditar-superficie.sh del VPS NO es idéntico al del repo" >&2
+  echo "  repo=$LOCAL_SHA  vps=$REMOTE_SHA" >&2
+  echo "  No se continúa: sincroniza la copia y revisa quién la cambió en el VPS." >&2
+  exit 1
+fi
+echo "   · auditar-superficie.sh repo↔VPS idéntico (${LOCAL_SHA:0:12}…)"
 
 # ═══════════════════════════════════════════════════════════════
 # 4. DEPLOY REMOTO (load → migraciones → update → verificar → limpiar)

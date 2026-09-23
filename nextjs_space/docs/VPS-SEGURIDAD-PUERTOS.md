@@ -320,6 +320,12 @@ recuperan a demanda con `docker swarm join-token worker` cuando haya que
 incorporar un nodo de verdad. Defensa en profundidad: aunque ufw volviera
 a abrir 2377, sin el token nuevo nadie entra.
 
+**Sincronizacion con el deploy**: `deploy-local.sh` sube la copia del repo
+a `/root/auditar-superficie.sh` en cada despliegue y verifica la identidad
+sha256 repo↔VPS; si difieren, el deploy FALLA antes de tocar nada. La
+divergencia sin explicar se investiga (¿quien cambio la copia del VPS?),
+no se absorbe.
+
 Cuando cambie la superficie a posta (nuevo servicio publicado, nueva app,
 rotacion con distinto numero de ficheros), actualizar §9/§10 y las listas
 de `auditar-superficie.sh` **en el mismo commit** — el auditor compara
