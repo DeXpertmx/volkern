@@ -320,6 +320,43 @@ recuperan a demanda con `docker swarm join-token worker` cuando haya que
 incorporar un nodo de verdad. Defensa en profundidad: aunque ufw volviera
 a abrir 2377, sin el token nuevo nadie entra.
 
+## 11. Desactivacion parcial del stack heredado volkern-table (2026-09-24)
+
+Inventario del legado (`volkern_*`, sin contar el ERP): app congelada sin
+una sola sesion activa (0 refresh tokens) y ultimo deploy el 25/08,
+landing comercial, postgres de 15 MB **sin escrituras de usuario desde el
+12/08** (solo escribe el monitor sobre su propio AuditLog), dispatch y
+ws-service sin nadie detras (solo health-checks del monitor; 0 conexiones
+ws en 48h), libretranslate SI usado por el app (`LIBRETRANSLATE_URL`).
+Herramienta de operacion dormida: el backup diario estaba ROTO (buscaba
+la BD `volkerntable`; la real es `volkern_table`) y llevaba dias
+produciendo dumps de 20 bytes.
+
+Lo ejecutado (autorizado por Bruno, "Fase 1+2"):
+
+- **Crons heredados retirados**: los 4 del crontab de root (reminders,
+  auto-release, backup-db roto, monitor) y los 3 de `/etc/cron.d/`
+  (attendance-digest, birthday-promos, held-orders). Copia literal de
+  antes/despues en `/root/backups/crons-heredados-20260923-194309/`:
+  revertir es restaurar el crontab y devolver los ficheros.
+- **Servicios sin uso a 0**: `docker service scale
+  volkern_ws-service=0 volkern_volkern-dispatch=0` (~110 MB de RAM
+  liberados). Revertir: `... =1`.
+- **Se conservan vivos**: `volkern_app`, `volkern_landing`,
+  `volkern_postgres` (volumen `volkern_pgdata` intacto) y
+  `volkern_libretranslate`. `table.volkern.app` y `volkerntable.com`
+  siguen respondiendo 200.
+- **Snapshot previo del legacy** (el unico backup honesto que tiene):
+  `/root/backups/volkern_table-pre-archivo-20260923-193949.dump` (436K).
+- Verificado despues: ERP y apps 200, auditor CONFORME, `docker node ls`
+  sin cambios.
+
+Pendiente si el producto legacy no vuelve (NO ejecutado, fase 3):
+`docker stack rm volkern` conservando el volumen, el snapshot y
+**`/opt/vt-build/keystores/`** (firma de las apps Android: perderlo es
+perder la firma), archivando `/opt/volkern-table` en tar, y decidir el
+destino del dominio `volkerntable.com`.
+
 **Sincronizacion con el deploy**: `deploy-local.sh` sube la copia del repo
 a `/root/auditar-superficie.sh` en cada despliegue y verifica la identidad
 sha256 repo↔VPS; si difieren, el deploy FALLA antes de tocar nada. La
