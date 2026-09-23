@@ -2,6 +2,11 @@ import { prisma } from '@/lib/db';
 import { encrypt, decrypt } from '@/lib/core/crypto';
 import { TIPOS_SYNC_CONECTIVIDAD, type FalloConectividad } from './conectividad-causa';
 import { sanitizarRespuestaExterna } from './conectividad-secreto';
+import {
+  preflightConectividad,
+  resumenPreflight,
+  type AvisoPreflight,
+} from './connectivity-preflight';
 
 /**
  * Capa de Conectividad de Canales (Hospitality).
@@ -148,15 +153,32 @@ export async function getConnectivityCredentials(): Promise<ConnectivityCredenti
 /**
  * Guarda (o actualiza) la configuración del proveedor de conectividad.
  * Cifra los secretos antes de persistir. Los campos que llegan vacíos se
- * ignoran (no borran lo existente); usa null explícito para limpiar.
+ * ignoran (no borran lo existente).
+ *
+ * Antes de escribir pasa por el preflight: es la última puerta antes de que un
+ * espacio de más, unas comillas de un PDF o un `usuario:contraseña` mal pegado
+ * se conviertan en un 401 indistinguible de «credenciales inválidas». Con
+ * errores no se escribe nada y se devuelven los avisos. La contraseña va
+ * BYTE A BYTE (nunca se recorta): el Basic Auth se compara tal cual y
+ * recortarla la convertiría en otra credencial distinta a la que mandó el
+ * proveedor.
  */
 export async function saveConnectivityConfig(input: {
   partnerId?: string;
   username?: string;
   password?: string;
   estado?: ConnectivityEstado;
-}): Promise<{ ok: true; configurado: boolean }> {
+}): Promise<{ ok: boolean; configurado: boolean; avisos?: AvisoPreflight[] }> {
   const existing = await getConnectivityProvider();
+
+  const revision = preflightConectividad({
+    partnerId: input.partnerId,
+    username: input.username,
+    password: input.password,
+  });
+  if (!revision.ok) {
+    return { ok: false, configurado: false, avisos: revision.bloqueantes };
+  }
 
   const data: any = {
     nombreVisible: CONNECTIVITY_PROVIDER_NOMBRE,
@@ -164,14 +186,18 @@ export async function saveConnectivityConfig(input: {
   };
 
   if (input.estado !== undefined) data.estado = input.estado;
-  if (input.partnerId !== undefined && input.partnerId !== '') {
-    data.partnerIdEnc = encrypt(input.partnerId.trim());
+  // Valores normalizados por el preflight (usuario y partner id recortados,
+  // contraseña intacta). Los campos que llegan vacíos se ignoran: el guardado
+  // parcial sigue funcionando igual que antes.
+  const { partnerId, username, password } = revision.valores;
+  if (partnerId !== null && partnerId !== '') {
+    data.partnerIdEnc = encrypt(partnerId);
   }
-  if (input.username !== undefined && input.username !== '') {
-    data.usernameEnc = encrypt(input.username.trim());
+  if (username !== null && username !== '') {
+    data.usernameEnc = encrypt(username);
   }
-  if (input.password !== undefined && input.password !== '') {
-    data.passwordEnc = encrypt(input.password.trim());
+  if (password !== null && password !== '') {
+    data.passwordEnc = encrypt(password);
   }
 
   const provider = await prisma.connectivityProvider.upsert({
@@ -295,8 +321,16 @@ export async function testConnectivityConnection(hotelCode?: string): Promise<Te
     return { ok: false, error: 'Conectividad no configurada: guarda primero las credenciales en esta pantalla.' };
   }
 
+  // Preflight de la URL antes de llamar. Sin esto, una URL mal pegada o sin
+  // configurar se convierte en un error de red o en un 404 del borde, que en el
+  // panel se lee como «las credenciales fallan». El mensaje dice qué arreglar.
+  const revisionUrl = preflightConectividad({ baseUrl: process.env.CONNECTIVITY_BASE_URL ?? '' });
+  if (!revisionUrl.ok) {
+    return { ok: false, error: `URL del servicio: ${resumenPreflight(revisionUrl)}` };
+  }
+
   const code = (hotelCode && hotelCode.trim()) || CONNECTIVITY_SANDBOX_HOTEL;
-  const baseUrl = getConnectivityBaseUrl();
+  const baseUrl = revisionUrl.urlContrato ?? getConnectivityBaseUrl();
   const url = `${baseUrl}/property_details/${encodeURIComponent(code)}?partnerId=${encodeURIComponent(creds.partnerId)}`;
 
   const auth = Buffer.from(`${creds.username}:${creds.password}`).toString('base64');

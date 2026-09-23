@@ -43,6 +43,15 @@ import { esReservaViva } from '@/lib/hospitality/estados';
 // almacena — la MISMA función produce la causa del badge y la de la tabla.
 import { causaDeFalloConectividad, type CausaConectividad } from '@/lib/hospitality/conectividad-causa';
 import { sanitizarRespuestaExterna } from '@/lib/hospitality/conectividad-secreto';
+// Preflight puro (sin Prisma): la MISMA revisión que aplica la API antes de
+// guardar. Aquí se ejecuta en vivo para que el error se vea al pegar, no al
+// guardar; y nunca muestra el valor, solo qué está mal y cómo arreglarlo.
+import {
+  preflightConectividad,
+  resumenPreflight,
+  ETIQUETAS_CAMPO,
+  type AvisoPreflight,
+} from '@/lib/hospitality/connectivity-preflight';
 
 interface EstadoConectividad {
   configurado: boolean;
@@ -55,6 +64,8 @@ interface EstadoConectividad {
   ultimoEvento: string | null;
   /** Última verificación activa (health-check diario o botón «Probar»). */
   ultimaVerificacion?: string | null;
+  /** Preflight de la URL configurada en el servidor (misma revisión que la API). */
+  preflightBaseUrl?: { ok: boolean; avisos: AvisoPreflight[] };
   contadorErrores: number;
   /** Último fallo de la capa en crudo (sin secretos): alimenta el diagnóstico del badge. */
   ultimoFallo?: {
@@ -137,6 +148,8 @@ export default function AdminConectividad() {
   const [partnerId, setPartnerId] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  /** Avisos que devuelve la API al guardar (bloqueantes o advertencias). */
+  const [avisosGuardado, setAvisosGuardado] = useState<AvisoPreflight[]>([]);
   const [copied, setCopied] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testHotel, setTestHotel] = useState('');
@@ -266,6 +279,7 @@ export default function AdminConectividad() {
         setPartnerId('');
         setUsername('');
         setPassword('');
+        setAvisosGuardado(data.avisos || []);
         await loadEstado();
         // Aviso claro de qué falta para poder conectar (los 3 campos son
         // necesarios; sin ID de socio el proveedor rechaza la llamada).
@@ -283,6 +297,9 @@ export default function AdminConectividad() {
           );
         }
       } else {
+        // La API rechaza antes de escribir: se muestran TODOS los avisos, con su
+        // arreglo, en vez de un único mensaje genérico.
+        setAvisosGuardado(data.avisos || []);
         toast.error(data.error || 'Error al guardar credenciales');
       }
     } catch (error) {
@@ -291,6 +308,39 @@ export default function AdminConectividad() {
       setSaving(false);
     }
   };
+
+  /**
+   * Revisión en vivo de lo que el operador está pegando. Los campos vacíos se
+   * envían como «no se toca» (el guardado parcial es válido) para que el aviso
+   * de un campo vacío no aparezca antes de que lo escriba.
+   */
+  const revisionCredenciales = preflightConectividad({
+    partnerId: partnerId.trim() === '' ? undefined : partnerId,
+    username: username.trim() === '' ? undefined : username,
+    password: password === '' ? undefined : password,
+  });
+
+  const erroresPorCampo = (campo: 'partnerId' | 'username' | 'password') =>
+    revisionCredenciales.avisos.filter((a) => a.campo === campo);
+
+  const avisosUrlServidor = estado?.preflightBaseUrl?.avisos || [];
+
+  /** Los avisos se pintan con su arreglo; nunca con el valor que se pegó. */
+  const renderAvisos = (avisos: AvisoPreflight[]) =>
+    avisos.length > 0 ? (
+      <ul className="space-y-1">
+        {avisos.map((a, i) => (
+          <li
+            key={`${a.campo}-${i}`}
+            className={`text-xs ${a.gravedad === 'error' ? 'text-destructive' : 'text-amber-600'}`}
+          >
+            <span className="font-medium">{ETIQUETAS_CAMPO[a.campo]}: </span>
+            {a.mensaje}
+            {a.arreglo ? <span className="text-muted-foreground"> {a.arreglo}</span> : null}
+          </li>
+        ))}
+      </ul>
+    ) : null;
 
   const webhookUrl =
     typeof window !== 'undefined'
@@ -467,6 +517,28 @@ export default function AdminConectividad() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {avisosUrlServidor.length > 0 && (
+            <div
+              className={`mb-4 rounded-lg border p-3 ${
+                estado?.preflightBaseUrl?.ok
+                  ? 'border-amber-300 bg-amber-50'
+                  : 'border-destructive/40 bg-destructive/5'
+              }`}
+            >
+              <p className="text-sm font-medium flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4" />
+                {estado?.preflightBaseUrl?.ok
+                  ? 'La URL del servicio tiene avisos'
+                  : 'La URL del servicio no es válida'}
+              </p>
+              {renderAvisos(avisosUrlServidor)}
+              <p className="text-xs text-muted-foreground mt-1">
+                La URL se configura en el servidor; esta revisión es la misma que aplica la API antes de
+                llamar al servicio.
+              </p>
+            </div>
+          )}
+
           <form onSubmit={handleSave} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="partnerId">ID de socio (partner id) — requerido</Label>
@@ -476,7 +548,9 @@ export default function AdminConectividad() {
                 value={partnerId}
                 onChange={(e) => setPartnerId(e.target.value)}
                 autoComplete="off"
+                aria-invalid={erroresPorCampo('partnerId').some((a) => a.gravedad === 'error')}
               />
+              {renderAvisos(erroresPorCampo('partnerId'))}
               <p className="text-xs text-muted-foreground">
                 Los TRES campos son obligatorios para conectar. Sin el ID de socio, el servicio rechaza las llamadas.
               </p>
@@ -489,7 +563,9 @@ export default function AdminConectividad() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 autoComplete="off"
+                aria-invalid={erroresPorCampo('username').some((a) => a.gravedad === 'error')}
               />
+              {renderAvisos(erroresPorCampo('username'))}
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Contraseña API</Label>
@@ -500,12 +576,22 @@ export default function AdminConectividad() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="new-password"
+                aria-invalid={erroresPorCampo('password').some((a) => a.gravedad === 'error')}
               />
+              {renderAvisos(erroresPorCampo('password'))}
               <p className="text-xs text-muted-foreground">
                 Dejar vacío un campo conserva el valor actual. Para cambiar solo un campo, escribe únicamente el nuevo valor.
+                La contraseña se guarda tal cual se escribe: no se recortan espacios, porque el Basic Auth se compara
+                byte a byte.
               </p>
             </div>
-            <Button type="submit" disabled={saving}>
+            {avisosGuardado.length > 0 && (
+              <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3">
+                <p className="text-sm font-medium">Lo que ha rechazado la API</p>
+                {renderAvisos(avisosGuardado)}
+              </div>
+            )}
+            <Button type="submit" disabled={saving || !revisionCredenciales.ok}>
               {saving ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
               ) : (
@@ -513,6 +599,11 @@ export default function AdminConectividad() {
               )}
               {saving ? 'Guardando...' : 'Guardar credenciales'}
             </Button>
+            {!revisionCredenciales.ok && (
+              <p className="text-xs text-destructive">
+                {resumenPreflight(revisionCredenciales)} — corrige los avisos marcados para poder guardar.
+              </p>
+            )}
           </form>
         </CardContent>
       </Card>
