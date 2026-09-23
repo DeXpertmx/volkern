@@ -62,6 +62,7 @@ import {
   mapearPersonaMIR,
   personasDesdeGuestData,
   resolverTipoPago,
+  saveMirConfig,
 } from '@/lib/hospitality/registro-viajeros-service';
 import {
   ENDPOINTS_MIR,
@@ -272,6 +273,52 @@ describe('Configuración del arrendador', () => {
     const sinPago = await getMirConfigPublica(TENANT);
     expect(sinPago.tieneCredenciales).toBe(true);
     expect(sinPago.listoParaEnviar).toBe(false);
+  });
+
+  it('vaciar un campo lo BORRA: la credencial no se queda pegada', async () => {
+    // El defecto que esto congela: en la pantalla se vaciaba la contraseña,
+    // se guardaba, y la credencial seguía en la fila (el vacío se ignoraba en
+    // silencio) — con `listoParaEnviar` diciendo que sí.
+    __mockPrisma.hospitalityMirConfig.upsert.mockResolvedValue(configMock());
+    await saveMirConfig(TENANT, {
+      codigoArrendador: '',
+      aplicacion: '',
+      usuario: '',
+      password: '',
+    });
+    const { update } = __mockPrisma.hospitalityMirConfig.upsert.mock.calls.at(-1)![0];
+    expect(update).toMatchObject({
+      codigoArrendador: '',
+      // La aplicación vuelve a su valor por defecto, no a una cabecera en blanco.
+      aplicacion: 'Volkern',
+      usuarioEnc: null,
+      passwordEnc: null,
+    });
+  });
+
+  it('un campo AUSENTE no se toca: vacío y ausente no son lo mismo', async () => {
+    __mockPrisma.hospitalityMirConfig.upsert.mockResolvedValue(configMock());
+    await saveMirConfig(TENANT, { entorno: 'prod' });
+    const { update } = __mockPrisma.hospitalityMirConfig.upsert.mock.calls.at(-1)![0];
+    expect(update).toEqual({ entorno: 'prod' });
+  });
+
+  it('sin código de arrendador no se inventa uno, y el estado lo dice', async () => {
+    // Un código inventado viajaría en la cabecera del parte al Ministerio: si
+    // el hotel no lo tiene, la fila lo guarda vacío y el estado lo confiesa.
+    __mockPrisma.hospitalityMirConfig.upsert.mockResolvedValue(configMock());
+    await saveMirConfig(TENANT, {});
+    const { create } = __mockPrisma.hospitalityMirConfig.upsert.mock.calls.at(-1)![0];
+    expect(create.codigoArrendador).toBe('');
+
+    // Y una fila vaciada NO está configurada (sin credenciales, sin envío).
+    __mockPrisma.hospitalityMirConfig.findUnique.mockResolvedValue(
+      configMock({ codigoArrendador: '', usuarioEnc: null, passwordEnc: null })
+    );
+    const vaciada = await getMirConfigPublica(TENANT);
+    expect(vaciada.configurado).toBe(false);
+    expect(vaciada.tieneCredenciales).toBe(false);
+    expect(vaciada.listoParaEnviar).toBe(false);
   });
 });
 

@@ -183,7 +183,9 @@ export async function getMirConfigPublica(tenantId: string) {
   const tieneCredenciales = !!(config.codigoArrendador && config.usuarioEnc && config.passwordEnc);
   const tiposPago = (config.mapaTiposPago as Record<string, string> | null) ?? {};
   return {
-    configurado: true,
+    // «Configurado» es tener código de arrendador, no tener la fila: una
+    // configuración vaciada (la de la traza de partida) no está configurada.
+    configurado: !!config.codigoArrendador,
     activo: config.activo,
     codigoArrendador: config.codigoArrendador,
     aplicacion: config.aplicacion,
@@ -200,22 +202,36 @@ export async function getMirConfigPublica(tenantId: string) {
 
 /**
  * Guarda (o actualiza) la configuración del arrendador. Cifra usuario y
- * contraseña antes de persistir; los campos vacíos no borran lo existente.
+ * contraseña antes de persistir.
+ *
+ * Convención de la entrada, la misma en toda la casa: **ausente = sin cambio,
+ * vacío = se borra**.
+ *
+ * Antes, una cadena vacía se ignoraba en silencio: el hotel borraba su
+ * contraseña en la pantalla, guardaba, y la credencial seguía ahí (y
+ * `listoParaEnviar` seguía diciendo que sí). Un hotel que cambia de proveedor,
+ * corrige una credencial equivocada o quiere dejar la cuenta sin activar tiene
+ * que poder vaciarla. Un código de arrendador vacío se guarda vacío —nunca se
+ * inventa uno—, y así el estado se lee como «sin configurar».
  */
 export async function saveMirConfig(tenantId: string, entrada: MirConfigEntrada) {
   const data: Record<string, unknown> = {};
-  if (entrada.codigoArrendador !== undefined && entrada.codigoArrendador !== '') {
+  if (entrada.codigoArrendador !== undefined) {
     data.codigoArrendador = entrada.codigoArrendador.trim();
   }
-  if (entrada.aplicacion !== undefined && entrada.aplicacion !== '') {
-    data.aplicacion = entrada.aplicacion.trim();
+  if (entrada.aplicacion !== undefined) {
+    // La aplicación que viaja en la cabecera tiene un valor por defecto: quien
+    // vacía el campo vuelve a él, no a una cabecera en blanco.
+    data.aplicacion = entrada.aplicacion.trim() || 'Volkern';
   }
   if (entrada.entorno !== undefined) data.entorno = entrada.entorno;
-  if (entrada.usuario !== undefined && entrada.usuario !== '') {
-    data.usuarioEnc = encrypt(entrada.usuario.trim());
+  if (entrada.usuario !== undefined) {
+    const usuario = entrada.usuario.trim();
+    data.usuarioEnc = usuario ? encrypt(usuario) : null;
   }
-  if (entrada.password !== undefined && entrada.password !== '') {
-    data.passwordEnc = encrypt(entrada.password.trim());
+  if (entrada.password !== undefined) {
+    const password = entrada.password.trim();
+    data.passwordEnc = password ? encrypt(password) : null;
   }
   if (entrada.tipoPagoDefecto !== undefined) {
     data.tipoPagoDefecto = entrada.tipoPagoDefecto ? entrada.tipoPagoDefecto.trim() : null;
@@ -227,7 +243,7 @@ export async function saveMirConfig(tenantId: string, entrada: MirConfigEntrada)
     where: { tenantId },
     create: {
       tenantId,
-      codigoArrendador: (entrada.codigoArrendador ?? '').trim() || 'SIN-CODIGO',
+      codigoArrendador: (entrada.codigoArrendador ?? '').trim(),
       aplicacion: (entrada.aplicacion ?? '').trim() || 'Volkern',
       entorno: entrada.entorno ?? 'pre',
       usuarioEnc: entrada.usuario ? encrypt(entrada.usuario.trim()) : null,
