@@ -311,6 +311,15 @@ alcanzable. `docker node ls` sigue mostrando UN unico nodo, luego nadie
 llego a unirse al cluster (unirse exige el token; no hay indicios de
 exploracion interna).
 
+**Cierre de la ventana (2026-09-24)**: rotados AMBOS tokens de ingreso
+(worker y manager) con `docker swarm join-token --rotate`. Los tokens
+antiguos —incluido cualquiera que pudiera haberse conocido durante la
+ventana— quedaron invalidos. Los nuevos viven solo en el store raft del
+VPS: no se imprimieron, no se guardaron en fichero ni en el repo; se
+recuperan a demanda con `docker swarm join-token worker` cuando haya que
+incorporar un nodo de verdad. Defensa en profundidad: aunque ufw volviera
+a abrir 2377, sin el token nuevo nadie entra.
+
 Cuando cambie la superficie a posta (nuevo servicio publicado, nueva app,
 rotacion con distinto numero de ficheros), actualizar §9/§10 y las listas
 de `auditar-superficie.sh` **en el mismo commit** — el auditor compara
