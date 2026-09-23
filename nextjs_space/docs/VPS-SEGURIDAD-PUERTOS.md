@@ -304,6 +304,13 @@ verde. Regla que queda: para cancelar una bomba de `systemd-run
 --on-active`, parar **el timer** (`systemctl stop <unidad>.timer`), no el
 service; y no crear la unidad si el plan es borrar su script.
 
+Registro de la exposicion: journal marca `Firewall stopped and disabled on
+system startup` a las **19:14:29** (240s tras armar la bomba) y reactivacion
+en la madrugada del 24; ventana de ~5h con el plano de control Swarm
+alcanzable. `docker node ls` sigue mostrando UN unico nodo, luego nadie
+llego a unirse al cluster (unirse exige el token; no hay indicios de
+exploracion interna).
+
 Cuando cambie la superficie a posta (nuevo servicio publicado, nueva app,
 rotacion con distinto numero de ficheros), actualizar §9/§10 y las listas
 de `auditar-superficie.sh` **en el mismo commit** — el auditor compara
