@@ -50,6 +50,10 @@ model User {
   fechaInvitacion         DateTime?
   invitadoPor             String?
   roleId                  String?
+  // Vínculo con el contacto del CRM cuando este usuario ES el huésped de una
+  // reserva (rol Huésped). El módulo filtra por él: sin vínculo no ve ninguna,
+  // y nunca las de la cuenta entera.
+  contactId               String?
   telefono                String?
   tenantId                String?
   timezone                String                     @default("America/Mexico_City")
@@ -79,6 +83,7 @@ model User {
   tareasAsignadas         Task[]                     @relation("TaskAssignee")
   role                    Role?                      @relation(fields: [roleId], references: [id])
   tenant                  Tenant?                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contacto                Contact?                   @relation("UserContacto", fields: [contactId], references: [id], onDelete: SetNull)
   whatsappInstances       UserWhatsAppInstance[]     @relation("UserWhatsAppInstances")
   agent_skill_logs        agent_skill_logs[]
   apiKeys                 ApiKey[]
@@ -112,6 +117,7 @@ model User {
   assignedTickets         SupportTicket[]            @relation("TicketAssignee")
   createdTickets          SupportTicket[]            @relation("TicketCreator")
   trainingSessions        TrainingSession[]
+  contestsSales           SalesContestEdition[]
   equalityComplaints      EqualityComplaint[]
   disponibilidad          Disponibilidad[]
   ausencias               Ausencia[]
@@ -123,6 +129,7 @@ model User {
 
   @@index([tenantId])
   @@index([roleId])
+  @@index([contactId])
   @@index([email])
   @@index([estado])
   @@unique([tenantId, bookingSlug])
@@ -280,6 +287,7 @@ model Tenant {
 
   AcademyPath              AcademyPath[]
   AiDecisionLog            AiDecisionLog[]
+  healthSnapshots              HealthSnapshot[]
   attendanceRules          AttendanceRules?
   auditLogs                AuditLog[]
   automations              Automation[]
@@ -472,6 +480,7 @@ model Tenant {
   tenantFeatures                 TenantFeature[]
   tenantWorkflows                TenantWorkflow[]                 @relation("TenantWorkflows")
   trainingSessions               TrainingSession[]
+  contestSalesEditions           SalesContestEdition[]
   unsubscribeList                UnsubscribeList[]
   webFormSubmissions             WebFormSubmission[]
   webForms                       WebForm[]
@@ -832,6 +841,7 @@ model Contact {
   oportunidadesSeguro            OportunidadComercial[]            @relation("OportunidadCliente")
   siniestrosCliente              Siniestro[]                       @relation("SiniestroCliente")
   hospitalityReservations        HospitalityReservation[]          @relation("HospitalityReservationContact")
+  usuarios                       User[]                            @relation("UserContacto")
 
   @@index([tenantId])
   @@index([email])
@@ -2421,6 +2431,7 @@ model Deal {
   lastAiConsult        DateTime?
   pipelineId           String?
   AiDecisionLog        AiDecisionLog[]
+  healthSnapshots      HealthSnapshot[]
   MessageDraft         MessageDraft[]
   comisiones           Comision[]
   contratos            Contrato[]
@@ -4284,22 +4295,52 @@ model TrainingSession {
   @@map("training_sessions")
 }
 
+// Ediciones del concurso de cerradores (C5): cada MES es una edición con
+// ganador. Se cierra ON-READ: la primera lectura del ranking tras terminar un
+// mes congela su ganador con las sesiones de ESE mes (dedupe: una sola fila
+// por tenant+periodo, guardada una vez). El ranking de pantalla sigue siendo
+// también el del periodo EN CURSO — practicar este mes mueve el ranking.
+model SalesContestEdition {
+  id            String   @id @default(cuid())
+  tenantId      String
+  periodo       String
+  ganadorId     String
+  ganadorNombre String
+  mediaGanador  Int
+  sesionesGanador Int
+  cerradoEn     DateTime @default(now())
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ganador       User     @relation(fields: [ganadorId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, periodo])
+  @@index([tenantId, cerradoEn])
+  @@map("sales_contest_editions")
+}
+
 model SalesPlaybookEntry {
   id              String   @id @default(cuid())
   tenantId        String
   topic           String
+  // Huella de la lección cosechada (tema + objeción normalizada, sha256):
+  // dos sesiones muy parecidas NO crean dos entradas casi iguales — la sonda
+  // de cosecha encuentra la huella y devuelve la entrada existente. Null en
+  // entradas manuales (los NULL no colisionan en un unique de Postgres).
   objection       String
   bestResponse    String
   technique       String?
   sourceSessionId String?
   agentId         String?
   score           Int
+  huellaLeccion   String?
   status          String   @default("approved")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   agent           User?    @relation(fields: [agentId], references: [id])
   tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  // La huella es única POR TENANT: dos tenants pueden tener legítimamente
+  // la misma lección (el Playbook es asunto de cada equipo).
+  @@unique([tenantId, huellaLeccion])
   @@index([tenantId])
   @@index([topic])
   @@index([status])
@@ -8670,6 +8711,9 @@ model HospitalityReview {
 
   @@index([tenantId, estado])
   @@index([propertyId, estado])
+  // Reportes agrupa y filtra por canal de origen: el índice lo creó la
+  // migración `20260922110000_review_canal` y el esquema no lo declaraba.
+  @@index([canal])
   @@map("hospitality_review")
 }
 
@@ -8734,5 +8778,32 @@ model HospitalityGuestRegistryCommunication {
   @@index([lote])
   @@index([reservationId])
   @@map("hospitality_guest_registry_communications")
+}
+
+// Instantánea del health score de un deal (C6) en un momento dado, con SUS
+// ENTRADAS (estancamiento, actividad, SLA) y el DESENLACE del deal (ganado /
+// perdido / abierto). Es el dataset de calibración: permite comprobar si el
+// score ordena bien y ajustar pesos y cortes con datos reales en vez de con
+// hipótesis. Nace con la etiqueta de desenlace NULL y el PATCH del deal la
+// rellena al cerrar — los snapshots anteriores a un cierre nunca se recrean.
+model HealthSnapshot {
+  id           String    @id @default(cuid())
+  tenantId     String
+  dealId       String
+  healthScore  Int
+  healthStatus String
+  diasSinMovimiento Int
+  diasSinActividad  Int
+  slaVencido   Boolean
+  desenlace    String? // null = abierto · 'ganado' | 'perdido'
+  fechaCierre  DateTime?
+  createdAt    DateTime  @default(now())
+  deal         Deal      @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([dealId])
+  @@index([desenlace])
+  @@map("health_snapshots")
 }
 
