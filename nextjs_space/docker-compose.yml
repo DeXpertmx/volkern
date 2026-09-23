@@ -12,8 +12,14 @@ services:
     image: postgres:16-alpine
     container_name: volkern-postgres
     restart: unless-stopped
+    # La BD solo se publica en loopback: un "5432:5432" pelado la deja
+    # escuchando en 0.0.0.0 y, en cualquier máquina compartida o VPS, eso es
+    # la BD entera a un intento de adivinar la contraseña de distancia.
+    # Nadie fuera del host necesita el puerto: la app entra por la red interna
+    # (postgres:5432) y el operador por `docker exec`. Detalle y evidencia en
+    # docs/VPS-SEGURIDAD-PUERTOS.md.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-volkern}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-volkern_secret}
