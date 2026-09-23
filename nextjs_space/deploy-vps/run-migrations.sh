@@ -45,14 +45,29 @@ docker service rm "$JOB_NAME" >/dev/null 2>&1 || true
 
 # 4. Ejecutar migrate deploy como servicio Swarm one-shot (replicated-job)
 #    en la red DXnet (overlay, no attachable manualmente → requiere service).
+# `timeout`: el CLI de Docker se ha quedado colgado en este punto con el servicio ya
+# creado (imprime el ID, avisa de la falta de digest y nunca retorna). Con
+# `set -euo pipefail` eso paraba el despliegue para siempre ANTES del `service
+# update`, sin error y sin actualizar nada. Acotarlo no oculta el resultado: el job
+# existe igualmente y el paso 5 comprueba lo que de verdad importa —si completó y
+# qué dijo—, así que aquí solo se evita que un CLI mudo bloquee el pipeline.
 echo "→ Ejecutando prisma migrate deploy (servicio job)..."
-docker service create --quiet \
+if ! timeout 120 docker service create --quiet \
   --name "$JOB_NAME" \
   --mode replicated-job \
   --restart-condition none \
   --network DXnet \
   --env "DATABASE_URL=$DATABASE_URL" \
-  volkern-erp:migrator migrate deploy
+  volkern-erp:migrator migrate deploy; then
+  echo "   ⚠️  docker service create no retornó en 120s (o falló). Se comprueba igualmente el job."
+fi
+
+# 4b. Si el servicio no llegó a existir, no hay nada que esperar: mejor decirlo con
+#     claridad que esperar 120s a un job que no está.
+if ! docker service inspect "$JOB_NAME" >/dev/null 2>&1; then
+  echo "✗ El job de migraciones no llegó a crearse ($JOB_NAME)." >&2
+  exit 1
+fi
 
 # 5. Esperar a que el job termine (máx. 120s)
 echo "→ Esperando a que el job termine..."

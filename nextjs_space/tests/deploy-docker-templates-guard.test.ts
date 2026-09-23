@@ -98,6 +98,10 @@ const REGLAS: Record<string, ReglaComando> = {
   'image inspect': { campos: null, nota: 'Salida JSON de la imagen.' },
   'container inspect': { campos: null, nota: 'Salida JSON del contenedor.' },
   'service inspect': { campos: null, nota: 'Salida JSON del servicio.' },
+  // `docker inspect` genérico (contenedor, imagen, red, volumen…): los campos de
+  // la plantilla son rutas del JSON del objeto, no una lista fija de columnas.
+  // Se exime del catálogo de campos por el mismo motivo que `container inspect`.
+  inspect: { campos: null, nota: 'Salida JSON del objeto inspeccionado (contenedor, imagen, red, volumen…).' },
   version: { campos: null, nota: 'Salida JSON de `docker version` ({{.Server.Version}}, {{.Client.Version}}…).' },
 };
 
@@ -402,11 +406,12 @@ describe('Guardia de plantillas Docker en los scripts de despliegue', () => {
       'STATE=$(docker service ps "$S" --format \'{{.CurrentState}} {{.Error}}\' 2>/dev/null | head -1 || true)',
       'CID=$(docker ps --filter name=volkern-erp_app --format \'{{.ID}}\' | head -1)',
       'docker service inspect app --format \'{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}\'',
+      'RUNNING_ID=$(docker inspect "$CID" --format \'{{.Image}}\' | cut -c8-19)',
       'docker version --format \'docker {{.Server.Version}}\'',
     ].join('\n');
 
     const r = escanearTexto(sano, 'sano.sh');
-    expect(r.plantillas.map((p) => p.comando)).toEqual(['service ps', 'ps', 'service inspect', 'version']);
+    expect(r.plantillas.map((p) => p.comando)).toEqual(['service ps', 'ps', 'service inspect', 'inspect', 'version']);
     expect(r.hallazgos, formatear(r.hallazgos).join('\n')).toEqual([]);
 
     // Un archivo con SOLO el comentario histórico no genera ni plantillas.

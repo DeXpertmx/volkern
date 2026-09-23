@@ -168,6 +168,58 @@ if [ "$CONVERGED" -eq 0 ]; then
   exit 1
 fi
 
+# ── 4b. Verificar que el contenedor corre la imagen recién cargada ──
+# El paso 5 (HTTP 200) no basta: un contenedor anclado a la imagen vieja
+# también responde 200. Comparar el image ID real del contenedor con el
+# de la imagen cargada en el paso 1; si no coincide, reintentar el roll
+# (bug conocido: el primer service update --force a veces deja el
+# contenedor anclado a la imagen anterior) y si persiste, fallar con
+# error claro que indique el fix manual.
+echo ""
+echo "→ [4b/5] Verificando image ID del contenedor ..."
+ROLL_ATTEMPTS=0
+while :; do
+  CID=$(docker ps --filter name=volkern-erp_app --format '{{.ID}}' | head -1)
+  if [ -z "$CID" ]; then
+    echo "✗ No se encontró el contenedor del servicio $SERVICE." >&2
+    docker service ps "$SERVICE" --no-trunc | head -5 >&2
+    exit 1
+  fi
+  RUNNING_ID=$(docker inspect "$CID" --format '{{.Image}}' | cut -c8-19)
+  if [ "$RUNNING_ID" = "$NEW_ID" ]; then
+    echo "   ✓ Contenedor $CID corriendo la imagen cargada: $RUNNING_ID = $NEW_ID"
+    break
+  fi
+  ROLL_ATTEMPTS=$((ROLL_ATTEMPTS + 1))
+  if [ "$ROLL_ATTEMPTS" -ge 2 ]; then
+    echo "✗ El contenedor quedó anclado a la imagen vieja tras el roll." >&2
+    echo "  Esperado: $NEW_ID (imagen cargada en el paso 1)" >&2
+    echo "  Real:     $RUNNING_ID" >&2
+    echo "  Fix manual: docker service update --force --image $IMAGE $SERVICE" >&2
+    docker service ps "$SERVICE" --no-trunc | head -5 >&2
+    exit 1
+  fi
+  echo "   ⚠️  Contenedor en imagen distinta ($RUNNING_ID ≠ $NEW_ID) — reintentando roll..."
+  docker service update --force --image "$IMAGE" "$SERVICE"
+  CONVERGED=0
+  for i in $(seq 1 60); do
+    # `|| true` por el mismo motivo que en el paso 4: con `set -o pipefail`,
+    # el SIGPIPE de `head -1` abortaría el bucle antes de converger.
+    STATE=$(docker service ps "$SERVICE" --format '{{.CurrentState}} {{.Image}}' 2>/dev/null | head -1 || true)
+    if echo "$STATE" | grep -qE '^Running'; then
+      CONVERGED=1
+      echo "   ✓ Tarea nueva corriendo tras reintento: $STATE"
+      break
+    fi
+    sleep 3
+  done
+  if [ "$CONVERGED" -eq 0 ]; then
+    echo "✗ La tarea no convergió tras el reintento del roll." >&2
+    docker service ps "$SERVICE" --no-trunc | head -5 >&2
+    exit 1
+  fi
+done
+
 # ── 5. Verificar que la app responde ────────────────────────────
 echo "→ [5/5] Verificando $APP_URL ..."
 for i in $(seq 1 10); do

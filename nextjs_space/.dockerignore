@@ -56,3 +56,5 @@ tests/
 
 # App Móvil
 app-movil/
+# CA de SES.HOSPEDAJES (el Dockerfile la COPY al runner; ver docker/ca/README.md)
+!docker/ca/*.pem

@@ -12,7 +12,7 @@
 set -euo pipefail
 
 MIGRATOR_TARBALL="${1:-/tmp/volkern-erp-migrator.tar}"
-JOB="volkern-erp-preflight-job"
+JOB_NAME="volkern-erp-preflight-job"
 OUTDIR=/root/deploy-vps/preflight
 
 echo "=== Preflight migraciones ($(date)) ==="
@@ -68,9 +68,14 @@ fi
 #    Es la comprobación definitiva: dice EXACTAMENTE lo que le falta (o le
 #    sobra) a producción para llegar al esquema del despliegue.
 echo "→ Calculando diff de producción contra el esquema nuevo (job Swarm) ..."
-docker service rm "$JOB" >/dev/null 2>&1 || true
-docker service create --quiet \
-  --name "$JOB" \
+docker service rm "$JOB_NAME" >/dev/null 2>&1 || true
+# `timeout`: el CLI de Docker ya se ha quedado colgado en este punto con el
+# servicio creado (imprime el ID, avisa de la falta de digest y no retorna).
+# Acotarlo no oculta el resultado —el job existe igualmente y el bucle de abajo
+# mira su estado real—, solo pone techo al silencio del CLI. Misma receta que
+# run-migrations.sh.
+if ! timeout 120 docker service create --quiet \
+  --name "$JOB_NAME" \
   --mode replicated-job \
   --restart-condition none \
   --network DXnet \
@@ -85,16 +90,25 @@ docker service create --quiet \
       --to-schema-datamodel /app/prisma/schema.prisma \
       --script > /out/prod-diff.sql 2> /out/prod-diff.err
     echo "DIFF_EXIT=$?" >> /out/prod-diff.err
-  '
+  '; then
+  echo "   ⚠️  docker service create no retornó en 120s (o falló). Se comprueba igualmente el job."
+fi
+
+# Si el servicio no llegó a existir, no hay nada que esperar: decirlo es más útil
+# que agotar la espera en un job que nunca se creó.
+if ! docker service inspect "$JOB_NAME" >/dev/null 2>&1; then
+  echo "✗ El job de preflight no llegó a crearse ($JOB_NAME)." >&2
+  exit 1
+fi
 
 for i in $(seq 1 60); do
-  COMPLETE=$(docker service ps "$JOB" --format '{{.CurrentState}}' 2>/dev/null | grep -c Complete || true)
+  COMPLETE=$(docker service ps "$JOB_NAME" --format '{{.CurrentState}}' 2>/dev/null | grep -c Complete || true)
   [ "$COMPLETE" -gt 0 ] && break
   sleep 3
 done
-echo "→ Estado del job: $(docker service ps "$JOB" --format '{{.CurrentState}}' 2>/dev/null | head -1 || true)"
-docker service logs "$JOB" 2>&1 | tail -5 || true
-docker service rm "$JOB" >/dev/null 2>&1 || true
+echo "→ Estado del job: $(docker service ps "$JOB_NAME" --format '{{.CurrentState}}' 2>/dev/null | head -1 || true)"
+docker service logs "$JOB_NAME" 2>&1 | tail -5 || true
+docker service rm "$JOB_NAME" >/dev/null 2>&1 || true
 
 echo ""
 echo "=== Resultado del preflight ==="

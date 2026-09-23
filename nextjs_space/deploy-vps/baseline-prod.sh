@@ -16,7 +16,7 @@ set -euo pipefail
 
 MIGRATOR_TARBALL="${1:-/tmp/volkern-erp-migrator.tar}"
 RESET_METADATA="${2:-}"
-JOB="volkern-erp-baseline-job"
+JOB_NAME="volkern-erp-baseline-job"
 OUTDIR=/root/deploy-vps/preflight
 mkdir -p "$OUTDIR" /root/backups
 
@@ -70,26 +70,39 @@ chmod +x "$OUTDIR/baseline-step.sh"
 
 # 5. Job Swarm one-shot en la red DXnet (misma receta que run-migrations.sh)
 echo "→ Ejecutando baseline + migrate deploy ..."
-docker service rm "$JOB" >/dev/null 2>&1 || true
-docker service create --quiet \
-  --name "$JOB" \
+docker service rm "$JOB_NAME" >/dev/null 2>&1 || true
+# `timeout`: el CLI de Docker se ha quedado colgado en este punto con el
+# servicio creado (imprime el ID y no retorna). Acotarlo no oculta el resultado
+# —el job existe igualmente y el bucle de abajo mira su estado real—, solo pone
+# techo al silencio del CLI. Misma receta que run-migrations.sh.
+if ! timeout 120 docker service create --quiet \
+  --name "$JOB_NAME" \
   --mode replicated-job \
   --restart-condition none \
   --network DXnet \
   --env "DATABASE_URL=$DATABASE_URL" \
   --mount "type=bind,src=$OUTDIR,dst=/out" \
   --entrypoint /bin/sh \
-  volkern-erp:migrator /out/baseline-step.sh
+  volkern-erp:migrator /out/baseline-step.sh; then
+  echo "   ⚠️  docker service create no retornó en 120s (o falló). Se comprueba igualmente el job."
+fi
+
+# Si el servicio no llegó a existir, no hay nada que esperar: decirlo es más útil
+# que agotar la espera en un job que nunca se creó.
+if ! docker service inspect "$JOB_NAME" >/dev/null 2>&1; then
+  echo "✗ El job de baseline no llegó a crearse ($JOB_NAME)." >&2
+  exit 1
+fi
 
 for i in $(seq 1 100); do
-  COMPLETE=$(docker service ps "$JOB" --format '{{.CurrentState}}' 2>/dev/null | grep -c Complete || true)
+  COMPLETE=$(docker service ps "$JOB_NAME" --format '{{.CurrentState}}' 2>/dev/null | grep -c Complete || true)
   [ "$COMPLETE" -gt 0 ] && break
   sleep 3
 done
-JOB_STATE=$(docker service ps "$JOB" --format '{{.CurrentState}} {{.Error}}' 2>/dev/null | head -1 || true)
+JOB_STATE=$(docker service ps "$JOB_NAME" --format '{{.CurrentState}} {{.Error}}' 2>/dev/null | head -1 || true)
 echo "→ Estado del job: $JOB_STATE"
-docker service logs "$JOB" 2>&1 | tail -10 || true
-docker service rm "$JOB" >/dev/null 2>&1 || true
+docker service logs "$JOB_NAME" 2>&1 | tail -10 || true
+docker service rm "$JOB_NAME" >/dev/null 2>&1 || true
 
 # 6. Resultado
 echo ""
