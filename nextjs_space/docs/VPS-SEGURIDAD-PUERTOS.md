@@ -216,9 +216,14 @@ Inventario de `authorized_keys` de root en el momento del cambio:
    usa el agente actual (la del agente es hFO4…).
 5. `buffy-deploy@volkern` (hFO4…) — la del agente Freebuff actual.
 
-Pendiente de decidir (no ejecutado): revocar las dos claves del CD heredado
-y la buffy desconocida. Nadie mas deberia aparecer en esa lista; si aparece
-una sexta clave, es incidente.
+**Revocacion (2026-09-23, autorizada por Bruno):** se retiraron las claves
+2, 3 y 4 despues de verificar que nada activo las usaba (los workflows del
+repo no despliegan por SSH, ninguna clave privada correspondiente existe
+en la maquina de trabajo ni en el VPS, no hay runners de CI). `authorized_keys`
+queda en 2 claves: bruno.hess y el agente actual. Backup de la lista
+anterior: `/root/.ssh/authorized_keys.bak-revocacion-20260923-190310`.
+Nadie mas deberia aparecer en la lista; si aparece una tercera clave, es
+incidente.
 
 Regla para lo que venga: cloud-init nunca con `ssh_pwauth: true`; y si
 algun dia se toca `sshd_config.d`, recordar que el orden alfabetico decide
