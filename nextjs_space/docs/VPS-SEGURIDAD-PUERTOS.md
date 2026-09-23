@@ -188,3 +188,39 @@ la contrasena: reutiliza `deploy-vps/.db_pass` si existe, y solo crea una
 nueva en el primer arranque o si se fuerza con `VOLKERN_DB_PASS` (cambiar
 entonces a mano con `ALTER USER`). Copia de seguridad previa quedo en
 `/root/backups/volkern_erp-pre-rotacion-20260923-184611.dump`.
+
+## 8. El root del VPS solo entra por clave (2026-09-23)
+
+Antes: `PermitRootLogin yes` + `PasswordAuthentication yes` — la contrasena
+de root era una puerta mas desde Internet. Y la capa que mandaba era sutil:
+
+- `sshd_config.d/50-cloud-init.conf` ponia `PasswordAuthentication yes` y,
+  por orden alfabetico (el primer fichero que declara una opcion gana),
+  tapaba el `no` de `60-cloudimg-settings.conf`.
+- cloud-init ademas tenia `ssh_pwauth: 1` en `/etc/cloud/cloud.cfg.d/99-ssh.cfg`:
+  un reboot habria vuelto a abrir la contrasena.
+
+Ahora: `PermitRootLogin prohibit-password`, `50-cloud-init.conf` con `no`, y
+`ssh_pwauth: false` editado en el `99-ssh.cfg` que gana el merge. Verificado
+con sesion nueva: un cliente sin clave recibe `Permission denied (publickey)`
+(ya no se ofrece contrasena) y la clave sigue entrando. Queda backup en
+`/etc/ssh/sshd_config.bak-hardening-*` y el cambio se ejecuto con un
+temporizador de reversion armado 5 min, cancelado al pasar la prueba.
+
+Inventario de `authorized_keys` de root en el momento del cambio:
+
+1. `bruno.hess@dimensionexpert.com` — humana, legítima.
+2. `github-cd-deploy@volkern-table` — CD heredado del proyecto viejo.
+3. `github-cd-deploy@volkerntable` — igual, con otra grafia.
+4. `buffy-deploy@volkern` (MkV3…) — origen desconocido; NO es la clave que
+   usa el agente actual (la del agente es hFO4…).
+5. `buffy-deploy@volkern` (hFO4…) — la del agente Freebuff actual.
+
+Pendiente de decidir (no ejecutado): revocar las dos claves del CD heredado
+y la buffy desconocida. Nadie mas deberia aparecer en esa lista; si aparece
+una sexta clave, es incidente.
+
+Regla para lo que venga: cloud-init nunca con `ssh_pwauth: true`; y si
+algun dia se toca `sshd_config.d`, recordar que el orden alfabetico decide
+el ganador — el `60-cloudimg-settings.conf` de la imagen no te salva del
+`50-cloud-init.conf`.
