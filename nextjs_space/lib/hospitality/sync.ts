@@ -16,6 +16,7 @@
 
 import { prisma } from '@/lib/db';
 import { availabilityByRoomCode, loadAvailabilityContext } from './availability';
+import { normalizarEstacionalidad, serieDeTarifas } from './estacionalidad';
 import {
   pushInventory,
   pushRates,
@@ -181,6 +182,8 @@ export async function dispatchConnectivityPush(
             maxNoches: true,
             checkInDias: true,
             checkOutDias: true,
+            temporadas: true,
+            finDeSemana: true,
           },
         },
       },
@@ -201,6 +204,8 @@ export async function dispatchConnectivityPush(
           maxNoches: rp.maxNoches ?? null,
           checkInDias: rp.checkInDias ?? null,
           checkOutDias: rp.checkOutDias ?? null,
+          temporadas: rp.temporadas ?? null,
+          finDeSemana: rp.finDeSemana ?? null,
         })),
     }));
 
@@ -397,18 +402,26 @@ function isNextDay(prev: string, next: string): boolean {
  * con los rate plans ACTIVOS de la unidad. Si la unidad no tiene planes
  * configurados, cae a su tarifaBase (compatibilidad con datos existentes).
  * Sin tarifa ni plan no se empujan tarifas (no inventar precios).
+ *
+ * Estacionalidad: un plan con temporadas/fin de semana ya no viaja como un
+ * bloque plano — se expande noche a noche con la MISMA regla del booking
+ * engine (la noche cuesta la tarifa de su fecha, módulo `./estacionalidad`)
+ * y se segmenta en tramos de precio constante para minimizar bloques. Un plan
+ * sin estacionalidad sigue empujando su bloque único de siempre.
  */
 export function buildRateUpdates(
   units: Array<{
     id: string;
     roomCode: string | null;
     tarifaBase: number | null;
-    ratePlans?: Array<{ codigo: string; tarifa: number }>;
+    ratePlans?: Array<{ codigo: string; tarifa: number; temporadas?: unknown; finDeSemana?: unknown }>;
   }>,
   start: Date,
   end: Date
 ) {
   const rates: Array<{ roomCode: string; rateplanCode: string; rate: number }> = [];
+  // Planes con estacionalidad: (roomCode, rateplanCode) → serie de precios.
+  const seriesPorPlan = new Map<string, Array<{ fecha: string; tarifa: number | null }>>();
 
   for (const u of units) {
     if (!u.roomCode) continue;
@@ -417,11 +430,21 @@ export function buildRateUpdates(
     const plans = (u.ratePlans || []).filter((p) => p.tarifa != null && p.tarifa > 0);
     if (plans.length > 0) {
       for (const p of plans) {
-        rates.push({
-          roomCode: u.roomCode,
-          rateplanCode: p.codigo || u.roomCode,
-          rate: p.tarifa,
-        });
+        const config = normalizarEstacionalidad(p.temporadas ?? p.finDeSemana);
+        if (config) {
+          seriesPorPlan.set(`${u.roomCode}\u0000${p.codigo || u.roomCode}`, serieDeTarifas({
+            desde: start,
+            hasta: end,
+            tarifaBase: null,
+            plan: { tarifa: p.tarifa, estacionalidad: config },
+          }));
+        } else {
+          rates.push({
+            roomCode: u.roomCode,
+            rateplanCode: p.codigo || u.roomCode,
+            rate: p.tarifa,
+          });
+        }
       }
       continue;
     }
@@ -435,19 +458,50 @@ export function buildRateUpdates(
     });
   }
 
-  if (rates.length === 0) return [];
+  if (rates.length === 0 && seriesPorPlan.size === 0) return [];
 
   const cursor = new Date(start);
   cursor.setHours(0, 0, 0, 0);
   const last = new Date(end);
   last.setHours(0, 0, 0, 0);
 
-  const startIso = toIsoLocal(cursor);
-  const endIso = toIsoLocal(new Date(last.getTime() - 86_400_000)); // inclusivo
-  if (startIso <= endIso) {
-    return [{ startDate: startIso, endDate: endIso, rates }];
+  const updates: Array<{
+    startDate: string;
+    endDate: string;
+    rates: Array<{ roomCode: string; rateplanCode: string; rate: number }>;
+  }> = [];
+
+  // Planes planos: un único bloque para todo el horizonte (como siempre).
+  if (rates.length > 0) {
+    const startIso = toIsoLocal(cursor);
+    const endIso = toIsoLocal(new Date(last.getTime() - 86_400_000)); // inclusivo
+    if (startIso <= endIso) {
+      updates.push({ startDate: startIso, endDate: endIso, rates });
+    }
   }
-  return [];
+
+  // Planes con estacionalidad: segmentar la serie en tramos de precio
+  // constante (la misma técnica que buildInventoryUpdates usa para cupos).
+  for (const [clave, serie] of seriesPorPlan) {
+    const [roomCode, rateplanCode] = clave.split('\u0000');
+    let tramo: { desde: string; hasta: string; rate: number } | null = null;
+    for (const fila of serie) {
+      if (fila.tarifa == null) continue; // noche sin precio: no se inventa
+      if (tramo && tramo.rate === fila.tarifa && isNextDay(tramo.hasta, fila.fecha)) {
+        tramo.hasta = fila.fecha; // extender el tramo
+        continue;
+      }
+      if (tramo) {
+        updates.push({ startDate: tramo.desde, endDate: tramo.hasta, rates: [{ roomCode, rateplanCode, rate: tramo.rate }] });
+      }
+      tramo = { desde: fila.fecha, hasta: fila.fecha, rate: fila.tarifa };
+    }
+    if (tramo) {
+      updates.push({ startDate: tramo.desde, endDate: tramo.hasta, rates: [{ roomCode, rateplanCode, rate: tramo.rate }] });
+    }
+  }
+
+  return updates;
 }
 
 function toIsoLocal(d: Date): string {

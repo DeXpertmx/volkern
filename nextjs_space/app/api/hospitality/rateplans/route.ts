@@ -7,6 +7,7 @@ import { authenticateRequest } from '@/lib/api-key-auth';
 
 import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
 import { primeraMoneda, monedaEscritura } from '@/lib/moneda';
+import { normalizarEstacionalidad } from '@/lib/hospitality/estacionalidad';
 /**
  * Planes de tarifa y restricciones de venta (plan maestro §6, §15).
  *
@@ -60,7 +61,7 @@ export async function POST(req: NextRequest) {
 
     const tenantId = auth.tenant!.id;
     const body = await req.json().catch(() => ({}));
-    const { propertyId, unitId, nombre, codigo, tarifa, moneda, minNoches, maxNoches, checkInDias, checkOutDias, activo } = body;
+    const { propertyId, unitId, nombre, codigo, tarifa, moneda, minNoches, maxNoches, checkInDias, checkOutDias, activo, temporadas, finDeSemana } = body;
 
     if (!propertyId || !unitId || !nombre || tarifa == null) {
       return NextResponse.json(
@@ -70,6 +71,30 @@ export async function POST(req: NextRequest) {
     }
     if (typeof tarifa !== 'number' || tarifa <= 0) {
       return NextResponse.json({ error: 'La tarifa debe ser un número mayor a 0' }, { status: 400 });
+    }
+    // Estacionalidad: se normaliza UNA vez aquí y se guarda canónica — la base
+    // nunca ve un rango malformado y toda la lectura (engine, push) puede
+    // confiar en la forma. La tarifa base sigue siendo obligatoria: es el
+    // "desde" de la unidad y el respaldo de las fechas sin temporada.
+    const estacionalidad = normalizarEstacionalidad({ temporadas, finDeSemana });
+    if (
+      Array.isArray(temporadas) && temporadas.length > 0 &&
+      !estacionalidad?.temporadas
+    ) {
+      return NextResponse.json(
+        { error: 'Hay temporadas con datos inválidos (fechas YYYY-MM-DD, hasta ≥ desde, tarifa > 0)' },
+        { status: 400 }
+      );
+    }
+    if (
+      finDeSemana != null && typeof finDeSemana === 'object' &&
+      Array.isArray(finDeSemana.dias) && finDeSemana.dias.length > 0 &&
+      !estacionalidad?.finDeSemana
+    ) {
+      return NextResponse.json(
+        { error: 'El recargo de fin de semana es inválido (días 0-6, porcentaje > 0)' },
+        { status: 400 }
+      );
     }
 
     // La unidad debe existir y pertenecer al tenant (aislamiento multi-tenant).
@@ -102,6 +127,12 @@ export async function POST(req: NextRequest) {
         maxNoches: maxNoches != null ? parseInt(maxNoches) : null,
         checkInDias: Array.isArray(checkInDias) && checkInDias.length ? checkInDias : Prisma.JsonNull,
         checkOutDias: Array.isArray(checkOutDias) && checkOutDias.length ? checkOutDias : Prisma.JsonNull,
+        temporadas: estacionalidad?.temporadas
+          ? (estacionalidad.temporadas as unknown as Prisma.InputJsonValue)
+          : Prisma.JsonNull,
+        finDeSemana: estacionalidad?.finDeSemana
+          ? (estacionalidad.finDeSemana as unknown as Prisma.InputJsonValue)
+          : Prisma.JsonNull,
         activo: activo !== false,
       },
     });

@@ -199,6 +199,64 @@ describe('buildRateUpdates (contrato: /update-rates)', () => {
     );
   });
 
+  it('plan sin estacionalidad: un solo bloque plano para todo el horizonte (como siempre)', () => {
+    const updates = buildRateUpdates(
+      [{ id: 'u1', roomCode: 'STD', tarifaBase: null, ratePlans: [{ codigo: 'STD-FLEX', tarifa: 100 }] }],
+      day('2026-09-10'),
+      day('2026-09-14')
+    );
+    expect(updates).toEqual([
+      { startDate: '2026-09-10', endDate: '2026-09-13', rates: [{ roomCode: 'STD', rateplanCode: 'STD-FLEX', rate: 100 }] },
+    ]);
+  });
+
+  it('plan con temporada: la serie se segmenta en tramos de precio constante', () => {
+    const updates = buildRateUpdates(
+      [
+        {
+          id: 'u1',
+          roomCode: 'STD',
+          tarifaBase: null,
+          ratePlans: [
+            {
+              codigo: 'STD-FLEX',
+              tarifa: 100,
+              temporadas: [{ desde: '2026-09-12', hasta: '2026-09-14', tarifa: 150 }],
+            },
+          ],
+        },
+      ],
+      day('2026-09-10'),
+      day('2026-09-16')
+    );
+    // 10-11 a 100, 12-14 a 150, 15 a 100 otra vez: tres tramos.
+    expect(updates).toEqual([
+      { startDate: '2026-09-10', endDate: '2026-09-11', rates: [{ roomCode: 'STD', rateplanCode: 'STD-FLEX', rate: 100 }] },
+      { startDate: '2026-09-12', endDate: '2026-09-14', rates: [{ roomCode: 'STD', rateplanCode: 'STD-FLEX', rate: 150 }] },
+      { startDate: '2026-09-15', endDate: '2026-09-15', rates: [{ roomCode: 'STD', rateplanCode: 'STD-FLEX', rate: 100 }] },
+    ]);
+  });
+
+  it('fin de semana: el canal ve los viernes/sábados más caros, noche a noche', () => {
+    // 2026-09-11 viernes, 12 sábado, 13 domingo: +20% solo en el fin de semana.
+    const updates = buildRateUpdates(
+      [
+        {
+          id: 'u1',
+          roomCode: 'STD',
+          tarifaBase: null,
+          ratePlans: [{ codigo: 'STD-FLEX', tarifa: 100, finDeSemana: { dias: [5, 6], porcentaje: 20 } }],
+        },
+      ],
+      day('2026-09-11'),
+      day('2026-09-14')
+    );
+    expect(updates).toEqual([
+      { startDate: '2026-09-11', endDate: '2026-09-12', rates: [{ roomCode: 'STD', rateplanCode: 'STD-FLEX', rate: 120 }] },
+      { startDate: '2026-09-13', endDate: '2026-09-13', rates: [{ roomCode: 'STD', rateplanCode: 'STD-FLEX', rate: 100 }] },
+    ]);
+  });
+
   it('sin tarifa base no empuja tarifas (no inventar precios)', () => {
     const units = [{ id: 'u1', roomCode: 'executive', tarifaBase: null }];
     expect(buildRateUpdates(units, day('2026-09-10'), day('2026-09-11'))).toEqual([]);

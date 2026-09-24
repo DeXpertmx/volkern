@@ -24,6 +24,7 @@
  */
 
 import { nightsBetween, startOfDay } from './calendar';
+import { normalizarEstacionalidad, precioEstancia, serieDeTarifas, tarifaPorNoche } from './estacionalidad';
 
 /** Restricciones de venta del plan de tarifa (las mismas que se empujan al canal). */
 export interface RestriccionesEstancia {
@@ -160,14 +161,25 @@ export interface EntradaCotizacion {
   limpieza?: number | null;
   /** Porcentaje de anticipo sobre el total (0-100). */
   anticipoPorcentaje?: number | null;
+  /**
+   * Estacionalidad del plan (temporadas/fin de semana, Json crudo de la base).
+   * Presente y utilizable → el precio se suma noche a noche; ausente → el
+   * cálculo clásico noches × tarifa, intacto.
+   */
+  estacionalidad?: unknown;
   /** Divisa con la que se publica; la resuelve el llamador desde los datos. */
   moneda: string;
 }
 
 export interface Cotizacion {
   noches: number;
+  /**
+   * Precio por noche: la tarifa del plan en el cálculo clásico; la MEDIA del
+   * rango cuando hay estacionalidad (informativa — el importe real es
+   * `alojamiento`, y la noche a noche está en `desgloseNoches`).
+   */
   tarifaPorNoche: number;
-  /** Noches × tarifa. Es la primera línea del desglose. */
+  /** Noches × tarifa, o la suma por noche con estacionalidad. */
   alojamiento: number;
   limpieza: number;
   /** Ingreso bruto de la reserva: alojamiento + limpieza. */
@@ -177,6 +189,11 @@ export interface Cotizacion {
   /** Lo que queda por cobrar después del anticipo. */
   saldo: number;
   moneda: string;
+  /**
+   * Precio por noche con su fecha cuando el plan tiene estacionalidad
+   * (null en el cálculo clásico: la tarifa plana no necesita desglose).
+   */
+  desgloseNoches: Array<{ fecha: string; tarifa: number }> | null;
 }
 
 /** Redondeo a céntimo, con el mismo criterio que el resto del dinero. */
@@ -186,6 +203,13 @@ function aCentimo(valor: number): number {
 
 /**
  * Cotiza una estancia a partir de las noches y la tarifa.
+ *
+ * Con estacionalidad en el plan, el precio ya no es noches × tarifa: se suma
+ * la serie de precios POR NOCHE del rango (la noche cuesta la tarifa de su
+ * fecha — la misma regla que empuja el canal; módulo `./estacionalidad`). La
+ * `tarifaPorNoche` devuelta pasa a ser la MEDIA del rango (informativa: es lo
+ * que la ficha muestra como "desde X/noche"), mientras `alojamiento` es el
+ * importe real y `desgloseNoches` trae noche a noche para el desglose visual.
  *
  * Lanza si el rango no tiene noches: una cotización de cero noches no es un
  * precio, es un error de quien llama, y devolverla como 0 acabaría en una reserva
@@ -197,9 +221,35 @@ export function cotizarEstancia(entrada: EntradaCotizacion): Cotizacion {
     throw new Error('No se puede cotizar una estancia sin noches');
   }
 
-  const tarifaPorNoche = aCentimo(Math.max(0, Number(entrada.tarifaPorNoche) || 0));
-  const alojamiento = aCentimo(tarifaPorNoche * noches);
+  const config = normalizarEstacionalidad(entrada.estacionalidad);
   const limpieza = aCentimo(Math.max(0, Number(entrada.limpieza) || 0));
+
+  let alojamiento: number;
+  let tarifaEfectiva: number;
+  let desgloseNoches: Cotizacion['desgloseNoches'] = null;
+
+  if (config) {
+    const serie = serieDeTarifas({
+      desde: entrada.checkIn,
+      hasta: entrada.checkOut,
+      tarifaBase: null,
+      plan: { tarifa: Number(entrada.tarifaPorNoche) || 0, estacionalidad: config },
+    });
+    const totalNoches = serie.reduce((acc, f) => acc + (f.tarifa ?? 0), 0);
+    if (!(totalNoches > 0)) {
+      throw new Error('No se puede cotizar una estancia sin precio por noche');
+    }
+    alojamiento = aCentimo(totalNoches);
+    tarifaEfectiva = aCentimo(totalNoches / noches);
+    desgloseNoches = serie.map((f) => ({
+      fecha: f.fecha,
+      tarifa: aCentimo(f.tarifa ?? 0),
+    }));
+  } else {
+    tarifaEfectiva = aCentimo(Math.max(0, Number(entrada.tarifaPorNoche) || 0));
+    alojamiento = aCentimo(tarifaEfectiva * noches);
+  }
+
   const total = aCentimo(alojamiento + limpieza);
 
   const porcentaje = Math.min(100, Math.max(0, Math.round(Number(entrada.anticipoPorcentaje) || 0)));
@@ -207,13 +257,14 @@ export function cotizarEstancia(entrada: EntradaCotizacion): Cotizacion {
 
   return {
     noches,
-    tarifaPorNoche,
+    tarifaPorNoche: tarifaEfectiva,
     alojamiento,
     limpieza,
     total,
     anticipo,
     saldo: aCentimo(total - anticipo),
     moneda: (entrada.moneda || '').trim().toUpperCase(),
+    desgloseNoches,
   };
 }
 
@@ -226,12 +277,17 @@ export function tienePrecio(tarifa: number | null | undefined): boolean {
  * Precio por noche de una unidad: el plan de tarifa activo manda; si no hay,
  * la tarifa base de la unidad; si no hay ninguna de las dos, no hay precio y la
  * unidad no se publica (vender a cero sería peor que no vender).
+ *
+ * Es el precio "desde": con estacionalidad el importe real lo suma
+ * `cotizarEstancia` noche a noche (módulo `./estacionalidad`).
  */
 export function tarifaPorNocheDe(params: {
   plan?: { tarifa: number | null | undefined } | null;
   tarifaBase?: number | null | undefined;
 }): number | null {
-  if (tienePrecio(params.plan?.tarifa)) return Number(params.plan!.tarifa);
+  if (typeof params.plan?.tarifa === 'number' && Number.isFinite(params.plan.tarifa) && params.plan.tarifa > 0) {
+    return params.plan.tarifa;
+  }
   if (tienePrecio(params.tarifaBase)) return Number(params.tarifaBase);
   return null;
 }

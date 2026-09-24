@@ -22,7 +22,10 @@
  *    del mismo rango se serializan en vez de colarse las dos (una ventana de
  *    milisegundos es suficiente para sobrevender en una web pública).
  * 2. **El precio que se guarda es el que se cotizó**, calculado por `./pricing`
- *    sobre la tarifa y las restricciones del plan, no por una aritmética propia.
+ *    sobre la tarifa (y la estacionalidad) del plan, no por una aritmética propia.
+ *    Con temporadas/fin de semana configurados, el importe se suma noche a noche
+ *    (la noche cuesta la tarifa de su fecha) y la línea de alojamiento lo explica:
+ *    "4 noches (desglose por temporada)".
  */
 
 import { prisma } from '@/lib/db';
@@ -30,11 +33,13 @@ import { Prisma } from '@prisma/client';
 import { unitUnavailableOnDay, loadAvailabilityContext } from './availability';
 import { nightsBetween, startOfDay, toIsoDate } from './calendar';
 import { cotizarEstancia, tarifaPorNocheDe, validarEstancia, type Cotizacion } from './pricing';
+import { tieneEstacionalidad } from './estacionalidad';
 import { upsertGuest, type WebhookReservationPayload } from './reservations';
 import { emitReservationCreated } from './events';
 import { dispararComunicacionReserva } from './comunicaciones';
 import { dispatchConnectivityPush } from './sync';
 import { leerConfigPorSlug, monedaPublicada, type ConfigBooking } from './booking-config';
+import { idiomaDeValor } from './booking-i18n';
 
 /** Canal de las reservas que llegan por la página pública del tenant. */
 export const CANAL_DIRECTO = 'Directa';
@@ -104,15 +109,16 @@ export async function listarPropiedadesPublicables(
     const fotosPropiedad = aLista(propiedad.fotos);
     const unidades = propiedad.units
       .map((unidad) => {
+        const plan = unidad.ratePlans[0] || null;
         const tarifa = tarifaPorNocheDe({
-          plan: unidad.ratePlans[0] || null,
+          plan,
           tarifaBase: unidad.tarifaBase,
         });
-        return { unidad, tarifa };
+        return { unidad, plan, tarifa };
       })
       // Sin precio no se publica: vender a cero sería peor que no vender.
-      .filter((fila): fila is { unidad: typeof fila.unidad; tarifa: number } => fila.tarifa !== null)
-      .map(({ unidad, tarifa }) => ({
+      .filter((fila): fila is { unidad: typeof fila.unidad; plan: typeof fila.plan; tarifa: number } => fila.tarifa !== null)
+      .map(({ unidad, plan, tarifa }) => ({
         id: unidad.id,
         propertyId: unidad.propertyId,
         nombre: unidad.nombre,
@@ -121,6 +127,7 @@ export async function listarPropiedadesPublicables(
         capacidad: unidad.capacidad,
         descripcion: unidad.descripcion,
         tarifaPorNoche: tarifa,
+        tarifaDesde: plan && tieneEstacionalidad(plan.temporadas ?? plan.finDeSemana) ? tarifa : null,
         fotos: aLista(unidad.fotos).length ? aLista(unidad.fotos) : fotosPropiedad,
         amenidades: aLista(unidad.amenidades),
       }));
@@ -143,6 +150,8 @@ export interface UnidadCotizada {
   tipo: string;
   capacidad: number;
   tarifaPorNoche: number;
+  /** Con estacionalidad, noche a noche del rango (el "desde" ya no basta). */
+  desgloseNoches: Array<{ fecha: string; tarifa: number }> | null;
   cotizacion: Cotizacion;
 }
 
@@ -238,6 +247,15 @@ export async function cotizarDisponibilidad(params: {
       continue;
     }
 
+    const cotizacion = cotizarEstancia({
+      checkIn,
+      checkOut,
+      tarifaPorNoche: tarifa,
+      estacionalidad: plan ? plan.temporadas ?? plan.finDeSemana : null,
+      limpieza: config.tarifaLimpieza,
+      anticipoPorcentaje: config.anticipoPorcentaje,
+      moneda: params.moneda,
+    });
     disponibles.push({
       unitId: unidad.id,
       propertyId: unidad.propertyId,
@@ -245,14 +263,8 @@ export async function cotizarDisponibilidad(params: {
       tipo: unidad.tipo,
       capacidad: unidad.capacidad,
       tarifaPorNoche: tarifa,
-      cotizacion: cotizarEstancia({
-        checkIn,
-        checkOut,
-        tarifaPorNoche: tarifa,
-        limpieza: config.tarifaLimpieza,
-        anticipoPorcentaje: config.anticipoPorcentaje,
-        moneda: params.moneda,
-      }),
+      desgloseNoches: cotizacion.desgloseNoches,
+      cotizacion,
     });
   }
 
@@ -301,6 +313,13 @@ export interface EntradaReservaDirecta {
    * en vez de crear otra.
    */
   solicitudId: string;
+  /**
+   * Idioma en que reservó el huésped (`?lang` de la página pública). Se guarda en
+   * `guestData.idioma`, que es lo que leen las comunicaciones automáticas (L-21)
+   * para mandarle confirmación, pre-llegada y post-estancia en su idioma. Un valor
+   * ausente o desconocido cae a español.
+   */
+  idioma?: string | null;
 }
 
 export type ResultadoReservaDirecta =
@@ -389,6 +408,7 @@ export async function crearReservaDirecta(
     checkIn,
     checkOut,
     tarifaPorNoche: tarifa,
+    estacionalidad: plan ? plan.temporadas ?? plan.finDeSemana : null,
     limpieza: config.tarifaLimpieza,
     anticipoPorcentaje: config.anticipoPorcentaje,
     moneda,
@@ -469,6 +489,7 @@ export async function crearReservaDirecta(
           lastName: null,
           email: payloadHuésped.guest?.email ?? null,
           phone: payloadHuésped.guest?.phone ?? null,
+          idioma: idiomaDeValor(entrada.idioma),
           origen: 'booking_engine',
         } as Prisma.InputJsonValue,
         payload: {
@@ -489,7 +510,12 @@ export async function crearReservaDirecta(
           propertyId,
           unitId,
           tipo: 'alojamiento',
-          concepto: `${cotizacion.noches} noche(s) × ${cotizacion.tarifaPorNoche}`,
+          // Con estacionalidad la tarifa es por noche (la media solo sería un
+          // número inventado): la línea lo dice y el detalle fecha a fecha
+          // queda en `payload.cotizacion.desgloseNoches` de la reserva.
+          concepto: cotizacion.desgloseNoches
+            ? `${cotizacion.noches} noche(s) — desglose por temporada`
+            : `${cotizacion.noches} noche(s) × ${cotizacion.tarifaPorNoche}`,
           cantidad: cotizacion.noches,
           importeUnitario: cotizacion.tarifaPorNoche,
           importeTotal: cotizacion.alojamiento,

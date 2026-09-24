@@ -16,6 +16,7 @@ import {
   Building2,
   CalendarX2,
   CalendarCheck2,
+  CalendarRange,
   Power,
   Copy,
 } from 'lucide-react';
@@ -57,9 +58,19 @@ interface RatePlan {
   maxNoches: number | null;
   checkInDias: number[] | null;
   checkOutDias: number[] | null;
+  temporadas?: unknown;
+  finDeSemana?: unknown;
   activo: boolean;
   unit?: { id: string; nombre: string; codigo: string | null };
   property?: { id: string; nombre: string };
+}
+
+/** Fila de temporada en el formulario (la tarifa como texto del input). */
+interface TemporadaUI {
+  desde: string;
+  hasta: string;
+  tarifa: string;
+  nombre: string;
 }
 
 /**
@@ -80,7 +91,32 @@ const DIAS_SEMANA = [
 const EMPTY_FORM = {
   nombre: '', codigo: '', tarifa: '', moneda: '', minNoches: '1', maxNoches: '',
   checkInDias: [] as number[], checkOutDias: [] as number[], activo: true,
+  temporadas: [] as TemporadaUI[],
+  fwDias: [] as number[],
+  fwPct: '',
 };
+
+/** Temporadas guardadas del plan (Json crudo) → filas del formulario. */
+function temporadasDePlan(plan: RatePlan): TemporadaUI[] {
+  if (!Array.isArray(plan.temporadas)) return [];
+  return (plan.temporadas as Array<Record<string, unknown>>)
+    .filter((t) => t && typeof t === 'object')
+    .map((t) => ({
+      desde: typeof t.desde === 'string' ? t.desde : '',
+      hasta: typeof t.hasta === 'string' ? t.hasta : '',
+      tarifa: t.tarifa != null ? String(t.tarifa) : '',
+      nombre: typeof t.nombre === 'string' ? t.nombre : '',
+    }));
+}
+
+function finDeSemanaDePlan(plan: RatePlan): { dias: number[]; porcentaje: string } {
+  const fw = plan.finDeSemana as { dias?: unknown; porcentaje?: unknown } | null | undefined;
+  if (!fw || typeof fw !== 'object' || !Array.isArray(fw.dias)) return { dias: [], porcentaje: '' };
+  return {
+    dias: (fw.dias as number[]).filter((d) => typeof d === 'number'),
+    porcentaje: fw.porcentaje != null ? String(fw.porcentaje) : '',
+  };
+}
 
 export default function HospitalityTarifasPage() {
   /** Moneda de reporte del tenant: respaldo de la divisa de una tarifa nueva. */
@@ -150,6 +186,7 @@ export default function HospitalityTarifasPage() {
       activos: activos.length,
       conRestriccionNoches: plans.filter((p) => p.minNoches > 1 || (p.maxNoches != null && p.maxNoches > 0)).length,
       conRestriccionDias: plans.filter((p) => (p.checkInDias?.length || 0) > 0 || (p.checkOutDias?.length || 0) > 0).length,
+      conEstacionalidad: plans.filter((p) => (Array.isArray(p.temporadas) && p.temporadas.length > 0) || (() => { const fw = finDeSemanaDePlan(p); return fw.dias.length > 0; })()).length,
     };
   }, [plans]);
 
@@ -171,6 +208,7 @@ export default function HospitalityTarifasPage() {
 
   const openEdit = (p: RatePlan) => {
     setEditing(p);
+    const fw = finDeSemanaDePlan(p);
     setForm({
       nombre: p.nombre,
       codigo: p.codigo || '',
@@ -181,17 +219,35 @@ export default function HospitalityTarifasPage() {
       checkInDias: p.checkInDias || [],
       checkOutDias: p.checkOutDias || [],
       activo: p.activo,
+      temporadas: temporadasDePlan(p),
+      fwDias: fw.dias,
+      fwPct: fw.porcentaje,
     });
     setDialogOpen(true);
   };
 
-  const toggleDia = (field: 'checkInDias' | 'checkOutDias', d: number) => {
+  const toggleDia = (field: 'checkInDias' | 'checkOutDias' | 'fwDias', d: number) => {
     setForm((f) => ({
       ...f,
       [field]: (f[field] as number[]).includes(d)
         ? (f[field] as number[]).filter((x) => x !== d)
         : [...(f[field] as number[]), d],
     }));
+  };
+
+  const setTemporada = (idx: number, patch: Partial<TemporadaUI>) => {
+    setForm((f) => ({
+      ...f,
+      temporadas: f.temporadas.map((t, i) => (i === idx ? { ...t, ...patch } : t)),
+    }));
+  };
+
+  const addTemporada = () => {
+    setForm((f) => ({ ...f, temporadas: [...f.temporadas, { desde: '', hasta: '', tarifa: '', nombre: '' }] }));
+  };
+
+  const removeTemporada = (idx: number) => {
+    setForm((f) => ({ ...f, temporadas: f.temporadas.filter((_, i) => i !== idx) }));
   };
 
   const save = async () => {
@@ -202,6 +258,29 @@ export default function HospitalityTarifasPage() {
     const tarifa = Number(form.tarifa);
     if (!tarifa || tarifa <= 0) {
       toast.error('La tarifa debe ser un número mayor a 0');
+      return;
+    }
+
+    // Temporadas: solo las filas completas; una fila a medias se descarta con
+    // un aviso (la API revalida todo: aquí es cortesía, allá es la guardia).
+    const temporadas = form.temporadas
+      .filter((t) => t.desde || t.hasta || t.tarifa || t.nombre)
+      .map((t) => ({
+        desde: t.desde,
+        hasta: t.hasta,
+        tarifa: Number(t.tarifa),
+        ...(t.nombre.trim() ? { nombre: t.nombre.trim() } : {}),
+      }));
+    if (temporadas.some((t) => !t.desde || !t.hasta || !t.tarifa || t.tarifa <= 0)) {
+      toast.error('Hay temporadas incompletas: fechas YYYY-MM-DD y tarifa mayor a 0');
+      return;
+    }
+    const finDeSemana =
+      form.fwDias.length > 0 || form.fwPct
+        ? { dias: form.fwDias, porcentaje: Number(form.fwPct) || 0 }
+        : null;
+    if (finDeSemana && form.fwDias.length > 0 && (!finDeSemana.porcentaje || finDeSemana.porcentaje <= 0)) {
+      toast.error('El recargo de fin de semana necesita un porcentaje mayor a 0');
       return;
     }
 
@@ -236,6 +315,8 @@ export default function HospitalityTarifasPage() {
         maxNoches: form.maxNoches ? parseInt(form.maxNoches) : null,
         checkInDias: form.checkInDias.length ? form.checkInDias : null,
         checkOutDias: form.checkOutDias.length ? form.checkOutDias : null,
+        temporadas,
+        finDeSemana,
         activo: form.activo,
       };
       const url = editing
@@ -316,6 +397,8 @@ export default function HospitalityTarifasPage() {
           maxNoches: p.maxNoches,
           checkInDias: p.checkInDias,
           checkOutDias: p.checkOutDias,
+          temporadas: Array.isArray(p.temporadas) ? p.temporadas : [],
+          finDeSemana: (p.finDeSemana as Record<string, unknown> | null) ?? null,
           activo: p.activo,
         }),
       });
@@ -374,9 +457,10 @@ export default function HospitalityTarifasPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <Card><CardContent className="p-4"><p className="text-2xl font-bold">{stats.planes}</p><p className="text-xs text-muted-foreground">Planes totales</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-2xl font-bold text-emerald-600">{stats.activos}</p><p className="text-xs text-muted-foreground">Planes activos</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-2xl font-bold">{stats.conEstacionalidad}</p><p className="text-xs text-muted-foreground">Con estacionalidad</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-2xl font-bold">{stats.conRestriccionNoches}</p><p className="text-xs text-muted-foreground">Con restricción de noches</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-2xl font-bold">{stats.conRestriccionDias}</p><p className="text-xs text-muted-foreground">Con restricción de días</p></CardContent></Card>
       </div>
@@ -465,6 +549,20 @@ export default function HospitalityTarifasPage() {
                     <Moon className="h-3.5 w-3.5" />
                     {p.minNoches}–{p.maxNoches != null ? p.maxNoches : '∞'} noches
                   </span>
+                  {Array.isArray(p.temporadas) && p.temporadas.length > 0 && (
+                    <Badge variant="outline" className="text-[10px]">
+                      <CalendarRange className="h-3 w-3 mr-1" />
+                      {p.temporadas.length} temporada{p.temporadas.length > 1 ? 's' : ''}
+                    </Badge>
+                  )}
+                  {(() => {
+                    const fw = finDeSemanaDePlan(p);
+                    return fw.dias.length > 0 ? (
+                      <Badge variant="outline" className="text-[10px]">
+                        +{fw.porcentaje || 0}% fin de
+                      </Badge>
+                    ) : null;
+                  })()}
                 </div>
 
                 <div className="hidden lg:block text-xs text-muted-foreground space-y-0.5">
@@ -674,6 +772,117 @@ export default function HospitalityTarifasPage() {
                 <p className="text-[11px] text-muted-foreground">
                   Sin selección = todos los días permitidos
                 </p>
+              </div>
+            </div>
+
+            {/* Estacionalidad: temporadas + recargo de fin de semana */}
+            <div className="border-t pt-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="flex items-center gap-1.5">
+                  <CalendarRange className="h-3.5 w-3.5" /> Estacionalidad (opcional)
+                </Label>
+                <Button type="button" variant="outline" size="sm" onClick={addTemporada}>
+                  <Plus className="h-3.5 w-3.5 mr-1" /> Añadir temporada
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground -mt-2">
+                El precio se cobra <strong>por noche</strong>: cada noche cuesta la tarifa de su fecha. La tarifa general queda como "desde" y como respaldo de las fechas sin temporada.
+              </p>
+
+              {form.temporadas.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">
+                  Sin temporadas: la tarifa general aplica a todas las noches.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {form.temporadas.map((t, idx) => (
+                    <div key={idx} className="grid grid-cols-[1fr_1fr_90px_1fr_32px] gap-2 items-end">
+                      <div className="space-y-1">
+                        <Label className="text-[10px] text-muted-foreground">Desde</Label>
+                        <Input
+                          type="date"
+                          value={t.desde}
+                          onChange={(e) => setTemporada(idx, { desde: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[10px] text-muted-foreground">Hasta</Label>
+                        <Input
+                          type="date"
+                          value={t.hasta}
+                          onChange={(e) => setTemporada(idx, { hasta: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[10px] text-muted-foreground">Tarifa</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={t.tarifa}
+                          onChange={(e) => setTemporada(idx, { tarifa: e.target.value })}
+                          placeholder={form.tarifa || '0'}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[10px] text-muted-foreground">Nombre</Label>
+                        <Input
+                          value={t.nombre}
+                          onChange={(e) => setTemporada(idx, { nombre: e.target.value })}
+                          placeholder="Ej: Verano, Semana Santa"
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => removeTemporada(idx)}
+                        title="Quitar temporada"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Recargo de fin de semana</Label>
+                  <div className="flex flex-wrap gap-1">
+                    {DIAS_SEMANA.map((d) => (
+                      <button
+                        key={d.v}
+                        type="button"
+                        onClick={() => toggleDia('fwDias', d.v)}
+                        className={`text-xs rounded px-2 py-1 border transition-colors ${
+                          form.fwDias.includes(d.v)
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'bg-background text-muted-foreground hover:bg-muted'
+                        }`}
+                      >
+                        {d.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Sin selección = sin recargo. No se suma sobre noches con temporada (su precio ya es completo).
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="rp-fwpct">Porcentaje de recargo</Label>
+                  <Input
+                    id="rp-fwpct"
+                    type="number"
+                    min={0}
+                    step="1"
+                    value={form.fwPct}
+                    onChange={(e) => setForm({ ...form, fwPct: e.target.value })}
+                    placeholder="Ej: 20 para +20%"
+                    disabled={form.fwDias.length === 0}
+                  />
+                </div>
               </div>
             </div>
 
