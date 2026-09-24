@@ -70,6 +70,42 @@ describe('la página pública no inventa dinero', () => {
   });
 });
 
+describe('el huésped lee la reserva directa en su idioma', () => {
+  it('el asistente toma los textos del módulo único y no de una lista paralela', () => {
+    const asistente = leer('components/hospitality/booking/BookingWizard.tsx');
+    expect(asistente).toContain("from '@/lib/hospitality/booking-i18n'");
+    expect(asistente).toContain('WIZARD_TEXTOS');
+    // Ni una frase suelta en español fuera del módulo de textos: las que
+    // quedan son identificadores de campo, no copy visible.
+    expect(asistente).not.toMatch(/'¿Cuándo vienes\?'|"¿Cuándo vienes\?"/);
+  });
+
+  it('el idioma baja del servidor: las dos superficies leen ?lang y se lo pasan', () => {
+    for (const ruta of ['app/reservar/[slug]/page.tsx', 'app/embed/reservar/[slug]/page.tsx']) {
+      const codigo = leer(ruta);
+      expect(codigo, `${ruta} no lee ?lang`).toContain('idiomaDeValor');
+      expect(codigo, `${ruta} no localiza la pantalla de no disponible`).toContain(
+        'textosPaginaNoDisponible'
+      );
+      expect(codigo, `${ruta} no le pasa el idioma al asistente`).toMatch(/idioma=\{idioma\}/);
+      expect(codigo, `${ruta} no le da ruta al conmutador`).toContain('rutaBase=');
+    }
+  });
+
+  it('el asistente manda su idioma al reservar (y el servidor lo guarda en la reserva)', () => {
+    const asistente = leer('components/hospitality/booking/BookingWizard.tsx');
+    expect(asistente).toMatch(/lang:\s*idioma/);
+
+    // La reserva directa nace con el idioma del huésped en `guestData.idioma`,
+    // que es lo que leen las comunicaciones automáticas.
+    const motor = leer('lib/hospitality/booking-engine.ts');
+    expect(motor).toMatch(/idioma:\s*idiomaDeValor\(entrada\.idioma\)/);
+    expect(leer('app/api/public/booking/[slug]/reservar/route.ts')).toMatch(
+      /idioma:\s*textoOpcional\(cuerpo\.lang/
+    );
+  });
+});
+
 describe('el cobro va a la cuenta del tenant, nunca a la de Volkern', () => {
   const cobros = leer('lib/hospitality/booking-payments.ts');
 

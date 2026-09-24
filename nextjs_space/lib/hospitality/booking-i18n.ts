@@ -26,8 +26,13 @@ export const IDIOMA_POR_DEFECTO: Idioma = 'es';
 export interface BookingTextos {
   /** Badge de cabecera. */
   reservaDirecta: string;
-  /** Página no disponible (propiedad sin publicar o inexistente). */
+  /** Página no disponible (alojamiento con las reservas apagadas). */
   noDisponible: string;
+  /** Página inexistente (slug que no resuelve a ningún alojamiento). */
+  noEncontrada: string;
+  /** Títulos de las dos pantallas anteriores. */
+  noDisponibleTitulo: string;
+  noEncontradaTitulo: string;
   /** Pantalla de confirmación. */
   reservaConfirmada: string;
   referencia: string;
@@ -84,6 +89,9 @@ export const TEXTOS: Record<Idioma, BookingTextos> = {
   es: {
     reservaDirecta: 'Reserva directa',
     noDisponible: 'Esta página de reservas no está disponible.',
+    noEncontrada: 'Esta página de reservas no existe.',
+    noDisponibleTitulo: 'Reservas no disponibles',
+    noEncontradaTitulo: 'Página no encontrada',
     reservaConfirmada: '¡Reserva confirmada!',
     referencia: 'Referencia',
     total: 'Total',
@@ -136,6 +144,9 @@ export const TEXTOS: Record<Idioma, BookingTextos> = {
   en: {
     reservaDirecta: 'Book direct',
     noDisponible: 'This booking page is not available.',
+    noEncontrada: 'This booking page does not exist.',
+    noDisponibleTitulo: 'Bookings unavailable',
+    noEncontradaTitulo: 'Page not found',
     reservaConfirmada: 'Booking confirmed!',
     referencia: 'Reference',
     total: 'Total',
@@ -186,6 +197,191 @@ export const TEXTOS: Record<Idioma, BookingTextos> = {
     extrasTotal: 'Extras',
   },
 };
+
+/**
+ * Textos de las dos pantallas de «no hay página» (misma decisión, dos casos).
+ *
+ * El `mensaje` que devuelve el servidor está escrito en español y es interno;
+ * esto es lo que lee quien entró con `?lang=en`. El defecto sigue siendo `es`,
+ * así que un enlace antiguo sin `lang` se comporta como siempre.
+ */
+export function textosPaginaNoDisponible(
+  idioma: Idioma,
+  motivo: 'no_existe' | 'inactiva',
+): { titulo: string; mensaje: string } {
+  const t = TEXTOS[idioma];
+  return motivo === 'inactiva'
+    ? { titulo: t.noDisponibleTitulo, mensaje: t.noDisponible }
+    : { titulo: t.noEncontradaTitulo, mensaje: t.noEncontrada };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Asistente de reserva directa (BookingWizard)
+//
+// El asistente es la MISMA experiencia en la página top-level (/reservar/<slug>)
+// y en el widget embebible (/embed/reservar/<slug>): vive en un único componente
+// y, por tanto, en una única lista de textos. No reutiliza `BookingTextos`
+// porque el asistente no recorre el catálogo ni pide documentos —otro flujo, otras
+// frases—, pero se queda en este módulo para que un texto nuevo en cualquiera de
+// las dos superficies siga sin poder existir en un solo idioma.
+//
+// El idioma lo resuelve el SERVIDOR (lee `?lang` de la URL) y baja como prop: el
+// primer render ya sale en el idioma pedido, sin el efecto isomórfico que necesita
+// la página pública —que se pinta en el cliente y no tiene un padre del que
+// heredar—. El conmutador ES/EN es un enlace real, así que también funciona dentro
+// del iframe del embed.
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface WizardTextos {
+  /** Cabecera de pasos. */
+  pasoFechas: string;
+  pasoUnidad: string;
+  pasoDatos: string;
+  pasoConfirmacion: string;
+  /** Alojamiento sin unidades publicadas. */
+  sinUnidadesTitulo: string;
+  /** «Escríbenos a {email} y te ayudamos.» */
+  sinUnidadesEmail: string;
+  sinUnidadesAyuda: string;
+  /** Errores. */
+  errorDisponibilidad: string;
+  errorReserva: string;
+  errorSinConexion: string;
+  /** Paso 1. */
+  cuandoVienes: string;
+  alojamiento: string;
+  entrada: string;
+  salida: string;
+  adultos: string;
+  ninos: string;
+  verDisponibilidad: string;
+  /** Paso 2. */
+  noche: string;
+  noches: string;
+  cambiarFechas: string;
+  sinDisponibilidad: string;
+  /** «Hasta {n} huéspedes» */
+  hastaHuespedes: string;
+  limpieza: string;
+  total: string;
+  /** «Anticipo ahora ({porcentaje}%)» */
+  anticipoAhora: string;
+  reservarEstaUnidad: string;
+  /** Paso 3. */
+  tusDatos: string;
+  nombreApellidos: string;
+  email: string;
+  telefono: string;
+  peticiones: string;
+  peticionesPlaceholder: string;
+  /** Recordatorio de que hace falta un contacto para poder confirmar. */
+  dejaContacto: string;
+  volver: string;
+  pagarYReservar: string;
+  confirmarReserva: string;
+  /** Paso 4. */
+  reservaRecibida: string;
+  reservaConfirmada: string;
+  referencia: string;
+  verDetalle: string;
+  guardaEnlace: string;
+}
+
+export const WIZARD_TEXTOS: Record<Idioma, WizardTextos> = {
+  es: {
+    pasoFechas: 'Fechas',
+    pasoUnidad: 'Unidad',
+    pasoDatos: 'Tus datos',
+    pasoConfirmacion: 'Confirmación',
+    sinUnidadesTitulo: 'Este alojamiento todavía no tiene unidades publicadas',
+    sinUnidadesEmail: 'Escríbenos a {email} y te ayudamos.',
+    sinUnidadesAyuda: 'Vuelve a intentarlo en un rato.',
+    errorDisponibilidad: 'No se pudo comprobar la disponibilidad.',
+    errorReserva: 'No se pudo completar la reserva.',
+    errorSinConexion: 'No hay conexión con el servidor. Inténtalo de nuevo.',
+    cuandoVienes: '¿Cuándo vienes?',
+    alojamiento: 'Alojamiento',
+    entrada: 'Entrada',
+    salida: 'Salida',
+    adultos: 'Adultos',
+    ninos: 'Niños',
+    verDisponibilidad: 'Ver disponibilidad',
+    noche: 'noche',
+    noches: 'noches',
+    cambiarFechas: 'Cambiar fechas',
+    sinDisponibilidad: 'No hay unidades libres para esas fechas. Prueba otras fechas.',
+    hastaHuespedes: 'Hasta {n} huéspedes',
+    limpieza: 'Limpieza',
+    total: 'Total',
+    anticipoAhora: 'Anticipo ahora ({porcentaje}%)',
+    reservarEstaUnidad: 'Reservar esta unidad',
+    tusDatos: 'Tus datos',
+    nombreApellidos: 'Nombre y apellidos',
+    email: 'Email',
+    telefono: 'Teléfono',
+    peticiones: '¿Algo que debamos saber?',
+    peticionesPlaceholder: 'Hora de llegada, cuna, mascotas…',
+    dejaContacto: 'Deja un email o un teléfono: es por donde te llega la confirmación.',
+    volver: 'Volver',
+    pagarYReservar: 'Pagar y reservar',
+    confirmarReserva: 'Confirmar reserva',
+    reservaRecibida: 'Reserva recibida',
+    reservaConfirmada: 'Reserva confirmada',
+    referencia: 'Referencia',
+    verDetalle: 'Ver el detalle de mi reserva',
+    guardaEnlace: 'Guarda ese enlace: es tu comprobante.',
+  },
+  en: {
+    pasoFechas: 'Dates',
+    pasoUnidad: 'Unit',
+    pasoDatos: 'Your details',
+    pasoConfirmacion: 'Confirmation',
+    sinUnidadesTitulo: 'This property has no published units yet',
+    sinUnidadesEmail: 'Email us at {email} and we will help you.',
+    sinUnidadesAyuda: 'Please try again in a little while.',
+    errorDisponibilidad: "We couldn't check availability.",
+    errorReserva: "We couldn't complete the booking.",
+    errorSinConexion: 'No connection to the server. Please try again.',
+    cuandoVienes: 'When are you coming?',
+    alojamiento: 'Property',
+    entrada: 'Check-in',
+    salida: 'Check-out',
+    adultos: 'Adults',
+    ninos: 'Children',
+    verDisponibilidad: 'View availability',
+    noche: 'night',
+    noches: 'nights',
+    cambiarFechas: 'Change dates',
+    sinDisponibilidad: 'No units free for those dates. Please try other dates.',
+    hastaHuespedes: 'Up to {n} guests',
+    limpieza: 'Cleaning',
+    total: 'Total',
+    anticipoAhora: 'Deposit now ({porcentaje}%)',
+    reservarEstaUnidad: 'Book this unit',
+    tusDatos: 'Your details',
+    nombreApellidos: 'Full name',
+    email: 'Email',
+    telefono: 'Phone',
+    peticiones: 'Anything we should know?',
+    peticionesPlaceholder: 'Arrival time, cot, pets…',
+    dejaContacto:
+      'Leave an email or a phone number: that is where your confirmation goes.',
+    volver: 'Back',
+    pagarYReservar: 'Pay and book',
+    confirmarReserva: 'Confirm booking',
+    reservaRecibida: 'Booking received',
+    reservaConfirmada: 'Booking confirmed',
+    referencia: 'Reference',
+    verDetalle: 'View my booking details',
+    guardaEnlace: 'Save that link: it is your receipt.',
+  },
+};
+
+/** Plural de «noche» en el idioma del huésped (una sola regla para las dos pantallas). */
+export function nocheONoches(idioma: Idioma, noches: number): string {
+  const t = WIZARD_TEXTOS[idioma];
+  return noches === 1 ? t.noche : t.noches;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Check-in online (registro de viajeros, RD 933/2021)

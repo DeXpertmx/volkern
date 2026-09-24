@@ -10,6 +10,12 @@
  *
  * El precio lo escribe `formatearImporte` con la divisa que llega en los datos: la
  * página no decide con qué moneda se escribe el dinero.
+ *
+ * Idioma (ES/EN): lo resuelve el SERVIDOR —el padre lee `?lang`— y baja como prop.
+ * El primer render ya sale en el idioma pedido: nada de parpadeo ni de hidratación
+ * distinta a la del HTML del servidor. El conmutador son dos enlaces reales, así
+ * que funciona igual en la página suelta y dentro del iframe del embed. El defecto
+ * es español (`IDIOMA_POR_DEFECTO`), también si alguien no pasa nada.
  */
 
 import { useMemo, useState } from 'react';
@@ -17,6 +23,7 @@ import {
   CalendarDays,
   CheckCircle2,
   CreditCard,
+  Languages,
   Loader2,
   MapPin,
   Users,
@@ -32,6 +39,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { formatearImporte } from '@/lib/moneda';
 import { toIsoDate } from '@/lib/hospitality/calendar';
+import {
+  IDIOMAS,
+  IDIOMA_POR_DEFECTO,
+  WIZARD_TEXTOS,
+  interpolar,
+  nocheONoches,
+  type Idioma,
+} from '@/lib/hospitality/booking-i18n';
 
 export interface UnidadPublicaUI {
   id: string;
@@ -97,6 +112,8 @@ export function BookingWizard({
   config,
   propiedades,
   embebido = false,
+  idioma = IDIOMA_POR_DEFECTO,
+  rutaBase,
 }: {
   slug: string;
   alojamiento: string;
@@ -104,7 +121,12 @@ export function BookingWizard({
   config: ConfigPublicaUI;
   propiedades: PropiedadPublicaUI[];
   embebido?: boolean;
+  /** Idioma del huésped, resuelto por el padre a partir de `?lang`. */
+  idioma?: Idioma;
+  /** Ruta de esta misma página (sin query) para los enlaces del conmutador. */
+  rutaBase?: string;
 }) {
+  const t = WIZARD_TEXTOS[idioma];
   const hoy = useMemo(() => toIsoDate(new Date()), []);
   const manana = useMemo(() => {
     const d = new Date();
@@ -145,11 +167,14 @@ export function BookingWizard({
       const res = await fetch(`/api/public/booking/${slug}/cotizar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ propertyId, checkIn, checkOut, adultos, ninos }),
+        // El idioma viaja también al servidor: los textos que él compone
+        // (mensajes de indisponibilidad, plantillas) salen en el idioma del
+        // huésped, no en el de la interfaz del hotel.
+        body: JSON.stringify({ propertyId, checkIn, checkOut, adultos, ninos, lang: idioma }),
       });
       const datos = await res.json();
       if (!datos.ok) {
-        setError(datos.error || 'No se pudo comprobar la disponibilidad.');
+        setError(datos.error || t.errorDisponibilidad);
         setUnidades([]);
         return;
       }
@@ -157,7 +182,7 @@ export function BookingWizard({
       setNoches(datos.noches as number);
       setPaso(2);
     } catch {
-      setError('No hay conexión con el servidor. Inténtalo de nuevo.');
+      setError(t.errorSinConexion);
     } finally {
       setCargando(false);
     }
@@ -183,11 +208,14 @@ export function BookingWizard({
           email,
           telefono,
           notas,
+          // El idioma en que reservó queda en la reserva: las comunicaciones
+          // automáticas (confirmación, pre-llegada, reseña) salen en él.
+          lang: idioma,
         }),
       });
       const datos = await res.json();
       if (!datos.ok) {
-        setError(datos.error || 'No se pudo completar la reserva.');
+        setError(datos.error || t.errorReserva);
         return;
       }
       if (datos.pagoUrl) {
@@ -206,7 +234,7 @@ export function BookingWizard({
       });
       setPaso(4);
     } catch {
-      setError('No hay conexión con el servidor. Inténtalo de nuevo.');
+      setError(t.errorSinConexion);
     } finally {
       setCargando(false);
     }
@@ -218,11 +246,11 @@ export function BookingWizard({
         <Card>
           <CardContent className="flex flex-col items-center gap-3 p-8 text-center">
             <AlertCircle className="h-10 w-10 text-muted-foreground" aria-hidden />
-            <p className="font-medium">Este alojamiento todavía no tiene unidades publicadas</p>
+            <p className="font-medium">{t.sinUnidadesTitulo}</p>
             <p className="text-sm text-muted-foreground">
               {config.emailContacto
-                ? `Escríbenos a ${config.emailContacto} y te ayudamos.`
-                : 'Vuelve a intentarlo en un rato.'}
+                ? interpolar(t.sinUnidadesEmail, { email: config.emailContacto })
+                : t.sinUnidadesAyuda}
             </p>
           </CardContent>
         </Card>
@@ -233,14 +261,15 @@ export function BookingWizard({
   return (
     <div className={caja}>
       <header className="mb-6 text-center">
-        <h1 className="text-2xl font-semibold">{config.titulo || alojamiento}</h1>
+        {rutaBase ? <ConmutadorIdiomaWizard actual={idioma} rutaBase={rutaBase} /> : null}
+        <h1 className="mt-3 text-2xl font-semibold">{config.titulo || alojamiento}</h1>
         {config.descripcion ? (
           <p className="mt-2 text-sm text-muted-foreground">{config.descripcion}</p>
         ) : null}
       </header>
 
       <ol className="mb-6 flex items-center justify-center gap-2 text-xs text-muted-foreground">
-        {['Fechas', 'Unidad', 'Tus datos', 'Confirmación'].map((etiqueta, indice) => (
+        {[t.pasoFechas, t.pasoUnidad, t.pasoDatos, t.pasoConfirmacion].map((etiqueta, indice) => (
           <li key={etiqueta} className="flex items-center gap-2">
             <span
               className={`flex h-6 w-6 items-center justify-center rounded-full border text-[11px] ${
@@ -271,12 +300,12 @@ export function BookingWizard({
       {paso === 1 ? (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">¿Cuándo vienes?</CardTitle>
+            <CardTitle className="text-base">{t.cuandoVienes}</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4">
             {propiedades.length > 1 ? (
               <div className="grid gap-2">
-                <Label htmlFor="propiedad">Alojamiento</Label>
+                <Label htmlFor="propiedad">{t.alojamiento}</Label>
                 <select
                   id="propiedad"
                   className="h-10 rounded-md border bg-background px-3 text-sm"
@@ -295,7 +324,7 @@ export function BookingWizard({
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="grid gap-2">
-                <Label htmlFor="entrada">Entrada</Label>
+                <Label htmlFor="entrada">{t.entrada}</Label>
                 <Input
                   id="entrada"
                   type="date"
@@ -305,7 +334,7 @@ export function BookingWizard({
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="salida">Salida</Label>
+                <Label htmlFor="salida">{t.salida}</Label>
                 <Input
                   id="salida"
                   type="date"
@@ -315,7 +344,7 @@ export function BookingWizard({
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="adultos">Adultos</Label>
+                <Label htmlFor="adultos">{t.adultos}</Label>
                 <Input
                   id="adultos"
                   type="number"
@@ -326,7 +355,7 @@ export function BookingWizard({
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="ninos">Niños</Label>
+                <Label htmlFor="ninos">{t.ninos}</Label>
                 <Input
                   id="ninos"
                   type="number"
@@ -340,7 +369,7 @@ export function BookingWizard({
 
             <Button onClick={cotizar} disabled={cargando}>
               {cargando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Ver disponibilidad
+              {t.verDisponibilidad}
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </CardContent>
@@ -352,18 +381,18 @@ export function BookingWizard({
           <div className="flex items-center justify-between text-sm text-muted-foreground">
             <span className="flex items-center gap-2">
               <CalendarDays className="h-4 w-4" aria-hidden />
-              {checkIn} → {checkOut} · {noches} {noches === 1 ? 'noche' : 'noches'}
+              {checkIn} → {checkOut} · {noches} {nocheONoches(idioma, noches)}
             </span>
             <Button variant="ghost" size="sm" onClick={() => setPaso(1)}>
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Cambiar fechas
+              {t.cambiarFechas}
             </Button>
           </div>
 
           {unidades && unidades.length === 0 ? (
             <Card>
               <CardContent className="p-8 text-center text-sm text-muted-foreground">
-                No hay unidades libres para esas fechas. Prueba otras fechas.
+                {t.sinDisponibilidad}
               </CardContent>
             </Card>
           ) : null}
@@ -382,7 +411,7 @@ export function BookingWizard({
               <CardContent className="grid gap-3 text-sm">
                 <span className="flex items-center gap-2 text-muted-foreground">
                   <Users className="h-4 w-4" aria-hidden />
-                  Hasta {u.capacidad} huéspedes
+                  {interpolar(t.hastaHuespedes, { n: u.capacidad })}
                 </span>
                 <div className="grid gap-1">
                   <div className="flex justify-between text-muted-foreground">
@@ -393,17 +422,19 @@ export function BookingWizard({
                   </div>
                   {u.desglose.limpieza > 0 ? (
                     <div className="flex justify-between text-muted-foreground">
-                      <span>Limpieza</span>
+                      <span>{t.limpieza}</span>
                       <span>{formatearImporte(u.desglose.limpieza, moneda)}</span>
                     </div>
                   ) : null}
                   <div className="flex justify-between border-t pt-1 font-medium">
-                    <span>Total</span>
+                    <span>{t.total}</span>
                     <span>{formatearImporte(u.desglose.total, moneda)}</span>
                   </div>
                   {u.desglose.anticipo > 0 ? (
                     <div className="flex justify-between text-muted-foreground">
-                      <span>Anticipo ahora ({config.anticipoPorcentaje}%)</span>
+                      <span>
+                        {interpolar(t.anticipoAhora, { porcentaje: config.anticipoPorcentaje })}
+                      </span>
                       <span>{formatearImporte(u.desglose.anticipo, moneda)}</span>
                     </div>
                   ) : null}
@@ -414,7 +445,7 @@ export function BookingWizard({
                     setPaso(3);
                   }}
                 >
-                  Reservar esta unidad
+                  {t.reservarEstaUnidad}
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </CardContent>
@@ -426,24 +457,24 @@ export function BookingWizard({
       {paso === 3 && unidad ? (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Tus datos</CardTitle>
+            <CardTitle className="text-base">{t.tusDatos}</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4">
             <div className="rounded-md bg-muted p-3 text-sm">
               <p className="font-medium">{unidad.nombre}</p>
               <p className="text-muted-foreground">
-                {checkIn} → {checkOut} · {noches} {noches === 1 ? 'noche' : 'noches'} ·{' '}
+                {checkIn} → {checkOut} · {noches} {nocheONoches(idioma, noches)} ·{' '}
                 {formatearImporte(unidad.desglose.total, moneda)}
               </p>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="grid gap-2 sm:col-span-2">
-                <Label htmlFor="nombre">Nombre y apellidos</Label>
+                <Label htmlFor="nombre">{t.nombreApellidos}</Label>
                 <Input id="nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} autoComplete="name" />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">{t.email}</Label>
                 <Input
                   id="email"
                   type="email"
@@ -453,7 +484,7 @@ export function BookingWizard({
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="telefono">Teléfono</Label>
+                <Label htmlFor="telefono">{t.telefono}</Label>
                 <Input
                   id="telefono"
                   value={telefono}
@@ -462,19 +493,17 @@ export function BookingWizard({
                 />
               </div>
               <div className="grid gap-2 sm:col-span-2">
-                <Label htmlFor="notas">¿Algo que debamos saber?</Label>
+                <Label htmlFor="notas">{t.peticiones}</Label>
                 <Textarea
                   id="notas"
                   value={notas}
                   onChange={(e) => setNotas(e.target.value)}
-                  placeholder="Hora de llegada, cuna, mascotas…"
+                  placeholder={t.peticionesPlaceholder}
                 />
               </div>
             </div>
 
-            <p className="text-xs text-muted-foreground">
-              Deja un email o un teléfono: es por donde te llega la confirmación.
-            </p>
+            <p className="text-xs text-muted-foreground">{t.dejaContacto}</p>
 
             {config.politicaCancelacion ? (
               <p className="rounded-md border p-3 text-xs text-muted-foreground">
@@ -485,7 +514,7 @@ export function BookingWizard({
             <div className="flex items-center justify-between gap-2">
               <Button variant="ghost" onClick={() => setPaso(2)} disabled={cargando}>
                 <ArrowLeft className="mr-2 h-4 w-4" />
-                Volver
+                {t.volver}
               </Button>
               <Button onClick={reservar} disabled={cargando || !nombre || (!email && !telefono)}>
                 {cargando ? (
@@ -493,7 +522,7 @@ export function BookingWizard({
                 ) : (
                   <CreditCard className="mr-2 h-4 w-4" />
                 )}
-                {config.requierePagoOnline ? 'Pagar y reservar' : 'Confirmar reserva'}
+                {config.requierePagoOnline ? t.pagarYReservar : t.confirmarReserva}
               </Button>
             </div>
           </CardContent>
@@ -505,11 +534,11 @@ export function BookingWizard({
           <CardContent className="flex flex-col items-center gap-3 p-8 text-center">
             <CheckCircle2 className="h-10 w-10 text-emerald-500" aria-hidden />
             <p className="text-lg font-medium">
-              {resultado.estado === 'pending' ? 'Reserva recibida' : 'Reserva confirmada'}
+              {resultado.estado === 'pending' ? t.reservaRecibida : t.reservaConfirmada}
             </p>
             <p className="text-sm text-muted-foreground">
-              Referencia <span className="font-medium">{resultado.referencia}</span> ·{' '}
-              {resultado.noches} {resultado.noches === 1 ? 'noche' : 'noches'} ·{' '}
+              {t.referencia} <span className="font-medium">{resultado.referencia}</span> ·{' '}
+              {resultado.noches} {nocheONoches(idioma, resultado.noches)} ·{' '}
               {formatearImporte(resultado.total, moneda)}
             </p>
             {resultado.avisoDePago ? (
@@ -518,11 +547,9 @@ export function BookingWizard({
               </p>
             ) : null}
             <Button asChild>
-              <a href={resultado.confirmacionUrl}>Ver el detalle de mi reserva</a>
+              <a href={resultado.confirmacionUrl}>{t.verDetalle}</a>
             </Button>
-            <p className="text-xs text-muted-foreground">
-              Guarda ese enlace: es tu comprobante.
-            </p>
+            <p className="text-xs text-muted-foreground">{t.guardaEnlace}</p>
           </CardContent>
         </Card>
       ) : null}
@@ -534,6 +561,37 @@ export function BookingWizard({
           {config.telefonoContacto ? <span>{config.telefonoContacto}</span> : null}
         </p>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * Conmutador ES/EN del asistente: dos enlaces reales a la MISMA ruta con otro
+ * `lang`. Sin JS de por medio para que funcione también dentro del iframe del
+ * embed, donde recargar el enlace equivale a recargar el widget.
+ */
+function ConmutadorIdiomaWizard({ actual, rutaBase }: { actual: Idioma; rutaBase: string }) {
+  return (
+    <div
+      className="flex items-center justify-center gap-1 text-xs text-muted-foreground"
+      aria-label="Language"
+    >
+      <Languages className="h-3.5 w-3.5" aria-hidden />
+      {IDIOMAS.map((idioma) =>
+        idioma === actual ? (
+          <span key={idioma} className="font-semibold uppercase text-foreground">
+            {idioma}
+          </span>
+        ) : (
+          <a
+            key={idioma}
+            href={`${rutaBase}?lang=${idioma}`}
+            className="uppercase hover:text-foreground hover:underline"
+          >
+            {idioma}
+          </a>
+        )
+      )}
     </div>
   );
 }
