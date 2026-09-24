@@ -144,22 +144,24 @@
 ## FASE 1 — Precondiciones del cliente (externo; se gestiona en paralelo)
 
 ### 1.1 - Enviar al cliente la petición de las 7 precondiciones
-- [ ] **PENDIENTE**
-- **Acción**: redactar y enviar el email con la lista (Sede Electrónica, credenciales de
-  PRUEBAS, códigos arrendador/aplicación/establecimiento, **XSD oficial**, 2–3 estancias
-  de prueba con documentos válidos, ventana de una mañana). Usar lenguaje de hotel, sin
-  jerga; mencionar que sin los 4 primeros el servicio rechaza todo y no se prueba nada.
-- **Verificado cuando**: el email está enviado (guardar copia en el hilo del proyecto).
-- **Mientras se espera**: no hay trabajo bloqueante de código; dedicar el tiempo a los
-  pendientes «investigar» de bajo riesgo o esperar instrucciones.
+- [x] **ENVIADO el 24 sep 2026** (confirmado por Bruno durante la sesión)
+- Cuerpo: `hospitality-email-precondiciones-cliente.md` (las 7 precondiciones, sin
+  adjuntos). El cliente debe devolver los puntos 1–4 (Sede Electrónica, credenciales de
+  PRUEBAS, códigos, **XSD oficial**); el 5–7 se agenda después.
+- **Recordatorio**: el 1 de oct 2026 (día 7) con la plantilla del
+  `hospitality-checklist-envio-correos.md`. Si no hay respuesta, ahí se propone la
+  llamada «pantalla a pantalla».
 
 ### 1.2 - Reunión con el proveedor de conectividad (vía paralela, otras claves)
-- [ ] **PENDIENTE**
-- **Acción**: preparar la reunión con el checklist ya redactado
-  (`hospitality-checklist-reunion-conectividad.md`) y el diagrama de emisión de
-  credenciales de la guía de go-live. No depende del Ministerio: puede cerrarse antes.
-- **Verificado cuando**: el usuario confirma las credenciales recibidas (se configuran en
-  su momento en el panel de conectividad, cifradas; NO commitearlas jamás).
+- [x] **ENVIADO el 24 sep 2026** (confirmado por Bruno durante la sesión)
+- Cuerpo: `hospitality-email-proveedor-conectividad.md` (36 preguntas, A/B bloqueantes)
+  + adjunto `hospitality-connectivity-contract-externo.md` (contrato externo en inglés,
+  ya expurgado). Convertir la respuesta en reunión/respuestas por escrito.
+- **Recordatorio**: el 1 de oct 2026 (día 5 hábil) citando SOLO A y B, con la plantilla
+  del `hospitality-checklist-envio-correos.md`.
+- **Cuando llegue la respuesta**: `npx tsx scripts/preflight-conectividad.ts --pegado
+  "URL | ID de socio | usuario | contraseña"` ANTES de tocar el servidor; verde →
+  paso 2.1. Las credenciales, cifradas en el panel; NO commitearlas jamás.
 
 ## FASE 2 — Día de homologación (con las claves de pruebas; medio día)
 
@@ -317,6 +319,7 @@ equipo decide cambiar la forma de acceso.
 | 24 sep 2026 | — | **§8-E reducido a prueba de UI: los crons tienen evidencia por fuera del panel** | `hospitality-reconcile` OK (200) dos veces al día los últimos 4 días (`/var/log/volkern-cron.log`); `hospitality_sync_logs` acumula 26 corridas `exito` y 2 `error`; la **divergencia pendiente (1)** es una reserva que ya no existe en el proveedor y queda **conservadoramente registrada, nunca cancelada** — su detalle está en `HospitalityReservation` sección 14 (tipo `reconciliacion`). El operador puede consultarlo con `psql`; el panel `/admin/hospitality` queda como mejora de ergonomía, no como requisito. |
 | 24 sep 2026 | — | **Serie de migraciones reproducible desde cero — CERRADO (con corrección del diagnóstico)** | El hallazgo original subestimaba: no eran 2 migraciones, eran **10** cuyas tablas/índices/FKs ya vivían en el baseline `0_init` (17 tablas + índices + FKs con `ADD CONSTRAINT`, 569 en el baseline). Producción lo confirmando: `0_init` registrada con `applied_steps=0` (baseline marcado, no ejecutado) y las tablas conservando los nombres de índice ORIGINALES — la absorción histórica ya estaba hecha; las carpetas eran chatarra que mataba `migrate deploy` en base nueva con `42P07`. Se retiraron las 10 y **se validó la serie completa (29 migraciones) sobre un PostgreSQL 16 temporal desde cero: todas aplicadas, 338 tablas, `prisma migrate diff` contra los modelos = migración VACÍA** (esquema equivalente, FKs incluidas). Guardia nueva `tests/migraciones-serie.test.ts` (3 comprobaciones: baseline con sus tablas, ninguna re-creación no idempotente — la única convivencia legítima es `IF NOT EXISTS`, caso `User_contactId_idx` — y las carpetas absorbidas no vuelven; probada también en negativo). |
 | 24 sep 2026 | 1.1 y 1.2 (munición) | **Borradores de correo listos para enviar** | El del cliente (paso 1.1, `hospitality-email-precondiciones-cliente.md`) y el del proveedor (paso 1.2, `hospitality-email-proveedor-conectividad.md`) llevan su bloque de «preparación de envío»: qué rellenar, canal, adjunto (el contrato técnico **expurgado** del encabezado interno — sin expurgar se entrega nuestro plano), y el recordatorio programado (7 días el cliente, 5 hábiles el proveedor). Pendiente solo de que Bruno los envíe; al hacerlo, marcar el paso y anotar fecha. |
+| 24 sep 2026 | **1.1 y 1.2 ENVIADOS** | **Los dos correos salieron** (confirmación de Bruno en sesión) | Cliente: las 7 precondiciones, sin adjuntos. Proveedor: 36 preguntas + adjunto del contrato externo en inglés. **Recordatorios fijados al 1 oct 2026** (día 7 / día 5 hábil) con las plantillas del checklist de envío. El reloj de terceros empieza aquí: lo único que separa del paso 2.1 es la respuesta del proveedor, y del 2.2 la del Ministerio. |
 
 ---
 
