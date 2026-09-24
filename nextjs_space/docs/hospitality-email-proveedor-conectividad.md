@@ -13,12 +13,14 @@
 >
 > **Preparación de envío (24 sep 2026):** rellenar `[name]` (uno por cuerpo y
 > firma) y enviar al contacto de soporte/ventas del proveedor con copia técnica.
-> **Adjunto obligatorio**: `hospitality-connectivity-contract.md` **expurgado**
-> — quitarle antes el encabezado interno («Documento interno de desarrollo»,
-> referencias al «plan maestro», la nota de marca y las secciones con decisiones
-> nuestras; dejarles flujo de integración, endpoints, formatos y política de
-> reintentos). Si se envía sin expurgar se les estaría entregando nuestro plano
-> interno. Al enviarlo, marcar el paso **1.2** del runbook y anotar fecha en §9.
+> **Adjunto obligatorio**: `hospitality-connectivity-contract-externo.md` —
+> la versión externa en inglés del contrato, YA EXPURGADA y creada para esto
+> (24 sep 2026): conformidad con su API, spec completa del webhook que deben
+> llamarnos (payload, multi-room, resolución estricta, privacidad) y política
+> de reintentos con `Retry-After`. Nada de material interno: ni código, ni
+> paneles, ni wizard, ni decisiones de producto. No adjuntar el contrato
+> interno `hospitality-connectivity-contract.md` (ese lleva encabezado interno,
+> plan maestro y decisiones nuestras: enviarlo sería entregar nuestro plano). Al enviarlo, marcar el paso **1.2** del runbook y anotar fecha en §9.
 > Recordatorio a los 5 días hábiles con las preguntas A y B citadas arriba del
 > todo. Cuando respondan: `npx tsx scripts/preflight-conectividad.ts --pegado
 > "URL | ID de socio | usuario | contraseña"` antes de tocar el servidor — la
