@@ -1,5 +1,7 @@
 export const dynamic = 'force-dynamic';
 
+import { TIPO_LINEA_FIANZA } from '@/lib/hospitality/fianza';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
@@ -36,6 +38,12 @@ export async function GET(req: NextRequest) {
         unit: { select: { id: true, nombre: true, codigo: true } },
         property: { select: { id: true, nombre: true } },
         contact: { select: { id: true, nombre: true, email: true, telefono: true } },
+        // La fianza (depósito del huésped): la ficha necesita su estado para el
+        // badge y las acciones. Solo la línea tipada — nunca todas las items.
+        items: {
+          where: { tipo: TIPO_LINEA_FIANZA },
+          select: { concepto: true, importeTotal: true, moneda: true },
+        },
       },
       orderBy: [{ checkIn: 'asc' }],
       take: limit,

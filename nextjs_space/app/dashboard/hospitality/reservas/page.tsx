@@ -28,6 +28,8 @@ import {
   Printer,
   PlaneLanding,
   PlaneTakeoff,
+  Shield,
+  Trash2,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { CompletarParteVijerosDialog } from '@/components/hospitality/completar-parte-viajeros-dialog';
@@ -43,6 +45,7 @@ import { nightsBetween } from '@/lib/hospitality/calendar';
 import { diaLocalIso } from '@/lib/hospitality/reservas-csv';
 import { resumenReservas } from '@/lib/hospitality/analytics';
 import { POLITICAS_NO_SHOW, ETIQUETA_POLITICA_NO_SHOW } from '@/lib/hospitality/no-show';
+import { ETIQUETA_FIANZA } from '@/lib/hospitality/fianza';
 import { Button } from '@/components/ui/button';
 import { AccionHospitality } from '@/components/hospitality/AccionHospitality';
 import { MONEDAS_SELECCIONABLES, formatearImporte, monedaEfectiva, primeraMoneda } from '@/lib/moneda';
@@ -75,6 +78,8 @@ interface Reservation {
   property?: { id: string; nombre: string } | null;
   contact?: { id: string; nombre: string | null; email: string | null; telefono: string | null } | null;
   guestData?: any;
+  /** Línea de fianza de la reserva (depósito del huésped), si existe. */
+  items?: Array<{ concepto: string; importeTotal: number; moneda: string }> | null;
   /** Respuestas del huésped a las preguntas personalizadas del hotel
    *  ({preguntaId: valor}). Asunto del hotel: nunca viajan al parte MIR. */
   respuestasCheckin?: Record<string, string> | null;
@@ -358,6 +363,18 @@ export default function HospitalityReservasPage() {
     guardando: boolean;
   }>({ open: false, reserva: null, data: null, cargando: false, guardando: false });
 
+  // Dialog de fianza (depósito de garantía): registrar, cobrar, devolver o
+  // aplicar a daños. El estado lo guarda el servidor; aquí se pregunta de novo
+  // cada vez que se abre.
+  const [fianza, setFianza] = useState<{
+    open: boolean;
+    reserva: Reservation | null;
+    estado: { existe: boolean; estado: string | null; importe: number | null; moneda: string | null } | null;
+    importe: string;
+    retenido: string;
+    guardando: boolean;
+  }>({ open: false, reserva: null, estado: null, importe: '', retenido: '', guardando: false });
+
   // Filtros
   const [fEstado, setFEstado] = useState('todas');
   const [fCanal, setFCanal] = useState('todos');
@@ -545,6 +562,59 @@ export default function HospitalityReservasPage() {
       }
     } catch {
       toast.error('Error al cambiar el estado');
+    }
+  };
+
+  // ─── Fianza (depósito de garantía) ────────────────────────────────────
+  // El dinero real lo mueve Finanzas (pagos/Stripe); aquí se gestiona el ESTADO
+  // de la garantía: pendiente → cobrada → devuelta / aplicada a daños.
+  const abrirFianza = async (r: Reservation) => {
+    setFianza({ open: true, reserva: r, estado: null, importe: '', retenido: '', guardando: false });
+    try {
+      const res = await fetch(`/api/hospitality/reservations/${r.id}/fianza`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || 'No se pudo consultar la fianza');
+        setFianza((f) => ({ ...f, estado: { existe: false, estado: null, importe: null, moneda: null } }));
+        return;
+      }
+      setFianza((f) => ({ ...f, estado: data.fianza }));
+    } catch {
+      toast.error('Error al consultar la fianza');
+      setFianza((f) => ({ ...f, estado: { existe: false, estado: null, importe: null, moneda: null } }));
+    }
+  };
+
+  const accionFianza = async (accion: 'registrar' | 'cobrar' | 'devolver' | 'aplicar' | 'quitar') => {
+    const r = fianza.reserva;
+    if (!r) return;
+    setFianza((f) => ({ ...f, guardando: true }));
+    try {
+      const res = await fetch(`/api/hospitality/reservations/${r.id}/fianza`, {
+        method: accion === 'quitar' ? 'DELETE' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: accion === 'quitar' ? undefined : JSON.stringify({
+          accion,
+          importe: Number(fianza.importe) || undefined,
+          importeRetenido: Number(fianza.retenido) || undefined,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || 'No se pudo actualizar la fianza');
+        return;
+      }
+      const etiqueta: Record<string, string> = {
+        registrada: 'Fianza registrada', cobrada: 'Fianza marcada como cobrada',
+        devuelta: 'Fianza devuelta', aplicada: 'Fianza aplicada a daños',
+      };
+      toast.success(accion === 'quitar' ? 'Fianza quitada' : etiqueta[data.accion] || 'Fianza actualizada');
+      await abrirFianza(r);
+      await cargar();
+    } catch {
+      toast.error('Error al actualizar la fianza');
+    } finally {
+      setFianza((f) => ({ ...f, guardando: false }));
     }
   };
 
@@ -1192,6 +1262,18 @@ export default function HospitalityReservasPage() {
                           ) : (
                             <span className="text-muted-foreground">—</span>
                           )}
+                          {/* Fianza: el botón solo existe si hay línea — el registro
+                              se hace desde el dialog que el badge abre. */}
+                          {(r.items?.length || 0) > 0 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => abrirFianza(r)}
+                              title={`Fianza: ${r.items![0].concepto}`}
+                            >
+                              <Shield className="h-4 w-4" />
+                            </Button>
+                          )}
                           {/* El no-show no ocupa la unidad, pero sí se cobra: aquí
                               el operador emite el cargo y lo factura por el ERP. */}
                           {r.estado === 'no_show' && (
@@ -1372,6 +1454,134 @@ export default function HospitalityReservasPage() {
               </AccionHospitality>
             )}
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de fianza (depósito de garantía) */}
+      <Dialog
+        open={fianza.open}
+        onOpenChange={(open) => { if (!open) setFianza({ open: false, reserva: null, estado: null, importe: '', retenido: '', guardando: false }); }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5" /> Fianza de la reserva
+            </DialogTitle>
+            <DialogDescription>
+              {fianza.reserva?.externalBookingId} — el depósito no es ingreso: solo lo retenido por daños se factura.
+            </DialogDescription>
+          </DialogHeader>
+
+          {fianza.estado === null ? (
+            <div className="flex items-center justify-center py-6">
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+            </div>
+          ) : !fianza.estado.existe ? (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="fianza-importe">Importe de la fianza *</Label>
+                <Input
+                  id="fianza-importe"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={fianza.importe}
+                  onChange={(e) => setFianza((f) => ({ ...f, importe: e.target.value }))}
+                  placeholder="Ej: 200"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Queda registrada como pendiente de cobro. El cobro efectivo se registra en Finanzas
+                (link de Stripe, transferencia o efectivo) y aquí se marca como cobrada.
+              </p>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setFianza((f) => ({ ...f, open: false }))}>Cerrar</Button>
+                <AccionHospitality capacidad="finanzas.gestionar">
+                  <Button
+                    onClick={() => accionFianza('registrar')}
+                    disabled={fianza.guardando || !fianza.importe || Number(fianza.importe) <= 0}
+                  >
+                    {fianza.guardando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Shield className="h-4 w-4 mr-2" />}
+                    Registrar fianza
+                  </Button>
+                </AccionHospitality>
+              </DialogFooter>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="rounded-md border p-3 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">{ETIQUETA_FIANZA[fianza.estado.estado as keyof typeof ETIQUETA_FIANZA] || fianza.estado.estado}</span>
+                  <Badge variant="secondary">
+                    {formatearImporte(fianza.estado.importe || 0, fianza.estado.moneda || monedaListado)}
+                  </Badge>
+                </div>
+              </div>
+
+              {fianza.estado.estado === 'pendiente' && (
+                <div className="flex flex-wrap gap-2">
+                  <AccionHospitality capacidad="finanzas.gestionar">
+                    <Button variant="outline" onClick={() => accionFianza('cobrar')} disabled={fianza.guardando}>
+                      <DollarSign className="h-4 w-4 mr-1" /> Marcar cobrada
+                    </Button>
+                  </AccionHospitality>
+                  <AccionHospitality capacidad="finanzas.gestionar">
+                    <Button variant="outline" className="text-destructive hover:text-destructive" onClick={() => accionFianza('quitar')} disabled={fianza.guardando}>
+                      <Trash2 className="h-4 w-4 mr-1" /> Quitar
+                    </Button>
+                  </AccionHospitality>
+                </div>
+              )}
+
+              {fianza.estado.estado === 'cobrada' && (
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="fianza-retenido">Retenido por daños (0 = devolver todo)</Label>
+                    <Input
+                      id="fianza-retenido"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={fianza.retenido}
+                      onChange={(e) => setFianza((f) => ({ ...f, retenido: e.target.value }))}
+                      placeholder={`Máximo ${fianza.estado.importe || 0}`}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Aplicar a daños reduce la fianza al importe retenido (ese importe lo factura el ERP)
+                    y el resto se devuelve. Si no hay daños, marca la devolución directamente.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <AccionHospitality capacidad="finanzas.gestionar">
+                      <Button
+                        variant="outline"
+                        onClick={() => accionFianza('aplicar')}
+                        disabled={fianza.guardando || !fianza.retenido || Number(fianza.retenido) <= 0}
+                      >
+                        <ShieldAlert className="h-4 w-4 mr-1" /> Aplicar a daños
+                      </Button>
+                    </AccionHospitality>
+                    <AccionHospitality capacidad="finanzas.gestionar">
+                      <Button variant="outline" onClick={() => accionFianza('devolver')} disabled={fianza.guardando}>
+                        <CheckCircle2 className="h-4 w-4 mr-1" /> Marcar devuelta
+                      </Button>
+                    </AccionHospitality>
+                  </div>
+                </div>
+              )}
+
+              {(fianza.estado.estado === 'devuelta' || fianza.estado.estado === 'aplicada_daños') && (
+                <p className="text-sm text-muted-foreground">
+                  La fianza está cerrada. El movimiento de dinero (reembolso al huésped, factura de los
+                  daños) se registra en Finanzas.
+                </p>
+              )}
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setFianza((f) => ({ ...f, open: false }))}>Cerrar</Button>
+              </DialogFooter>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
