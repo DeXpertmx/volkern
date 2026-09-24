@@ -357,6 +357,15 @@ Pendiente si el producto legacy no vuelve (NO ejecutado, fase 3):
 perder la firma), archivando `/opt/volkern-table` en tar, y decidir el
 destino del dominio `volkerntable.com`.
 
+**Centinela contra la reanimacion** (2026-09-24): el cron semanal
+`43 4 * * 0` ejecuta `deploy-vps/vigilar-crons-heredados.sh` (copia en
+`/root/`, sincronizada y verificada por sha256 desde el deploy igual que
+el auditor). Alerta si el crontab de root vuelve a citar el legado o
+aparece cualquier `/etc/cron.d/*volkern*` (los crons del ERP viven en el
+crontab, NUNCA en `/etc/cron.d`): senal = marcador `/root/DERIVA-LEGADO`
+y linea `[legado]` en el log compartido. Probado en las tres direcciones:
+reposo (exit 0), deteccion por crontab y por fichero (exit 1 + marcador).
+
 **Sincronizacion con el deploy**: `deploy-local.sh` sube la copia del repo
 a `/root/auditar-superficie.sh` en cada despliegue y verifica la identidad
 sha256 repo↔VPS; si difieren, el deploy FALLA antes de tocar nada. La
