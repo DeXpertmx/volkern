@@ -1,16 +1,14 @@
-# Volkern PMS — Channel Manager Integration Contract (external)
+# Volkern PMS — Channel Manager Integration Contract
 
-> **Purpose of this document.** It is the integration attachment for our email
-> to the connectivity provider: what Volkern expects from their API (and
-> confirms we already use), plus the full specification of the reservation
-> webhook their emitter must call. It deliberately excludes internal-only
-> material: internal code paths, admin panels, onboarding wizard behaviour,
-> product decisions and pricing policies. It is written so their engineering
-> team can implement and verify their side without any other document.
+> This document is the technical reference for the Volkern PMS ↔ channel
+> manager integration: what we already run against your API (Section 1), the
+> complete specification of the reservation webhook your emitter will call
+> (Section 2), the responses and retry policy your queue must implement
+> (Section 3), and the specific answers we need to start (Section 4, which
+> mirror questions A/B of the accompanying email).
 >
-> Language: English (their support language). Brand rule: the provider's name
-> appears only in the official API docs URLs; in product and customer material
-> we say "Channel Connectivity".
+> It is self-contained: your team should not need any other document to
+> implement and verify their side.
 
 ## 1. What we already run (conformance statement)
 
@@ -117,7 +115,7 @@ on missing or masked values. We process guest personal data in the **EU
 - A **409** on `book`/`modify` means our availability guard rejected it: fix
   your inventory instead of retrying the same event.
 
-## 4. What we need from you to start (mirrors email questions A/B)
+## 4. What we need from you to start (questions A/B in the accompanying email)
 
 - Exact production base URL (byte-for-byte, `/api/v2/cm` prefix included),
   partner ID, production Basic Auth pair separate from sandbox.
