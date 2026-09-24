@@ -30,9 +30,16 @@
 
 import { prisma } from '@/lib/db';
 import { Prisma } from '@prisma/client';
-import { unitUnavailableOnDay, loadAvailabilityContext } from './availability';
+import { unitUnavailableOnDay, loadAvailabilityContext, ocupacionPorNoche } from './availability';
 import { nightsBetween, startOfDay, toIsoDate } from './calendar';
-import { cotizarEstancia, tarifaPorNocheDe, validarEstancia, type Cotizacion } from './pricing';
+import {
+  conceptoAlojamiento,
+  cotizarEstancia,
+  tarifaPorNocheDe,
+  validarEstancia,
+  type Cotizacion,
+  type NocheCotizada,
+} from './pricing';
 import { tieneEstacionalidad } from './estacionalidad';
 import { upsertGuest, type WebhookReservationPayload } from './reservations';
 import { emitReservationCreated } from './events';
@@ -150,8 +157,12 @@ export interface UnidadCotizada {
   tipo: string;
   capacidad: number;
   tarifaPorNoche: number;
-  /** Con estacionalidad, noche a noche del rango (el "desde" ya no basta). */
-  desgloseNoches: Array<{ fecha: string; tarifa: number }> | null;
+  /**
+   * Noche a noche del rango cuando la estancia no cuesta la tarifa plana
+   * (estacionalidad y/o ajustes): el "desde" ya no basta y la media no es un
+   * precio que nadie pague.
+   */
+  desgloseNoches: NocheCotizada[] | null;
   cotizacion: Cotizacion;
 }
 
@@ -183,6 +194,19 @@ export async function cotizarDisponibilidad(params: {
   // La disponibilidad la responde el motor central, con las reservas y los
   // bloqueos reales del rango. No hay otra consulta de disponibilidad aquí.
   const contexto = await loadAvailabilityContext(prisma, tenantId, propertyId, checkIn, checkOut);
+
+  // Ocupación por noche: la demanda que consume la capa 2 del precio. Se mide
+  // con la regla única del Availability Engine sobre TODO el inventario de la
+  // propiedad (no solo las unidades de este catálogo) porque el porcentaje
+  // responde "cómo de llena está la propiedad esa noche", no "cuántas
+  // unidades hay publicadas".
+  const ocupacion = ocupacionPorNoche(
+    contexto.units,
+    checkIn,
+    checkOut,
+    contexto.reservations,
+    contexto.blocks
+  );
   const nochesDelRango = [];
   for (let cursor = startOfDay(checkIn); cursor.getTime() < startOfDay(checkOut).getTime(); cursor.setDate(cursor.getDate() + 1)) {
     nochesDelRango.push(new Date(cursor));
@@ -252,6 +276,8 @@ export async function cotizarDisponibilidad(params: {
       checkOut,
       tarifaPorNoche: tarifa,
       estacionalidad: plan ? plan.temporadas ?? plan.finDeSemana : null,
+      ajustes: plan?.ajustes ?? null,
+      ocupacionPorNoche: ocupacion,
       limpieza: config.tarifaLimpieza,
       anticipoPorcentaje: config.anticipoPorcentaje,
       moneda: params.moneda,
@@ -404,11 +430,27 @@ export async function crearReservaDirecta(
     return { ok: false, motivo: 'datos', mensaje: estancia.mensaje };
   }
 
+  // Ocupación del momento de reservar: es la lectura que consumen los tramos de
+  // la capa 2 para fijar el precio. La estancia se vuelve a comprobar dentro de
+  // la transacción, bajo el bloqueo de la unidad, y eso es lo que decide si se
+  // puede vender; esto solo decide cuánto. Una lectura más, a cambio de que el
+  // precio guardado salga de las mismas reglas que vio el huésped.
+  const contextoPrecio = await loadAvailabilityContext(prisma, tenantId, propertyId, checkIn, checkOut);
+  const ocupacion = ocupacionPorNoche(
+    contextoPrecio.units,
+    checkIn,
+    checkOut,
+    contextoPrecio.reservations,
+    contextoPrecio.blocks
+  );
+
   const cotizacion = cotizarEstancia({
     checkIn,
     checkOut,
     tarifaPorNoche: tarifa,
     estacionalidad: plan ? plan.temporadas ?? plan.finDeSemana : null,
+    ajustes: plan?.ajustes ?? null,
+    ocupacionPorNoche: ocupacion,
     limpieza: config.tarifaLimpieza,
     anticipoPorcentaje: config.anticipoPorcentaje,
     moneda,
@@ -510,12 +552,11 @@ export async function crearReservaDirecta(
           propertyId,
           unitId,
           tipo: 'alojamiento',
-          // Con estacionalidad la tarifa es por noche (la media solo sería un
-          // número inventado): la línea lo dice y el detalle fecha a fecha
-          // queda en `payload.cotizacion.desgloseNoches` de la reserva.
-          concepto: cotizacion.desgloseNoches
-            ? `${cotizacion.noches} noche(s) — desglose por temporada`
-            : `${cotizacion.noches} noche(s) × ${cotizacion.tarifaPorNoche}`,
+          // La tarifa puede no ser plana (temporada, ajustes o las dos): la
+          // línea dice de dónde sale el importe y el detalle fecha a fecha
+          // queda en `payload.cotizacion.desgloseNoches` de la reserva. La
+          // frase es la misma que escribe el otro motor (`conceptoAlojamiento`).
+          concepto: conceptoAlojamiento(cotizacion),
           cantidad: cotizacion.noches,
           importeUnitario: cotizacion.tarifaPorNoche,
           importeTotal: cotizacion.alojamiento,

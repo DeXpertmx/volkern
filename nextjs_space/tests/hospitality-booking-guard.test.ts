@@ -178,8 +178,9 @@ describe('el desglose noche a noche (estancia en temporada)', () => {
     // temporadas y la otra no, la página y la reserva dirían precios distintos.
     expect(ruta).toMatch(/estacionalidad:\s*plan \? plan\.temporadas/);
     expect(ruta).toMatch(/estacionalidad:\s*ratePlan \? ratePlan\.temporadas/);
-    // Y las reglas son las del módulo que ya usa el asistente: una sola.
-    expect(leer('lib/hospitality/booking-rates.ts')).toContain("from './estacionalidad'");
+    // Y las reglas son las del motor que ya usa el asistente: una sola. La
+    // página pública no suma a mano: delega en `./pricing`.
+    expect(leer('lib/hospitality/booking-rates.ts')).toContain("from './pricing'");
   });
 
   it('la fecha de cada noche se lee como día local (una fecha ISO no se corre un día)', () => {
@@ -194,6 +195,45 @@ describe('el desglose noche a noche (estancia en temporada)', () => {
       expect(codigo, `${superficie} parsea la fecha de la noche en UTC`).not.toMatch(
         /new Date\(noche\.fecha\)/
       );
+    }
+  });
+});
+
+describe('la capa 2 (ajustes por demanda) es de la reserva directa', () => {
+  it('el push a canales no conoce los ajustes: un calendario por fecha no sabe de antelación', () => {
+    const sync = leer('lib/hospitality/sync.ts');
+    expect(sync).not.toContain("from './ajustes'");
+    // Ni los lee del plan para empujarlos: la tarifa que viaja es la publicada.
+    expect(sync).not.toMatch(/\.ajustes\b/);
+  });
+
+  it('los dos motores públicos piden la capa 2 al plan y la tarifa al motor único', () => {
+    for (const ruta of [
+      'lib/hospitality/booking-engine.ts',
+      'lib/hospitality/booking-rates.ts',
+    ]) {
+      expect(leer(ruta), `${ruta} no le pasa los ajustes a la tarificación`).toMatch(
+        /ajustes:\s*/
+      );
+    }
+    // Y la demanda la calcula el Availability Engine, no cada uno por su cuenta.
+    expect(leer('lib/hospitality/availability.ts')).toContain('export function ocupacionPorNoche');
+    for (const ruta of [
+      'lib/hospitality/booking-engine.ts',
+      'app/api/public/booking/[slug]/route.ts',
+    ]) {
+      expect(leer(ruta), `${ruta} no mide la demanda con el motor`).toContain('ocupacionPorNoche');
+    }
+  });
+
+  it('la API de planes normaliza los ajustes antes de guardarlos (nunca guarda basura)', () => {
+    for (const ruta of [
+      'app/api/hospitality/rateplans/route.ts',
+      'app/api/hospitality/rateplans/[id]/route.ts',
+    ]) {
+      const codigo = leer(ruta);
+      expect(codigo, `${ruta} no normaliza los ajustes`).toContain('normalizarAjustes');
+      expect(codigo, `${ruta} no rechaza ajustes inválidos`).toContain('pidenAjustes');
     }
   });
 });

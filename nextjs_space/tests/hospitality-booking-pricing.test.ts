@@ -111,6 +111,131 @@ describe('cotizarEstancia', () => {
   });
 });
 
+describe('cotizarEstancia — capa 2: ajustes por demanda', () => {
+  it('la duración descuenta la tarifa de CADA noche y el total es la suma del desglose', () => {
+    const cotizacion = cotizarEstancia({
+      checkIn: fecha('2026-10-10'),
+      checkOut: fecha('2026-10-13'), // 3 noches
+      tarifaPorNoche: 100,
+      ajustes: { duracion: [{ desdeNoches: 3, porcentaje: -10, nombre: '3 noches' }] },
+      moneda: 'EUR',
+    });
+
+    expect(cotizacion.alojamiento).toBe(270);
+    expect(cotizacion.desgloseNoches?.map((n) => n.tarifa)).toEqual([90, 90, 90]);
+    expect(cotizacion.desgloseNoches?.map((n) => n.base)).toEqual([100, 100, 100]);
+    expect(cotizacion.desgloseNoches?.[0].ajustes).toEqual([
+      { tipo: 'duracion', porcentaje: -10, nombre: '3 noches' },
+    ]);
+    // La media por noche sigue siendo informativa; el importe real es la suma.
+    expect(cotizacion.tarifaPorNoche).toBe(90);
+  });
+
+  it('la antelación se mide en días de calendario contra `hoy`', () => {
+    const base = {
+      checkIn: fecha('2026-10-10'),
+      checkOut: fecha('2026-10-12'),
+      tarifaPorNoche: 100,
+      ajustes: { antelacion: [{ desdeDias: 30, hastaDias: null, porcentaje: -10 }] },
+      moneda: 'EUR',
+    };
+    // 25 días de antelación: todavía no llega al tramo de 30.
+    expect(cotizarEstancia({ ...base, hoy: fecha('2026-09-15') }).total).toBe(200);
+    // 40 días: entra, y con la fecha de hoy por defecto (el momento real).
+    expect(cotizarEstancia({ ...base, hoy: fecha('2026-08-31') }).total).toBe(180);
+    expect(cotizarEstancia({ ...base, hoy: fecha('2026-10-11') }).total).toBe(200);
+  });
+
+  it('la ocupación es de CADA noche: una noche llena sube y la vacía no', () => {
+    const cotizacion = cotizarEstancia({
+      checkIn: fecha('2026-10-10'),
+      checkOut: fecha('2026-10-13'),
+      tarifaPorNoche: 100,
+      ajustes: { ocupacion: [{ desdePorcentaje: 80, porcentaje: 20, nombre: 'Casi lleno' }] },
+      ocupacionPorNoche: { '2026-10-10': 90, '2026-10-11': 12.5, '2026-10-12': 100 },
+      moneda: 'EUR',
+    });
+
+    expect(cotizacion.desgloseNoches?.map((n) => n.tarifa)).toEqual([120, 100, 120]);
+    expect(cotizacion.alojamiento).toBe(340);
+    // La noche que no está llena no lleva `base` ni `ajustes`: no se tocó.
+    expect(cotizacion.desgloseNoches?.[1]).toEqual({ fecha: '2026-10-11', tarifa: 100 });
+    expect(cotizacion.desgloseNoches?.[0].base).toBe(100);
+  });
+
+  it('sin mapa de ocupación la regla de ocupación no aplica (no se inventa la demanda)', () => {
+    const sinMapa = cotizarEstancia({
+      checkIn: fecha('2026-10-10'),
+      checkOut: fecha('2026-10-12'),
+      tarifaPorNoche: 100,
+      ajustes: { ocupacion: [{ desdePorcentaje: 0, porcentaje: 25 }] },
+      moneda: 'EUR',
+    });
+    expect(sinMapa.total).toBe(200);
+
+    // Y una fecha que no está en el mapa tampoco cuenta como 0 %.
+    const parcial = cotizarEstancia({
+      checkIn: fecha('2026-10-10'),
+      checkOut: fecha('2026-10-12'),
+      tarifaPorNoche: 100,
+      ajustes: { ocupacion: [{ desdePorcentaje: 0, porcentaje: 25 }] },
+      ocupacionPorNoche: { '2026-10-10': 50 },
+      moneda: 'EUR',
+    });
+    expect(parcial.desgloseNoches?.map((n) => n.tarifa)).toEqual([125, 100]);
+  });
+
+  it('la capa 2 se aplica sobre la tarifa que ya resolvió la capa 1 (temporada)', () => {
+    const cotizacion = cotizarEstancia({
+      checkIn: fecha('2026-10-10'),
+      checkOut: fecha('2026-10-13'),
+      tarifaPorNoche: 100,
+      estacionalidad: { temporadas: [{ desde: '2026-10-11', hasta: '2026-10-12', tarifa: 300 }] },
+      ajustes: { duracion: [{ desdeNoches: 1, porcentaje: -50 }] },
+      moneda: 'EUR',
+    });
+
+    // 10 → 100, 11 y 12 → 300 (temporada), y luego el −50 % de la duración.
+    expect(cotizacion.desgloseNoches?.map((n) => n.base)).toEqual([100, 300, 300]);
+    expect(cotizacion.desgloseNoches?.map((n) => n.tarifa)).toEqual([50, 150, 150]);
+    expect(cotizacion.alojamiento).toBe(350);
+  });
+
+  it('los ajustes nunca regalan la noche (suelo del 10 %)', () => {
+    const cotizacion = cotizarEstancia({
+      checkIn: fecha('2026-10-10'),
+      checkOut: fecha('2026-10-12'),
+      tarifaPorNoche: 100,
+      ajustes: {
+        antelacion: [{ desdeDias: 0, hastaDias: null, porcentaje: -90 }],
+        duracion: [{ desdeNoches: 1, porcentaje: -90 }],
+      },
+      hoy: fecha('2026-10-10'),
+      moneda: 'EUR',
+    });
+    expect(cotizacion.alojamiento).toBe(20);
+    expect(cotizacion.total).toBeGreaterThan(0);
+  });
+
+  it('un plan SIN ajustes cotiza céntimo a céntimo como antes', () => {
+    const conAjustesVacios = cotizarEstancia({
+      checkIn: fecha('2026-10-10'),
+      checkOut: fecha('2026-10-13'),
+      tarifaPorNoche: 10.005,
+      ajustes: { duracion: [] },
+      moneda: 'EUR',
+    });
+    const sinAjustes = cotizarEstancia({
+      checkIn: fecha('2026-10-10'),
+      checkOut: fecha('2026-10-13'),
+      tarifaPorNoche: 10.005,
+      moneda: 'EUR',
+    });
+    expect(conAjustesVacios).toEqual(sinAjustes);
+    expect(sinAjustes.desgloseNoches).toBeNull();
+  });
+});
+
 describe('validarEstancia', () => {
   const restricciones = (r: RestriccionesEstancia) => r;
 

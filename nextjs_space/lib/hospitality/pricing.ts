@@ -21,10 +21,28 @@
  *     Limpieza      tarifa de la estancia (opcional)
  *     ────────────────────────────────
  *     Total         = ingreso bruto
+ *
+ * Las dos capas del precio viven aquí, en este orden:
+ *
+ * - **Capa 1** (`./estacionalidad`): cuánto cuesta cada noche —temporada por
+ *   fecha y recargo de fin de semana—.
+ * - **Capa 2** (`./ajustes`): cuánto cuesta esa noche para ESTA estancia y este
+ *   momento —antelación, ocupación y duración—.
+ *
+ * Y una regla que decide el redondeo: cuando hay ajustes, cada noche se ajusta
+ * y se redondea a céntimo, y el alojamiento es la **suma de lo que se enseña**.
+ * Redondear el total al final daría un importe que no cuadra con su propio
+ * desglose.
  */
 
 import { nightsBetween, startOfDay } from './calendar';
-import { normalizarEstacionalidad, precioEstancia, serieDeTarifas, tarifaPorNoche } from './estacionalidad';
+import { normalizarEstacionalidad, serieDeTarifas, tarifaPorNoche } from './estacionalidad';
+import {
+  ajustesDeEstancia,
+  factorDeAjustes,
+  normalizarAjustes,
+  type AjusteAplicado,
+} from './ajustes';
 
 /** Restricciones de venta del plan de tarifa (las mismas que se empujan al canal). */
 export interface RestriccionesEstancia {
@@ -167,15 +185,45 @@ export interface EntradaCotizacion {
    * cálculo clásico noches × tarifa, intacto.
    */
   estacionalidad?: unknown;
+  /**
+   * Ajustes del plan (capa 2: antelación, ocupación y duración, Json crudo de
+   * la base). Presente y utilizable → la tarifa de cada noche se ajusta; ausente
+   * → la capa 1 sola, céntimo a céntimo como antes.
+   */
+  ajustes?: unknown;
+  /**
+   * Momento de la reserva, para la regla de antelación.
+   * Por defecto, ahora: los llamadores que puedan fijarlo (una simulación, un
+   * reintento) lo pasan, igual que `validarEstancia` acepta su `hoy`.
+   */
+  hoy?: Date;
+  /**
+   * Ocupación (%) de cada noche del rango, indexada por fecha ISO local. La
+   * calcula el Availability Engine (`ocupacionPorNoche`): aquí no se consulta
+   * nada. Sin mapa o sin la fecha, la regla de ocupación no aplica.
+   */
+  ocupacionPorNoche?: Record<string, number> | null;
   /** Divisa con la que se publica; la resuelve el llamador desde los datos. */
   moneda: string;
+}
+
+/** Una noche del desglose: lo que cuesta y por qué. */
+export interface NocheCotizada {
+  /** Fecha ISO local de la noche (la del día en que se duerme). */
+  fecha: string;
+  /** Precio final de la noche: la capa 1 con los ajustes que le tocaron. */
+  tarifa: number;
+  /** Tarifa de la noche ANTES de los ajustes (solo si alguno la tocó). */
+  base?: number;
+  /** Ajustes aplicados a esta noche (vacío/ausente si ninguno). */
+  ajustes?: AjusteAplicado[];
 }
 
 export interface Cotizacion {
   noches: number;
   /**
    * Precio por noche: la tarifa del plan en el cálculo clásico; la MEDIA del
-   * rango cuando hay estacionalidad (informativa — el importe real es
+   * rango cuando hay estacionalidad o ajustes (informativa — el importe real es
    * `alojamiento`, y la noche a noche está en `desgloseNoches`).
    */
   tarifaPorNoche: number;
@@ -190,10 +238,11 @@ export interface Cotizacion {
   saldo: number;
   moneda: string;
   /**
-   * Precio por noche con su fecha cuando el plan tiene estacionalidad
-   * (null en el cálculo clásico: la tarifa plana no necesita desglose).
+   * Precio por noche con su fecha cuando la estancia no cuesta la tarifa plana
+   * (estacionalidad y/o ajustes); null en el cálculo clásico, que no necesita
+   * desglose.
    */
-  desgloseNoches: Array<{ fecha: string; tarifa: number }> | null;
+  desgloseNoches: NocheCotizada[] | null;
 }
 
 /** Redondeo a céntimo, con el mismo criterio que el resto del dinero. */
@@ -202,18 +251,55 @@ function aCentimo(valor: number): number {
 }
 
 /**
+ * Días entre el momento de la reserva y la llegada, en días de calendario
+ * locales (0 = se llega hoy; negativo = fecha ya pasada, que la validación de
+ * la estancia rechaza antes). Se cuenta por días de calendario y no por horas:
+ * «reservar con 30 días de antelación» es una cuenta de días, no de horas.
+ */
+function diasHasta(desde: Date, hasta: Date): number {
+  const ms = startOfDay(hasta).getTime() - startOfDay(desde).getTime();
+  return Math.round(ms / 86_400_000);
+}
+
+/**
+ * Concepto de la línea de alojamiento: dice cómo se llegó al importe —tarifa
+ * plana, temporada o temporada con ajustes— y nunca presenta una media como si
+ * fuera una tarifa. Una sola frase para los dos motores que la escriben.
+ */
+export function conceptoAlojamiento(cotizacion: {
+  noches: number;
+  /** Media por noche; sin ella (línea ya cotizada) la frase va sin tarifa. */
+  tarifaPorNoche?: number | null;
+  desgloseNoches: NocheCotizada[] | null;
+}): string {
+  const etiqueta = cotizacion.noches === 1 ? '1 noche' : `${cotizacion.noches} noches`;
+  if (!cotizacion.desgloseNoches) {
+    return cotizacion.tarifaPorNoche == null
+      ? etiqueta
+      : `${etiqueta} × ${cotizacion.tarifaPorNoche}`;
+  }
+  const conAjustes = cotizacion.desgloseNoches.some((n) => (n.ajustes?.length ?? 0) > 0);
+  return conAjustes
+    ? `${etiqueta} — desglose por noche con ajustes`
+    : `${etiqueta} — desglose por temporada`;
+}
+
+/**
  * Cotiza una estancia a partir de las noches y la tarifa.
  *
  * Con estacionalidad en el plan, el precio ya no es noches × tarifa: se suma
  * la serie de precios POR NOCHE del rango (la noche cuesta la tarifa de su
- * fecha — la misma regla que empuja el canal; módulo `./estacionalidad`). La
+ * fecha — la misma regla que empuja el canal; módulo `./estacionalidad`). Con
+ * ajustes (capa 2), la tarifa de cada noche se multiplica por los tramos que le
+ * tocan —antelación, ocupación de ESA noche y duración de la estancia—. La
  * `tarifaPorNoche` devuelta pasa a ser la MEDIA del rango (informativa: es lo
  * que la ficha muestra como "desde X/noche"), mientras `alojamiento` es el
  * importe real y `desgloseNoches` trae noche a noche para el desglose visual.
  *
  * Lanza si el rango no tiene noches: una cotización de cero noches no es un
  * precio, es un error de quien llama, y devolverla como 0 acabaría en una reserva
- * sin importe.
+ * sin importe. Y lanza si ninguna noche queda con precio: una estancia a cero
+ * no es una oferta, es un dato roto.
  */
 export function cotizarEstancia(entrada: EntradaCotizacion): Cotizacion {
   const noches = nightsBetween(entrada.checkIn, entrada.checkOut);
@@ -222,33 +308,65 @@ export function cotizarEstancia(entrada: EntradaCotizacion): Cotizacion {
   }
 
   const config = normalizarEstacionalidad(entrada.estacionalidad);
+  const ajustes = normalizarAjustes(entrada.ajustes);
   const limpieza = aCentimo(Math.max(0, Number(entrada.limpieza) || 0));
+  const tarifaPlana = aCentimo(Math.max(0, Number(entrada.tarifaPorNoche) || 0));
+
+  // Capa 1: la tarifa de CADA noche del rango. Con estacionalidad sale de la
+  // fecha (temporada / fin de semana); sin ella, la tarifa del plan en todas.
+  const serieBase = serieDeTarifas({
+    desde: entrada.checkIn,
+    hasta: entrada.checkOut,
+    tarifaBase: config ? null : tarifaPlana,
+    plan: config ? { tarifa: tarifaPlana, estacionalidad: config } : null,
+  });
 
   let alojamiento: number;
-  let tarifaEfectiva: number;
   let desgloseNoches: Cotizacion['desgloseNoches'] = null;
 
-  if (config) {
-    const serie = serieDeTarifas({
-      desde: entrada.checkIn,
-      hasta: entrada.checkOut,
-      tarifaBase: null,
-      plan: { tarifa: Number(entrada.tarifaPorNoche) || 0, estacionalidad: config },
+  if (ajustes) {
+    // Capa 1 + capa 2, noche a noche. La antelación y la duración son hechos de
+    // la estancia (valen para todas sus noches); la ocupación es de la noche
+    // concreta. Sin dato de ocupación para una fecha, esa fecha se queda sin el
+    // tramo de ocupación: no se inventa un porcentaje para poder cobrar.
+    const diasAntelacion = diasHasta(entrada.hoy ?? new Date(), entrada.checkIn);
+    const ocupacion = entrada.ocupacionPorNoche ?? null;
+
+    let totalNoches = 0;
+    desgloseNoches = serieBase.map((fila) => {
+      const base = aCentimo(fila.tarifa ?? 0);
+      const aplicables = ajustesDeEstancia({
+        config: ajustes,
+        noches,
+        diasAntelacion,
+        ocupacionPorcentaje: ocupacion ? ocupacion[fila.fecha] ?? null : null,
+      });
+      const tarifa = aCentimo(base * factorDeAjustes(aplicables));
+      totalNoches += tarifa;
+      return aplicables.length
+        ? { fecha: fila.fecha, tarifa, base, ajustes: aplicables }
+        : { fecha: fila.fecha, tarifa };
     });
-    const totalNoches = serie.reduce((acc, f) => acc + (f.tarifa ?? 0), 0);
+
     if (!(totalNoches > 0)) {
       throw new Error('No se puede cotizar una estancia sin precio por noche');
     }
     alojamiento = aCentimo(totalNoches);
-    tarifaEfectiva = aCentimo(totalNoches / noches);
-    desgloseNoches = serie.map((f) => ({
+  } else if (config) {
+    const totalNoches = serieBase.reduce((acc, f) => acc + (f.tarifa ?? 0), 0);
+    if (!(totalNoches > 0)) {
+      throw new Error('No se puede cotizar una estancia sin precio por noche');
+    }
+    alojamiento = aCentimo(totalNoches);
+    desgloseNoches = serieBase.map((f) => ({
       fecha: f.fecha,
       tarifa: aCentimo(f.tarifa ?? 0),
     }));
   } else {
-    tarifaEfectiva = aCentimo(Math.max(0, Number(entrada.tarifaPorNoche) || 0));
-    alojamiento = aCentimo(tarifaEfectiva * noches);
+    alojamiento = aCentimo(tarifaPlana * noches);
   }
+
+  const tarifaEfectiva = aCentimo(alojamiento / noches);
 
   const total = aCentimo(alojamiento + limpieza);
 

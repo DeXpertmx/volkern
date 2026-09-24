@@ -301,6 +301,61 @@ describe('cotizarEstancia — estacionalidad del plan (el mismo precio que ve el
     expect(con.desgloseNoches?.map((n) => n.tarifa)).toEqual([100, 120, 300, 100, 100]);
   });
 
+  it('la duración de la estancia (capa 2) descuenta cada noche y estrena desglose sin temporadas', () => {
+    const u = cotizarEstancia({
+      checkIn: '2026-09-10',
+      checkOut: '2026-09-15',
+      unidades: [
+        {
+          id: 'u1',
+          tarifaNoche: 100,
+          moneda: 'MXN',
+          ajustes: { duracion: [{ desdeNoches: 5, porcentaje: -10, nombre: '5 noches' }] },
+        },
+      ],
+      reservas: [],
+    }).unidades[0];
+
+    expect(u.precioTotal).toBe(450);
+    expect(u.desgloseNoches?.map((n) => n.tarifa)).toEqual([90, 90, 90, 90, 90]);
+    // La tarifa de la capa 1 queda a la vista: el descuento es sobre el precio
+    // publicado, no un precio nuevo sin origen.
+    expect(u.desgloseNoches?.[0].base).toBe(100);
+    expect(u.desgloseNoches?.[0].ajustes).toEqual([
+      { tipo: 'duracion', porcentaje: -10, nombre: '5 noches' },
+    ]);
+  });
+
+  it('la ocupación llega en el mapa de demanda y es la misma para todas las unidades', () => {
+    const c = cotizarEstancia({
+      checkIn: '2026-09-10',
+      checkOut: '2026-09-13', // noches 10, 11 y 12
+      unidades: [
+        { id: 'a', tarifaNoche: 100, moneda: 'MXN', ajustes: { ocupacion: [{ desdePorcentaje: 80, porcentaje: 20 }] } },
+        { id: 'b', tarifaNoche: 100, moneda: 'MXN', ajustes: { ocupacion: [{ desdePorcentaje: 80, porcentaje: 20 }] } },
+      ],
+      reservas: [],
+      ocupacionPorNoche: { '2026-09-11': 80 },
+    });
+
+    expect(c.unidades[0].precioTotal).toBe(320);
+    expect(c.unidades[0].desgloseNoches?.map((n) => n.tarifa)).toEqual([100, 120, 100]);
+    // La demanda es de la propiedad: las dos unidades ven el mismo mapa.
+    expect(c.unidades[1].precioTotal).toBe(320);
+  });
+
+  it('sin ajustes, la cotización es la de siempre (contrato de la página intacto)', () => {
+    const u = cotizarEstancia({
+      checkIn: '2026-09-10',
+      checkOut: '2026-09-13',
+      unidades: [{ id: 'u1', tarifaNoche: 100, moneda: 'MXN' }],
+      reservas: [],
+      ocupacionPorNoche: { '2026-09-11': 100 },
+    }).unidades[0];
+    expect(u.precioTotal).toBe(300);
+    expect(u.desgloseNoches).toBeNull();
+  });
+
   it('una temporada no vuelve vendible una unidad sin precio base', () => {
     // Misma regla que el asistente: sin tarifa del plan no hay precio del que
     // partir, y una temporada suelta no es una tarifa publicada.

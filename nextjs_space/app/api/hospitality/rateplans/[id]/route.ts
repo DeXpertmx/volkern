@@ -7,6 +7,7 @@ import { authenticateRequest } from '@/lib/api-key-auth';
 import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
 import { monedaEscritura } from '@/lib/moneda';
 import { normalizarEstacionalidad } from '@/lib/hospitality/estacionalidad';
+import { normalizarAjustes, pidenAjustes } from '@/lib/hospitality/ajustes';
 /**
  * PATCH /api/hospitality/rateplans/[id] — editar tarifa/restricciones.
  * DELETE /api/hospitality/rateplans/[id] — eliminar plan.
@@ -79,6 +80,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       }
       data.temporadas = estacionalidad?.temporadas ?? null;
       data.finDeSemana = estacionalidad?.finDeSemana ?? null;
+    }
+    // Ajustes (capa 2): antelación, ocupación y duración. Se normalizan una vez
+    // y se guardan canónicos; mandar listas vacías limpia la capa y el plan
+    // vuelve a cotizar con la sola tarifa de la capa 1.
+    if (body.ajustes !== undefined) {
+      const ajustes = normalizarAjustes(body.ajustes);
+      if (pidenAjustes(body.ajustes) && !ajustes) {
+        return NextResponse.json(
+          {
+            error:
+              'Hay ajustes con datos inválidos (porcentaje ≠ 0 y entre -90 y 500, días/ocupación/noches coherentes)',
+          },
+          { status: 400 }
+        );
+      }
+      data.ajustes = ajustes ?? null;
     }
     if (body.activo !== undefined) data.activo = body.activo === true;
 

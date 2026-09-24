@@ -5,13 +5,12 @@
  * SIEMPRE el Availability Engine central (`unitAvailability`): este módulo
  * no reimplementa ninguna regla de ocupación (guardia de "un solo motor").
  *
- * Precio: la tarifa del rate plan activo de la unidad (la tarifa por noche ya
- * vive en `HospitalityRatePlan.tarifa`, sincronizada con el canal) multiplicada
- * por las noches — y, cuando el plan tiene **estacionalidad**, la suma noche a
- * noche con las MISMAS reglas que el resto del sistema (`./estacionalidad`, el
- * módulo que también tarifica el asistente y el push de canales). Con
- * temporadas el detalle viaja en `desgloseNoches`: la media del rango no es
- * ningún precio real y nadie la paga.
+ * Precio: lo calcula el motor de tarificación (`./pricing`), el MISMO que usa el
+ * asistente: capa 1 (la tarifa del rate plan, o la de cada fecha si el plan
+ * tiene temporadas) y capa 2 (antelación, ocupación y duración). Aquí no se suma
+ * nada a mano — dos sumas distintas es exactamente la discrepancia
+ * página-vs-reserva que este sistema evita. El detalle noche a noche viaja en
+ * `desgloseNoches`: la media del rango no es ningún precio real y nadie la paga.
  * Restricciones del plan: `minNoches`, `maxNoches` y días de llegada/salida.
  *
  * Cada unidad cotiza con las restricciones de SU plan (`unidades[].ratePlan`),
@@ -24,7 +23,11 @@
 
 import { unitAvailability, type ActiveReservationSpan, type ActiveUnitBlockSpan } from './availability';
 import { startOfDay, toIsoDate } from './calendar';
-import { serieDeTarifas, tieneEstacionalidad, totalDeSerie } from './estacionalidad';
+import {
+  cotizarEstancia as cotizarTarifa,
+  type Cotizacion as CotizacionTarifa,
+  type NocheCotizada,
+} from './pricing';
 
 export const CANAL_BOOKING_ENGINE = 'Directa';
 
@@ -56,10 +59,22 @@ export interface CotizacionInput {
      * precio se suma noche a noche; ausente → noches × tarifa, como siempre.
      */
     estacionalidad?: unknown;
+    /**
+     * Ajustes del plan de la unidad (capa 2: antelación, ocupación, duración;
+     * Json crudo). Modifican la tarifa por noche que resolvió la capa 1.
+     */
+    ajustes?: unknown;
   }>;
   reservas: ActiveReservationSpan[];
   bloques?: ActiveUnitBlockSpan[];
   ratePlan?: RestriccionesVenta | null;
+  /**
+   * Ocupación (%) de cada noche del rango, indexada por fecha ISO local. La
+   * calcula el Availability Engine (`ocupacionPorNoche`) y es la misma para
+   * todas las unidades: es la demanda de la propiedad, no de la habitación.
+   * Sin mapa, la regla de ocupación no aplica.
+   */
+  ocupacionPorNoche?: Record<string, number> | null;
 }
 
 /**
@@ -96,11 +111,12 @@ export interface CotizacionUnidad {
   noches: number;
   precioTotal: number | null;
   /**
-   * Precio por noche con su fecha cuando el plan tiene estacionalidad (`null`
-   * en el cálculo plano, que no necesita desglose): es lo que la página enseña
-   * noche a noche en vez de una media que nadie cobra.
+   * Precio por noche con su fecha (y el ajuste que lo movió, si lo hubo) cuando
+   * la estancia no cuesta la tarifa plana; `null` en el cálculo plano, que no
+   * necesita desglose. Es lo que la página enseña noche a noche en vez de una
+   * media que nadie cobra.
    */
-  desgloseNoches: Array<{ fecha: string; tarifa: number }> | null;
+  desgloseNoches: NocheCotizada[] | null;
   moneda: string;
 }
 
@@ -188,42 +204,41 @@ export function cotizarEstancia(input: CotizacionInput): Cotizacion {
     if (checkOutDias && !checkOutDias.includes(diaSalida)) {
       return sinVender(u, 'dia_checkout');
     }
-    // 3) Precio: la tarifa del plan por cada noche.
+    // 3) Precio: el motor único de tarificación, con la capa 1 (la tarifa de
+    //    cada noche) y la capa 2 (antelación, ocupación de esa noche y duración
+    //    de la estancia). El mismo que cotiza el asistente y el que guarda la
+    //    reserva: aquí no se multiplica nada a mano.
     if (u.tarifaNoche == null || u.tarifaNoche <= 0) {
       return sinVender(u, 'sin_tarifa');
     }
 
-    // Con estacionalidad, la noche cuesta la tarifa de SU fecha (temporada, o
-    // recargo de fin de semana) y el total es la suma de la serie: el mismo
-    // cálculo del asistente y del push, hecho por el mismo módulo. Se devuelve
-    // el detalle noche a noche para que la página pueda enseñarlo en vez de una
-    // media que nadie paga.
-    if (tieneEstacionalidad(u.estacionalidad)) {
-      const tarifasPorNoche = serieDeTarifas({
-        desde: inicio,
-        hasta: fin,
-        tarifaBase: u.tarifaNoche,
-        plan: { tarifa: u.tarifaNoche, estacionalidad: u.estacionalidad },
-      });
-      const precioTotal = totalDeSerie(tarifasPorNoche);
-      if (precioTotal === null) {
-        return sinVender(u, 'sin_tarifa');
-      }
-      return {
-        unitId: u.id,
-        disponible: true,
-        noches: nNoches,
-        precioTotal,
-        desgloseNoches: tarifasPorNoche.map((f) => ({
-          fecha: f.fecha,
-          tarifa: Math.round((f.tarifa ?? 0) * 100) / 100,
-        })),
+    let precio: CotizacionTarifa;
+    try {
+      precio = cotizarTarifa({
+        checkIn: inicio,
+        checkOut: fin,
+        tarifaPorNoche: u.tarifaNoche,
+        estacionalidad: u.estacionalidad,
+        ajustes: u.ajustes,
+        ocupacionPorNoche: input.ocupacionPorNoche ?? null,
+        limpieza: 0,
+        anticipoPorcentaje: 0,
         moneda: u.moneda,
-      };
+      });
+    } catch {
+      // El motor lanza cuando ninguna noche queda con precio (nunca vende a 0):
+      // una unidad sin tarifa utilizable no se publica.
+      return sinVender(u, 'sin_tarifa');
     }
 
-    const precioTotal = Math.round(u.tarifaNoche * nNoches * 100) / 100;
-    return { unitId: u.id, disponible: true, noches: nNoches, precioTotal, desgloseNoches: null, moneda: u.moneda };
+    return {
+      unitId: u.id,
+      disponible: true,
+      noches: nNoches,
+      precioTotal: precio.alojamiento,
+      desgloseNoches: precio.desgloseNoches,
+      moneda: u.moneda,
+    };
   });
 
   const monedas = new Set(unidades.map((u) => u.moneda));

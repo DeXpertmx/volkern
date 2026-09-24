@@ -49,6 +49,7 @@ import {
   type Idioma,
 } from '@/lib/hospitality/booking-i18n';
 import { formatearImporte } from '@/lib/moneda';
+import { porcentajeTotalDeAjustes, type AjusteAplicado } from '@/lib/hospitality/ajustes';
 import { textosResena } from '@/lib/hospitality/resenas-i18n';
 import type { ResenaPublica } from '@/lib/hospitality/resenas';
 import type { ExtraPublico } from '@/lib/hospitality/booking-extras';
@@ -84,11 +85,17 @@ interface UnidadCotizada extends UnidadCatalogo {
   noches: number;
   precioTotal: number | null;
   /**
-   * Precio por noche con su fecha cuando el plan tiene temporadas (el motor la
-   * devuelve solo en ese caso). Con temporadas la página lista las noches; la
-   * media por noche no es ningún precio que el huésped vaya a pagar.
+   * Precio por noche con su fecha cuando la estancia no cuesta la tarifa plana:
+   * temporadas y/o ajustes por demanda (el motor la devuelve solo en ese caso).
+   * Entonces la página lista las noches; la media por noche no es ningún precio
+   * que el huésped vaya a pagar.
    */
-  desgloseNoches?: Array<{ fecha: string; tarifa: number }> | null;
+  desgloseNoches?: Array<{
+    fecha: string;
+    tarifa: number;
+    base?: number;
+    ajustes?: AjusteAplicado[];
+  }> | null;
 }
 
 /**
@@ -136,6 +143,19 @@ function hoyMas(dias: number): string {
   const d = new Date();
   d.setDate(d.getDate() + dias);
   return d.toISOString().slice(0, 10);
+}
+
+/** Efecto total de los ajustes de una noche, con su signo («−15 %»). */
+function etiquetaAjustes(ajustes: AjusteAplicado[]): string {
+  const total = porcentajeTotalDeAjustes(ajustes);
+  return `${total > 0 ? '+' : ''}${total} %`;
+}
+
+/** Detalle por regla del ajuste de una noche (el `title` de la etiqueta). */
+function tituloAjustes(ajustes: AjusteAplicado[]): string {
+  return ajustes
+    .map((a) => `${a.nombre || a.tipo}: ${a.porcentaje > 0 ? '+' : ''}${a.porcentaje} %`)
+    .join(' · ');
 }
 
 export default function BookingPublico() {
@@ -434,8 +454,18 @@ function BookingCliente() {
                       <ul className="mt-1 space-y-1 text-xs">
                         {u.desgloseNoches.map((noche) => (
                           <li key={noche.fecha} className="flex justify-between gap-3">
-                            <span className="text-muted-foreground">
+                            <span className="flex items-center gap-1.5 text-muted-foreground">
                               {fechaLarga(fechaDeNoche(noche.fecha), idioma) || noche.fecha}
+                              {/* Noche movida por las reglas del plan: el huésped
+                                  ve cuánto, y el detalle por regla en el title. */}
+                              {noche.ajustes && noche.ajustes.length > 0 ? (
+                                <span
+                                  className="rounded bg-background px-1 text-[10px] font-medium text-foreground"
+                                  title={tituloAjustes(noche.ajustes)}
+                                >
+                                  {etiquetaAjustes(noche.ajustes)}
+                                </span>
+                              ) : null}
                             </span>
                             <span className="font-medium">{moneda(noche.tarifa, u.moneda)}</span>
                           </li>

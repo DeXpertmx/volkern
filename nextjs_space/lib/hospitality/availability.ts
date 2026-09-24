@@ -30,6 +30,9 @@ export interface AvailabilityUnit {
   estado: string;
 }
 
+/** Estados que sacan una unidad del inventario vendible (ni se vende ni cuenta). */
+export const ESTADOS_FUERA_DE_VENTA = ['maintenance', 'out_of_service'];
+
 export interface ActiveReservationSpan {
   unitId: string | null;
   checkIn: Date;
@@ -142,7 +145,7 @@ export function availabilityByRoomCode(
     for (const unit of units) {
       if (!unit.roomCode) continue; // sin mapping externo: no participa
       // Estados que sacan la unidad del inventario vendible
-      if (['maintenance', 'out_of_service'].includes(unit.estado)) continue;
+      if (ESTADOS_FUERA_DE_VENTA.includes(unit.estado)) continue;
       const unavailable = unitUnavailableOnDay(unit.id, cursor, reservations, blocks);
       const current = rooms.get(unit.roomCode) ?? 0;
       rooms.set(unit.roomCode, current + (unavailable ? 0 : 1));
@@ -154,6 +157,47 @@ export function availabilityByRoomCode(
         available,
       })),
     });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return out;
+}
+
+/**
+ * Ocupación diaria de una propiedad dentro de un rango [start, end): por cada
+ * fecha, el % de unidades **vendibles** que ya no están libres.
+ *
+ * Es la lectura de demanda que consume el pricing dinámico (capa 2, regla de
+ * ocupación): la propiedad medio vacía justifica un precio más bajo y las
+ * últimas habitaciones, uno más alto. Se calcula con la MISMA regla de
+ * ocupación del engine (`unitUnavailableOnDay`): aquí no hay una segunda forma
+ * de decidir si una unidad está libre. Una unidad bloqueada tampoco está en
+ * venta, así que cuenta igual que una ocupada — el porcentaje mide cuánta
+ * habitación le queda al hotel, no cuánta demanda hay en el mercado.
+ *
+ * Las unidades en mantenimiento o fuera de servicio no entran en el
+ * denominador. Sin unidades vendibles devuelve un mapa vacío: **sin dato, la
+ * regla de ocupación no aplica** (mejor que inventarse un 0 %).
+ */
+export function ocupacionPorNoche(
+  units: AvailabilityUnit[],
+  start: Date,
+  end: Date,
+  reservations: ActiveReservationSpan[],
+  blocks: ActiveUnitBlockSpan[] = []
+): Record<string, number> {
+  const vendibles = units.filter((u) => !ESTADOS_FUERA_DE_VENTA.includes(u.estado));
+  const out: Record<string, number> = {};
+  if (vendibles.length === 0) return out;
+
+  const cursor = startOfDay(start);
+  const last = startOfDay(end);
+  while (cursor.getTime() < last.getTime()) {
+    const ocupadas = vendibles.filter((u) =>
+      unitUnavailableOnDay(u.id, cursor, reservations, blocks)
+    ).length;
+    // Un decimal basta para comparar con los tramos configurados, y evita
+    // porcentajes con cola de coma flotante (33.33333333333333).
+    out[toIsoDate(cursor)] = Math.round((ocupadas / vendibles.length) * 1000) / 10;
     cursor.setDate(cursor.getDate() + 1);
   }
   return out;

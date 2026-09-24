@@ -8,6 +8,7 @@ import { authenticateRequest } from '@/lib/api-key-auth';
 import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
 import { primeraMoneda, monedaEscritura } from '@/lib/moneda';
 import { normalizarEstacionalidad } from '@/lib/hospitality/estacionalidad';
+import { normalizarAjustes, pidenAjustes } from '@/lib/hospitality/ajustes';
 /**
  * Planes de tarifa y restricciones de venta (plan maestro §6, §15).
  *
@@ -61,7 +62,7 @@ export async function POST(req: NextRequest) {
 
     const tenantId = auth.tenant!.id;
     const body = await req.json().catch(() => ({}));
-    const { propertyId, unitId, nombre, codigo, tarifa, moneda, minNoches, maxNoches, checkInDias, checkOutDias, activo, temporadas, finDeSemana } = body;
+    const { propertyId, unitId, nombre, codigo, tarifa, moneda, minNoches, maxNoches, checkInDias, checkOutDias, activo, temporadas, finDeSemana, ajustes } = body;
 
     if (!propertyId || !unitId || !nombre || tarifa == null) {
       return NextResponse.json(
@@ -93,6 +94,19 @@ export async function POST(req: NextRequest) {
     ) {
       return NextResponse.json(
         { error: 'El recargo de fin de semana es inválido (días 0-6, porcentaje > 0)' },
+        { status: 400 }
+      );
+    }
+    // Capa 2: se normaliza aquí y se guarda canónica, igual que la capa 1. Un
+    // tramo con datos imposibles descarta la regla entera; si el cliente pedía
+    // reglas y no queda ninguna, es un error suyo y no un plan sin ajustes.
+    const ajustesLimpios = normalizarAjustes(ajustes);
+    if (pidenAjustes(ajustes) && !ajustesLimpios) {
+      return NextResponse.json(
+        {
+          error:
+            'Hay ajustes con datos inválidos (porcentaje ≠ 0 y entre -90 y 500, días/ocupación/noches coherentes)',
+        },
         { status: 400 }
       );
     }
@@ -132,6 +146,9 @@ export async function POST(req: NextRequest) {
           : Prisma.JsonNull,
         finDeSemana: estacionalidad?.finDeSemana
           ? (estacionalidad.finDeSemana as unknown as Prisma.InputJsonValue)
+          : Prisma.JsonNull,
+        ajustes: ajustesLimpios
+          ? (ajustesLimpios as unknown as Prisma.InputJsonValue)
           : Prisma.JsonNull,
         activo: activo !== false,
       },
