@@ -6,6 +6,7 @@ import { authenticateRequest } from '@/lib/api-key-auth';
 
 import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
 import { monedaEscritura } from '@/lib/moneda';
+import { normalizarEstacionalidad } from '@/lib/hospitality/estacionalidad';
 /**
  * PATCH /api/hospitality/rateplans/[id] — editar tarifa/restricciones.
  * DELETE /api/hospitality/rateplans/[id] — eliminar plan.
@@ -53,6 +54,31 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
     if (body.checkOutDias !== undefined) {
       data.checkOutDias = Array.isArray(body.checkOutDias) && body.checkOutDias.length ? body.checkOutDias : null;
+    }
+    // Estacionalidad: los dos capas viajan juntas (el UI las edita en el mismo
+    // formulario), se normalizan una vez y se guardan canónicas. Enviar un
+    // array vacío de temporadas limpia la capa (vuelve a la tarifa plana).
+    if (body.temporadas !== undefined || body.finDeSemana !== undefined) {
+      const estacionalidad = normalizarEstacionalidad({
+        temporadas: body.temporadas ?? [],
+        finDeSemana: body.finDeSemana ?? null,
+      });
+      const pideTemporadas = Array.isArray(body.temporadas) && body.temporadas.length > 0;
+      const pideFinDe = body.finDeSemana != null && typeof body.finDeSemana === 'object' && Array.isArray(body.finDeSemana.dias) && body.finDeSemana.dias.length > 0;
+      if (pideTemporadas && !estacionalidad?.temporadas) {
+        return NextResponse.json(
+          { error: 'Hay temporadas con datos inválidos (fechas YYYY-MM-DD, hasta ≥ desde, tarifa > 0)' },
+          { status: 400 }
+        );
+      }
+      if (pideFinDe && !estacionalidad?.finDeSemana) {
+        return NextResponse.json(
+          { error: 'El recargo de fin de semana es inválido (días 0-6, porcentaje > 0)' },
+          { status: 400 }
+        );
+      }
+      data.temporadas = estacionalidad?.temporadas ?? null;
+      data.finDeSemana = estacionalidad?.finDeSemana ?? null;
     }
     if (body.activo !== undefined) data.activo = body.activo === true;
 

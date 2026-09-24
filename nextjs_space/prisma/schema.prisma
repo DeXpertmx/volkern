@@ -8252,6 +8252,16 @@ model HospitalityRatePlan {
   // null o [] = sin restricción de día.
   checkInDias   Json?
   checkOutDias  Json?
+  // Estacionalidad (capa 1 del pricing): configuración por fecha del precio.
+  // `temporadas`: rangos {desde, hasta, tarifa, nombre?} con precio ABSOLUTO
+  // por noche; `finDeSemana`: {dias: number[], porcentaje} recargo sobre la
+  // tarifa de noches SIN temporada. La regla central: el precio se aplica por
+  // NOCHE (la noche cuesta la tarifa de su fecha), y un plan sin ninguna de
+  // las dos capas sigue cotizando con su `tarifa` plana de siempre. El Json se
+  // normaliza con normalizarEstacionalidad() antes de usarse: un rango
+  // malformado se descarta, nunca tumba una cotización.
+  temporadas    Json?
+  finDeSemana   Json?
   activo        Boolean   @default(true)
   fechaCreacion DateTime  @default(now())
   fechaEdicion  DateTime  @updatedAt
