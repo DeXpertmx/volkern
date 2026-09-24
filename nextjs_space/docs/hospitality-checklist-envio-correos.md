@@ -45,3 +45,73 @@ Fuente: [`hospitality-email-proveedor-conectividad.md`](./hospitality-email-prov
   cliente; en el correo al proveedor sí se habla de su API con naturalidad.
 - Ambos envíos son independientes: se pueden enviar el mismo día; el proveedor
   no espera al cliente ni viceversa.
+
+---
+
+## Plantilla de recordatorio — Cliente (día 7)
+
+> Responder **encima del mismo hilo**. Se copia tal cual salvo la fecha entre
+> corchetes. Sin adjuntos, sin nuevos pedidos: solo reabrir el hilo y bajar la
+> fricción ofreciendo la llamada.
+
+**Asunto:** Re: Alta de la plataforma — últimos pasos para comunicar los partes de viajeros al Ministerio
+
+Hola [nombre]:
+
+Te escribo por si se nos había perdido el correo de la semana pasada — te lo
+vuelvo a dejar resumido aquí abajo. Son los datos que solo vosotros podéis
+solicitar para que los partes de viajeros puedan comunicarse al Ministerio:
+
+1. El alta en la Sede Electrónica y las credenciales de **pruebas** del
+   servicio de comunicaciones.
+2. Los tres códigos del establecimiento (arrendador, aplicación y
+   establecimiento; una pareja por propiedad si hay varias).
+3. El documento técnico **XSD** que os entreguen con el alta — este es el que
+   nos falta para terminar por nuestra parte.
+
+Con eso montamos la prueba en un día. Si alguno de los pasos de la Sede
+Electrónica se hace lío, lo vemos juntos por pantalla compartida en una llamada
+de media hora — dime cuándo te viene bien y te lanzo la invitación.
+
+Un saludo,
+[Firma]
+
+*(Debajo queda el correo original completo.)*
+
+---
+
+## Plantilla de recordatorio — Proveedor (día 5 hábil)
+
+> Responder **encima del mismo hilo**, en inglés. Se copia tal cual salvo la
+> fecha entre corchetes. Solo cita **A y B** (lo que nos bloquea) y las deja
+> contestables inline sin reabrir el adjunto.
+
+**Subject:** Re: Volkern (PMS) — channel manager integration: A and B (the two blocking questions)
+
+Hi [name]:
+
+Following up on our email from [fecha de envío] — no rush on the rest, but
+**questions A and B are the only ones blocking our go-live**, so we'd appreciate
+answers to those first. Inline, so you can reply in place:
+
+**A. Access (3 short answers):**
+1. Production base URL, byte-for-byte (we need the `/api/v2/cm` prefix in writing).
+2. Our partner ID (the `{pms}` segment), or the date you will issue it.
+3. Production Basic Auth username + password (separate from sandbox), and your
+   rotation procedure.
+
+**B. Mapping (2 short answers):**
+7. Should `hotelCode` be the OTA hotel ID or an ID your platform issues?
+12. Are the `roomCode` / `rateplanCode` values from `property_details` the same
+    codes your webhook sends in bookings, and are they **stable** over time?
+
+(The full 36-question list and the integration contract are in the thread below.)
+
+With A and B we can configure the first property and push to your sandbox the
+same day. Happy to take any of these live on a short call if that's easier.
+
+Best regards,
+[name]
+[role] · Volkern
+
+*(Debajo queda el correo original completo, con el adjunto ya entregado.)*
