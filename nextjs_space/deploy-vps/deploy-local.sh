@@ -114,23 +114,28 @@ $SSH "$VPS" "mkdir -p /root/deploy-vps" >/dev/null 2>&1 || true
 $SCP $TARBALLS "$VPS:/tmp/"
 # Los scripts del repo son la fuente de verdad; se sincronizan en cada deploy
 $SCP deploy-vps/deploy-app.sh deploy-vps/run-migrations.sh "$VPS:/root/deploy-vps/"
-# El auditor de superficie tambien se sincroniza (el repo manda sobre la
-# copia del VPS) y su identidad se verifica abajo, antes de tocar nada más.
-$SCP deploy-vps/auditar-superficie.sh "$VPS:/root/auditar-superficie.sh"
-$SSH "$VPS" "chmod 700 /root/auditar-superficie.sh"
+# Los centinelas de seguridad del VPS se sincronizan (el repo manda sobre
+# la copia del VPS) y su identidad se verifica abajo, antes de tocar nada.
+for s in auditar-superficie.sh vigilar-crons-heredados.sh; do
+  $SCP "deploy-vps/$s" "$VPS:/root/$s"
+  $SSH "$VPS" "chmod 700 /root/$s"
+done
 
-# Verificación de identidad repo↔VPS del auditor: si las reglas del baseline
-# derivan entre copias, el cron horario del VPS compararía contra un runbook
-# viejo y la deriva real pasaría como conforme (docs/VPS-SEGURIDAD-PUERTOS.md §10).
-LOCAL_SHA=$(sha256sum deploy-vps/auditar-superficie.sh | cut -d' ' -f1)
-REMOTE_SHA=$($SSH "$VPS" "sha256sum /root/auditar-superficie.sh | cut -d' ' -f1")
-if [ "$LOCAL_SHA" != "$REMOTE_SHA" ]; then
-  echo "✗ El auditar-superficie.sh del VPS NO es idéntico al del repo" >&2
-  echo "  repo=$LOCAL_SHA  vps=$REMOTE_SHA" >&2
-  echo "  No se continúa: sincroniza la copia y revisa quién la cambió en el VPS." >&2
-  exit 1
-fi
-echo "   · auditar-superficie.sh repo↔VPS idéntico (${LOCAL_SHA:0:12}…)"
+# Verificación de identidad repo↔VPS de los centinelas: si las reglas del
+# baseline derivan entre copias, los crons del VPS compararían contra un
+# runbook viejo y la deriva real pasaría como conforme
+# (docs/VPS-SEGURIDAD-PUERTOS.md §10–§11).
+for s in auditar-superficie.sh vigilar-crons-heredados.sh; do
+  LOCAL_SHA=$(sha256sum "deploy-vps/$s" | cut -d' ' -f1)
+  REMOTE_SHA=$($SSH "$VPS" "sha256sum /root/$s | cut -d' ' -f1")
+  if [ "$LOCAL_SHA" != "$REMOTE_SHA" ]; then
+    echo "✗ El $s del VPS NO es idéntico al del repo" >&2
+    echo "  repo=$LOCAL_SHA  vps=$REMOTE_SHA" >&2
+    echo "  No se continúa: sincroniza la copia y revisa quién la cambió en el VPS." >&2
+    exit 1
+  fi
+  echo "   · $s repo↔VPS idéntico (${LOCAL_SHA:0:12}…)"
+done
 
 # ═══════════════════════════════════════════════════════════════
 # 4. DEPLOY REMOTO (load → migraciones → update → verificar → limpiar)
