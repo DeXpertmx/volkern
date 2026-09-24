@@ -102,15 +102,15 @@ $PGBIN/pg_ctl -D "$PGDATA" stop && rm -rf "$PGDATA"
 ```
 
 Se usó `db push` y **no** `migrate deploy` por un defecto real encontrado en ese
-momento: **la serie de migraciones no se puede reproducir desde cero**.
-`prisma/migrations/0_init/migration.sql` y
-`20260907_add_platform_whatsapp_instance/migration.sql` crean la misma tabla
-(`platform_whatsapp_instances`), así que `migrate deploy` sobre una base vacía
-falla con `42P07: relation already exists` en la segunda. Producción no lo nota
-porque está baselinada, pero un entorno nuevo (o el trabajo de deriva de
-`db:verify` con shadow DB) sí. Arreglarlo es una tarea de higiene de migraciones
-aparte: requiere decidir si el `20260907_*` se absorbe en `0_init` dejando
-constancia de que producción ya lo tiene registrado.
+momento: **la serie de migraciones no se podía reproducir desde cero** (el
+baseline `0_init` tenía 10 carpetas duplicadas que morían con `42P07`). **Ya
+está arreglado** (24 sep 2026): la serie completa se aplica con `migrate
+deploy` desde cero y lo congela el job de CI `migrations.yml` + la guardia
+`tests/migraciones-serie.test.ts`. Hoy el ensayo puede usar el camino real:
+
+```bash
+DATABASE_URL="postgresql://postgres@127.0.0.1:5459/volkern_e2e" npx prisma migrate deploy
+```
 
 Tras el ensayo, todas las tablas de Hospitality quedaron a cero (tenants,
 propiedades, unidades, reservas, mappings, eventos y contactos): la limpieza se
