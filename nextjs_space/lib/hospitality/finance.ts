@@ -21,7 +21,13 @@
 
 import { monedaEscritura } from '@/lib/moneda';
 
-export type LineaTipo = 'alojamiento' | 'limpieza' | 'extra' | 'otro' | 'penalizacion';
+/**
+ * Tipos de línea del desglose. `fianza` es la garantía registrada del huésped
+ * (módulo `./fianza`): es un depósito, no un ingreso — `calcularBruto` la
+ * aparta igual que la penalización y su retención real se lee con
+ * `calcularFianzaRetenida`.
+ */
+export type LineaTipo = 'alojamiento' | 'limpieza' | 'extra' | 'otro' | 'penalizacion' | 'fianza';
 
 export type PagoMetodo = 'stripe' | 'transferencia' | 'efectivo' | 'manual' | 'otro';
 
@@ -124,7 +130,7 @@ export function normalizarLinea(linea: {
 export function calcularBruto(lineas: LineaReserva[]): number {
   return redondear(
     lineas
-      .filter((linea) => linea.tipo !== 'penalizacion')
+      .filter((linea) => linea.tipo !== 'penalizacion' && linea.tipo !== 'fianza')
       .reduce((total, linea) => total + (linea.importeTotal || 0), 0)
   );
 }
@@ -141,6 +147,35 @@ export function calcularBruto(lineas: LineaReserva[]): number {
 export function totalDeLineas(lineas: LineaReserva[]): number {
   return redondear(
     lineas.reduce((total, linea) => total + (linea.importeTotal || 0), 0)
+  );
+}
+
+/**
+ * Garantía registrada del huésped (líneas `tipo: 'fianza'`), tal como está:
+ * pendiente, cobrada o devuelta. Es la cifra del DEPÓSITO — lo que el hotel
+ * tiene en manos del huésped o le debe devolver. Nunca entra al bruto: es
+ * dinero del huésped, no ingreso de la estancia.
+ */
+export function calcularFianza(lineas: LineaReserva[]): number {
+  return redondear(
+    lineas
+      .filter((linea) => linea.tipo === 'fianza')
+      .reduce((total, linea) => total + (linea.importeTotal || 0), 0)
+  );
+}
+
+/**
+ * Fianza RETENIDA por daños: la línea cuyo concepto dice "aplicada a daños",
+ * con el importe ya reducido a lo efectivamente retenido. Esa parte sí es
+ * ingreso — la factura el ERP — y por eso se lee aparte del depósito: el
+ * informe puede mostrar "retenido 120 de 200" sin que el bruto del período
+ * se mueva hasta que la factura exista.
+ */
+export function calcularFianzaRetenida(lineas: LineaReserva[]): number {
+  return redondear(
+    lineas
+      .filter((linea) => linea.tipo === 'fianza' && linea.concepto.includes('aplicada a daños'))
+      .reduce((total, linea) => total + (linea.importeTotal || 0), 0)
   );
 }
 
