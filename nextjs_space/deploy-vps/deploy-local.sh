@@ -73,7 +73,16 @@ if [ "$SKIP_BUILD" = "1" ]; then
   echo "→ [1/5] Build: omitido (--skip-build). Usando imágenes ya construidas."
 else
   echo ""
-  echo "→ [1/5] Build de volkern-erp:latest${SKIP_MIGRATOR:+ (sin migrator)} (puede tardar 10-20 min) ..."
+  # Ojo con `${SKIP_MIGRATOR:+…}`: la variable es 0/1, así que con "0" (el
+  # migrator SÍ se construye) la expansión también imprimía «sin migrator» y la
+  # línea mentía sobre lo que se iba a construir. Se decide por valor, no por
+  # estar definida.
+  if [ "$SKIP_MIGRATOR" = "1" ]; then
+    MIGRATOR_SUFIJO=" (sin migrator)"
+  else
+    MIGRATOR_SUFIJO=" (con migrator)"
+  fi
+  echo "→ [1/5] Build de volkern-erp:latest${MIGRATOR_SUFIJO} (puede tardar 10-20 min) ..."
   if ! docker_cmd version >/dev/null 2>&1; then
     echo "✗ docker no accesible ni con sudo. Revisa el daemon." >&2
     exit 1
