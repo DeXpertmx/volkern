@@ -70,6 +70,11 @@ const REGLAS: Record<string, ReglaComando> = {
     campos: CAMPOS_TAREA,
     retirados: { Status: RETIRADO_STATUS_TAREA },
   },
+  // Columnas de `docker service ls` (no es el contexto de TAREA: aquí `.Name`
+  // es el nombre del servicio y `.Replicas` es «1/1», no hay `.Status`).
+  'service ls': {
+    campos: ['ID', 'Name', 'Mode', 'Replicas', 'Image', 'Ports'],
+  },
   'stack ps': {
     campos: CAMPOS_TAREA,
     retirados: { Status: RETIRADO_STATUS_TAREA },
