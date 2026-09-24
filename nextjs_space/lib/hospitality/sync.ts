@@ -408,6 +408,13 @@ function isNextDay(prev: string, next: string): boolean {
  * engine (la noche cuesta la tarifa de su fecha, módulo `./estacionalidad`)
  * y se segmenta en tramos de precio constante para minimizar bloques. Un plan
  * sin estacionalidad sigue empujando su bloque único de siempre.
+ *
+ * Lo que NO viaja: la capa 2 del precio (antelación, ocupación y duración del
+ * plan). Un calendario de tarifas por fecha no puede expresar «si se reserva
+ * con 30 días de antelación» ni «si la estancia es de 7 noches», así que el
+ * canal recibe la tarifa PUBLICADA y las reglas de demanda ajustan solo la
+ * reserva directa. Inventar aquí un calendario distinto sería un precio que el
+ * hotel no configuró.
  */
 export function buildRateUpdates(
   units: Array<{

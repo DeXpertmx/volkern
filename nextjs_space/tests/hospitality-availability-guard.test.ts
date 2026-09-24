@@ -24,6 +24,9 @@ const PRIMITIVAS = [
   'unitAvailability',
   'availabilityByRoomCode',
   'loadAvailabilityContext',
+  // Ocupación agregada (la demanda que mueve el precio de la capa 2): si cada
+  // consumidor la contara por su cuenta, el precio dependería de quién pregunte.
+  'ocupacionPorNoche',
 ];
 
 /** Directorios de código de servidor donde vive (o vivirá) la lógica. */

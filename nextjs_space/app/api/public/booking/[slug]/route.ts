@@ -18,7 +18,8 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
-import { loadAvailabilityContext } from '@/lib/hospitality/availability';
+import { loadAvailabilityContext, ocupacionPorNoche } from '@/lib/hospitality/availability';
+import { conceptoAlojamiento } from '@/lib/hospitality/pricing';
 import {
   cotizarEstancia,
   restriccionesDeRatePlan,
@@ -159,6 +160,17 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
     const contexto = await loadAvailabilityContext(prisma, propiedad.tenantId, propiedad.id, inicio, fin);
     const unidadesMap = new Map(unidades.map((u) => [u.id, u]));
 
+    // Ocupación por noche: es la demanda que consumen los tramos de ocupación de
+    // la capa 2. Se mide sobre TODO el inventario de la propiedad —no solo las
+    // unidades publicadas— y con la regla única del Availability Engine.
+    const ocupacion = ocupacionPorNoche(
+      contexto.units,
+      inicio,
+      fin,
+      contexto.reservations,
+      contexto.blocks
+    );
+
     const cotizacion = cotizarEstancia({
       checkIn,
       checkOut,
@@ -177,6 +189,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
             // noche (y la cotización baja con su desglose, que es lo que la
             // página enseña); sin ella el cálculo es el de siempre.
             estacionalidad: plan ? plan.temporadas ?? plan.finDeSemana : null,
+            // Ajustes del plan (capa 2): antelación, ocupación y duración.
+            ajustes: plan?.ajustes ?? null,
           };
         }),
       reservas: contexto.reservations.map((r) => ({
@@ -186,6 +200,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
         estado: r.estado,
       })),
       bloques: contexto.blocks,
+      ocupacionPorNoche: ocupacion,
     });
 
     const detalles = unidades.filter((u) => cotizacion.unidades.some((c) => c.unitId === u.id));
@@ -268,7 +283,16 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
     const ratePlan = unidad.ratePlans[0] || null;
 
     // Disponibilidad y precio, recalculados en el servidor con el motor central.
-    const contexto = await loadAvailabilityContext(prisma, tenantId, propiedad.id, new Date(`${checkIn}T00:00:00`), new Date(`${checkOut}T00:00:00`));
+    const inicioReserva = new Date(`${checkIn}T00:00:00`);
+    const finReserva = new Date(`${checkOut}T00:00:00`);
+    const contexto = await loadAvailabilityContext(prisma, tenantId, propiedad.id, inicioReserva, finReserva);
+    const ocupacion = ocupacionPorNoche(
+      contexto.units,
+      inicioReserva,
+      finReserva,
+      contexto.reservations,
+      contexto.blocks
+    );
     const cotizacion = cotizarEstancia({
       checkIn,
       checkOut,
@@ -277,9 +301,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
         tarifaNoche: ratePlan?.tarifa ?? unidad.tarifaBase ?? null,
         moneda: unidad.moneda,
         ratePlan: restriccionesDeRatePlan(ratePlan),
-        // Mismo precio que vio el huésped en la página: la reserva se cotiza
-        // con la estacionalidad del plan, no con la tarifa plana.
+        // Mismo precio que vio el huésped en la página: la reserva se cotiza con
+        // la estacionalidad del plan y con sus ajustes (capa 2), no con la
+        // tarifa plana.
         estacionalidad: ratePlan ? ratePlan.temporadas ?? ratePlan.finDeSemana : null,
+        ajustes: ratePlan?.ajustes ?? null,
       }],
       reservas: contexto.reservations.map((r) => ({
         unitId: r.unitId,
@@ -288,6 +314,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
         estado: r.estado,
       })),
       bloques: contexto.blocks,
+      ocupacionPorNoche: ocupacion,
     });
     const linea = cotizacion.unidades[0];
     if (!linea?.disponible) {
@@ -390,11 +417,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
         propertyId: propiedad.id,
         unitId: unidad.id,
         tipo: 'alojamiento',
-        // Con estacionalidad el importe sale de la suma noche a noche: la línea
-        // lo dice en vez de presentar una media como si fuera la tarifa.
-        concepto: linea.desgloseNoches
-          ? `Alojamiento · ${cotizacion.noches} noches — desglose por temporada`
-          : `Alojamiento · ${cotizacion.noches} noches`,
+        // La línea dice de dónde sale el importe —tarifa plana, temporada o
+        // temporada con ajustes— con la misma frase que escribe el motor nuevo.
+        concepto: `Alojamiento · ${conceptoAlojamiento({
+          noches: cotizacion.noches,
+          desgloseNoches: linea.desgloseNoches,
+        })}`,
         cantidad: 1,
         importeUnitario: linea.precioTotal!,
         importeTotal: linea.precioTotal!,

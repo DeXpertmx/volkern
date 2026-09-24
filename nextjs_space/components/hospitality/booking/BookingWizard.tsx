@@ -39,6 +39,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { formatearImporte } from '@/lib/moneda';
 import { toIsoDate } from '@/lib/hospitality/calendar';
+import { porcentajeTotalDeAjustes, type AjusteAplicado } from '@/lib/hospitality/ajustes';
 import {
   IDIOMAS,
   IDIOMA_POR_DEFECTO,
@@ -88,11 +89,16 @@ interface UnidadCotizadaUI {
   capacidad: number;
   tarifaPorNoche: number;
   /**
-   * Precio por noche con su fecha cuando el plan tiene temporadas (null = tarifa
-   * plana). El asistente no calcula nada: solo elige entre enseñar esta lista y
-   * enseñar la línea «N noches × tarifa».
+   * Precio por noche con su fecha cuando la estancia no cuesta la tarifa plana:
+   * temporadas y/o ajustes (null = tarifa plana). El asistente no calcula nada:
+   * solo elige entre enseñar esta lista y enseñar la línea «N noches × tarifa».
    */
-  desgloseNoches?: Array<{ fecha: string; tarifa: number }> | null;
+  desgloseNoches?: Array<{
+    fecha: string;
+    tarifa: number;
+    base?: number;
+    ajustes?: AjusteAplicado[];
+  }> | null;
   desglose: { alojamiento: number; limpieza: number; total: number; anticipo: number; saldo: number };
 }
 
@@ -431,8 +437,20 @@ export function BookingWizard({
                         {t.desglosePorNoche}
                       </div>
                       {u.desgloseNoches.map((noche) => (
-                        <div key={noche.fecha} className="flex justify-between text-muted-foreground">
-                          <span>{fechaLarga(fechaDeNoche(noche.fecha), idioma) || noche.fecha}</span>
+                        <div key={noche.fecha} className="flex justify-between gap-2 text-muted-foreground">
+                          <span className="flex items-center gap-1.5">
+                            {fechaLarga(fechaDeNoche(noche.fecha), idioma) || noche.fecha}
+                            {/* Noche movida por las reglas del plan: el huésped
+                                ve cuánto, y el detalle por regla en el title. */}
+                            {noche.ajustes && noche.ajustes.length > 0 ? (
+                              <span
+                                className="rounded bg-muted px-1 text-[10px] font-medium text-foreground"
+                                title={tituloAjustes(noche.ajustes)}
+                              >
+                                {etiquetaAjustes(noche.ajustes)}
+                              </span>
+                            ) : null}
+                          </span>
                           <span>{formatearImporte(noche.tarifa, moneda)}</span>
                         </div>
                       ))}
@@ -588,6 +606,19 @@ export function BookingWizard({
       ) : null}
     </div>
   );
+}
+
+/** Efecto total de los ajustes de una noche, con su signo («−15 %»). */
+function etiquetaAjustes(ajustes: AjusteAplicado[]): string {
+  const total = porcentajeTotalDeAjustes(ajustes);
+  return `${total > 0 ? '+' : ''}${total} %`;
+}
+
+/** Detalle por regla del ajuste de una noche (el `title` de la etiqueta). */
+function tituloAjustes(ajustes: AjusteAplicado[]): string {
+  return ajustes
+    .map((a) => `${a.nombre || a.tipo}: ${a.porcentaje > 0 ? '+' : ''}${a.porcentaje} %`)
+    .join(' · ');
 }
 
 /**

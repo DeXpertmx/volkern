@@ -136,6 +136,44 @@ describe('el asistente enseña la estancia en temporada noche a noche', () => {
     expect(screen.getAllByText(/4,000\.00/).length).toBeGreaterThan(0);
   });
 
+  it('la noche ajustada por las reglas del plan lleva su efecto, con el detalle por regla', async () => {
+    await cotizarCon({
+      ...UNIDAD_BASE,
+      tarifaPorNoche: 100,
+      desgloseNoches: [
+        {
+          fecha: '2026-09-19',
+          tarifa: 115,
+          base: 100,
+          ajustes: [{ tipo: 'antelacion', porcentaje: 15, nombre: 'Última hora' }],
+        },
+        {
+          fecha: '2026-09-20',
+          tarifa: 115,
+          base: 100,
+          ajustes: [{ tipo: 'antelacion', porcentaje: 15, nombre: 'Última hora' }],
+        },
+        {
+          fecha: '2026-09-21',
+          tarifa: 85,
+          base: 100,
+          ajustes: [{ tipo: 'duracion', porcentaje: -15, nombre: 'Semana completa' }],
+        },
+      ],
+      desglose: { alojamiento: 315, limpieza: 0, total: 315, anticipo: 0, saldo: 315 },
+    });
+
+    expect(await screen.findByText('Precio por noche')).toBeTruthy();
+    // El efecto total de los tramos que tocaron esa noche, con su signo.
+    expect(screen.getAllByText('+15 %')).toHaveLength(2);
+    expect(screen.getByText('-15 %')).toBeTruthy();
+    // Y el detalle por regla, para poder explicar de dónde sale el precio.
+    expect(screen.getAllByTitle('Última hora: +15 %')).toHaveLength(2);
+    expect(screen.getByTitle('Semana completa: -15 %')).toBeTruthy();
+    // Sigue sin enseñarse ninguna media por noche.
+    expect(screen.queryByText(/×/)).toBeNull();
+  });
+
   it('sin estacionalidad se enseña la línea de siempre, con el total del servidor', async () => {
     await cotizarCon({
       ...UNIDAD_BASE,

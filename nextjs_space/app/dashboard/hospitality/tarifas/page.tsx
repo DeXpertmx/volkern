@@ -19,6 +19,9 @@ import {
   CalendarRange,
   Power,
   Copy,
+  TrendingUp,
+  Clock,
+  Gauge,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -60,6 +63,7 @@ interface RatePlan {
   checkOutDias: number[] | null;
   temporadas?: unknown;
   finDeSemana?: unknown;
+  ajustes?: unknown;
   activo: boolean;
   unit?: { id: string; nombre: string; codigo: string | null };
   property?: { id: string; nombre: string };
@@ -70,6 +74,26 @@ interface TemporadaUI {
   desde: string;
   hasta: string;
   tarifa: string;
+  nombre: string;
+}
+
+/** Tramos de los ajustes (capa 2) en el formulario: los números son texto del input. */
+interface TramoAntelacionUI {
+  desdeDias: string;
+  hastaDias: string;
+  porcentaje: string;
+  nombre: string;
+}
+
+interface TramoOcupacionUI {
+  desdePorcentaje: string;
+  porcentaje: string;
+  nombre: string;
+}
+
+interface TramoDuracionUI {
+  desdeNoches: string;
+  porcentaje: string;
   nombre: string;
 }
 
@@ -94,6 +118,9 @@ const EMPTY_FORM = {
   temporadas: [] as TemporadaUI[],
   fwDias: [] as number[],
   fwPct: '',
+  antelacion: [] as TramoAntelacionUI[],
+  ocupacion: [] as TramoOcupacionUI[],
+  duracion: [] as TramoDuracionUI[],
 };
 
 /** Temporadas guardadas del plan (Json crudo) → filas del formulario. */
@@ -116,6 +143,54 @@ function finDeSemanaDePlan(plan: RatePlan): { dias: number[]; porcentaje: string
     dias: (fw.dias as number[]).filter((d) => typeof d === 'number'),
     porcentaje: fw.porcentaje != null ? String(fw.porcentaje) : '',
   };
+}
+
+/** Lista de tramos guardada en el Json, sin fiarse de su forma. */
+function listaDePlan(valor: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(valor)) return [];
+  return valor.filter(
+    (f) => f && typeof f === 'object' && !Array.isArray(f)
+  ) as Array<Record<string, unknown>>;
+}
+
+function comoTexto(valor: unknown): string {
+  return valor == null ? '' : String(valor);
+}
+
+/** Ajustes guardados del plan (Json crudo) → filas del formulario. */
+function ajustesDePlan(plan: RatePlan): {
+  antelacion: TramoAntelacionUI[];
+  ocupacion: TramoOcupacionUI[];
+  duracion: TramoDuracionUI[];
+} {
+  const raiz =
+    plan.ajustes && typeof plan.ajustes === 'object' && !Array.isArray(plan.ajustes)
+      ? (plan.ajustes as Record<string, unknown>)
+      : {};
+  return {
+    antelacion: listaDePlan(raiz.antelacion).map((t) => ({
+      desdeDias: comoTexto(t.desdeDias),
+      hastaDias: comoTexto(t.hastaDias),
+      porcentaje: comoTexto(t.porcentaje),
+      nombre: comoTexto(t.nombre),
+    })),
+    ocupacion: listaDePlan(raiz.ocupacion).map((t) => ({
+      desdePorcentaje: comoTexto(t.desdePorcentaje),
+      porcentaje: comoTexto(t.porcentaje),
+      nombre: comoTexto(t.nombre),
+    })),
+    duracion: listaDePlan(raiz.duracion).map((t) => ({
+      desdeNoches: comoTexto(t.desdeNoches),
+      porcentaje: comoTexto(t.porcentaje),
+      nombre: comoTexto(t.nombre),
+    })),
+  };
+}
+
+/** Cuántas reglas de la capa 2 tiene guardadas el plan. */
+function cuantosAjustes(plan: RatePlan): number {
+  const r = ajustesDePlan(plan);
+  return r.antelacion.length + r.ocupacion.length + r.duracion.length;
 }
 
 export default function HospitalityTarifasPage() {
@@ -187,6 +262,7 @@ export default function HospitalityTarifasPage() {
       conRestriccionNoches: plans.filter((p) => p.minNoches > 1 || (p.maxNoches != null && p.maxNoches > 0)).length,
       conRestriccionDias: plans.filter((p) => (p.checkInDias?.length || 0) > 0 || (p.checkOutDias?.length || 0) > 0).length,
       conEstacionalidad: plans.filter((p) => (Array.isArray(p.temporadas) && p.temporadas.length > 0) || (() => { const fw = finDeSemanaDePlan(p); return fw.dias.length > 0; })()).length,
+      conAjustes: plans.filter((p) => cuantosAjustes(p) > 0).length,
     };
   }, [plans]);
 
@@ -209,6 +285,7 @@ export default function HospitalityTarifasPage() {
   const openEdit = (p: RatePlan) => {
     setEditing(p);
     const fw = finDeSemanaDePlan(p);
+    const ajustes = ajustesDePlan(p);
     setForm({
       nombre: p.nombre,
       codigo: p.codigo || '',
@@ -222,6 +299,9 @@ export default function HospitalityTarifasPage() {
       temporadas: temporadasDePlan(p),
       fwDias: fw.dias,
       fwPct: fw.porcentaje,
+      antelacion: ajustes.antelacion,
+      ocupacion: ajustes.ocupacion,
+      duracion: ajustes.duracion,
     });
     setDialogOpen(true);
   };
@@ -249,6 +329,44 @@ export default function HospitalityTarifasPage() {
   const removeTemporada = (idx: number) => {
     setForm((f) => ({ ...f, temporadas: f.temporadas.filter((_, i) => i !== idx) }));
   };
+
+  // Ajustes (capa 2): tres listas de tramos con formas distintas, así que cada
+  // una tiene su setter explícito en lugar de uno genérico por clave.
+  const setAntelacion = (idx: number, patch: Partial<TramoAntelacionUI>) =>
+    setForm((f) => ({
+      ...f,
+      antelacion: f.antelacion.map((t, i) => (i === idx ? { ...t, ...patch } : t)),
+    }));
+
+  const setOcupacion = (idx: number, patch: Partial<TramoOcupacionUI>) =>
+    setForm((f) => ({
+      ...f,
+      ocupacion: f.ocupacion.map((t, i) => (i === idx ? { ...t, ...patch } : t)),
+    }));
+
+  const setDuracion = (idx: number, patch: Partial<TramoDuracionUI>) =>
+    setForm((f) => ({
+      ...f,
+      duracion: f.duracion.map((t, i) => (i === idx ? { ...t, ...patch } : t)),
+    }));
+
+  const addTramo = (clave: 'antelacion' | 'ocupacion' | 'duracion') =>
+    setForm((f) => {
+      if (clave === 'antelacion') {
+        return { ...f, antelacion: [...f.antelacion, { desdeDias: '', hastaDias: '', porcentaje: '', nombre: '' }] };
+      }
+      if (clave === 'ocupacion') {
+        return { ...f, ocupacion: [...f.ocupacion, { desdePorcentaje: '', porcentaje: '', nombre: '' }] };
+      }
+      return { ...f, duracion: [...f.duracion, { desdeNoches: '', porcentaje: '', nombre: '' }] };
+    });
+
+  const removeTramo = (clave: 'antelacion' | 'ocupacion' | 'duracion', idx: number) =>
+    setForm((f) => {
+      if (clave === 'antelacion') return { ...f, antelacion: f.antelacion.filter((_, i) => i !== idx) };
+      if (clave === 'ocupacion') return { ...f, ocupacion: f.ocupacion.filter((_, i) => i !== idx) };
+      return { ...f, duracion: f.duracion.filter((_, i) => i !== idx) };
+    });
 
   const save = async () => {
     if (!form.nombre.trim() || !form.tarifa) {
@@ -281,6 +399,51 @@ export default function HospitalityTarifasPage() {
         : null;
     if (finDeSemana && form.fwDias.length > 0 && (!finDeSemana.porcentaje || finDeSemana.porcentaje <= 0)) {
       toast.error('El recargo de fin de semana necesita un porcentaje mayor a 0');
+      return;
+    }
+
+    // Ajustes (capa 2): se mandan los tres tramos completos. La API revalida
+    // todo (aquí es cortesía, allá es la guardia): un porcentaje fuera de rango
+    // o un tramo incoherente se avisa antes de enviarlo.
+    const ajustes = {
+      antelacion: form.antelacion
+        .filter((t) => t.desdeDias || t.hastaDias || t.porcentaje)
+        .map((t) => ({
+          desdeDias: Number(t.desdeDias),
+          hastaDias: t.hastaDias === '' ? null : Number(t.hastaDias),
+          porcentaje: Number(t.porcentaje),
+          ...(t.nombre.trim() ? { nombre: t.nombre.trim() } : {}),
+        })),
+      ocupacion: form.ocupacion
+        .filter((t) => t.desdePorcentaje || t.porcentaje)
+        .map((t) => ({
+          desdePorcentaje: Number(t.desdePorcentaje),
+          porcentaje: Number(t.porcentaje),
+          ...(t.nombre.trim() ? { nombre: t.nombre.trim() } : {}),
+        })),
+      duracion: form.duracion
+        .filter((t) => t.desdeNoches || t.porcentaje)
+        .map((t) => ({
+          desdeNoches: Number(t.desdeNoches),
+          porcentaje: Number(t.porcentaje),
+          ...(t.nombre.trim() ? { nombre: t.nombre.trim() } : {}),
+        })),
+    };
+    const porcentajeOk = (p: number) => Number.isFinite(p) && p !== 0 && p >= -90 && p <= 500;
+    if (
+      ajustes.antelacion.some(
+        (t) => !Number.isInteger(t.desdeDias) || t.desdeDias < 0 || !porcentajeOk(t.porcentaje)
+      ) ||
+      ajustes.ocupacion.some(
+        (t) => !(t.desdePorcentaje >= 0 && t.desdePorcentaje <= 100) || !porcentajeOk(t.porcentaje)
+      ) ||
+      ajustes.duracion.some(
+        (t) => !Number.isInteger(t.desdeNoches) || t.desdeNoches < 1 || !porcentajeOk(t.porcentaje)
+      )
+    ) {
+      toast.error(
+        'Revisa los ajustes: días y noches enteros, ocupación entre 0 y 100, y porcentaje ≠ 0 entre -90 y 500'
+      );
       return;
     }
 
@@ -317,6 +480,7 @@ export default function HospitalityTarifasPage() {
         checkOutDias: form.checkOutDias.length ? form.checkOutDias : null,
         temporadas,
         finDeSemana,
+        ajustes,
         activo: form.activo,
       };
       const url = editing
@@ -399,6 +563,7 @@ export default function HospitalityTarifasPage() {
           checkOutDias: p.checkOutDias,
           temporadas: Array.isArray(p.temporadas) ? p.temporadas : [],
           finDeSemana: (p.finDeSemana as Record<string, unknown> | null) ?? null,
+          ajustes: (p.ajustes as Record<string, unknown> | null) ?? null,
           activo: p.activo,
         }),
       });
@@ -457,10 +622,11 @@ export default function HospitalityTarifasPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
         <Card><CardContent className="p-4"><p className="text-2xl font-bold">{stats.planes}</p><p className="text-xs text-muted-foreground">Planes totales</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-2xl font-bold text-emerald-600">{stats.activos}</p><p className="text-xs text-muted-foreground">Planes activos</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-2xl font-bold">{stats.conEstacionalidad}</p><p className="text-xs text-muted-foreground">Con estacionalidad</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-2xl font-bold">{stats.conAjustes}</p><p className="text-xs text-muted-foreground">Con ajustes por demanda</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-2xl font-bold">{stats.conRestriccionNoches}</p><p className="text-xs text-muted-foreground">Con restricción de noches</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-2xl font-bold">{stats.conRestriccionDias}</p><p className="text-xs text-muted-foreground">Con restricción de días</p></CardContent></Card>
       </div>
@@ -560,6 +726,15 @@ export default function HospitalityTarifasPage() {
                     return fw.dias.length > 0 ? (
                       <Badge variant="outline" className="text-[10px]">
                         +{fw.porcentaje || 0}% fin de
+                      </Badge>
+                    ) : null;
+                  })()}
+                  {(() => {
+                    const total = cuantosAjustes(p);
+                    return total > 0 ? (
+                      <Badge variant="outline" className="text-[10px]">
+                        <TrendingUp className="h-3 w-3 mr-1" />
+                        {total} ajuste{total > 1 ? 's' : ''}
                       </Badge>
                     ) : null;
                   })()}
@@ -886,9 +1061,225 @@ export default function HospitalityTarifasPage() {
               </div>
             </div>
 
+            {/* Ajustes (capa 2): antelación, ocupación y duración */}
+            <div className="border-t pt-3 space-y-3">
+              <Label className="flex items-center gap-1.5">
+                <TrendingUp className="h-3.5 w-3.5" /> Ajustes por demanda (opcional)
+              </Label>
+              <p className="text-[11px] text-muted-foreground">
+                Reglas que ajustan <strong>en %</strong> la tarifa de cada noche ya calculada por temporada
+                y fin de semana. Por regla se aplica <strong>un solo tramo</strong> —el más específico que
+                encaje— y el efecto conjunto nunca baja del 10 % ni supera el 500 % de la tarifa. Negativo
+                descuenta, positivo recarga. Aplican a <strong>tu web de reservas</strong>: los canales siguen
+                recibiendo la tarifa publicada, porque un calendario por fecha no puede expresar «si se reserva
+                con 30 días de antelación».
+              </p>
+
+              {/* Antelación */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="flex items-center gap-1.5 text-xs">
+                    <Clock className="h-3 w-3" /> Antelación de la reserva (días hasta la llegada)
+                  </Label>
+                  <Button type="button" variant="outline" size="sm" onClick={() => addTramo('antelacion')}>
+                    <Plus className="h-3.5 w-3.5 mr-1" /> Añadir tramo
+                  </Button>
+                </div>
+                {form.antelacion.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic">Sin regla de antelación.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {form.antelacion.map((t, idx) => (
+                      <div key={idx} className="grid grid-cols-[80px_80px_90px_1fr_32px] gap-2 items-end">
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-muted-foreground">Desde</Label>
+                          <Input
+                            type="number"
+                            min={0}
+                            value={t.desdeDias}
+                            onChange={(e) => setAntelacion(idx, { desdeDias: e.target.value })}
+                            placeholder="30"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-muted-foreground">Hasta</Label>
+                          <Input
+                            type="number"
+                            min={0}
+                            value={t.hastaDias}
+                            onChange={(e) => setAntelacion(idx, { hastaDias: e.target.value })}
+                            placeholder="sin techo"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-muted-foreground">%</Label>
+                          <Input
+                            type="number"
+                            step="1"
+                            value={t.porcentaje}
+                            onChange={(e) => setAntelacion(idx, { porcentaje: e.target.value })}
+                            placeholder="-10"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-muted-foreground">Nombre</Label>
+                          <Input
+                            value={t.nombre}
+                            onChange={(e) => setAntelacion(idx, { nombre: e.target.value })}
+                            placeholder="Ej: Early bird"
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => removeTramo('antelacion', idx)}
+                          title="Quitar tramo"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="text-[10px] text-muted-foreground">
+                  «Hasta» vacío = sin techo (de esos días en adelante). Sin fecha de llegada conocida no aplica.
+                </p>
+              </div>
+
+              {/* Ocupación */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="flex items-center gap-1.5 text-xs">
+                    <Gauge className="h-3 w-3" /> Ocupación de la propiedad esa noche
+                  </Label>
+                  <Button type="button" variant="outline" size="sm" onClick={() => addTramo('ocupacion')}>
+                    <Plus className="h-3.5 w-3.5 mr-1" /> Añadir tramo
+                  </Button>
+                </div>
+                {form.ocupacion.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic">Sin regla de ocupación.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {form.ocupacion.map((t, idx) => (
+                      <div key={idx} className="grid grid-cols-[110px_90px_1fr_32px] gap-2 items-end">
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-muted-foreground">Desde ocupación</Label>
+                          <Input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={t.desdePorcentaje}
+                            onChange={(e) => setOcupacion(idx, { desdePorcentaje: e.target.value })}
+                            placeholder="80"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-muted-foreground">%</Label>
+                          <Input
+                            type="number"
+                            step="1"
+                            value={t.porcentaje}
+                            onChange={(e) => setOcupacion(idx, { porcentaje: e.target.value })}
+                            placeholder="+15"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-muted-foreground">Nombre</Label>
+                          <Input
+                            value={t.nombre}
+                            onChange={(e) => setOcupacion(idx, { nombre: e.target.value })}
+                            placeholder="Ej: Últimas habitaciones"
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => removeTramo('ocupacion', idx)}
+                          title="Quitar tramo"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="text-[10px] text-muted-foreground">
+                  Se mide con las unidades <strong>vendibles</strong> que ya no están libres (reservas y bloqueos),
+                  contando la propiedad entera. Es la misma demanda que ve el calendario.
+                </p>
+              </div>
+
+              {/* Duración */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="flex items-center gap-1.5 text-xs">
+                    <Moon className="h-3 w-3" /> Duración de la estancia (noches)
+                  </Label>
+                  <Button type="button" variant="outline" size="sm" onClick={() => addTramo('duracion')}>
+                    <Plus className="h-3.5 w-3.5 mr-1" /> Añadir tramo
+                  </Button>
+                </div>
+                {form.duracion.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic">Sin regla de duración.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {form.duracion.map((t, idx) => (
+                      <div key={idx} className="grid grid-cols-[110px_90px_1fr_32px] gap-2 items-end">
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-muted-foreground">Desde noches</Label>
+                          <Input
+                            type="number"
+                            min={1}
+                            value={t.desdeNoches}
+                            onChange={(e) => setDuracion(idx, { desdeNoches: e.target.value })}
+                            placeholder="7"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-muted-foreground">%</Label>
+                          <Input
+                            type="number"
+                            step="1"
+                            value={t.porcentaje}
+                            onChange={(e) => setDuracion(idx, { porcentaje: e.target.value })}
+                            placeholder="-15"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-muted-foreground">Nombre</Label>
+                          <Input
+                            value={t.nombre}
+                            onChange={(e) => setDuracion(idx, { nombre: e.target.value })}
+                            placeholder="Ej: Semana completa"
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => removeTramo('duracion', idx)}
+                          title="Quitar tramo"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="text-[10px] text-muted-foreground">
+                  El mínimo exigido sigue siendo el de arriba («Noches mínimas»): esto solo mueve el precio.
+                </p>
+              </div>
+            </div>
+
             <Alert>
               <AlertDescription className="text-xs">
-                Al guardar, las tarifas se sincronizan automáticamente hacia los canales de distribución (push de tarifas). El resultado queda registrado en los sync-logs del panel de Conectividad.
+                Al guardar, las tarifas se sincronizan automáticamente hacia los canales de distribución (push de tarifas). El resultado queda registrado en los sync-logs del panel de Conectividad. Los ajustes por demanda no viajan al canal: son de tu web de reservas y se recalculan con cada cotización.
               </AlertDescription>
             </Alert>
           </div>

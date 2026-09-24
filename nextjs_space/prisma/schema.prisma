@@ -8262,6 +8262,17 @@ model HospitalityRatePlan {
   // malformado se descarta, nunca tumba una cotización.
   temporadas    Json?
   finDeSemana   Json?
+  // Ajustes de precio (capa 2 del pricing dinámico): reglas de ANTELACIÓN
+  // (días entre la reserva y la llegada), OCUPACIÓN (cómo de llena está la
+  // propiedad esa noche) y DURACIÓN (noches de la estancia) que modifican
+  // porcentualmente la tarifa por noche que ya resolvió la capa 1. La forma
+  // —tramos, precedencia y suelo/techo del factor— vive en
+  // lib/hospitality/ajustes.ts y se normaliza antes de usarse (una pieza
+  // malformada se descarta y el plan cotiza como si no tuviera ajustes).
+  // SOLO reserva directa: un calendario de tarifas por fecha no puede expresar
+  // "si se reserva con 30 días de antelación", así que el push a canales sigue
+  // empujando la tarifa publicada de la capa 1.
+  ajustes       Json?
   activo        Boolean   @default(true)
   fechaCreacion DateTime  @default(now())
   fechaEdicion  DateTime  @updatedAt
