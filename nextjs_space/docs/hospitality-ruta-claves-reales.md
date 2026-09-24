@@ -317,3 +317,66 @@ equipo decide cambiar la forma de acceso.
 | 24 sep 2026 | — | **§8-E reducido a prueba de UI: los crons tienen evidencia por fuera del panel** | `hospitality-reconcile` OK (200) dos veces al día los últimos 4 días (`/var/log/volkern-cron.log`); `hospitality_sync_logs` acumula 26 corridas `exito` y 2 `error`; la **divergencia pendiente (1)** es una reserva que ya no existe en el proveedor y queda **conservadoramente registrada, nunca cancelada** — su detalle está en `HospitalityReservation` sección 14 (tipo `reconciliacion`). El operador puede consultarlo con `psql`; el panel `/admin/hospitality` queda como mejora de ergonomía, no como requisito. |
 | 24 sep 2026 | — | **Serie de migraciones reproducible desde cero — CERRADO (con corrección del diagnóstico)** | El hallazgo original subestimaba: no eran 2 migraciones, eran **10** cuyas tablas/índices/FKs ya vivían en el baseline `0_init` (17 tablas + índices + FKs con `ADD CONSTRAINT`, 569 en el baseline). Producción lo confirmando: `0_init` registrada con `applied_steps=0` (baseline marcado, no ejecutado) y las tablas conservando los nombres de índice ORIGINALES — la absorción histórica ya estaba hecha; las carpetas eran chatarra que mataba `migrate deploy` en base nueva con `42P07`. Se retiraron las 10 y **se validó la serie completa (29 migraciones) sobre un PostgreSQL 16 temporal desde cero: todas aplicadas, 338 tablas, `prisma migrate diff` contra los modelos = migración VACÍA** (esquema equivalente, FKs incluidas). Guardia nueva `tests/migraciones-serie.test.ts` (3 comprobaciones: baseline con sus tablas, ninguna re-creación no idempotente — la única convivencia legítima es `IF NOT EXISTS`, caso `User_contactId_idx` — y las carpetas absorbidas no vuelven; probada también en negativo). |
 | 24 sep 2026 | 1.1 y 1.2 (munición) | **Borradores de correo listos para enviar** | El del cliente (paso 1.1, `hospitality-email-precondiciones-cliente.md`) y el del proveedor (paso 1.2, `hospitality-email-proveedor-conectividad.md`) llevan su bloque de «preparación de envío»: qué rellenar, canal, adjunto (el contrato técnico **expurgado** del encabezado interno — sin expurgar se entrega nuestro plano), y el recordatorio programado (7 días el cliente, 5 hábiles el proveedor). Pendiente solo de que Bruno los envíe; al hacerlo, marcar el paso y anotar fecha. |
+
+---
+
+## 10. Política de CI para migraciones (24 sep 2026)
+
+La garantía «la serie se aplica desde cero y produce el esquema de los
+modelos» está congelada en CI, no solo en el repo. Tres workflows, tres
+papeles distintos:
+
+**`migrations.yml` — el especialista (base PROPIA, vacía de cero).** Corre en
+PR/push que toquen `prisma/**` y con `workflow_dispatch`. Cuatro pasos en
+orden creciente de valor:
+
+1. Guardia estática (`tests/migraciones-serie.test.ts`): sin re-creaciones no
+   idempotentes, carpetas absorbidas retiradas, baseline intacto.
+2. `prisma migrate deploy` COMPLETO sobre PostgreSQL 17 efímero vacío — aquí
+   muere con `42P07` cualquier reintroducción de duplicados.
+3. `prisma migrate status` — la serie completa queda registrada.
+4. `prisma migrate diff` modelos↔base **en vacío** — aunque el deploy pase, si
+   el esquema difiere de los modelos (una FK de menos, un índice renombrado,
+   una columna con otro tipo), el PR falla imprimiendo el SQL exacto de la
+   diferencia. Esta es la garantía fuerte: «se aplica» Y «produce lo que
+dicen los modelos».
+
+**Por qué base propia y no la compartida de los otros workflows:** este job
+exige una base VERDE de cero. La base de `unit-tests` llega contaminada de
+seed y datos de prueba — un `migrate deploy` contra ella no probaría nada (los
+objetos ya existen) y podría pasar en verde exactamente el fallo que buscamos.
+La base efímera es la única prueba honesta de «desde cero».
+
+**`unit-tests.yml` y `e2e-reconciliation.yml` — abandonan `db push
+--accept-data-loss`.** Ese atajo existía «porque las migraciones traen
+CREATE TABLE duplicados» — documentaba el defecto que ya está arreglado.
+Ahora aplican `migrate deploy`, el mismo camino que producción. La razón de
+fondo: `db push` sincroniza el esquema directamente de los modelos y podría
+aceptar en CI un estado que `deploy` (la serie real) no reprodujera — CI y
+producción deben aplicar LO MISMO, no equivalentes.
+
+**Cuándo falla a propósito (los tres modos):**
+
+| Modo | Paso que falla | Qué significa |
+|---|---|---|
+| Duplicado reintroducido | deploy (`42P07`) | Las carpetas absorbidas volvieron, o una migración nueva recrea algo existente sin `IF NOT EXISTS` |
+| Serie incompleta/rota | deploy (cualquier error SQL) | Una migración nueva no funciona en base nueva (dependencias de orden, objetos asumidos) |
+| Esquema ≠ modelos | diff (SQL impreso en el log) | El deploy pasa pero el resultado no es lo que `schema.prisma` declara — se arregla en la migración, NO corrigiendo el diff a mano |
+
+Regla operativa: si el diff falla en un PR tuyo, la corrección va en la
+migración (o en los modelos si el cambio era intencionado); **nunca** se
+relaja el job. Si algún día el diff falla sin cambio de esquema, sospechar de
+un cambio de versión de Prisma y comparar la salida antes de tocar nada.
+
+Verificación local del mismo circuito (sin esperar a CI):
+
+```bash
+# clúster temporal (PostgreSQL 16/17 local, socket en /tmp)
+/usr/lib/postgresql/16/bin/initdb -D /tmp/mig/data -U postgres --auth=trust
+/usr/lib/postgresql/16/bin/pg_ctl -D /tmp/mig/data -o "-p 5470 -k /tmp" -l /tmp/mig/log start
+/usr/lib/postgresql/16/bin/createdb -h 127.0.0.1 -p 5470 -U postgres volkern_migrations
+DATABASE_URL=postgresql://postgres@127.0.0.1:5470/volkern_migrations npx prisma migrate deploy
+npx prisma migrate diff --from-schema-datamodel prisma/schema.prisma \
+  --to-url "postgresql://postgres@127.0.0.1:5470/volkern_migrations" --script
+# salida esperada: "-- This is an empty migration."
+```
