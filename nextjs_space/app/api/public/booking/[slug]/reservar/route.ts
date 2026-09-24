@@ -77,6 +77,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
       ninos: rango.rango.ninos,
       moneda,
       solicitudId,
+      // El idioma de la página (`?lang=en`) viaja con la reserva: es el idioma en
+      // que el huésped recibirá sus comunicaciones automáticas.
+      idioma: textoOpcional(cuerpo.lang, 8),
       huesped: {
         nombre,
         email,

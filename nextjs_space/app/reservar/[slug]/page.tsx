@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import type { Metadata } from 'next';
 import { datosPaginaPublica } from '@/lib/hospitality/booking-public';
 import { BookingWizard } from '@/components/hospitality/booking/BookingWizard';
+import { idiomaDeValor, textosPaginaNoDisponible } from '@/lib/hospitality/booking-i18n';
 
 /**
  * Página pública de reserva directa de un alojamiento: `/reservar/<slug>`.
@@ -11,6 +12,10 @@ import { BookingWizard } from '@/components/hospitality/booking/BookingWizard';
  * por el slug de un tenant. Aquí no se decide nada de negocio: los datos salen de
  * `datosPaginaPublica` y la reserva la crea la API pública, que a su vez la pide
  * al Reservation Engine.
+ *
+ * El idioma se lee aquí (`?lang=en`), en el servidor: la página se pinta entera en
+ * el idioma pedido, sin parpadeo ni hidratación distinta. Sin `lang` —o con un
+ * valor desconocido— sigue siendo español, como siempre.
  */
 export async function generateMetadata({
   params,
@@ -28,22 +33,27 @@ export async function generateMetadata({
   };
 }
 
+type Busqueda = Record<string, string | string[] | undefined>;
+
 export default async function ReservarPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }> | { slug: string };
+  searchParams?: Promise<Busqueda> | Busqueda;
 }) {
   const { slug } = await params;
+  const busqueda = (await searchParams) ?? {};
+  const idioma = idiomaDeValor(busqueda.lang);
   const pagina = await datosPaginaPublica(slug);
 
   if (!pagina.ok) {
+    const { titulo, mensaje } = textosPaginaNoDisponible(idioma, pagina.motivo);
     return (
       <main className="flex min-h-screen items-center justify-center p-6">
         <div className="max-w-md text-center">
-          <h1 className="text-2xl font-semibold">
-            {pagina.motivo === 'inactiva' ? 'Reservas no disponibles' : 'Página no encontrada'}
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">{pagina.mensaje}</p>
+          <h1 className="text-2xl font-semibold">{titulo}</h1>
+          <p className="mt-2 text-sm text-muted-foreground">{mensaje}</p>
         </div>
       </main>
     );
@@ -57,6 +67,8 @@ export default async function ReservarPage({
         moneda={pagina.datos.moneda}
         config={pagina.datos.config}
         propiedades={pagina.datos.propiedades}
+        idioma={idioma}
+        rutaBase={`/reservar/${slug}`}
       />
     </main>
   );
