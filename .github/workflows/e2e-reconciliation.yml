@@ -63,9 +63,13 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/volkern_test
 
+      # La serie de migraciones ya es reproducible desde cero (el 24-sep-2026 se
+      # retiraron las carpetas duplicadas del baseline; el job migrations.yml la
+      # valida con diff vacío en cada PR), así que se usa el camino REAL de
+      # despliegue y no db push.
       - name: Run Prisma migrations
         working-directory: nextjs_space
-        run: npx prisma db push --accept-data-loss # db push instead of migrate deploy because migration files contain duplicate CREATE TABLE statements
+        run: npx prisma migrate deploy
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/volkern_test
 

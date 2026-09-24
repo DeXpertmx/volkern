@@ -68,8 +68,10 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/volkern_test
 
-      - name: Push Prisma schema
-        run: npx prisma db push --accept-data-loss
+      # Camino REAL de despliegue: la serie es reproducible desde cero (ver
+      # migrations.yml, que además la valida con diff vacío contra los modelos).
+      - name: Apply Prisma migrations
+        run: npx prisma migrate deploy
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/volkern_test
 

@@ -1,0 +1,134 @@
+name: Migrations (reproducible from zero)
+
+# La serie de migraciones debe aplicarse SIN ERRORES sobre una base vacía y
+# producir un esquema equivalente a los modelos de Prisma. Historia: el
+# baseline 0_init absorbió 10 migraciones cuyas carpetas quedaron en el
+# directorio y `migrate deploy` moría con `42P07` en cualquier base nueva
+# (producción no lo notaba por estar baselinada). Arreglado el 24 sep 2026
+# (commit a887bf7d); este job congela la garantía.
+#
+# Tres comprobaciones, en orden creciente de valor:
+#   1. `migrate deploy` sobre una base VACÍA: aplica la serie completa sin error.
+#      (Un PR que re-introduzca un duplicado muere aquí con 42P07.)
+#   2. `migrate diff` modelos↔base: debe ser una migración VACÍA. (Un PR que
+#      aplique la serie pero deje el esquema distinto de los modelos —una FK de
+#      menos, un índice con otro nombre— muere aquí aunque el deploy haya ido bien.)
+#   3. Guardia estática de la serie (tests/migraciones-serie.test.ts): prohibe
+#      re-creaciones no idempotentes y congelar las carpetas absorbidas; corre
+#      en el job de unit-tests y aquí se repite como red de seguridad.
+#
+# Por qué un servicio efímero y no el shared de los otros workflows: este job
+# exige una base VERDE de cero — compartir base contaminada por el seed de
+# unit-tests escondería exactamente el fallo que buscamos.
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'nextjs_space/prisma/**'
+      - 'nextjs_space/schema.prisma'
+      - 'nextjs_space/tests/migraciones-serie.test.ts'
+      - '.github/workflows/migrations.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'nextjs_space/prisma/**'
+      - '.github/workflows/migrations.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: migrations-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: nextjs_space
+
+jobs:
+  migrate:
+    name: Deploy from zero + schema equivalence
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: volkern_migrations
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: nextjs_space/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify the migrations directory has no duplicates (static guard)
+        run: npx vitest run tests/migraciones-serie.test.ts
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/volkern_migrations
+
+      # Las .env locales del runner no existen, pero por simetría con los otros
+      # workflows y para que un .env future no calle la DATABASE_URL del paso:
+      - name: Backup .env files
+        run: |
+          for f in .env .env.local .env.production .env.production.local; do
+            if [ -f "$f" ]; then mv "$f" "$f.ci-backup"; echo "Backed up $f"; fi
+          done
+
+      # El corazón del job: la serie completa contra una base vacía.
+      - name: Apply full migration series from zero
+        run: npx prisma migrate deploy --schema prisma/schema.prisma
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/volkern_migrations
+
+      - name: Verify every migration is registered
+        run: |
+          COUNT=$(npx prisma migrate status --schema prisma/schema.prisma 2>&1 | tail -1)
+          echo "prisma migrate status → $COUNT"
+          case "$COUNT" in
+            *"Database schema is up to date"*) echo "OK: serie completa registrada" ;;
+            *) echo "✗ la serie no quedó al día"; exit 1 ;;
+          esac
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/volkern_migrations
+
+      # La garantía fuerte: el esquema reconstruido equivale a los modelos.
+      # `migrate diff` sale 0 con salida vacía; cualquier diferencia imprime el
+      # SQL y sale 1. (Se redirige a fichero para que el log del fallo muestre
+      # exactamente QUÉ difiere.)
+      - name: Verify schema matches Prisma models (diff must be empty)
+        run: |
+          if npx prisma migrate diff \
+              --from-schema-datamodel prisma/schema.prisma \
+              --to-url "postgresql://postgres:postgres@localhost:5432/volkern_migrations" \
+              --script > /tmp/schema-diff.sql 2>/tmp/schema-diff.err; then
+            if [ -s /tmp/schema-diff.sql ] && ! grep -q "This is an empty migration" /tmp/schema-diff.sql; then
+              echo "✗ el esquema de la base NO equivale a los modelos. Diferencias:"
+              cat /tmp/schema-diff.sql
+              exit 1
+            fi
+            echo "OK: esquema equivalente a los modelos (diff vacío)"
+          else
+            echo "✗ prisma migrate diff falló:"
+            cat /tmp/schema-diff.err
+            exit 1
+          fi
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/volkern_migrations
