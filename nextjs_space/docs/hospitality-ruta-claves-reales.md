@@ -240,6 +240,61 @@
 
 > **Cuando llegue la respuesta del proveedor (bloqueos de la §8 fuera de la tabla):** pasarla por `npx tsx scripts/preflight-conectividad.ts --pegado "URL | ID de socio | usuario | contraseña"` ANTES de tocar el servidor. Es la misma revisión que aplica la API al guardar: si la pega trae un espacio de más, comillas de un PDF o la contraseña dentro del campo del usuario, lo dice con su arreglo en vez de devolver un 401 que parece «credenciales inválidas».
 
+### §8-E — Diseño del acceso de operador (auditoría 24 sep 2026, NO implementado)
+
+**Qué hay:** el panel `/admin/hospitality` (340 líneas, client component) consulta
+`GET /api/cron-status` (estado de los jobs: última ejecución, resultado,
+duración, avisos por tenant — incluidos los partes que el barrido ya no
+reintenta) y `GET /api/admin/hospitality/holds?dias=N` (holds caducados por
+tenant). Ambos endpoints usan `isAdminRequest()` → `isSuperadminRequest()`
+(`lib/auth-helpers.ts`): exige **sesión NextAuth + rol de plataforma
+`Superadmin`** (no un admin de tenant). El layout `app/admin/layout.tsx` hace
+la misma comprobación en cliente. **La auditoría de producción encontró 2
+usuarios con rol Superadmin ya existentes** (`admin@volkern.app` verificado,
+y otro sin verificar). **Conclusión: no falta ningún cambio de código** — el
+acceso ya está diseñado y guardado correctamente; lo que faltaba era una
+sesión de uno de esos dos usuarios.
+
+**Cómo lo usaría el operador (sin tocar código):**
+
+1. Recuperar la contraseña del Superadmin elegido (`admin@volkern.app`):
+   mecanismo normal de reset por email, **no** por SQL.
+2. `/auth/login` → redirección automática al backoffice `/admin` (el layout
+   ya la hace para Superadmin).
+3. Sidebar → «Hospitality»: estado de los crons (el reconcile diario, los
+   avisos del registro de viajeros por tenant) y holds caducados con su
+   ventana configurable.
+4. Alternativa ya disponible sin UI: los mismos datos por `psql` —
+   `hospitality_sync_logs` y `/var/log/volkern-cron.log` (usado en el §9).
+
+**Si algún día se quisiera acceso SIN sesión de Superadmin** (p. ej. un token
+de operador de plataforma tipo `CRON_SECRET`, que ya existe y solo habilita
+las 3 rutas `/api/cron/*`):
+
+- **No reutilizar `CRON_SECRET`** para leer paneles: convierte un secreto de
+  disparo en un secreto de lectura de datos cross-tenant, y viaja en la URL
+  del cron (logs).
+- **Diseño propuesto**: token dedicado `ADMIN_PANEL_TOKEN` (32 bytes hex,
+  `openssl rand -hex 32`), entregado por el canal seguro, almacenado igual que
+  `CRON_SECRET` (fuera del repo), y un `isPlatformOperatorRequest(req)` en
+  `lib/auth-helpers.ts` que acepte **sesión Superadmin O** header
+  `Authorization: Bearer <ADMIN_PANEL_TOKEN>` comparado en tiempo constante.
+  Aplicarlo SOLO a las dos rutas de lectura del panel (`/api/cron-status`,
+  `/api/admin/hospitality/holds`); nada de escritura. Los paths de la UI no
+  cambian: el layout `app/admin/layout.tsx` sigue exigiendo rol Superadmin,
+  así que el acceso por token sería para `curl`/scripting, no para el panel
+  visual (que seguiría pidiendo sesión).
+- **Por qué no se ha hecho hoy**: con `admin@volkern.app` existente y
+  recuperable, el token solo añade una segunda llave que custodiar. Se
+  activaría si el acceso por email se vuelve fricción habitual.
+- **Guardia pendiente de ese futuro**: que ningún otro endpoint admin acepte
+  el token; y que el token no aparezca en el repo (`grep` de `ADMIN_PANEL_TOKEN`
+  fuera del diseño).
+
+**No implementado a propósito**: la sesión existe, el panel funciona, y el
+runbook ya ofrece el camino por `psql`. Este diseño solo se activa si el
+equipo decide cambiar la forma de acceso.
+
 ## 9. Registro de avance (rellenar al marcar cada paso)
 
 | Fecha | Paso | Resultado | Nota |
