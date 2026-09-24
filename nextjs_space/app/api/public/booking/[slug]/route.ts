@@ -173,6 +173,10 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
             tarifaNoche: plan?.tarifa ?? unidad.tarifaBase ?? null,
             moneda: unidad.moneda,
             ratePlan: restriccionesDeRatePlan(plan),
+            // Estacionalidad del plan: con temporadas el precio se suma noche a
+            // noche (y la cotización baja con su desglose, que es lo que la
+            // página enseña); sin ella el cálculo es el de siempre.
+            estacionalidad: plan ? plan.temporadas ?? plan.finDeSemana : null,
           };
         }),
       reservas: contexto.reservations.map((r) => ({
@@ -205,7 +209,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
             fotos: u.fotos || [],
             amenidades: u.amenidades || [],
             // Tarifa por noche de la que salió el precio: la ficha la muestra
-            // junto al total (mismo plan que cotizó).
+            // junto al total (mismo plan que cotizó). Con estacionalidad
+            // `desgloseNoches` viene en la cotización y la página lista cada
+            // noche en lugar de esta media.
             tarifaNoche: u.ratePlans[0]?.tarifa ?? u.tarifaBase ?? null,
           };
         }),
@@ -271,6 +277,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
         tarifaNoche: ratePlan?.tarifa ?? unidad.tarifaBase ?? null,
         moneda: unidad.moneda,
         ratePlan: restriccionesDeRatePlan(ratePlan),
+        // Mismo precio que vio el huésped en la página: la reserva se cotiza
+        // con la estacionalidad del plan, no con la tarifa plana.
+        estacionalidad: ratePlan ? ratePlan.temporadas ?? ratePlan.finDeSemana : null,
       }],
       reservas: contexto.reservations.map((r) => ({
         unitId: r.unitId,
@@ -381,7 +390,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
         propertyId: propiedad.id,
         unitId: unidad.id,
         tipo: 'alojamiento',
-        concepto: `Alojamiento · ${cotizacion.noches} noches`,
+        // Con estacionalidad el importe sale de la suma noche a noche: la línea
+        // lo dice en vez de presentar una media como si fuera la tarifa.
+        concepto: linea.desgloseNoches
+          ? `Alojamiento · ${cotizacion.noches} noches — desglose por temporada`
+          : `Alojamiento · ${cotizacion.noches} noches`,
         cantidad: 1,
         importeUnitario: linea.precioTotal!,
         importeTotal: linea.precioTotal!,

@@ -207,3 +207,66 @@ describe('Página pública de reserva', () => {
     expect(screen.getByText('BE-PAGINA-E2E')).toBeTruthy();
   });
 });
+
+/** La misma respuesta, con la estancia dentro de temporada. */
+const COTIZACION_TEMPORADA = {
+  propiedad: { id: SLUG, nombre: 'Hotel Volcán', ciudad: 'San Cristóbal', moneda: 'MXN' },
+  cotizacion: {
+    checkIn: '2026-09-19',
+    checkOut: '2026-09-22',
+    noches: 3,
+    moneda: 'MXN',
+    disponible: true,
+    unidades: [
+      {
+        unitId: 'unit_libre',
+        nombre: 'Loft Bosque',
+        tipo: 'apartamento',
+        capacidad: 3,
+        descripcion: null,
+        fotos: [],
+        amenidades: [],
+        // La tarifa del plan (la media) y el detalle noche a noche que la
+        // sustituye en la pantalla.
+        tarifaNoche: 1200,
+        moneda: 'MXN',
+        disponible: true,
+        noches: 3,
+        precioTotal: 4200,
+        desgloseNoches: [
+          { fecha: '2026-09-19', tarifa: 1200 },
+          { fecha: '2026-09-20', tarifa: 1500 },
+          { fecha: '2026-09-21', tarifa: 1500 },
+        ],
+      },
+    ],
+  },
+};
+
+describe('Página pública de reserva — estancia en temporada', () => {
+  it('enseña el precio de CADA noche y no la media del rango', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((entrada: RequestInfo | URL) => {
+        const url = String(entrada);
+        if (url.includes('checkIn=')) return json(COTIZACION_TEMPORADA);
+        return json(CATALOGO);
+      })
+    );
+
+    render(<BookingPublico />);
+    await screen.findByText('Hotel Volcán');
+    await userEvent.click(screen.getByRole('button', { name: /Ver disponibilidad/ }));
+
+    // El desglose noche a noche, con la fecha de cada noche.
+    expect(await screen.findByText('Precio por noche')).toBeTruthy();
+    expect(screen.getAllByText(/septiembre/)).toHaveLength(3);
+    expect(screen.getByText(/1,200\.00/)).toBeTruthy();
+    expect(screen.getAllByText(/1,500\.00/)).toHaveLength(2);
+
+    // El total sigue siendo el del servidor…
+    expect(screen.getByText(/4,200\.00/)).toBeTruthy();
+    // …y la media por noche no se enseña: no es el precio de ninguna noche.
+    expect(screen.queryByText(/\/noche/)).toBeNull();
+  });
+});

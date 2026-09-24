@@ -257,6 +257,60 @@ describe('Contratos del flujo común', () => {
   });
 });
 
+describe('cotizarEstancia — estacionalidad del plan (el mismo precio que ve el asistente)', () => {
+  // Ventana 10 → 15 sep 2026: noches 10 (jue), 11 (vie), 12 (sáb), 13 (dom) y 14 (lun).
+  const conPlan = (estacionalidad: unknown, tarifa = 100) =>
+    cotizarEstancia({
+      checkIn: '2026-09-10',
+      checkOut: '2026-09-15',
+      unidades: [{ id: 'u1', tarifaNoche: tarifa, moneda: 'MXN', estacionalidad }],
+      reservas: [],
+    }).unidades[0];
+
+  it('con temporadas suma noche a noche y devuelve el desglose (no una media)', () => {
+    const u = conPlan({ temporadas: [{ desde: '2026-09-12', hasta: '2026-09-14', tarifa: 200 }] });
+
+    // 10 y 11 a la tarifa del plan; 12, 13 y 14 a la de la temporada.
+    expect(u.precioTotal).toBe(800);
+    expect(u.desgloseNoches).toEqual([
+      { fecha: '2026-09-10', tarifa: 100 },
+      { fecha: '2026-09-11', tarifa: 100 },
+      { fecha: '2026-09-12', tarifa: 200 },
+      { fecha: '2026-09-13', tarifa: 200 },
+      { fecha: '2026-09-14', tarifa: 200 },
+    ]);
+  });
+
+  it('sin estacionalidad el precio es plano y no hay desglose que enseñar', () => {
+    const u = conPlan(null);
+    expect(u.precioTotal).toBe(500);
+    expect(u.desgloseNoches).toBeNull();
+  });
+
+  it('el recargo de fin de semana solo toca las noches SIN temporada', () => {
+    const sin = conPlan({ finDeSemana: { dias: [5, 6], porcentaje: 20 } });
+    expect(sin.desgloseNoches?.map((n) => n.tarifa)).toEqual([100, 120, 120, 100, 100]);
+    expect(sin.precioTotal).toBe(540);
+
+    // Con una temporada encima del sábado, esa noche vale SU tarifa: un +20 %
+    // sobre un precio ya configurado a mano sería un precio que nadie puso.
+    const con = conPlan({
+      temporadas: [{ desde: '2026-09-12', hasta: '2026-09-12', tarifa: 300 }],
+      finDeSemana: { dias: [5, 6], porcentaje: 20 },
+    });
+    expect(con.desgloseNoches?.map((n) => n.tarifa)).toEqual([100, 120, 300, 100, 100]);
+  });
+
+  it('una temporada no vuelve vendible una unidad sin precio base', () => {
+    // Misma regla que el asistente: sin tarifa del plan no hay precio del que
+    // partir, y una temporada suelta no es una tarifa publicada.
+    const u = conPlan({ temporadas: [{ desde: '2026-09-12', hasta: '2026-09-14', tarifa: 200 }] }, 0);
+    expect(u.disponible).toBe(false);
+    expect(u.motivo).toBe('sin_tarifa');
+    expect(u.desgloseNoches).toBeNull();
+  });
+});
+
 describe('Coherencia con el Availability Engine (caso cruzado)', () => {
   it('cotizar y el motor coinciden día a día en el mismo rango', () => {
     // La unidad está ocupada SOLO la noche del 12 (reserva de 1 noche).
