@@ -160,10 +160,10 @@ block us** — everything else we can keep building while we wait.
     calendar? Which dates are available on your side?
 
 **What we already have ready**, so there is nothing to wait for from us: the full
-integration, the inventory and rate pushes, the reservation receiver with
-idempotency and reconciliation, and the emitter integration guide for your team
-(attached). As soon as we have A and B we can configure the first property and
-push to your sandbox the same day.
+integration, the inventory and rate pushes, and the reservation receiver with
+idempotency and reconciliation. The attached contract includes the complete
+webhook specification and the retry policy for your queue. As soon as we have A
+and B we can configure the first property and push to your sandbox the same day.
 
 Thanks — happy to jump on a call if any answer is easier to give live.
 
