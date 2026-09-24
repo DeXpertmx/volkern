@@ -3,6 +3,15 @@
 > Listo para copiar, personalizar el saludo y enviar. Sin jerga técnica.
 > Contexto para nosotros: sin los puntos 1–4 no se puede probar NADA — cualquier
 > envío solo demostraría que las credenciales no valen. Por eso van primero.
+>
+> **Preparación de envío (24 sep 2026):** rellenar `[nombre]` y `[Firma]`; enviar
+> por el correo comercial de siempre (este email no lleva secretos: las
+> credenciales del punto 2 ya se pide que lleguen por el canal seguro). Sin
+> adjuntos — todo lo que el hotel necesita está en el cuerpo. Los pasos 5–7 se
+> agendan cuando respondan a 1–4; no hace falta esperar a tenerlo todo. Al
+> enviarlo, marcar el paso **1.1** del runbook y anotar la fecha en §9. Si en
+> 7 días no hay respuesta, reenviar con una línea encima y proponer la llamada
+> «pantalla a pantalla» del cierre.
 
 ---
 

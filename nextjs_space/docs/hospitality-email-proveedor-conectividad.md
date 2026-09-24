@@ -10,6 +10,19 @@
 > y de la pata de activación en la OTA
 > ([`hospitality-conexion-otas-activacion.md`](./hospitality-conexion-otas-activacion.md)).
 > Las notas internas, al final, **no se envían**.
+>
+> **Preparación de envío (24 sep 2026):** rellenar `[name]` (uno por cuerpo y
+> firma) y enviar al contacto de soporte/ventas del proveedor con copia técnica.
+> **Adjunto obligatorio**: `hospitality-connectivity-contract.md` **expurgado**
+> — quitarle antes el encabezado interno («Documento interno de desarrollo»,
+> referencias al «plan maestro», la nota de marca y las secciones con decisiones
+> nuestras; dejarles flujo de integración, endpoints, formatos y política de
+> reintentos). Si se envía sin expurgar se les estaría entregando nuestro plano
+> interno. Al enviarlo, marcar el paso **1.2** del runbook y anotar fecha en §9.
+> Recordatorio a los 5 días hábiles con las preguntas A y B citadas arriba del
+> todo. Cuando respondan: `npx tsx scripts/preflight-conectividad.ts --pegado
+> "URL | ID de socio | usuario | contraseña"` antes de tocar el servidor — la
+> misma validación que aplica la API al guardar.
 
 ---
 
