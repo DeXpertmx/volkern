@@ -225,8 +225,13 @@
 ### 3.2 - Cierre de la homologación
 - [ ] **PENDIENTE**
 - Restaurar la configuración del tenant o migrarla a producción (paso §6 del plan),
-  dejándolo escrito en el §9. Rotación de credenciales y pase a producción es OTRO plan
-  (no esta ruta).
+  dejándolo escrito en el §9. Rotación de credenciales y pase a producción es OTRO plan:
+  **el esqueleto de ese plan ya existe** — `docs/hospitality-plan-golive-produccion.md`
+  (Fase A credenciales de producción por las dos vías, B rotación con contraprueba de
+  credenciales viejas, C reconfigurar en limpio en el tenant real —no copiar el de
+  homologación—, D checklist de corte con doble publish y rollback). Los huecos `____`
+  se rellenan cuando lleguen los datos; nada se ejecuta hasta que la homologación esté
+  SUPERADA (2.4 con los 18 casos).
 
 ---
 
