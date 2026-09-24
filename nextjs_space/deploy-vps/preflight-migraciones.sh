@@ -50,13 +50,19 @@ if [ -n "$PG_CID" ]; then
   echo "   primeras: $(head -3 "$OUTDIR/applied-prod.txt" | tr '\n' ' ')"
   echo "   últimas:  $(tail -3 "$OUTDIR/applied-prod.txt" | tr '\n' ' ')"
   # Tablas clave del módulo Hospitality (¿existen ya en producción?)
+  # Los nombres van en el nombre REAL de la tabla (`@@map` de `schema.prisma` o
+  # el del modelo cuando no lo tiene), no en el del modelo. Esta lista llevaba
+  # tres mal (`hospitality_property`, `hospitality_reservation`,
+  # `connectivity_provider`, todos en singular) y uno que no existe en ninguna
+  # base (`hospitality_guest_registry`), así que la consulta devolvía menos
+  # filas en silencio. Verificados contra `pg_class` de producción.
   echo "→ Tablas clave en producción:"
   docker exec "$PG_CID" psql -U volkern_erp -d volkern_erp -t -A -c "
     SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
     WHERE n.nspname='public' AND c.relkind='r'
-      AND c.relname IN ('hospitality_review','hospitality_extra','hospitality_property',
-                        'hospitality_reservation','hospitality_guest_registry',
-                        'hospitality_checkin_pregunta','connectivity_provider')
+      AND c.relname IN ('hospitality_review','hospitality_extra','hospitality_properties',
+                        'hospitality_reservations','hospitality_travelers',
+                        'hospitality_checkin_pregunta','connectivity_providers')
     ORDER BY 1;" > "$OUTDIR/tablas-clave.txt" 2>&1 || true
   sed 's/^/   /' "$OUTDIR/tablas-clave.txt"
   echo "   total tablas public: $(docker exec "$PG_CID" psql -U volkern_erp -d volkern_erp -t -A -c "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind='r';" 2>/dev/null | tr -d '[:space:]')"
