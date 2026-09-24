@@ -160,3 +160,40 @@ describe('la sección existe y se puede llegar a ella', () => {
     expect(confirmacion).not.toContain('require(');
   });
 });
+
+describe('el desglose noche a noche (estancia en temporada)', () => {
+  it('las dos superficies públicas lo reciben del servidor, no lo calculan', () => {
+    // El asistente: la ruta que cotiza lo expone tal cual lo sumó el motor.
+    expect(leer('app/api/public/booking/[slug]/cotizar/route.ts')).toContain(
+      'desgloseNoches: u.desgloseNoches'
+    );
+    // La página pública: el desglose viaja con la cotización del motor.
+    expect(leer('app/booking/[slug]/page.tsx')).toContain('desgloseNoches');
+    expect(leer('components/hospitality/booking/BookingWizard.tsx')).toContain('desgloseNoches');
+  });
+
+  it('la página pública cotiza con la estacionalidad del plan, no con la tarifa plana', () => {
+    const ruta = leer('app/api/public/booking/[slug]/route.ts');
+    // Cotizar (GET) y reservar (POST) con el MISMO plan: si una añadiera las
+    // temporadas y la otra no, la página y la reserva dirían precios distintos.
+    expect(ruta).toMatch(/estacionalidad:\s*plan \? plan\.temporadas/);
+    expect(ruta).toMatch(/estacionalidad:\s*ratePlan \? ratePlan\.temporadas/);
+    // Y las reglas son las del módulo que ya usa el asistente: una sola.
+    expect(leer('lib/hospitality/booking-rates.ts')).toContain("from './estacionalidad'");
+  });
+
+  it('la fecha de cada noche se lee como día local (una fecha ISO no se corre un día)', () => {
+    expect(leer('lib/hospitality/booking-i18n.ts')).toContain('fechaDeNoche');
+    for (const superficie of [
+      'app/booking/[slug]/page.tsx',
+      'components/hospitality/booking/BookingWizard.tsx',
+    ]) {
+      const codigo = leer(superficie);
+      expect(codigo, `${superficie} no localiza la fecha de la noche`).toContain('fechaDeNoche');
+      // `new Date('2026-09-25')` es medianoche UTC: en América se lee como el 24.
+      expect(codigo, `${superficie} parsea la fecha de la noche en UTC`).not.toMatch(
+        /new Date\(noche\.fecha\)/
+      );
+    }
+  });
+});

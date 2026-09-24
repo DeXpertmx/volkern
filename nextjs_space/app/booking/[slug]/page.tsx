@@ -40,6 +40,8 @@ import { Badge } from '@/components/ui/badge';
 import {
   CHECKIN_TEXTOS,
   TEXTOS,
+  fechaDeNoche,
+  fechaLarga,
   interpolar,
   idiomaDesdeUrl,
   IDIOMAS,
@@ -81,6 +83,12 @@ interface UnidadCotizada extends UnidadCatalogo {
   motivo?: string;
   noches: number;
   precioTotal: number | null;
+  /**
+   * Precio por noche con su fecha cuando el plan tiene temporadas (el motor la
+   * devuelve solo en ese caso). Con temporadas la página lista las noches; la
+   * media por noche no es ningún precio que el huésped vaya a pagar.
+   */
+  desgloseNoches?: Array<{ fecha: string; tarifa: number }> | null;
 }
 
 /**
@@ -399,9 +407,13 @@ function BookingCliente() {
                       <div className="font-bold">
                         {moneda(u.precioTotal || 0, u.moneda)}
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        {moneda(u.tarifaNoche || 0, u.moneda)}/{t.porNoche}
-                      </div>
+                      {/* Con temporadas no se enseña una media por noche: el
+                          detalle de abajo dice lo que cuesta cada noche. */}
+                      {u.desgloseNoches && u.desgloseNoches.length > 0 ? null : (
+                        <div className="text-xs text-muted-foreground">
+                          {moneda(u.tarifaNoche || 0, u.moneda)}/{t.porNoche}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <Badge variant="outline">{t.motivos[u.motivo || 'ocupada'] ?? u.motivo}</Badge>
@@ -411,6 +423,26 @@ function BookingCliente() {
                       {elegida?.id === u.id ? t.elegida : t.elegir}
                     </Button>
                   )}
+                  {/* Desglose noche a noche de la estancia en temporada: la
+                      noche cuesta la tarifa de SU fecha, y la lista ocupa su
+                      propia línea dentro de la tarjeta. */}
+                  {u.disponible && u.desgloseNoches && u.desgloseNoches.length > 0 ? (
+                    <div className="w-full rounded-md bg-muted/50 p-3">
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        {t.desglosePorNoche}
+                      </p>
+                      <ul className="mt-1 space-y-1 text-xs">
+                        {u.desgloseNoches.map((noche) => (
+                          <li key={noche.fecha} className="flex justify-between gap-3">
+                            <span className="text-muted-foreground">
+                              {fechaLarga(fechaDeNoche(noche.fecha), idioma) || noche.fecha}
+                            </span>
+                            <span className="font-medium">{moneda(noche.tarifa, u.moneda)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                 </CardContent>
               </Card>
             ))}

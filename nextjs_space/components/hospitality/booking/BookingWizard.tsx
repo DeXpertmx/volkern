@@ -43,6 +43,8 @@ import {
   IDIOMAS,
   IDIOMA_POR_DEFECTO,
   WIZARD_TEXTOS,
+  fechaDeNoche,
+  fechaLarga,
   interpolar,
   nocheONoches,
   type Idioma,
@@ -85,6 +87,12 @@ interface UnidadCotizadaUI {
   tipo: string;
   capacidad: number;
   tarifaPorNoche: number;
+  /**
+   * Precio por noche con su fecha cuando el plan tiene temporadas (null = tarifa
+   * plana). El asistente no calcula nada: solo elige entre enseñar esta lista y
+   * enseñar la línea «N noches × tarifa».
+   */
+  desgloseNoches?: Array<{ fecha: string; tarifa: number }> | null;
   desglose: { alojamiento: number; limpieza: number; total: number; anticipo: number; saldo: number };
 }
 
@@ -414,12 +422,29 @@ export function BookingWizard({
                   {interpolar(t.hastaHuespedes, { n: u.capacidad })}
                 </span>
                 <div className="grid gap-1">
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>
-                      {noches} × {formatearImporte(u.tarifaPorNoche, moneda)}
-                    </span>
-                    <span>{formatearImporte(u.desglose.alojamiento, moneda)}</span>
-                  </div>
+                  {/* Estancia en temporada: la noche cuesta la tarifa de SU
+                      fecha, así que se listan una a una. La media del rango no
+                      es ningún precio que el huésped pueda pagar. */}
+                  {u.desgloseNoches && u.desgloseNoches.length > 0 ? (
+                    <>
+                      <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        {t.desglosePorNoche}
+                      </div>
+                      {u.desgloseNoches.map((noche) => (
+                        <div key={noche.fecha} className="flex justify-between text-muted-foreground">
+                          <span>{fechaLarga(fechaDeNoche(noche.fecha), idioma) || noche.fecha}</span>
+                          <span>{formatearImporte(noche.tarifa, moneda)}</span>
+                        </div>
+                      ))}
+                    </>
+                  ) : (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>
+                        {noches} × {formatearImporte(u.tarifaPorNoche, moneda)}
+                      </span>
+                      <span>{formatearImporte(u.desglose.alojamiento, moneda)}</span>
+                    </div>
+                  )}
                   {u.desglose.limpieza > 0 ? (
                     <div className="flex justify-between text-muted-foreground">
                       <span>{t.limpieza}</span>

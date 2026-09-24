@@ -55,6 +55,8 @@ export interface BookingTextos {
   noche: string;
   noches: string;
   porNoche: string;
+  /** «Precio por noche»: encabezado del desglose noche a noche de la estancia. */
+  desglosePorNoche: string;
   hastaPersonas: string; // «hasta {n} personas»
   elegir: string;
   elegida: string;
@@ -109,6 +111,7 @@ export const TEXTOS: Record<Idioma, BookingTextos> = {
     noche: 'noche',
     noches: 'noches',
     porNoche: 'noche',
+    desglosePorNoche: 'Precio por noche',
     hastaPersonas: 'hasta {n} personas',
     elegir: 'Elegir',
     elegida: 'Elegida',
@@ -164,6 +167,7 @@ export const TEXTOS: Record<Idioma, BookingTextos> = {
     noche: 'night',
     noches: 'nights',
     porNoche: 'night',
+    desglosePorNoche: 'Price per night',
     hastaPersonas: 'up to {n} guests',
     elegir: 'Select',
     elegida: 'Selected',
@@ -258,6 +262,8 @@ export interface WizardTextos {
   /** Paso 2. */
   noche: string;
   noches: string;
+  /** «Precio por noche»: encabezado del desglose noche a noche de la estancia. */
+  desglosePorNoche: string;
   cambiarFechas: string;
   sinDisponibilidad: string;
   /** «Hasta {n} huéspedes» */
@@ -308,6 +314,7 @@ export const WIZARD_TEXTOS: Record<Idioma, WizardTextos> = {
     verDisponibilidad: 'Ver disponibilidad',
     noche: 'noche',
     noches: 'noches',
+    desglosePorNoche: 'Precio por noche',
     cambiarFechas: 'Cambiar fechas',
     sinDisponibilidad: 'No hay unidades libres para esas fechas. Prueba otras fechas.',
     hastaHuespedes: 'Hasta {n} huéspedes',
@@ -351,6 +358,7 @@ export const WIZARD_TEXTOS: Record<Idioma, WizardTextos> = {
     verDisponibilidad: 'View availability',
     noche: 'night',
     noches: 'nights',
+    desglosePorNoche: 'Price per night',
     cambiarFechas: 'Change dates',
     sinDisponibilidad: 'No units free for those dates. Please try other dates.',
     hastaHuespedes: 'Up to {n} guests',
@@ -683,6 +691,21 @@ export const PLANTILLAS_SUGERIDAS: Record<Idioma, Record<string, PlantillaHuespe
 /** Plantilla sugerida para un evento e idioma (null si no existe). */
 export function plantillaSugerida(evento: string, idioma: Idioma): PlantillaHuesped | null {
   return PLANTILLAS_SUGERIDAS[idioma]?.[evento] ?? null;
+}
+
+/**
+ * Fecha de una noche (`YYYY-MM-DD`) como día LOCAL del calendario.
+ *
+ * `new Date('2026-09-25')` es medianoche UTC: en una zona con offset negativo la
+ * noche del 25 se leería como el 24 —justo en el desglose que el huésped está
+ * mirando—. El `T00:00:00` sin zona lo interpreta el navegador como hora local,
+ * que es el mismo criterio que la disponibilidad del servidor (`startOfDay`).
+ * Devuelve null si la fecha no está bien formada.
+ */
+export function fechaDeNoche(fecha: string): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return null;
+  const dia = new Date(`${fecha}T00:00:00`);
+  return Number.isNaN(dia.getTime()) ? null : dia;
 }
 
 /** Fecha larga localizada para las variables {{checkIn}}/{{checkOut}}. */

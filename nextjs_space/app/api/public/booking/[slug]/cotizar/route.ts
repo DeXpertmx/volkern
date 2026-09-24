@@ -63,6 +63,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
         tipo: u.tipo,
         capacidad: u.capacidad,
         tarifaPorNoche: u.tarifaPorNoche,
+        // Precio noche a noche cuando el plan tiene temporadas: es lo que el
+        // asistente enseña en su desglose en vez de la media del rango (null =
+        // tarifa plana, que no necesita detalle).
+        desgloseNoches: u.desgloseNoches,
         desglose: {
           alojamiento: u.cotizacion.alojamiento,
           limpieza: u.cotizacion.limpieza,

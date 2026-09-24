@@ -5,8 +5,13 @@
  * SIEMPRE el Availability Engine central (`unitAvailability`): este módulo
  * no reimplementa ninguna regla de ocupación (guardia de "un solo motor").
  *
- * Precio: noches × tarifa del rate plan activo de la unidad (la tarifa por
- * noche ya vive en `HospitalityRatePlan.tarifa`, sincronizada con el canal).
+ * Precio: la tarifa del rate plan activo de la unidad (la tarifa por noche ya
+ * vive en `HospitalityRatePlan.tarifa`, sincronizada con el canal) multiplicada
+ * por las noches — y, cuando el plan tiene **estacionalidad**, la suma noche a
+ * noche con las MISMAS reglas que el resto del sistema (`./estacionalidad`, el
+ * módulo que también tarifica el asistente y el push de canales). Con
+ * temporadas el detalle viaja en `desgloseNoches`: la media del rango no es
+ * ningún precio real y nadie la paga.
  * Restricciones del plan: `minNoches`, `maxNoches` y días de llegada/salida.
  *
  * Cada unidad cotiza con las restricciones de SU plan (`unidades[].ratePlan`),
@@ -19,6 +24,7 @@
 
 import { unitAvailability, type ActiveReservationSpan, type ActiveUnitBlockSpan } from './availability';
 import { startOfDay, toIsoDate } from './calendar';
+import { serieDeTarifas, tieneEstacionalidad, totalDeSerie } from './estacionalidad';
 
 export const CANAL_BOOKING_ENGINE = 'Directa';
 
@@ -39,7 +45,18 @@ export interface CotizacionInput {
    * de arriba queda como valor por defecto cuando la unidad no trae el suyo
    * (una sola unidad cotizada, como en la creación de la reserva).
    */
-  unidades: Array<{ id: string; tarifaNoche: number | null; moneda: string; ratePlan?: RestriccionesVenta | null }>;
+  unidades: Array<{
+    id: string;
+    tarifaNoche: number | null;
+    moneda: string;
+    ratePlan?: RestriccionesVenta | null;
+    /**
+     * Estacionalidad del plan de la unidad (el Json crudo `temporadas` /
+     * `finDeSemana`, tal como vive en la fila). Presente y utilizable → el
+     * precio se suma noche a noche; ausente → noches × tarifa, como siempre.
+     */
+    estacionalidad?: unknown;
+  }>;
   reservas: ActiveReservationSpan[];
   bloques?: ActiveUnitBlockSpan[];
   ratePlan?: RestriccionesVenta | null;
@@ -78,6 +95,12 @@ export interface CotizacionUnidad {
   motivo?: 'ocupada' | 'min_noches' | 'max_noches' | 'dia_checkin' | 'dia_checkout' | 'sin_tarifa';
   noches: number;
   precioTotal: number | null;
+  /**
+   * Precio por noche con su fecha cuando el plan tiene estacionalidad (`null`
+   * en el cálculo plano, que no necesita desglose): es lo que la página enseña
+   * noche a noche en vez de una media que nadie cobra.
+   */
+  desgloseNoches: Array<{ fecha: string; tarifa: number }> | null;
   moneda: string;
 }
 
@@ -120,6 +143,20 @@ export function cotizarEstancia(input: CotizacionInput): Cotizacion {
   const diaLlegada = inicio.getDay();
   const diaSalida = fin.getDay();
 
+  /** Unidad que no se puede vender: misma causa que el Availability Engine, sin precio. */
+  const sinVender = (
+    unidad: { id: string; moneda: string },
+    motivo: CotizacionUnidad['motivo']
+  ): CotizacionUnidad => ({
+    unitId: unidad.id,
+    disponible: false,
+    motivo,
+    noches: nNoches,
+    precioTotal: null,
+    desgloseNoches: null,
+    moneda: unidad.moneda,
+  });
+
   const unidades: CotizacionUnidad[] = input.unidades.map((u) => {
     // Restricciones del plan de esta unidad (o las del plan por defecto).
     const restricciones = restriccionesDeRatePlan(u.ratePlan ?? input.ratePlan);
@@ -136,27 +173,57 @@ export function cotizarEstancia(input: CotizacionInput): Cotizacion {
       input.bloques || [],
     );
     if (!serie.every((d) => d.disponible)) {
-      return { unitId: u.id, disponible: false, motivo: 'ocupada', noches: nNoches, precioTotal: null, moneda: u.moneda };
+      return sinVender(u, 'ocupada');
     }
     // 2) Restricciones de venta del rate plan.
     if (nNoches < minNoches) {
-      return { unitId: u.id, disponible: false, motivo: 'min_noches', noches: nNoches, precioTotal: null, moneda: u.moneda };
+      return sinVender(u, 'min_noches');
     }
     if (maxNoches != null && nNoches > maxNoches) {
-      return { unitId: u.id, disponible: false, motivo: 'max_noches', noches: nNoches, precioTotal: null, moneda: u.moneda };
+      return sinVender(u, 'max_noches');
     }
     if (checkInDias && !checkInDias.includes(diaLlegada)) {
-      return { unitId: u.id, disponible: false, motivo: 'dia_checkin', noches: nNoches, precioTotal: null, moneda: u.moneda };
+      return sinVender(u, 'dia_checkin');
     }
     if (checkOutDias && !checkOutDias.includes(diaSalida)) {
-      return { unitId: u.id, disponible: false, motivo: 'dia_checkout', noches: nNoches, precioTotal: null, moneda: u.moneda };
+      return sinVender(u, 'dia_checkout');
     }
-    // 3) Precio: noches × tarifa por noche del rate plan.
+    // 3) Precio: la tarifa del plan por cada noche.
     if (u.tarifaNoche == null || u.tarifaNoche <= 0) {
-      return { unitId: u.id, disponible: false, motivo: 'sin_tarifa', noches: nNoches, precioTotal: null, moneda: u.moneda };
+      return sinVender(u, 'sin_tarifa');
     }
+
+    // Con estacionalidad, la noche cuesta la tarifa de SU fecha (temporada, o
+    // recargo de fin de semana) y el total es la suma de la serie: el mismo
+    // cálculo del asistente y del push, hecho por el mismo módulo. Se devuelve
+    // el detalle noche a noche para que la página pueda enseñarlo en vez de una
+    // media que nadie paga.
+    if (tieneEstacionalidad(u.estacionalidad)) {
+      const tarifasPorNoche = serieDeTarifas({
+        desde: inicio,
+        hasta: fin,
+        tarifaBase: u.tarifaNoche,
+        plan: { tarifa: u.tarifaNoche, estacionalidad: u.estacionalidad },
+      });
+      const precioTotal = totalDeSerie(tarifasPorNoche);
+      if (precioTotal === null) {
+        return sinVender(u, 'sin_tarifa');
+      }
+      return {
+        unitId: u.id,
+        disponible: true,
+        noches: nNoches,
+        precioTotal,
+        desgloseNoches: tarifasPorNoche.map((f) => ({
+          fecha: f.fecha,
+          tarifa: Math.round((f.tarifa ?? 0) * 100) / 100,
+        })),
+        moneda: u.moneda,
+      };
+    }
+
     const precioTotal = Math.round(u.tarifaNoche * nNoches * 100) / 100;
-    return { unitId: u.id, disponible: true, noches: nNoches, precioTotal, moneda: u.moneda };
+    return { unitId: u.id, disponible: true, noches: nNoches, precioTotal, desgloseNoches: null, moneda: u.moneda };
   });
 
   const monedas = new Set(unidades.map((u) => u.moneda));
