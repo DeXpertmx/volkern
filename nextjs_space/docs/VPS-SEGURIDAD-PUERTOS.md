@@ -287,6 +287,21 @@ Exit 0 = conforme; exit 1 = DERIVA. No imprime secretos.
 - `/root/DERIVA-AUDITORIA` — si este fichero existe, la ultima pasada
   detecto deriva: mirar el log y actuar.
 
+**Aviso activo por Telegram (2026-09-24)**: el auditor ya no depende de
+que alguien mire el log. En deriva empuja un resumen (hasta 4 lineas de
+DERIVA + hora) por el apprise del VPS al chat de Bruno con
+`@VolkernNotify_bot` (chat 646107192); al volver a CONFORME avisa de la
+recuperacion y limpia el marcador; conforme en estado estable = silencio
+(sin spam horario). Detalles de operacion: el canal del apprise es
+`tgram://<token>/646107192` y se lee del `apprise.cfg` del volumen en
+tiempo de ejecucion (el token no vive en el repo ni en el script); la
+llamada es `docker exec` dentro del contenedor apprise porque las IPs
+overlay NO son alcanzables desde el host; y un fallo de notificacion
+NUNCA altera el exit code de la auditoria. Probado en vivo con una
+deriva controlada (abrir 5432 en ufw): llego el aviso, se creo el
+marcador; restaurado el firewall, llego el aviso de recuperacion y el
+marcador se limpio. El centinela del §11 comparte la misma mecanica.
+
 Uso desde el puesto (ruta real de Internet + secreto local):
 
 ```bash
@@ -362,9 +377,11 @@ destino del dominio `volkerntable.com`.
 `/root/`, sincronizada y verificada por sha256 desde el deploy igual que
 el auditor). Alerta si el crontab de root vuelve a citar el legado o
 aparece cualquier `/etc/cron.d/*volkern*` (los crons del ERP viven en el
-crontab, NUNCA en `/etc/cron.d`): senal = marcador `/root/DERIVA-LEGADO`
-y linea `[legado]` en el log compartido. Probado en las tres direcciones:
-reposo (exit 0), deteccion por crontab y por fichero (exit 1 + marcador).
+crontab, NUNCA en `/etc/cron.d`): senal = marcador `/root/DERIVA-LEGADO`,
+linea `[legado]` en el log compartido **y aviso Telegram por apprise**
+(misma mecanica del §10); al volver al reposo avisa de la recuperacion y
+limpia el marcador. Probado en las tres direcciones: reposo (exit 0),
+deteccion por crontab y por fichero (exit 1 + marcador).
 
 **Sincronizacion con el deploy**: `deploy-local.sh` sube la copia del repo
 a `/root/auditar-superficie.sh` en cada despliegue y verifica la identidad

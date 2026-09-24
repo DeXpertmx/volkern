@@ -44,9 +44,31 @@ APPS_ESPERADAS='https://volkern.app:200 https://erp.dimension.expert:200 https:/
 FICHEROS_DB_PASS_ESPERADOS=5
 
 DERIVA=0
+DERIVA_LINES=()
 FICHEROS=()
 
-falla() { DERIVA=1; echo "  X DERIVA: $1"; }
+falla() { DERIVA=1; DERIVA_LINES+=("X DERIVA: $1"); echo "  X DERIVA: $1"; }
+
+# Aviso por Telegram via el apprise del VPS (canal verificado 2026-09-24,
+# chat de Bruno con @VolkernNotify_bot). La ruta es docker exec: las IPs
+# overlay NO son alcanzables desde el host. Un fallo de notificacion jamas
+# altera el resultado de la auditoria.
+avisar() {
+  docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^apprise_apprise-api' || return 0
+  local A URLS BODY
+  A=$(docker ps --filter name=apprise_apprise-api --format '{{.Names}}' | head -1)
+  URLS=$(sed -n 's#^tgram://\([^?]*\)$#tgram://\1/646107192#p' /var/lib/docker/volumes/apprise_apprise-data/_data/apprise.cfg 2>/dev/null) || return 0
+  [ -z "$URLS" ] && return 0
+  BODY=$(python3 - "$URLS" "$1" "$2" <<'PYAP'
+import json, sys
+print(json.dumps({"urls": sys.argv[1], "title": sys.argv[2], "body": sys.argv[3], "type": "warning"}))
+PYAP
+) || return 0
+  if docker exec "$A" curl -s -m 20 -X POST http://127.0.0.1:8000/notify -H 'Content-Type: application/json' -d "$BODY" >/dev/null 2>&1; then
+    echo "  (aviso enviado por Telegram)"
+  fi
+  return 0
+}
 ok()    { echo "  = $1"; }
 titulo() { echo; echo "== $1 =="; }
 fichero() { FICHEROS+=("$1"); printf '%s\n' "$2" > "/tmp/auditor-$1"; }
@@ -185,8 +207,17 @@ fi
 titulo "RESULTADO"
 if [ "$DERIVA" -eq 0 ]; then
   echo "  SUPERFICIE CONFORME: coincide con docs/VPS-SEGURIDAD-PUERTOS.md"
+  if [ -f /root/DERIVA-AUDITORIA ]; then
+    avisar "VPS auditor: SUPERFICIE RECUPERADA" "La superficie volvio a CONFORME tras la deriva previa. Hora: $(date -Is)"
+    rm -f /root/DERIVA-AUDITORIA
+  fi
   exit 0
 else
+  N=${#DERIVA_LINES[@]}
+  RESUMEN=$(printf '%s\n' "${DERIVA_LINES[@]:-deriva sin detalle}" | head -4 | tr '\n' ' ' | cut -c1-500)
+  [ "$N" -gt 4 ] && RESUMEN="$RESUMEN ...($((N-4)) mas)"
+  avisar "VPS auditor: DERIVA DETECTADA" "$RESUMEN | hora: $(date -Is) | log: /var/log/auditoria-superficie.log"
+  touch /root/DERIVA-AUDITORIA
   echo "  *** DERIVA DETECTADA. Dos salidas posibles: ***"
   echo "    1) Revertir el cambio no autorizado en el VPS."
   echo "    2) Si el cambio es a posta: actualizar runbook §9/§10 y las"
