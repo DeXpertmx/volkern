@@ -51,8 +51,12 @@ export default function ImpersonationBanner() {
       if (res.ok) {
         toast.success('Suplantación finalizada');
         setImpersonatingTenant(null);
-        // Recargar para limpiar el contexto global y volver al panel del admin
-        window.location.href = '/admin/tenants';
+        // Recargar para limpiar el contexto global y volver al panel del admin.
+        // Ojo con la ruta: los tenants del backoffice están en `/admin/saas/tenants`.
+        // Aquí ponía `/admin/tenants`, que no existe (no hay carpeta `tenants`
+        // bajo `app/admin/`), así que detener la suplantación terminaba en un 404.
+        // El fallo no se veía porque hasta hoy era imposible llegar a suplantar.
+        window.location.href = '/admin/saas/tenants';
       } else {
         toast.error('Error al detener la suplantación');
       }
