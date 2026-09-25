@@ -393,3 +393,49 @@ Cuando cambie la superficie a posta (nuevo servicio publicado, nueva app,
 rotacion con distinto numero de ficheros), actualizar §9/§10 y las listas
 de `auditar-superficie.sh` **en el mismo commit** — el auditor compara
 contra su propio baseline, no contra el git.
+
+## 12. Definir `ENCRYPTION_KEY` y rotar los secretos cifrados (2026-09-25)
+
+Aplicada el 2026-09-25. Hasta ese dia `lib/core/crypto.ts` (AES-256-CBC,
+formato `iv_hex:ct_hex`) cifraba con la clave **por defecto incrustada** por
+no estar definida la env `ENCRYPTION_KEY`: cualquiera con acceso al repo
+podia descifrar los secretos de la BD (hallazgo del incidente del webhook
+401). Ahora la clave existe y los datos ya no se cifran con la de fabrica.
+
+Alcance real de la rotacion (inventario previo, no se toca lo vacio):
+`connectivity_providers` (partnerId/username/password, 1 fila) y
+`client_signature_settings` (apiToken/webhookSecret, 1 fila). El vault de
+sueldos usa `MASTER_KEY`+`TENANT_PEPPER` (otro esquema, intacto) y los
+tokens de telegram viven en claro (otros modelos).
+
+1. **Inventario**: columnas `*Enc` de `information_schema` + recuento con
+   formato cifrado `^[0-9a-f]{32}:[0-9a-f]+$`. pgcrypto NO es compatible con
+   el IV prefijado en PG17 (`aes-256-cbc/iv:...` = "Unknown option"), asi que
+   la rotacion se hace en Node dentro del contenedor de la app: mismas
+   primitivas que la app, cero riesgo de formato.
+2. **Respaldo previo**: volcado de los valores cifrados a
+   `/root/respaldo-cifrados-encryption-key-*.txt` (600).
+3. **Clave nueva**: 32 bytes aleatorios generados con node dentro del
+   contenedor, guardados en `/root/.encryption_key` (600) y anadida a
+   `/root/volkern-erp/.env` (600) para que sobreviva a `stack deploy`/rollback.
+4. **Rotar ANTES de inyectar** la env: `node rotar.js` (puro, lee por stdin
+   `tabla|columna|id|valor` desde psql, emite SQL transaccional con los
+   re-cifrados; el plaintext nunca sale de los pipes) aplicado con
+   `psql -v ON_ERROR_STOP=1`. Verificacion por HUELLAS sha256 truncadas
+   (`verificar.js`): 5/5 OK con la nueva (mismas huellas que con la vieja:
+   mismos plaintexts) y 0/5 con la vieja tras rotar.
+5. **Inyectar**: `docker service update --env-add ENCRYPTION_KEY=...`
+   (la spec del servicio la conserva; `--force` rollback incluido). El
+   contenedor se recrea: si se necesita re-verificar, re-copiar los scripts.
+6. **Probar E2E**: «Probar conexion» del panel (`getConnectivityCredentials`
+   descifra con la clave nueva y autentica contra el proveedor) -> exito,
+   `estado=conectado`, `contadorErrores=0`. Webhook entrante OK (401 con
+   par distinto).
+7. **Verificacion en la BD**: CREATE EXTENSION pgcrypto NO hace falta para
+   el cifrado de la app (es Node); se dejo instalado al descartar la via SQL.
+
+Nunca escribir la clave en ficheros versionados (`.env.vps`,
+`.env.production.local` estan trackeados en git). El endurecimiento del
+codigo (aviso de arranque en produccion si falta la env, `Crypto.estaUsando-
+ClavePorDefecto()` y guardia `tests/core-crypto-default-key.test.ts`) viajo
+en el despliegue siguiente a la rotacion.
