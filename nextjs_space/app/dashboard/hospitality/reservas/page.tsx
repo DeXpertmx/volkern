@@ -45,7 +45,9 @@ import { nightsBetween } from '@/lib/hospitality/calendar';
 import { diaLocalIso } from '@/lib/hospitality/reservas-csv';
 import { resumenReservas } from '@/lib/hospitality/analytics';
 import { POLITICAS_NO_SHOW, ETIQUETA_POLITICA_NO_SHOW } from '@/lib/hospitality/no-show';
-import { ETIQUETA_FIANZA } from '@/lib/hospitality/fianza';
+// Módulo PURO (sin Prisma): `@/lib/hospitality/fianza` sí abre la BD y no se
+// puede importar desde un componente cliente.
+import { ETIQUETA_FIANZA } from '@/lib/hospitality/fianza-estados';
 import { Button } from '@/components/ui/button';
 import { AccionHospitality } from '@/components/hospitality/AccionHospitality';
 import { MONEDAS_SELECCIONABLES, formatearImporte, monedaEfectiva, primeraMoneda } from '@/lib/moneda';
