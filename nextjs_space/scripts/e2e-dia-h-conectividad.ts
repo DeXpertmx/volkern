@@ -17,6 +17,10 @@
  *      queda en silencio.
  *   6. El proveedor EMPUJA una reserva (webhook `book` al producto, con Basic
  *      Auth) → la reserva entra en el ERP, con su token de check-in.
+ *   6b. Contrapruebas del 401 del webhook ENTRANTE contra el simulador:
+ *       sin cabecera (401 sin_cabecera), `basic` en minúsculas (200, RFC
+ *       7235) y otro esquema (401 esquema_no_basic con el esquema visto): el
+ *       diagnóstico que pinta /admin/conectividad, cubierto en el ensayo.
  *   7. `modify` y `cancel` sobre la misma reserva, y el ciclo `book` repetido
  *      (idempotencia: no duplica).
  *   8. Reconciliación: `data` devuelve la reserva que el proveedor tiene.
@@ -173,6 +177,8 @@ async function peticionesDelSimulador(): Promise<Array<Record<string, unknown>>>
 async function empujarWebhook(
   payload: Record<string, unknown>,
   credenciales?: { usuario: string; password: string },
+  /** Contrapruebas del 401: cabecera Authorization EXACTA o ninguna. */
+  opciones?: { cabecera?: string; sinCabecera?: boolean },
 ): Promise<{ httpStatus: number; cuerpo: any; envoltorio: any }> {
   const res = await fetch(`${simuladorUrl}/_control/empujar-reserva`, {
     method: 'POST',
@@ -180,6 +186,8 @@ async function empujarWebhook(
     body: JSON.stringify({
       url: `${BASE_URL}/api/hospitality/webhook/reservations`,
       ...(credenciales ? { basicAuth: credenciales } : {}),
+      ...(opciones?.cabecera !== undefined ? { cabecera: opciones.cabecera } : {}),
+      ...(opciones?.sinCabecera ? { sinCabecera: true } : {}),
       ...payload,
     }),
   });
@@ -468,6 +476,63 @@ async function main(): Promise<void> {
       huéspedMalo.httpStatus === 401,
       'Contraprueba: el webhook con Basic Auth incorrecto se rechaza (401)',
       huéspedMalo,
+    );
+    comprobar(
+      huéspedMalo.cuerpo?.diagnostico?.motivo === 'credenciales_no_coinciden',
+      'Contraprueba: el 401 nombra el motivo (credenciales_no_coinciden) y las longitudes/huellas',
+      huéspedMalo.cuerpo?.diagnostico,
+    );
+
+    // Contrapruebas del 401 del webhook ENTRANTE, contra el simulador real: el
+    // diagnóstico que ahora vive en /admin/conectividad (motivo, longitudes,
+    // huellas) tiene que salir también en el ensayo del día H, no solo en
+    // producción con el proveedor delante.
+    const payloadSufijo = (s: string) =>
+      buildTestReservationPayload({
+        hotelCode: HOTEL_CODE,
+        roomCode: ROOM_CODE,
+        rateplanCode: RATEPLAN_CODE,
+        moneda: 'EUR',
+        sufijo: s,
+      }) as unknown as Record<string, unknown>;
+
+    const sinCabecera = await empujarWebhook(payloadSufijo('sin-cabecera'), undefined, { sinCabecera: true });
+    comprobar(
+      sinCabecera.httpStatus === 401 && sinCabecera.cuerpo?.diagnostico?.motivo === 'sin_cabecera',
+      'Contraprueba: sin cabecera Authorization → 401 con motivo sin_cabecera',
+      sinCabecera.cuerpo?.diagnostico,
+    );
+
+    // Esta contraprueba SÍ crea reserva (se acepta): el bookingId lleva el
+    // prefijo del ensayo y el huésped el email del ensayo para que la limpieza
+    // estándar (por PREFIJO_E2E + EMAIL_HUESPED) la borre sin nada extra.
+    const payloadMinusculas = {
+      ...payloadSufijo('basic-minusculas'),
+      bookingId: `${PREFIJO_E2E}-basic-minusculas`,
+      guest: {
+        firstName: 'Contraprueba',
+        lastName: 'Día H',
+        email: EMAIL_HUESPED,
+        phone: null,
+        address: { line1: 'Calle del Ensayo 1', city: 'Madrid', state: 'Madrid', country: 'ES', zipCode: '28001' },
+      },
+    };
+    const basicMinuscula = await empujarWebhook(payloadMinusculas, undefined, {
+      cabecera: `basic ${Buffer.from(`${CLAVES.username}:${CLAVES.password}`).toString('base64')}`,
+    });
+    comprobar(
+      basicMinuscula.httpStatus === 200 && basicMinuscula.cuerpo?.success === true,
+      'Contraprueba: `basic` en minúsculas se ACEPTA (RFC 7235), no se castiga con 401',
+      basicMinuscula.cuerpo,
+    );
+
+    const bearer = await empujarWebhook(payloadSufijo('bearer'), undefined, {
+      cabecera: 'Bearer abc.def.ghi',
+    });
+    comprobar(
+      bearer.httpStatus === 401 && bearer.cuerpo?.diagnostico?.motivo === 'esquema_no_basic' && bearer.cuerpo?.diagnostico?.esquema === 'bearer',
+      'Contraprueba: otro esquema (Bearer) → 401 con motivo esquema_no_basic y el esquema visto',
+      bearer.cuerpo?.diagnostico,
     );
 
     const payload = buildTestReservationPayload({
