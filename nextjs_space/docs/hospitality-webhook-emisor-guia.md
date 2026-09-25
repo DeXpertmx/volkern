@@ -92,10 +92,63 @@ Dos campos que **no son opcionales** aunque sea un aviso de no-presentación:
 |------|--------|--------------|------|
 | **200** | Aplicado, o ya estaba marcado (idempotente) | **No** | Nada que hacer. Reenviar el mismo evento no cambia nada y no duplica cargos. |
 | **404** | Tu `bookingId` no existe en Volkern | **Sí, con backoff limitado** | El `book` original puede estar aún en camino (entregas desordenadas). Espera el `Retry-After` y reintenta: 5 min → 1 h → 6 h, hasta **24 h** desde el primer 404. Si sigue 404, **escala a soporte**: significa que el `book` se perdió — reenviar el `book` original (no el `no_show` convertido en `book`). |
-| **401** | Credenciales incorrectas | **No** | Detén la cola y revisa credenciales. Reintentar no cambia nada. |
+| **401** | Credenciales incorrectas, o una cabecera que no se puede leer | **No** | Detén la cola y revisa credenciales. Reintentar no cambia nada. El cuerpo trae `diagnostico` (ver abajo): dice si el problema es el esquema, el base64 o el par. |
 | **400** | Payload inválido (falta `hotelCode`/`bookingId`/`channel`/`rooms`, acción desconocida, multi-habitación) | **No** | Es un defecto del payload, no transitorio. Corrige y envía solo si cambias el payload. |
 | **503** | Volkern aún no tiene la conectividad configurada | **Sí, con backoff** | Transitorio del receptor. Espera el `Retry-After` (60 s) y reintenta. |
 | **500** | Fallo interno no esperado | **Sí, con backoff** | Transitorio. Espera el `Retry-After` (60 s) y reintenta; todo el ciclo es idempotente, reintentar no duplica nada. |
+
+### Si te llega un 401: el campo `diagnostico` te dice por qué
+
+El 401 no es un «no» opaco. Trae `diagnostico` con el motivo y, cuando tus
+credenciales eran legibles, las **huellas** de lo que enviaste (nunca los
+valores, y nada de nuestro par guardado):
+
+```json
+{
+  "success": false,
+  "error": "No autorizado",
+  "diagnostico": {
+    "motivo": "credenciales_no_coinciden",
+    "esquema": "basic",
+    "usuarioLen": 7,
+    "passwordLen": 11,
+    "usuarioHuella": "8c7e40780bbf",
+    "huella": "30284edbd493"
+  }
+}
+```
+
+| `motivo` | Qué pasó del lado receptor | Qué hacer |
+|---|---|---|
+| `sin_cabecera` | La petición llegó **sin** `Authorization`. | Revisa que la cabecera se añade también en los reintentos y no la borra ningún proxy. |
+| `esquema_no_basic` | Llegó otro esquema (mira `esquema`: `bearer`…). | Corrige el emisor a `Basic`. |
+| `cabecera_malformada` | Esquema `basic` sin valor. | Cabecera truncada: revisa cómo la construyes. |
+| `encoding_no_utf8` | Los bytes decodificados no son UTF-8 (p. ej. latin-1). | Codifica el par en UTF-8 antes del base64. |
+| `sin_separador` | El base64 no decodifica a `usuario:contraseña`. | Falta el `:`. |
+| `credenciales_no_coinciden` | El par llegó completo pero no es el vigente. | Compara las huellas (abajo). |
+
+**Comparar huellas (sin intercambiar secretos).** `huella` es
+`sha256(usuario + ":" + contraseña)` truncado a los 12 primeros caracteres hex,
+calculado sobre **lo que llegó**. Calcula el tuyo igual y compáralo:
+
+```bash
+# mismo cálculo que hace el receptor, con lo que TÚ tienes configurado
+printf '%s:%s' "$USER" "$PASS" | sha256sum | cut -c1-12
+```
+
+- **Coincide** → tu configuración llegó intacta y el par vigente en el receptor
+es otro: pídele al equipo de Volkern el par que emite (o reenvíale el tuyo).
+- **No coincide** → algo altera la cabecera por el camino (proxy, codificación,
+recorte de comillas).
+
+> **Nota:** este diagnóstico no solo viaja en la respuesta: queda registrado en
+> el panel de administración de Volkern (`/admin/conectividad`), con motivo,
+> longitudes, huellas y hora. Si se te pierde una respuesta 401, el equipo de
+> Volkern puede leerte el último rechazo de la pantalla, sin tocar logs.
+
+El esquema `Basic` se acepta en cualquier caja y con espacios de más
+(`basic …` es válido, RFC 7235). Si cambian las credenciales, **pide las nuevas**:
+un 401 no se cura reintentando.
 
 ### La cabecera `Retry-After`
 

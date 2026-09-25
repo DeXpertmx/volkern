@@ -518,7 +518,7 @@ Lo que responde `POST /api/hospitality/webhook/reservations` a un
 | **200** | `{ success: true, status: "actualizada", reservationId, penalizacion }` | La reserva existía y estaba viva (`pending`/`confirmed`/`checked_in`): queda `no_show`. `penalizacion` trae `{ emitida, importe, motivo }` — `emitida: true` con el importe del cargo, o `emitida: false` con el motivo (`canal_del_proveedor`, `politica_ninguna`, `sin_importe`…). | Nada. No reenviar el evento. |
 | **200** | `{ success: true, status: "actualizada", reservationId, penalizacion: null }` | La reserva ya estaba `no_show` (o `checked_out`/`cancelled`): **idempotente**, no se toca ni re-emite cargo. | Nada. El reintento nunca duplica: el estado manda. |
 | **404** | `{ success: false, error: "Reserva no encontrada para marcar no_show" }` | El `bookingId` no existe (o nunca llegó un `book`). | Reintentar con **backoff** (p. ej. 1 min → 5 min → 1 h) hasta **24 h**: si el `book` original se perdió o llegó tarde, puede estar aún en camino. Si sigue 404, escalar al operador — un `no_show` sin reserva aquí es señal de que falta el `book`, no de que falte el no-show. **No** reenviar el `no_show` como `book`: el motor no lo creará. |
-| **401** | `{ success: false, error: "No autorizado" }` | Credenciales Basic incorrectas. | Detener reintentos: reintroducir no cambia nada. Revisar credenciales. |
+| **401** | `{ success: false, error: "No autorizado", diagnostico }` | Credenciales Basic incorrectas **o** cabecera inservible. `diagnostico.motivo` dice cuál de las dos sin ambigüedad (`sin_cabecera`, `esquema_no_basic`, `cabecera_malformada`, `encoding_no_utf8`, `sin_separador`, `credenciales_no_coinciden`). | Detener reintentos: reintroducir no cambia nada. Revisar credenciales. El diagnóstico ya separa lo que arregla el emisor (esquema, base64) de lo que es el par. |
 | **400** | `{ success: false, error }` | Payload inválido (falta `hotelCode`/`bookingId`/`channel`/`rooms`, acción desconocida, multi-habitación). | Detener reintentos: es un defecto del payload, no transitorio. Corregir y enviar de nuevo solo si se corrige el payload. |
 | **503** | `{ success: false, error: "Conectividad no configurada" }` | El receptor aún no tiene credenciales cargadas. | Reintentar con backoff: es transitorio del lado del receptor. |
 | **500** | `{ success: false, error: "Error interno" }` | Fallo no esperado del receptor. | Reintentar con backoff; el evento queda auditado aunque el reintento duplique nada (todo el ciclo es idempotente). |
@@ -543,6 +543,51 @@ escalando a partir de ese mínimo (en el 404: 5 min → 1 h… hasta el límite 
 24 h). Las respuestas **no** reintentables (200, 401, 400) no la llevan: su
 ausencia es parte del contrato. Guardia:
 `tests/hospitality-webhook-reservations-route.test.ts`.
+
+### Un 401 que se explica solo (diagnóstico sin secretos)
+
+**Por qué existe.** El 25 sep 2026 el emisor del proveedor recibió
+`{"success":false,"error":"No autorizado"}` tres veces (16:16 BDT, hotel
+`sandbox-pms`, partner `sample-pms`) y no había forma de saber desde ningún lado
+*qué* fallaba: ese body no distingue «no manda la cabecera» de «manda otro
+esquema», «el base64 viene roto» o «el par es otro». La comprobación de nuestro
+lado, con el par guardado, dio el mismo día: `property_details` del proveedor
+**200** y nuestro propio webhook **400 `Payload inválido`** — es decir, la
+credencial guardada es válida en las dos direcciones y lo que llega **no es ese
+par**. Sin diagnóstico, esa conclusión exige descifrar la fila a mano.
+
+**Qué lleva ahora el 401.** Además de `error`, un objeto `diagnostico`:
+
+| Campo | Cuándo | Qué es |
+|---|---|---|
+| `motivo` | siempre | `sin_cabecera`, `esquema_no_basic`, `cabecera_malformada`, `encoding_no_utf8`, `sin_separador` o `credenciales_no_coinciden`. |
+| `esquema` | siempre | El nombre del esquema recibido, en minúsculas (`basic`, `bearer`…) o `null` si no había cabecera. |
+| `usuarioLen`, `passwordLen` | par legible | Longitud de lo recibido. Compararlo con la propia configuración resuelve el caso casi siempre. |
+| `usuarioHuella`, `huella` | par legible | SHA-256 **truncado a 12 hex** del usuario recibido y de `usuario:contraseña` tal como llegaron. |
+
+Nunca viaja el valor recibido ni nada del par guardado (misma disciplina que
+`lib/hospitality/conectividad-secreto.ts`). La huella es **comparable**: el
+emisor hashea su par con la misma receta (`sha256(usuario + ":" + contraseña)`,
+12 primeros hex) y la coteja — si coincide, su configuración llegó intacta y el
+par guardado es otro; si no coincide, algo alteró la cabecera por el camino
+(proxy, codificación, recorte). El mismo objeto queda en el log del servidor
+como `[Hospitality] Webhook de reservas rechazado (401): {…}` y se **persiste**
+en la fila del proveedor (`configuracion.ultimoRechazoWebhook`, con su marca
+horaria): `/admin/conectividad` lo muestra en la tarjeta «Webhook de Reservas»
+— motivo, esquema, longitudes, huellas y hora — sin depender de los logs del
+servicio. El último evento de autenticación correcta no borra el registro: se
+queda como historial del último rechazo.
+
+**Esquema Basic, sin caja fija.** El nombre del esquema es insensible a
+mayúsculas y admite espacios de más (RFC 7235): un emisor que mande `basic …`
+autentica igual, y eso deja de disfrazarse de «credenciales malas».
+
+**Cómo se coteja el par guardado sin exponerlo.** El par vive cifrado en la
+fila global; para compararlo con el del proveedor sin imprimirlo, la sonda del
+VPS descifra dentro del contenedor y publica solo huellas y longitudes.
+Guardia de todo esto: `tests/hospitality-webhook-reservations-route.test.ts`
+(persistencia del rechazo incluida) y `tests/hospitality-conectividad-rechazo.test.ts`
+(normalización, etiquetas y exposición pública sin secretos).
 
 > **Para el equipo que implementa el emisor del proveedor** existe una guía de
 > integración con esta tabla en formato práctico (cola, backoff, checklist):

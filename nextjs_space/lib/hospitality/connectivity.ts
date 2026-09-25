@@ -2,6 +2,13 @@ import { prisma } from '@/lib/db';
 import { encrypt, decrypt } from '@/lib/core/crypto';
 import { TIPOS_SYNC_CONECTIVIDAD, type FalloConectividad } from './conectividad-causa';
 import { sanitizarRespuestaExterna } from './conectividad-secreto';
+// Último rechazo del webhook entrante (401): normalización pura para
+// persistirlo y para exponerlo ya legible al panel.
+import {
+  rechazoDesdeDiagnostico,
+  rechazoLegible,
+  type RechazoLegible,
+} from './conectividad-rechazo';
 import {
   preflightConectividad,
   resumenPreflight,
@@ -98,6 +105,8 @@ export async function getConnectivityPublic() {
       contadorErrores: 0,
       // Sin configuración no puede haber fallo previo de la capa.
       ultimoFallo: null,
+      // Sin configuración tampoco puede haber rechazos del webhook entrante.
+      ultimoRechazo: null as RechazoLegible | null,
     };
   }
 
@@ -131,6 +140,10 @@ export async function getConnectivityPublic() {
     contadorErrores: provider.contadorErrores,
     /** Último fallo de la capa (push/fetch de conectividad), en crudo para derivar la causa en el cliente. */
     ultimoFallo: ultimoFallo,
+    /** Último rechazo del webhook ENTRANTE (401), ya legible (motivo, longitudes, huellas, hora). */
+    ultimoRechazo: rechazoLegible(
+      (provider.configuracion as Record<string, unknown> | null)?.ultimoRechazoWebhook
+    ),
   };
 }
 
@@ -231,11 +244,27 @@ export async function updateConnectivityStatus(input: {
   resetErrores?: boolean;
   /** Marca del health-check diario (sonda property_details) y de «Probar». */
   ultimaVerificacion?: Date;
+  /**
+   * Diagnóstico del 401 del webhook ENTRANTE tal como se construyó en la
+   * ruta. Se persiste en `configuracion.ultimoRechazoWebhook` con su marca
+   * horaria para que el panel lo muestre sin depender de los logs del
+   * servicio. Solo metadatos: la pieza pura normaliza y descarta otra forma.
+   */
+  registroRechazo?: Record<string, unknown>;
 }) {
   const provider = await getConnectivityProvider();
   if (!provider) return null;
 
   const data: any = { fechaEdicion: new Date() };
+  if (input.registroRechazo) {
+    const rechazo = rechazoDesdeDiagnostico(input.registroRechazo, new Date());
+    if (rechazo) {
+      data.configuracion = {
+        ...((provider.configuracion as Record<string, unknown> | null) ?? {}),
+        ultimoRechazoWebhook: rechazo,
+      };
+    }
+  }
   if (input.estado !== undefined) data.estado = input.estado;
   if (input.ultimaSincronizacion !== undefined) data.ultimaSincronizacion = input.ultimaSincronizacion;
   if (input.ultimoEvento !== undefined) data.ultimoEvento = input.ultimoEvento;
