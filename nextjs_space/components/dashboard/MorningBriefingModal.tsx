@@ -21,7 +21,9 @@ import {
   Brain,
   ListTodo
 } from 'lucide-react';
-import { BriefingData } from '@/lib/sales/morning-briefing-service';
+// `import type`: sin la palabra `type` el bundler no puede elidir el import y
+// se lleva el servicio entero (Prisma incluido) al bundle del navegador.
+import type { BriefingData } from '@/lib/sales/morning-briefing-service';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';

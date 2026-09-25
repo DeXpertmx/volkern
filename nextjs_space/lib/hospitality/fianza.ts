@@ -29,29 +29,19 @@
 import { prisma } from '@/lib/db';
 import { monedaEscritura } from '@/lib/moneda';
 import { formatearImporte } from '@/lib/moneda';
+import {
+  CONCEPTOS,
+  TIPO_LINEA_FIANZA,
+  estadoDesdeConcepto,
+  fianzaAusente,
+  type EstadoFianza,
+  type ResultadoFianza,
+} from './fianza-estados';
 
-/** Tipo de línea de reserva que representa la fianza. */
-export const TIPO_LINEA_FIANZA = 'fianza';
-
-export interface EstadoFianza {
-  /** Existe línea de fianza registrada. */
-  existe: boolean;
-  /** Concepto actual: pendiente | cobrada | devuelta | aplicada_daños | null. */
-  estado: 'pendiente' | 'cobrada' | 'devuelta' | 'aplicada_daños' | null;
-  /** Importe registrado (o lo que queda tras compensar daños). */
-  importe: number | null;
-  moneda: string | null;
-  itemId: string | null;
-  /** Fecha en la que se cambió de estado por última vez (fechaEdicion). */
-  actualizadaEn: Date | null;
-}
-
-const CONCEPTOS: Record<NonNullable<EstadoFianza['estado']>, string> = {
-  pendiente: 'Fianza (pendiente de cobro)',
-  cobrada: 'Fianza (cobrada — devolver a la salida)',
-  devuelta: 'Fianza (devuelta a la salida)',
-  'aplicada_daños': 'Fianza (aplicada a daños)',
-};
+// Reexport del módulo puro: la API (servidor) sigue importando todo desde aquí,
+// y el navegador importa las etiquetas desde './fianza-estados' sin arrastrar
+// Prisma. Ver el comentario de cabecera de ese archivo.
+export * from './fianza-estados';
 
 /** Lee el estado de la fianza de una reserva. Sin línea = sin fianza. */
 export async function estadoFianza(
@@ -64,28 +54,17 @@ export async function estadoFianza(
     select: { id: true, concepto: true, importeTotal: true, moneda: true, fechaEdicion: true },
   });
 
-  if (!item) {
-    return { existe: false, estado: null, importe: null, moneda: null, itemId: null, actualizadaEn: null };
-  }
-
-  let estado: EstadoFianza['estado'] = 'pendiente';
-  if (item.concepto.includes('Cobrada')) estado = 'cobrada';
-  else if (item.concepto.includes('Devuelta')) estado = 'devuelta';
-  else if (item.concepto.includes('Aplicada')) estado = 'aplicada_daños';
+  if (!item) return fianzaAusente();
 
   return {
     existe: true,
-    estado,
+    estado: estadoDesdeConcepto(item.concepto),
     importe: item.importeTotal,
     moneda: item.moneda,
     itemId: item.id,
     actualizadaEn: item.fechaEdicion,
   };
 }
-
-export type ResultadoFianza =
-  | { ok: true; accion: 'registrada' | 'cobrada' | 'devuelta' | 'aplicada'; importe: number; moneda: string; itemId: string }
-  | { ok: false; motivo: string; error: string };
 
 /**
  * Registra la fianza pendiente. Idempotente: si ya hay línea, no crea otra
@@ -207,14 +186,6 @@ export async function cambiarEstadoFianza(
     return { ok: false, motivo: 'error', error: error instanceof Error ? error.message : 'Error actualizando la fianza' };
   }
 }
-
-/** Etiquetas legibles del estado, para la ficha y los listados. */
-export const ETIQUETA_FIANZA: Record<NonNullable<EstadoFianza['estado']>, string> = {
-  pendiente: 'Pendiente de cobro',
-  cobrada: 'Cobrada — devolver a la salida',
-  devuelta: 'Devuelta',
-  'aplicada_daños': 'Aplicada a daños',
-};
 
 /**
  * Quita una fianza registrada por error. Solo si sigue pendiente: una cobrada
