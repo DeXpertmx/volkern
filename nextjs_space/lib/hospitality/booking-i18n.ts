@@ -57,6 +57,27 @@ export interface BookingTextos {
   porNoche: string;
   /** «Precio por noche»: encabezado del desglose noche a noche de la estancia. */
   desglosePorNoche: string;
+  /** Ficha pública de la propiedad: galería de fotos, ubicación y servicios. */
+  galeria: string;
+  /** «Ver las {n} fotos»: abre el visor a pantalla completa. */
+  verFotos: string;
+  sinFotos: string;
+  cerrar: string;
+  fotoAnterior: string;
+  fotoSiguiente: string;
+  ubicacion: string;
+  verMapa: string;
+  servicios: string;
+  /** Listado de unidades publicadas, antes de elegir fechas. */
+  disponiblesTitulo: string;
+  /** «{n} unidades publicadas»: el singular y el plural viven en el idioma. */
+  unidad: string;
+  unidades: string;
+  /** Prefijo del precio de una tarjeta: «desde 1.200 MXN / noche». */
+  desde: string;
+  consultarFechas: string;
+  /** «Hasta {n} personas», en la ficha de la propiedad. */
+  capacidadMaxima: string;
   hastaPersonas: string; // «hasta {n} personas»
   elegir: string;
   elegida: string;
@@ -112,6 +133,21 @@ export const TEXTOS: Record<Idioma, BookingTextos> = {
     noches: 'noches',
     porNoche: 'noche',
     desglosePorNoche: 'Precio por noche',
+    galeria: 'Fotos de la propiedad',
+    verFotos: 'Ver las {n} fotos',
+    sinFotos: 'La propiedad aún no ha publicado fotos',
+    cerrar: 'Cerrar',
+    fotoAnterior: 'Foto anterior',
+    fotoSiguiente: 'Foto siguiente',
+    ubicacion: 'Ubicación',
+    verMapa: 'Ver en el mapa',
+    servicios: 'Servicios del alojamiento',
+    disponiblesTitulo: 'Alojamientos disponibles',
+    unidad: 'unidad',
+    unidades: 'unidades',
+    desde: 'desde',
+    consultarFechas: 'Consultar fechas',
+    capacidadMaxima: 'Hasta {n} personas',
     hastaPersonas: 'hasta {n} personas',
     elegir: 'Elegir',
     elegida: 'Elegida',
@@ -168,6 +204,21 @@ export const TEXTOS: Record<Idioma, BookingTextos> = {
     noches: 'nights',
     porNoche: 'night',
     desglosePorNoche: 'Price per night',
+    galeria: 'Property photos',
+    verFotos: 'View all {n} photos',
+    sinFotos: 'The property has not published photos yet',
+    cerrar: 'Close',
+    fotoAnterior: 'Previous photo',
+    fotoSiguiente: 'Next photo',
+    ubicacion: 'Location',
+    verMapa: 'View on map',
+    servicios: 'Amenities',
+    disponiblesTitulo: 'Available accommodations',
+    unidad: 'unit',
+    unidades: 'units',
+    desde: 'from',
+    consultarFechas: 'Check dates',
+    capacidadMaxima: 'Up to {n} guests',
     hastaPersonas: 'up to {n} guests',
     elegir: 'Select',
     elegida: 'Selected',

@@ -7,6 +7,12 @@
  * unidad) → datos del huésped → confirmación. Si el hotel tiene Stripe
  * Connect activo, el último paso redirige al pago; si no, queda confirmada.
  *
+ * La propiedad se presenta como una ficha de alojamiento —galería de fotos,
+ * ubicación, servicios y descripción— y cada unidad publicada se enseña con su
+ * foto y su precio, también antes de pedir fechas: el huésped decide con lo que
+ * ve, no con lo que intuye. Los datos salen del servidor (`datosPublicosDePropiedad`
+ * de la API pública); esta página no inventa ninguno.
+ *
  * Es pública: no usa sesión. La propiedad se identifica por su id (slug) y
  * solo responde si está "conectada" (publicada vía Puesta en marcha).
  *
@@ -24,6 +30,8 @@ import { toast } from 'sonner';
 import {
   CalendarDays,
   CheckCircle2,
+  Home,
+  ImageOff,
   Languages,
   Loader2,
   Mail,
@@ -37,6 +45,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { FichaPropiedad, GaleriaPropiedad } from '@/components/hospitality/booking/FichaPropiedad';
 import {
   CHECKIN_TEXTOS,
   TEXTOS,
@@ -65,6 +74,24 @@ interface ResumenResenas {
   media: number | null;
   total: number;
   reseñas: ResenaPublica[];
+}
+
+/**
+ * Ficha pública de la propiedad (catálogo sin fechas y cotización con fechas
+ * devuelven la misma forma; lo que no venga publicado queda nulo y la ficha lo
+ * esconde en lugar de enseñar un hueco).
+ */
+interface PropiedadUI {
+  nombre: string;
+  descripcion: string | null;
+  ciudad: string | null;
+  estadoProvincia: string | null;
+  pais: string | null;
+  direccion: string | null;
+  latitud: number | null;
+  longitud: number | null;
+  fotos: string[];
+  moneda: string;
 }
 
 interface UnidadCatalogo {
@@ -145,6 +172,64 @@ function hoyMas(dias: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** Texto publicado o nulo: un campo vacío no es un dato. */
+function textoOpcional(valor: unknown): string | null {
+  return typeof valor === 'string' && valor.trim() ? valor : null;
+}
+
+/** Fotos publicables: solo URLs de texto, sin huecos. */
+function fotosDe(valor: unknown): string[] {
+  if (!Array.isArray(valor)) return [];
+  return valor.filter((x): x is string => typeof x === 'string' && x.trim().length > 0);
+}
+
+/**
+ * Normaliza la ficha que llega de la API. La página no confía en la forma del
+ * JSON: lo que falte o venga de otro tipo queda nulo y la ficha lo esconde.
+ */
+function normalizarPropiedad(cruda: unknown): PropiedadUI {
+  const datos = (cruda || {}) as Record<string, unknown>;
+  return {
+    nombre: typeof datos.nombre === 'string' ? datos.nombre : '',
+    descripcion: textoOpcional(datos.descripcion),
+    ciudad: textoOpcional(datos.ciudad),
+    estadoProvincia: textoOpcional(datos.estadoProvincia),
+    pais: textoOpcional(datos.pais),
+    direccion: textoOpcional(datos.direccion),
+    latitud: typeof datos.latitud === 'number' ? datos.latitud : null,
+    longitud: typeof datos.longitud === 'number' ? datos.longitud : null,
+    fotos: fotosDe(datos.fotos),
+    moneda: typeof datos.moneda === 'string' ? datos.moneda : '',
+  };
+}
+
+/** «Playa del Carmen · Quintana Roo · México»: solo lo que está publicado. */
+function ubicacionDe(propiedad: PropiedadUI): string | null {
+  const partes = [propiedad.ciudad, propiedad.estadoProvincia, propiedad.pais].filter(
+    (parte): parte is string => Boolean(parte)
+  );
+  return partes.length > 0 ? partes.join(' · ') : null;
+}
+
+/**
+ * Enlace al mapa: por coordenadas cuando la propiedad las tiene y, si no, por su
+ * dirección publicada. Sin ninguno de los dos no hay enlace —la ficha no manda a
+ * buscar una dirección que no existe—.
+ */
+function enlaceMapaDe(propiedad: PropiedadUI): string | null {
+  if (propiedad.latitud !== null && propiedad.longitud !== null) {
+    return `https://www.google.com/maps/search/?api=1&query=${propiedad.latitud},${propiedad.longitud}`;
+  }
+  const consulta = [propiedad.direccion, propiedad.ciudad, propiedad.pais].filter(Boolean).join(', ');
+  return consulta ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(consulta)}` : null;
+}
+
+/** Primera foto de la unidad o, si no tiene, la de la propiedad. */
+function fotoDeUnidad(unidad: { fotos: string[] }, propiedad: PropiedadUI | null): string | null {
+  if (unidad.fotos.length > 0) return unidad.fotos[0];
+  return propiedad?.fotos[0] ?? null;
+}
+
 /** Efecto total de los ajustes de una noche, con su signo («−15 %»). */
 function etiquetaAjustes(ajustes: AjusteAplicado[]): string {
   const total = porcentajeTotalDeAjustes(ajustes);
@@ -186,8 +271,8 @@ function BookingCliente() {
 
   const [cargando, setCargando] = useState(true);
   const [noDisponible, setNoDisponible] = useState(false);
-  const [propiedad, setPropiedad] = useState<{ nombre: string; descripcion: string | null; ciudad: string | null; moneda: string } | null>(null);
-  const [unidades, setUnidades] = useState<UnidadCatalogo[]>([]);
+  const [propiedad, setPropiedad] = useState<PropiedadUI | null>(null);
+  const [catalogo, setCatalogo] = useState<UnidadCatalogo[]>([]);
   const [resenas, setResenas] = useState<ResumenResenas | null>(null);
   const [extrasDisponibles, setExtrasDisponibles] = useState<ExtraPublico[]>([]);
   const [seleccionExtras, setSeleccionExtras] = useState<SeleccionExtraUI[]>([]);
@@ -212,7 +297,8 @@ function BookingCliente() {
     checkinUrl: string | null;
   } | null>(null);
 
-  // Carga del catálogo público.
+  // Carga del catálogo público: la ficha de la propiedad y el inventario
+  // publicado, con las fotos y los precios «desde» de cada unidad.
   useEffect(() => {
     if (!slug) return;
     (async () => {
@@ -224,8 +310,8 @@ function BookingCliente() {
         }
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || t.errorCargarPropiedad);
-        setPropiedad(data.propiedad);
-        setUnidades(data.unidades || []);
+        setPropiedad(normalizarPropiedad(data.propiedad));
+        setCatalogo((data.unidades || []) as UnidadCatalogo[]);
         setResenas(data.resenas || null);
         setExtrasDisponibles(data.extras || []);
       } catch {
@@ -313,6 +399,20 @@ function BookingCliente() {
     }
   };
 
+  /** Lleva al huésped al formulario de fechas desde una tarjeta del inventario. */
+  const irAFechas = () => {
+    if (typeof document === 'undefined') return;
+    document.getElementById('fechas')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
+  // Servicios publicados: los que el hotel catalogó en sus unidades (el esquema
+  // no tiene servicios de propiedad). Sin repetir y en el orden en que se
+  // catalogaron, que es el orden en que el hotel los escribió.
+  const amenidades = Array.from(
+    new Set(catalogo.flatMap((unidad) => unidad.amenidades || []).filter((a) => typeof a === 'string' && a.trim()))
+  ).slice(0, 20);
+  const capacidadMaxima = catalogo.reduce((mayor, unidad) => Math.max(mayor, unidad.capacidad || 0), 0);
+
   if (noDisponible) {
     return (
       <main className="min-h-screen flex items-center justify-center p-6 bg-muted/40">
@@ -374,19 +474,32 @@ function BookingCliente() {
             <Badge variant="outline" className="mb-2 gap-1">
               <Sparkles className="h-3 w-3" /> {t.reservaDirecta}
             </Badge>
-            <h1 className="text-2xl font-bold">{propiedad?.nombre || '…'}</h1>
-            {propiedad?.descripcion && <p className="text-sm text-muted-foreground mt-1">{propiedad.descripcion}</p>}
-            {propiedad?.ciudad && <p className="text-xs text-muted-foreground">{propiedad.ciudad}</p>}
+            <h1 className="text-2xl font-bold sm:text-3xl">{propiedad?.nombre || '…'}</h1>
           </div>
           {montado && <ConmutadorIdioma actual={idioma} />}
         </header>
 
-        {/* Reseñas publicadas (moderadas por el hotel): la prueba social del
-            motor — media, total y las recientes, con la respuesta del hotel. */}
-        {resenas && resenas.total > 0 && <SeccionResenas resumen={resenas} idioma={idioma} />}
+        {/* Galería de la propiedad: portada, mosaico y visor a pantalla completa.
+            Sin fotos publicadas, un marco de relleno (nunca una imagen rota). */}
+        <GaleriaPropiedad nombre={propiedad?.nombre || ''} fotos={propiedad?.fotos ?? []} idioma={idioma} />
+
+        {/* Datos de la propiedad: ubicación, capacidad, unidades publicadas,
+            valoración, descripción y servicios del inventario. */}
+        {propiedad && (
+          <FichaPropiedad
+            descripcion={propiedad.descripcion}
+            ubicacion={ubicacionDe(propiedad)}
+            capacidad={capacidadMaxima > 0 ? capacidadMaxima : null}
+            unidades={catalogo.length}
+            amenidades={amenidades}
+            valoracion={resenas && resenas.media ? { media: resenas.media, total: resenas.total } : null}
+            enlaceMapa={enlaceMapaDe(propiedad)}
+            idioma={idioma}
+          />
+        )}
 
         {/* Paso 1: fechas */}
-        <Card>
+        <Card id="fechas">
           <CardContent className="p-4 flex flex-wrap items-end gap-3">
             <label className="text-sm">
               <span className="font-medium flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" /> {t.llegada}</span>
@@ -403,7 +516,69 @@ function BookingCliente() {
           </CardContent>
         </Card>
 
-        {/* Paso 2: elegir unidad (con precio) */}
+        {/* Paso 2.a: alojamientos publicados, con foto y precio «desde».
+            Es lo que el huésped ve al entrar, antes de elegir fechas: el
+            inventario de la propiedad a la vista, no un formulario a ciegas. */}
+        {!cotizadas && !cargando && catalogo.length > 0 && (
+          <section className="space-y-3">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+              <Home className="h-4 w-4" aria-hidden />
+              {t.disponiblesTitulo}
+            </h2>
+            {catalogo.map((unidad) => {
+              const foto = fotoDeUnidad(unidad, propiedad);
+              return (
+                <Card key={unidad.id} className="overflow-hidden">
+                  <div className="flex flex-col sm:flex-row">
+                    <div className="relative h-44 w-full shrink-0 overflow-hidden bg-muted sm:h-auto sm:w-48">
+                      {foto ? (
+                        <img src={foto} alt={unidad.nombre} className="h-full w-full object-cover" loading="lazy" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                          <ImageOff className="h-6 w-6" aria-hidden />
+                        </div>
+                      )}
+                    </div>
+                    <CardContent className="flex flex-1 flex-col gap-2 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <div className="font-semibold">{unidad.nombre}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {unidad.tipo} · {interpolar(t.hastaPersonas, { n: unidad.capacidad })}
+                          </div>
+                        </div>
+                        {unidad.tarifaNoche != null && (
+                          <div className="text-right">
+                            <div className="text-xs text-muted-foreground">{t.desde}</div>
+                            <div className="font-bold">
+                              {moneda(unidad.tarifaNoche, unidad.moneda)}
+                              <span className="text-xs font-normal text-muted-foreground">/{t.porNoche}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      {unidad.descripcion && (
+                        <p className="text-xs text-muted-foreground">{unidad.descripcion}</p>
+                      )}
+                      {unidad.amenidades.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {unidad.amenidades.slice(0, 4).map((amenidad) => (
+                            <Badge key={amenidad} variant="secondary">{amenidad}</Badge>
+                          ))}
+                        </div>
+                      )}
+                      <Button size="sm" variant="outline" className="mt-auto self-start" onClick={irAFechas}>
+                        {t.consultarFechas}
+                      </Button>
+                    </CardContent>
+                  </div>
+                </Card>
+              );
+            })}
+          </section>
+        )}
+
+        {/* Paso 2.b: disponibilidad cotizada para las fechas elegidas. */}
         {cotizadas && (
           <div className="space-y-3">
             <h2 className="text-sm font-semibold text-muted-foreground">
@@ -413,71 +588,89 @@ function BookingCliente() {
                 total: cotizadas.length,
               })}
             </h2>
-            {cotizadas.map((u) => (
-              <Card key={u.id} className={elegida?.id === u.id ? 'ring-2 ring-primary' : u.disponible ? '' : 'opacity-60'}>
-                <CardContent className="p-4 flex flex-wrap items-center gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="font-semibold">{u.nombre}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {u.tipo} · {interpolar(t.hastaPersonas, { n: u.capacidad })}{u.amenidades.length ? ` · ${u.amenidades.slice(0, 4).join(', ')}` : ''}
-                    </div>
-                  </div>
-                  {u.disponible ? (
-                    <div className="text-right">
-                      <div className="font-bold">
-                        {moneda(u.precioTotal || 0, u.moneda)}
-                      </div>
-                      {/* Con temporadas no se enseña una media por noche: el
-                          detalle de abajo dice lo que cuesta cada noche. */}
-                      {u.desgloseNoches && u.desgloseNoches.length > 0 ? null : (
-                        <div className="text-xs text-muted-foreground">
-                          {moneda(u.tarifaNoche || 0, u.moneda)}/{t.porNoche}
+            {cotizadas.map((u) => {
+              const foto = fotoDeUnidad(u, propiedad);
+              return (
+                <Card key={u.id} className={elegida?.id === u.id ? 'ring-2 ring-primary' : u.disponible ? '' : 'opacity-60'}>
+                  <div className="flex flex-col sm:flex-row">
+                    <div className="relative h-44 w-full shrink-0 overflow-hidden bg-muted sm:h-auto sm:w-48">
+                      {foto ? (
+                        <img src={foto} alt={u.nombre} className="h-full w-full object-cover" loading="lazy" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                          <ImageOff className="h-6 w-6" aria-hidden />
                         </div>
                       )}
                     </div>
-                  ) : (
-                    <Badge variant="outline">{t.motivos[u.motivo || 'ocupada'] ?? u.motivo}</Badge>
-                  )}
-                  {u.disponible && (
-                    <Button size="sm" variant={elegida?.id === u.id ? 'default' : 'outline'} onClick={() => setElegida(u)}>
-                      {elegida?.id === u.id ? t.elegida : t.elegir}
-                    </Button>
-                  )}
-                  {/* Desglose noche a noche de la estancia en temporada: la
-                      noche cuesta la tarifa de SU fecha, y la lista ocupa su
-                      propia línea dentro de la tarjeta. */}
-                  {u.disponible && u.desgloseNoches && u.desgloseNoches.length > 0 ? (
-                    <div className="w-full rounded-md bg-muted/50 p-3">
-                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                        {t.desglosePorNoche}
-                      </p>
-                      <ul className="mt-1 space-y-1 text-xs">
-                        {u.desgloseNoches.map((noche) => (
-                          <li key={noche.fecha} className="flex justify-between gap-3">
-                            <span className="flex items-center gap-1.5 text-muted-foreground">
-                              {fechaLarga(fechaDeNoche(noche.fecha), idioma) || noche.fecha}
-                              {/* Noche movida por las reglas del plan: el huésped
-                                  ve cuánto, y el detalle por regla en el title. */}
-                              {noche.ajustes && noche.ajustes.length > 0 ? (
-                                <span
-                                  className="rounded bg-background px-1 text-[10px] font-medium text-foreground"
-                                  title={tituloAjustes(noche.ajustes)}
-                                >
-                                  {etiquetaAjustes(noche.ajustes)}
+                    <CardContent className="flex flex-1 flex-wrap items-center gap-3 p-4">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-semibold">{u.nombre}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {u.tipo} · {interpolar(t.hastaPersonas, { n: u.capacidad })}{u.amenidades.length ? ` · ${u.amenidades.slice(0, 4).join(', ')}` : ''}
+                        </div>
+                      </div>
+                      {u.disponible ? (
+                        <div className="text-right">
+                          <div className="font-bold">
+                            {moneda(u.precioTotal || 0, u.moneda)}
+                          </div>
+                          {/* Con temporadas no se enseña una media por noche: el
+                              detalle de abajo dice lo que cuesta cada noche. */}
+                          {u.desgloseNoches && u.desgloseNoches.length > 0 ? null : (
+                            <div className="text-xs text-muted-foreground">
+                              {moneda(u.tarifaNoche || 0, u.moneda)}/{t.porNoche}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <Badge variant="outline">{t.motivos[u.motivo || 'ocupada'] ?? u.motivo}</Badge>
+                      )}
+                      {u.disponible && (
+                        <Button size="sm" variant={elegida?.id === u.id ? 'default' : 'outline'} onClick={() => setElegida(u)}>
+                          {elegida?.id === u.id ? t.elegida : t.elegir}
+                        </Button>
+                      )}
+                      {/* Desglose noche a noche de la estancia en temporada: la
+                          noche cuesta la tarifa de SU fecha, y la lista ocupa su
+                          propia línea dentro de la tarjeta. */}
+                      {u.disponible && u.desgloseNoches && u.desgloseNoches.length > 0 ? (
+                        <div className="w-full rounded-md bg-muted/50 p-3">
+                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                            {t.desglosePorNoche}
+                          </p>
+                          <ul className="mt-1 space-y-1 text-xs">
+                            {u.desgloseNoches.map((noche) => (
+                              <li key={noche.fecha} className="flex justify-between gap-3">
+                                <span className="flex items-center gap-1.5 text-muted-foreground">
+                                  {fechaLarga(fechaDeNoche(noche.fecha), idioma) || noche.fecha}
+                                  {/* Noche movida por las reglas del plan: el huésped
+                                      ve cuánto, y el detalle por regla en el title. */}
+                                  {noche.ajustes && noche.ajustes.length > 0 ? (
+                                    <span
+                                      className="rounded bg-background px-1 text-[10px] font-medium text-foreground"
+                                      title={tituloAjustes(noche.ajustes)}
+                                    >
+                                      {etiquetaAjustes(noche.ajustes)}
+                                    </span>
+                                  ) : null}
                                 </span>
-                              ) : null}
-                            </span>
-                            <span className="font-medium">{moneda(noche.tarifa, u.moneda)}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : null}
-                </CardContent>
-              </Card>
-            ))}
+                                <span className="font-medium">{moneda(noche.tarifa, u.moneda)}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+                    </CardContent>
+                  </div>
+                </Card>
+              );
+            })}
           </div>
         )}
+
+        {/* Reseñas publicadas (moderadas por el hotel): la prueba social del
+            motor — media, total y las recientes, con la respuesta del hotel. */}
+        {resenas && resenas.total > 0 && <SeccionResenas resumen={resenas} idioma={idioma} />}
 
         {/* Paso 3: datos del huésped */}
         {elegida && (
