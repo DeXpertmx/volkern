@@ -243,6 +243,146 @@ const COTIZACION_TEMPORADA = {
   },
 };
 
+//
+// Ficha pública de la propiedad (fotos y datos).
+//
+// Qué vigila: que la página ENSEÑE lo que la API pública ya devuelve. El defecto
+// real era el contrario: la API mandaba fotos, ubicación y servicios desde el
+// primer día y la página no pintaba ninguno — el cliente veía un formulario y
+// ningún alojamiento. Con fotos de por medio, además, la ausencia de foto no
+// puede acabar en una imagen rota: se enseña el marco de relleno.
+//
+const FICHA = {
+  id: SLUG,
+  nombre: 'Villa Mar Azul',
+  descripcion: 'Villa frente al mar con piscina privada',
+  ciudad: 'Playa del Carmen',
+  estadoProvincia: 'Quintana Roo',
+  pais: 'México',
+  direccion: 'Calle 10 Norte',
+  latitud: 20.6,
+  longitud: -87.07,
+  fotos: ['https://cdn.test/portada.jpg', 'https://cdn.test/salon.jpg', 'https://cdn.test/piscina.jpg'],
+  moneda: 'MXN',
+};
+
+const CATALOGO_CON_FICHA = {
+  propiedad: FICHA,
+  unidades: [
+    {
+      id: 'u1',
+      nombre: 'Loft Marina',
+      tipo: 'loft',
+      capacidad: 3,
+      descripcion: 'Loft con vistas al mar',
+      // Foto propia: la tarjeta no usa la de la propiedad.
+      fotos: ['https://cdn.test/loft.jpg'],
+      amenidades: ['WiFi', 'Piscina'],
+      tarifaNoche: 1200,
+      moneda: 'MXN',
+    },
+    {
+      id: 'u2',
+      nombre: 'Suite Oceano',
+      tipo: 'suite',
+      capacidad: 4,
+      descripcion: null,
+      // Sin foto propia: cae a la galería de la propiedad.
+      fotos: [],
+      amenidades: ['Estacionamiento'],
+      tarifaNoche: 1800,
+      moneda: 'MXN',
+    },
+  ],
+  resenas: null,
+  extras: [],
+};
+
+describe('Página pública de reserva — ficha de la propiedad', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn(() => json(CATALOGO_CON_FICHA)));
+  });
+
+  it('enseña la galería, la ubicación, la capacidad y los servicios publicados', async () => {
+    render(<BookingPublico />);
+    await screen.findByText('Villa Mar Azul');
+
+    // La portada es la primera foto publicada.
+    expect(screen.getByAltText('Villa Mar Azul')).toBeTruthy();
+    expect(screen.getByText('Playa del Carmen · Quintana Roo · México')).toBeTruthy();
+    expect(screen.getByText('Hasta 4 personas')).toBeTruthy();
+    expect(screen.getByText('2 unidades')).toBeTruthy();
+    expect(screen.getByText('Villa frente al mar con piscina privada')).toBeTruthy();
+    expect(screen.getByText('Servicios del alojamiento')).toBeTruthy();
+
+    // Servicios de la ficha: los de las unidades, sin repetir. Cada uno sale
+    // además en la tarjeta de la unidad que lo tiene, de ahí los dos matches.
+    expect(screen.getAllByText('WiFi')).toHaveLength(2); // ficha + Loft Marina
+    expect(screen.getAllByText('Piscina')).toHaveLength(2); // ficha + Loft Marina
+    expect(screen.getAllByText('Estacionamiento')).toHaveLength(2); // ficha + Suite Oceano
+
+    // Coordenadas publicadas: el enlace al mapa las usa antes que la dirección.
+    const mapa = screen.getByRole('link', { name: /Ver en el mapa/ });
+    expect(mapa.getAttribute('href')).toContain('20.6,-87.07');
+  });
+
+  it('cada alojamiento publicado se ve con su foto, su capacidad y el precio desde', async () => {
+    render(<BookingPublico />);
+    await screen.findByText('Alojamientos disponibles');
+
+    // La unidad con foto propia la usa; la que no la tiene cae a la de la propiedad.
+    expect(screen.getByAltText('Loft Marina').getAttribute('src')).toBe('https://cdn.test/loft.jpg');
+    expect(screen.getByAltText('Suite Oceano').getAttribute('src')).toBe('https://cdn.test/portada.jpg');
+
+    expect(screen.getByText('Loft con vistas al mar')).toBeTruthy();
+    expect(screen.getAllByText('desde')).toHaveLength(2);
+    expect(screen.getByText(/1,200\.00/)).toBeTruthy();
+    expect(screen.getByText(/1,800\.00/)).toBeTruthy();
+  });
+
+  it('sin fotos publicadas enseña el marco de relleno, no una imagen rota', async () => {
+    // El mismo caso con una propiedad SIN fotos publicadas.
+    vi.stubGlobal('fetch', vi.fn(() => json(CATALOGO)));
+    render(<BookingPublico />);
+    await screen.findByText('Hotel Volcán');
+
+    expect(screen.getByRole('img', { name: 'La propiedad aún no ha publicado fotos' })).toBeTruthy();
+    expect(screen.queryByAltText('Hotel Volcán')).toBeNull();
+  });
+
+  it('la cotización no recorta la ficha: la galería y la ubicación siguen en pantalla', async () => {
+    const conFicha = {
+      propiedad: FICHA,
+      cotizacion: {
+        ...COTIZACION.cotizacion,
+        unidades: [
+          {
+            ...COTIZACION.cotizacion.unidades[1],
+            fotos: ['https://cdn.test/loft.jpg'],
+            amenidades: ['WiFi'],
+          },
+        ],
+      },
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((entrada: RequestInfo | URL) => {
+        const url = String(entrada);
+        return url.includes('checkIn=') ? json(conFicha) : json(CATALOGO_CON_FICHA);
+      })
+    );
+
+    render(<BookingPublico />);
+    await screen.findByText('Villa Mar Azul');
+    await userEvent.click(screen.getByRole('button', { name: /Ver disponibilidad/ }));
+
+    expect(await screen.findByText(/2 noches/)).toBeTruthy();
+    expect(screen.getByAltText('Villa Mar Azul')).toBeTruthy();
+    expect(screen.getByText('Playa del Carmen · Quintana Roo · México')).toBeTruthy();
+    expect(screen.getByAltText('Loft Bosque')).toBeTruthy();
+  });
+});
+
 describe('Página pública de reserva — estancia en temporada', () => {
   it('enseña el precio de CADA noche y no la media del rango', async () => {
     vi.stubGlobal(

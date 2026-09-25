@@ -51,6 +51,62 @@ async function propiedadPublicada(slug: string) {
   return propiedad;
 }
 
+/**
+ * Fotos publicables: solo URLs de texto, sin huecos ni valores de otro tipo.
+ *
+ * El campo es un Json libre en el esquema, así que lo que no sea una cadena con
+ * contenido no puede llegar a la página: una entrada rara se convierte en una
+ * imagen rota delante del huésped.
+ */
+function fotosPublicas(valor: unknown): string[] {
+  if (!Array.isArray(valor)) return [];
+  return valor.filter((x): x is string => typeof x === 'string' && x.trim().length > 0);
+}
+
+/**
+ * Datos públicos de la propiedad, con la MISMA forma en las dos respuestas
+ * (catálogo sin fechas y cotización con fechas).
+ *
+ * La ficha de la página —fotos, ubicación, descripción— es la misma se pidan
+ * fechas o no: si la cotización devolviera un objeto recortado, la galería
+ * desaparecería justo cuando el huésped ya está decidiendo. Aquí no hay nada
+ * interno: ni importes de otras reservas, ni huéspedes, ni códigos de canal.
+ */
+function datosPublicosDePropiedad(
+  propiedad: {
+    id: string;
+    nombre: string;
+    descripcion: string | null;
+    ciudad: string | null;
+    estadoProvincia: string | null;
+    pais: string | null;
+    direccion: string | null;
+    latitud: number | null;
+    longitud: number | null;
+    fotos: unknown;
+  },
+  /**
+   * Divisa de la ficha. Nula cuando las unidades publicadas no comparten una
+   * (el motor de precios no inventa una divisa para un catálogo mixto): la
+   * página escribe cada importe con la moneda de su unidad.
+   */
+  moneda: string | null
+) {
+  return {
+    id: propiedad.id,
+    nombre: propiedad.nombre,
+    descripcion: propiedad.descripcion,
+    ciudad: propiedad.ciudad,
+    estadoProvincia: propiedad.estadoProvincia,
+    pais: propiedad.pais,
+    direccion: propiedad.direccion,
+    latitud: propiedad.latitud,
+    longitud: propiedad.longitud,
+    fotos: fotosPublicas(propiedad.fotos),
+    moneda,
+  };
+}
+
 async function unidadesConTarifa(propertyId: string) {
   return prisma.hospitalityUnit.findMany({
     where: { propertyId, estado: { notIn: ESTADO_UNIDAD_NO_VENDIBLE } },
@@ -120,20 +176,15 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
     // Sin fechas: catálogo público (lo que ve el visitante al entrar).
     if (!checkIn || !checkOut) {
       return NextResponse.json({
-        propiedad: {
-          id: propiedad.id,
-          nombre: propiedad.nombre,
-          descripcion: propiedad.descripcion,
-          ciudad: propiedad.ciudad,
-          pais: propiedad.pais,
-          fotos: propiedad.fotos || [],
-          // La divisa del catálogo: la de las unidades de la propiedad (la
-          // predominante) y, si aún no hay ninguna, la de reporte del hotel.
-          moneda: monedaEfectiva(
+        // La divisa del catálogo: la de las unidades de la propiedad (la
+        // predominante) y, si aún no hay ninguna, la de reporte del hotel.
+        propiedad: datosPublicosDePropiedad(
+          propiedad,
+          monedaEfectiva(
             unidades.map((u) => u.moneda),
             propiedad.tenant?.moneda
-          ),
-        },
+          )
+        ),
         resenas,
         extras,
         unidades: unidades.map((u) => ({
@@ -205,12 +256,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
 
     const detalles = unidades.filter((u) => cotizacion.unidades.some((c) => c.unitId === u.id));
     return NextResponse.json({
-      propiedad: {
-        id: propiedad.id,
-        nombre: propiedad.nombre,
-        ciudad: propiedad.ciudad,
-        moneda: cotizacion.moneda,
-      },
+      // La misma ficha que sin fechas: la galería y la ubicación no se caen
+      // porque el huésped haya pedido disponibilidad.
+      propiedad: datosPublicosDePropiedad(propiedad, cotizacion.moneda),
       cotizacion: {
         ...cotizacion,
         unidades: cotizacion.unidades.map((c) => {
