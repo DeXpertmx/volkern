@@ -61,8 +61,14 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Tenant no encontrado' }, { status: 404 });
       }
 
-      // Validar permisos de la agencia
-      if (isAgency && targetTenant.parentId !== user?.tenant?.id) {
+      // Validar permisos de la agencia. El Superadmin de la plataforma NO pasa
+      // por esta regla: su cuenta vive en un tenant marcado como AGENCY
+      // (volkern-admin), así que sin excluirlo la condición lo encerraba en sus
+      // propios hijos —y el tenant de plataforma no tiene ninguno— y dejaba
+      // «Inyectar Sesión» en 403 para el único rol que existe precisamente para
+      // suplantar. La restricción es para las CUENTAS DE AGENCIA, no para el
+      // Superadmin que además resulta estar en una.
+      if (!isSuperadmin && isAgency && targetTenant.parentId !== user?.tenant?.id) {
         return NextResponse.json({ error: 'Este tenant no pertenece a tu agencia' }, { status: 403 });
       }
 
@@ -110,14 +116,20 @@ export async function GET() {
     include: { tenant: { select: { id: true, accountType: true } } }
   });
 
-  if ((session?.user as any)?.roleName === 'Superadmin' || user?.tenant?.accountType === 'AGENCY') {
+  const esSuperadmin = (session?.user as any)?.roleName === 'Superadmin';
+  const esAgencia = user?.tenant?.accountType === 'AGENCY';
+
+  if (esSuperadmin || esAgencia) {
     const tenant = await prisma.tenant.findUnique({
       where: { id: impersonatedId },
       select: { id: true, nombre: true, slug: true, parentId: true }
     });
-    
-    // Si es Agencia, verificar que el tenant suplantado sea su hijo
-    if (user?.tenant?.accountType === 'AGENCY' && tenant?.parentId !== user.tenant.id) {
+
+    // Si es Agencia, verificar que el tenant suplantado sea su hijo. Mismo
+    // criterio que en el POST: el Superadmin queda fuera de la regla (su tenant
+    // también es AGENCY), o el banner de suplantación no aparecería nunca
+    // aunque el POST hubiera funcionado.
+    if (!esSuperadmin && esAgencia && tenant?.parentId !== user?.tenant?.id) {
       return NextResponse.json({ active: false });
     }
 
