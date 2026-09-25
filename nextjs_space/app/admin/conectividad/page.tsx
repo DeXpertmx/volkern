@@ -19,6 +19,7 @@ import {
   Tags,
   RefreshCcw,
   Scale,
+  EyeOff,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -72,6 +73,18 @@ interface EstadoConectividad {
     httpStatus: number | null;
     errorMensaje: string | null;
     fechaCreacion: string;
+  } | null;
+  /** Último rechazo del webhook ENTRANTE (401), ya legible (motivo, longitudes, huellas, hora). */
+  ultimoRechazo?: {
+    motivo: string;
+    etiqueta: string;
+    consejo: string;
+    esquema: string | null;
+    usuarioLen: number | null;
+    passwordLen: number | null;
+    usuarioHuella: string | null;
+    huella: string | null;
+    fecha: string | null;
   } | null;
 }
 
@@ -143,6 +156,8 @@ const ESTADO_LABEL: Record<string, { text: string; variant: 'default' | 'seconda
 
 export default function AdminConectividad() {
   const [loading, setLoading] = useState(true);
+  /** Recarga del estado sin apagar la pantalla entera (botón «Actualizar»). */
+  const [recargandoEstado, setRecargandoEstado] = useState(false);
   const [saving, setSaving] = useState(false);
   const [estado, setEstado] = useState<EstadoConectividad | null>(null);
   const [partnerId, setPartnerId] = useState('');
@@ -241,9 +256,10 @@ export default function AdminConectividad() {
     }
   };
 
-  const loadEstado = async () => {
+  const loadEstado = async (silencioso = false) => {
     try {
-      setLoading(true);
+      if (silencioso) setRecargandoEstado(true);
+      else setLoading(true);
       const res = await fetch('/api/admin/conectividad');
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -256,7 +272,14 @@ export default function AdminConectividad() {
       toast.error('Error al cargar configuración');
     } finally {
       setLoading(false);
+      setRecargandoEstado(false);
     }
+  };
+
+  /** Copia la huella del par recibido para cotejarla con la del emisor. */
+  const copiarHuella = (huella: string) => {
+    navigator.clipboard.writeText(huella);
+    toast.success('Huella copiada al portapapeles');
   };
 
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -413,6 +436,9 @@ export default function AdminConectividad() {
   }
 
   const estadoInfo = estado ? ESTADO_LABEL[estado.estado] || ESTADO_LABEL.sin_configurar : ESTADO_LABEL.sin_configurar;
+  // Último rechazo del webhook entrante (401): viene ya legible desde el
+  // estado público (misma pieza pura que lo normalizó al persistirlo).
+  const rechazo = estado?.ultimoRechazo ?? null;
   // El badge rojo nombra la causa: 401/403 → credenciales rechazadas;
   // 5xx/timeout → sin respuesta del servicio. Derivado del último fallo de la
   // capa (push/fetch), con la MISMA regla que la tabla por propiedad.
@@ -611,13 +637,30 @@ export default function AdminConectividad() {
       {/* Webhook de reservas */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Globe className="h-5 w-5 text-primary" />
-            Webhook de Reservas
-          </CardTitle>
-          <CardDescription>
-            El proveedor de conectividad llama a esta URL para notificar reservas nuevas, modificaciones y cancelaciones.
-          </CardDescription>
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Globe className="h-5 w-5 text-primary" />
+                Webhook de Reservas
+              </CardTitle>
+              <CardDescription>
+                El proveedor de conectividad llama a esta URL para notificar reservas nuevas, modificaciones y cancelaciones.
+              </CardDescription>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => loadEstado(true)}
+              disabled={recargandoEstado}
+            >
+              {recargandoEstado ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+              Actualizar
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-2">
@@ -629,6 +672,52 @@ export default function AdminConectividad() {
               {copied ? 'Copiado' : 'Copiar'}
             </Button>
           </div>
+
+          {rechazo ? (
+            <div className="mt-4 rounded-lg border border-red-200 bg-red-50 dark:bg-red-950 p-3 text-sm" role="alert">
+              <p className="font-medium text-red-700 dark:text-red-300 flex items-center gap-2">
+                <EyeOff className="h-4 w-4" />
+                Último rechazo del webhook · {hace(rechazo.fecha)}
+              </p>
+              <p className="text-red-700/80 dark:text-red-300/80 mt-1">
+                {rechazo.etiqueta}. {rechazo.consejo}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-red-700/90 dark:text-red-300/90">
+                <span>Esquema: {rechazo.esquema ?? '—'}</span>
+                {rechazo.usuarioLen !== null && <span>Usuario: {rechazo.usuarioLen} caracteres</span>}
+                {rechazo.passwordLen !== null && (
+                  <span>Contraseña: {rechazo.passwordLen} caracteres</span>
+                )}
+                {rechazo.usuarioHuella && (
+                  <span>
+                    Huella del usuario: <code>{rechazo.usuarioHuella}</code>
+                  </span>
+                )}
+                {rechazo.huella && (
+                  <span className="flex items-center gap-1">
+                    Huella del par: <code>{rechazo.huella}</code>
+                    <button
+                      type="button"
+                      onClick={() => copiarHuella(rechazo.huella!)}
+                      className="underline hover:no-underline"
+                    >
+                      copiar
+                    </button>
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-red-700/70 dark:text-red-300/70 mt-2">
+                La huella son los primeros 12 hex del SHA-256 de «usuario:contraseña». El emisor calcula la
+                de su par (printf '%s:%s' "$USUARIO" "$CLAVE" | sha256sum) y la coteja con esta: si no
+                coincide, su configuración es otra. Nunca se muestra el valor recibido.
+              </p>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground mt-4">
+              Sin rechazos registrados del webhook entrante. Un intento sin cabecera, con otro esquema o
+              con credenciales distintas queda aquí (motivo, longitudes y huellas, nunca el valor).
+            </p>
+          )}
         </CardContent>
       </Card>
 
