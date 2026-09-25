@@ -34,7 +34,14 @@
  *   GET  /_control/peticiones    → registro de lo recibido (sin contraseñas)
  *   POST /_control/reset         → limpia el registro
  *   POST /_control/empujar-reserva → envía el webhook `book|modify|cancel` al
- *                                    producto, con el Basic Auth del proveedor
+ *                                    producto. Por defecto con el Basic Auth
+ *                                    del proveedor; acepta `basicAuth` (otro
+ *                                    usuario/contraseña), `cabecera` (el valor
+ *                                    EXACTO de Authorization: otro esquema,
+ *                                    `basic` en minúsculas, basura…) o
+ *                                    `sinCabecera: true` (sin Authorization),
+ *                                    que es lo que necesitan las contrapruebas
+ *                                    del 401 del webhook en el ensayo del día H.
  *
  * Uso:
  *   node scripts/simulador-conectividad.mjs                     # puerto libre
@@ -173,20 +180,25 @@ const servidor = http.createServer(async (req, res) => {
       if (!cuerpo || typeof cuerpo !== 'object' || !cuerpo.url) {
         return json(res, 400, { ok: false, error: 'Falta url' });
       }
-      const { url: destino, basicAuth, ...payload } = cuerpo;
-      // El proveedor llama al webhook del producto CON SU Basic Auth. Se puede
-      // forzar otro usuario/contraseña solo para las contrapruebas (que el
-      // producto rechace unas credenciales que no son las suyas).
-      const usuario = basicAuth?.usuario ?? USUARIO;
-      const password = basicAuth?.password ?? PASSWORD;
-      const credenciales = Buffer.from(`${usuario}:${password}`).toString('base64');
+      const { url: destino, basicAuth, cabecera, sinCabecera, ...payload } = cuerpo;
+      // El proveedor llama al webhook del producto CON SU Basic Auth. Para las
+      // contrapruebas del 401 se puede elegir qué manda exactamente:
+      //   - `cabecera`: el valor EXACTO de Authorization (sin validar): otro
+      //     esquema, `basic` en minúsculas, base64 roto… tal como llegaría.
+      //   - `sinCabecera: true`: sin Authorization, el emisor que la olvidó.
+      //   - `basicAuth`: otro usuario/contraseña con Basic canónico.
+      const cabeceras = { 'Content-Type': 'application/json' };
+      if (typeof cabecera === 'string' && cabecera.length > 0) {
+        cabeceras.Authorization = cabecera;
+      } else if (sinCabecera !== true) {
+        const usuario = basicAuth?.usuario ?? USUARIO;
+        const password = basicAuth?.password ?? PASSWORD;
+        cabeceras.Authorization = `Basic ${Buffer.from(`${usuario}:${password}`).toString('base64')}`;
+      }
       try {
         const respuesta = await fetch(destino, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Basic ${credenciales}`,
-          },
+          headers: cabeceras,
           body: JSON.stringify(payload),
         });
         const texto = await respuesta.text();

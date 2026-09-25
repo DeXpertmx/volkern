@@ -200,6 +200,65 @@ describe('simulador del proveedor — push y datos', () => {
     expect(sinHotel.status).toBe(400);
   });
 
+  it('el empuje acepta una cabecera Authorization EXACTA (contrapruebas del 401) y una SIN cabecera', async () => {
+    const base = await levantar();
+
+    // «Producto» mínimo: deja constancia de la cabecera Authorization que
+    // realmente recibió, que es exactamente lo que las contrapruebas del 401
+    // del webhook necesitan que el simulador sepa mandar.
+    const recibidas: Array<{ auth: string | undefined }> = [];
+    const producto = http.createServer((req, res) => {
+      let datos = '';
+      req.on('data', (t) => (datos += t));
+      req.on('end', () => {
+        recibidas.push({ auth: req.headers.authorization as string | undefined });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, status: 'creada' }));
+      });
+    });
+    await new Promise<void>((resolve) => producto.listen(0, '127.0.0.1', () => resolve()));
+    const destino = `http://127.0.0.1:${(producto.address() as any).port}/api/hospitality/webhook/reservations`;
+
+    const empujar = async (cuerpoExtra: Record<string, unknown>) => {
+      const res = await fetch(control(base, '/_control/empujar-reserva'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: destino, action: 'book', bookingId: 'H-1', ...cuerpoExtra }),
+      });
+      return (await res.json()) as any;
+    };
+
+    try {
+      // 1. Cabecera cruda tal cual: `basic` en minúsculas pasa SIN retocar.
+      const minuscula = await empujar({
+        cabecera: `basic ${Buffer.from(`${CLAVES.usuario}:${CLAVES.password}`).toString('base64')}`,
+      });
+      expect(minuscula.ok).toBe(true);
+
+      // 2. Otro esquema: la cabecera llega intacta, el PRODUCTO decide.
+      const bearer = await empujar({ cabecera: 'Bearer abc.def.ghi' });
+      expect(bearer.ok).toBe(true);
+
+      // 3. Sin cabecera: el emisor que la olvidó.
+      const sinCabecera = await empujar({ sinCabecera: true });
+      expect(sinCabecera.ok).toBe(true);
+
+      // 4. Sin instrucción especial: Basic canónico del proveedor (como antes).
+      const porDefecto = await empujar({});
+      expect(porDefecto.ok).toBe(true);
+
+      expect(recibidas).toHaveLength(4);
+      expect(recibidas[0].auth).toBe(
+        `basic ${Buffer.from(`${CLAVES.usuario}:${CLAVES.password}`).toString('base64')}`,
+      );
+      expect(recibidas[1].auth).toBe('Bearer abc.def.ghi');
+      expect(recibidas[2].auth).toBeUndefined();
+      expect(recibidas[3].auth).toBe(authBasica());
+    } finally {
+      producto.close();
+    }
+  });
+
   it('devuelve por /data las reservas que le han empujado', async () => {
     const base = await levantar();
     const cabeceras = { Authorization: authBasica(), 'Content-Type': 'application/json' };
