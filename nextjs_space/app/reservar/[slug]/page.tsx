@@ -3,6 +3,8 @@ export const dynamic = 'force-dynamic';
 import type { Metadata } from 'next';
 import { datosPaginaPublica } from '@/lib/hospitality/booking-public';
 import { BookingWizard } from '@/components/hospitality/booking/BookingWizard';
+import { EnvolturaPlantilla, PlantillaBookingPage, type DatosPlantilla } from '@/components/hospitality/booking/PlantillaBookingPage';
+import { formatearImporte } from '@/lib/moneda';
 import { idiomaDeValor, textosPaginaNoDisponible } from '@/lib/hospitality/booking-i18n';
 
 /**
@@ -59,17 +61,52 @@ export default async function ReservarPage({
     );
   }
 
+  // Plantilla y personalización (del módulo puro; lo inválido ya cayó a defaults).
+  const datosPlantilla: DatosPlantilla = {
+    plantilla: pagina.datos.plantilla,
+    personalizacion: pagina.datos.personalizacion,
+    titulo: pagina.datos.config.titulo || pagina.datos.alojamiento,
+    descripcion: pagina.datos.config.descripcion,
+    ciudad: pagina.datos.propiedades.find((p) => p.ciudad)?.ciudad ?? null,
+    fotoPortada:
+      pagina.datos.propiedades.flatMap((p) => p.unidades).find((u) => u.fotos.length > 0)?.fotos[0] ?? null,
+    tarifaDesde: null,
+    tarifaDesdeTexto:
+      pagina.datos.propiedades.flatMap((p) => p.unidades).reduce<number | null>(
+        (min, u) => (min === null || u.tarifaPorNoche < min ? u.tarifaPorNoche : min),
+        null
+      ) !== null
+        ? formatearImporte(
+            Math.min(...pagina.datos.propiedades.flatMap((p) => p.unidades).map((u) => u.tarifaPorNoche)),
+            pagina.datos.moneda
+          )
+        : null,
+    capacidadMaxima:
+      pagina.datos.propiedades.flatMap((p) => p.unidades).reduce<number | null>(
+        (max, u) => (max === null || u.capacidad > max ? u.capacidad : max),
+        null
+      ),
+  };
+
   return (
-    <main className="min-h-screen bg-muted/30 px-4 py-10">
-      <BookingWizard
-        slug={pagina.datos.slug}
-        alojamiento={pagina.datos.alojamiento}
-        moneda={pagina.datos.moneda}
-        config={pagina.datos.config}
-        propiedades={pagina.datos.propiedades}
-        idioma={idioma}
-        rutaBase={`/reservar/${slug}`}
-      />
+    <main className="min-h-screen px-4 py-10" style={{ background: 'var(--booking-fondo, hsl(var(--muted, 210 40% 96%)))' }}>
+      <EnvolturaPlantilla personalizacion={pagina.datos.personalizacion}>
+        <PlantillaBookingPage
+          plantilla={pagina.datos.plantilla}
+          datos={datosPlantilla}
+          wizard={
+            <BookingWizard
+              slug={pagina.datos.slug}
+              alojamiento={pagina.datos.alojamiento}
+              moneda={pagina.datos.moneda}
+              config={pagina.datos.config}
+              propiedades={pagina.datos.propiedades}
+              idioma={idioma}
+              rutaBase={`/reservar/${slug}`}
+            />
+          }
+        />
+      </EnvolturaPlantilla>
     </main>
   );
 }

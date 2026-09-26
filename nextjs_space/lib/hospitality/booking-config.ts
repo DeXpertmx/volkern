@@ -16,6 +16,12 @@
  */
 
 import { prisma } from '@/lib/db';
+import { Prisma } from '@prisma/client';
+import {
+  esPlantillaValida,
+  normalizarPersonalizacion,
+  normalizarDominio,
+} from './booking-plantillas';
 import { monedaEfectiva, monedaEscritura } from '@/lib/moneda';
 import { TOP_LEVEL } from '@/lib/legacy-redirects';
 
@@ -39,6 +45,12 @@ export interface ConfigBooking {
   requierePagoOnline: boolean;
   propiedadesPublicadas: string[];
   activo: boolean;
+  /** Plantilla visual (módulo puro `booking-plantillas`); null = clásica. */
+  plantilla?: string | null;
+  /** Personalización (colores/radios); null = defaults del módulo puro. */
+  personalizacion?: unknown;
+  /** Dominio propio del tenant; null = sin dominio (solo volkern.app). */
+  dominio?: string | null;
 }
 
 /**
@@ -161,6 +173,14 @@ export interface EntradaConfigBooking {
   requierePagoOnline?: boolean;
   propiedadesPublicadas?: string[];
   activo?: boolean;
+  /** Plantilla visual: valor del módulo puro o vacío = clásica. */
+  plantilla?: unknown;
+  /** Personalización (colores/radios): se normaliza al guardar. */
+  personalizacion?: unknown;
+  /** Dominio propio del tenant: vacío = quitar; se normaliza/valida. */
+  dominio?: unknown;
+  /** Dominio guardado actualmente (para saber si cambió y hay que reverificar). */
+  dominioActual?: string | null;
 }
 
 /**
@@ -189,6 +209,24 @@ export async function guardarConfigBooking(
   // y la página publica en la moneda del tenant. La del esquema no entra aquí.
   const moneda = entrada.moneda ? monedaEscritura(entrada.moneda, monedaTenant) : null;
 
+  // Dominio propio: vacío = quitar (null); valor inválido = error legible.
+  const dominioResultado = normalizarDominio(entrada.dominio);
+  if (!dominioResultado.ok) return { ok: false, error: dominioResultado.error! };
+  const dominioNormalizado = dominioResultado.dominio ?? null;
+
+  // Convención del repo para los tres campos nuevos: AUSENTE en el body = sin
+  // cambio (los PUT del onboarding no los mandan y no deben borrar lo guardado);
+  // presente e inválido = neutro (clásica/defaults); dominio vacío = quitar.
+  const plantillaValor =
+    entrada.plantilla === undefined
+      ? undefined
+      : esPlantillaValida(entrada.plantilla)
+        ? (entrada.plantilla as string)
+        : null;
+  const personalizacionValor =
+    entrada.personalizacion === undefined ? undefined : normalizarPersonalizacion(entrada.personalizacion);
+  const dominioValor = entrada.dominio === undefined ? undefined : dominioNormalizado;
+
   const datos = {
     slug: slug.slug,
     titulo: entrada.titulo?.trim() || null,
@@ -207,8 +245,26 @@ export async function guardarConfigBooking(
   try {
     const fila = await prisma.hospitalityBookingConfig.upsert({
       where: { tenantId },
-      create: { tenantId, ...datos },
-      update: datos,
+      // Alta: los tres campos nuevos nacen en su neutro (clásica, sin
+      // personalización —la página aplica defaults—, sin dominio propio).
+      create: {
+        tenantId,
+        ...datos,
+        plantilla: plantillaValor ?? null,
+        personalizacion: personalizacionValor ?? Prisma.DbNull,
+        dominio: dominioValor ?? null,
+      },
+      // Edición: undefined = no tocar; dominio cambiado ⇒ reverificar DNS.
+      update: {
+        ...datos,
+        plantilla: plantillaValor,
+        personalizacion: personalizacionValor === undefined ? undefined : personalizacionValor,
+        ...(dominioValor !== undefined ? { dominio: dominioValor } : {}),
+        ...(dominioValor !== undefined &&
+        !(dominioValor !== null && dominioValor === (entrada.dominioActual ?? null))
+          ? { dominioVerificado: false }
+          : {}),
+      },
     });
     return { ok: true, config: fila as ConfigBooking };
   } catch (e: unknown) {

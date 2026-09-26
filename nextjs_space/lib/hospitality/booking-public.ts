@@ -9,6 +9,12 @@
 
 import { resolverPaginaPublica, type PropiedadPublica } from './booking-engine';
 import { estadoDeCobroDelTenant } from './booking-payments';
+import {
+  plantillaDeValor,
+  personalizacionDeValor,
+  type PlantillaBooking,
+  type PersonalizacionBooking,
+} from './booking-plantillas';
 
 export interface ConfigPaginaPublica {
   titulo: string | null;
@@ -29,6 +35,10 @@ export interface DatosPaginaPublica {
   moneda: string;
   config: ConfigPaginaPublica;
   propiedades: PropiedadPublica[];
+  /** Plantilla visual elegida por el tenant (desconocido = clásica). */
+  plantilla: PlantillaBooking;
+  /** Colores/radios normalizados para inyectar como CSS custom properties. */
+  personalizacion: PersonalizacionBooking;
 }
 
 export type ResultadoDatosPagina =
@@ -59,6 +69,8 @@ export async function datosPaginaPublica(slug: string): Promise<ResultadoDatosPa
         pagoOnlineDisponible: cobro.disponible,
       },
       propiedades: pagina.propiedades,
+      plantilla: plantillaDeValor(pagina.config.plantilla),
+      personalizacion: personalizacionDeValor(pagina.config.personalizacion),
     },
   };
 }

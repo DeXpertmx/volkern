@@ -8847,6 +8847,18 @@ model HospitalityBookingConfig {
   // Propiedades publicadas en la página pública. Vacío = no hay nada publicado.
   propiedadesPublicadas String[] @default([])
   activo                Boolean  @default(true)
+  // Plantilla visual de la página pública. Valor del módulo puro
+  // (`PLANTILLA_CLASICA`…); null = la clásica. Un valor desconocido se trata
+  // como clásica en el servidor, nunca rompe la página.
+  plantilla             String?
+  // Personalización visual libre (colores, radios) en JSON. El módulo puro
+  // valida y completa defaults: lo que llegue malformado no rompe la página.
+  personalizacion       Json?
+  // Dominio propio del tenant para su página de reserva (ej: reservas.mihotel.com).
+  // Normalizado minúscula/sin www por el módulo; único en toda la plataforma.
+  // La verificación DNS se guarda aparte y se re-checa desde el panel.
+  dominio               String?  @unique
+  dominioVerificado     Boolean  @default(false)
   fechaCreacion         DateTime @default(now())
   fechaEdicion          DateTime @updatedAt
   tenant                Tenant   @relation("HospitalityBookingConfig", fields: [tenantId], references: [id], onDelete: Cascade)

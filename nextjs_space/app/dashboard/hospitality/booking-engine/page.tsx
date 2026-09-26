@@ -20,6 +20,7 @@ import { useMonedaTenant } from '@/lib/use-moneda-tenant';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import { AspectoBookingPanel, type AspectoActual } from '@/components/hospitality/booking/AspectoBookingPanel';
 
 interface ExtraCatalogoPanel {
   id: string;
@@ -69,11 +70,17 @@ export default function BookingEngineConfig() {
   const [borrador, setBorrador] = useState(EXTRA_VACIO);
   const [guardandoExtra, setGuardandoExtra] = useState(false);
 
+  // Aspecto y dominio (plantilla, colores, dominio propio del tenant).
+  const [aspecto, setAspecto] = useState<AspectoActual | null>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      // Reutiliza la API del dashboard del módulo: propiedades + unidades.
-      const [propRes, unitRes] = await Promise.all([
+      // Reutiliza la API del dashboard del módulo: propiedades + unidades + config.
+      const [propRes, unitRes, cfgRes] = await Promise.all([
+        fetch('/api/hospitality/properties'),
+        fetch('/api/hospitality/units'),
+        fetch('/api/hospitality/booking'),
         fetch('/api/hospitality/properties'),
         fetch('/api/hospitality/units'),
       ]);
@@ -105,6 +112,20 @@ export default function BookingEngineConfig() {
         if (!p.moneda) p.moneda = monedaTenant;
       }
       setPropiedades(props);
+      // Config del Booking Engine: plantilla, colores y dominio para la sección.
+      if (cfgRes.ok) {
+        const cfgData = await cfgRes.json();
+        if (cfgData.config) {
+          const c = cfgData.config;
+          setAspecto({
+            plantilla: c.plantilla ?? null,
+            personalizacion: c.personalizacion ?? null,
+            dominio: c.dominio ?? null,
+            dominioVerificado: Boolean(c.dominioVerificado),
+            slug: c.slug ?? '',
+          });
+        }
+      }
     } catch {
       toast.error('Error al cargar las propiedades');
     } finally {
@@ -223,6 +244,15 @@ export default function BookingEngineConfig() {
 
   return (
     <div className="space-y-4">
+      {aspecto ? (
+        <AspectoBookingPanel
+          actual={aspecto}
+          onGuardado={() => {
+            load();
+          }}
+        />
+      ) : null}
+
       <Card>
         <CardContent className="p-3 flex flex-wrap items-center gap-2">
           <Globe className="h-4 w-4 text-muted-foreground" />

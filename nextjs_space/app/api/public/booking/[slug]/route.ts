@@ -28,6 +28,7 @@ import {
 } from '@/lib/hospitality/booking-engine';
 import { crearReservaDeBookingDirecto } from '@/lib/hospitality/reservations';
 import { crearCobroReserva } from '@/lib/stripe/connect';
+import { plantillaDeValor, personalizacionDeValor } from '@/lib/hospitality/booking-plantillas';
 import { dispatchConnectivityPush } from '@/lib/hospitality/sync';
 import { dispararComunicacionReserva } from '@/lib/hospitality/comunicaciones';
 import { idiomaDeValor } from '@/lib/hospitality/booking-i18n';
@@ -45,7 +46,18 @@ async function propiedadPublicada(slug: string) {
     include: {
       // La moneda del tenant hace falta como respaldo de la divisa del catálogo
       // público (una propiedad sin unidades con tarifa todavía no tiene divisa).
-      tenant: { select: { id: true, nombre: true, moneda: true } },
+      tenant: {
+        select: {
+          id: true,
+          nombre: true,
+          moneda: true,
+          // Plantilla y personalización de la página pública del Booking Engine
+          // (viven en la config del tenant; desconocido = clásica/defaults).
+          hospitalityBookingConfig: {
+            select: { plantilla: true, personalizacion: true },
+          },
+        },
+      },
     },
   });
   return propiedad;
@@ -175,7 +187,15 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
 
     // Sin fechas: catálogo público (lo que ve el visitante al entrar).
     if (!checkIn || !checkOut) {
+      // Plantilla y personalización elegidas por el hotel (normalizadas por el
+      // módulo puro: lo inválido llega como clásica/defaults, nunca rompe).
+      const cfg = propiedad.tenant?.hospitalityBookingConfig;
+      const aspecto = {
+        plantilla: plantillaDeValor(cfg?.plantilla),
+        personalizacion: personalizacionDeValor(cfg?.personalizacion),
+      };
       return NextResponse.json({
+        ...aspecto,
         // La divisa del catálogo: la de las unidades de la propiedad (la
         // predominante) y, si aún no hay ninguna, la de reporte del hotel.
         propiedad: datosPublicosDePropiedad(

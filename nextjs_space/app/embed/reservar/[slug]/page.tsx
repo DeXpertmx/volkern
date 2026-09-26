@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import type { Metadata } from 'next';
 import { datosPaginaPublica } from '@/lib/hospitality/booking-public';
 import { BookingWizard } from '@/components/hospitality/booking/BookingWizard';
+import { EnvolturaPlantilla } from '@/components/hospitality/booking/PlantillaBookingPage';
 import { idiomaDeValor, textosPaginaNoDisponible } from '@/lib/hospitality/booking-i18n';
 
 /**
@@ -39,17 +40,19 @@ export default async function EmbedReservarPage({
   }
 
   return (
-    <div className="min-h-[640px] bg-background p-4">
-      <BookingWizard
-        slug={pagina.datos.slug}
-        alojamiento={pagina.datos.alojamiento}
-        moneda={pagina.datos.moneda}
-        config={pagina.datos.config}
-        propiedades={pagina.datos.propiedades}
-        idioma={idioma}
-        rutaBase={`/embed/reservar/${slug}`}
-        embebido
-      />
+    <div className="min-h-[640px] p-4" style={{ background: 'var(--booking-fondo, hsl(var(--background)))' }}>
+      <EnvolturaPlantilla personalizacion={pagina.datos.personalizacion}>
+        <BookingWizard
+          slug={pagina.datos.slug}
+          alojamiento={pagina.datos.alojamiento}
+          moneda={pagina.datos.moneda}
+          config={pagina.datos.config}
+          propiedades={pagina.datos.propiedades}
+          idioma={idioma}
+          rutaBase={`/embed/reservar/${slug}`}
+          embebido
+        />
+      </EnvolturaPlantilla>
     </div>
   );
 }
