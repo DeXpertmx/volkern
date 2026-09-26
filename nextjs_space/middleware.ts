@@ -58,12 +58,18 @@ export async function middleware(request: NextRequest) {
   // ─── Custom domain resolution ─────────────────────────────────────────
   // Detecta dominios personalizados (no locales, no volkern.app, no subdominios)
   // y reescribe internamente a /p/{tenantSlug}{pathname}
+  // EXCEPCIÓN: el Booking Engine (/reservar, /booking, /embed) va por slug y
+  // funciona en CUALQUIER dominio — si el hotel configuró el suyo (y verificó),
+  // esas rutas pasan tal cual, sin caer al portal inmobiliario.
   if (
     isCustomDomain(host) &&
     !pathname.startsWith('/api/') &&
     !pathname.startsWith('/p/') &&
     !pathname.startsWith('/_next/') &&
     !pathname.startsWith('/.well-known/') &&
+    !pathname.startsWith('/reservar') &&
+    !pathname.startsWith('/booking') &&
+    !pathname.startsWith('/embed/') &&
     !pathname.match(/\.\w+$/)
   ) {
     try {

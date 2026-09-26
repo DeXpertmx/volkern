@@ -94,6 +94,9 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'Cuerpo inválido' }, { status: 400 });
     }
 
+    // El dominio guardado hace falta para saber si cambió (y reverificar DNS).
+    const configActual = await leerConfigBooking(tenantId);
+
     const resultado = await guardarConfigBooking(tenantId, auth.tenant!.moneda, {
       slug: String((body as Record<string, unknown>).slug || ''),
       titulo: (body as Record<string, unknown>).titulo as string | undefined,
@@ -111,6 +114,10 @@ export async function PUT(req: NextRequest) {
           )
         : [],
       activo: (body as Record<string, unknown>).activo !== false,
+      plantilla: (body as Record<string, unknown>).plantilla,
+      personalizacion: (body as Record<string, unknown>).personalizacion,
+      dominio: (body as Record<string, unknown>).dominio,
+      dominioActual: configActual?.dominio ?? null,
     });
 
     if (!resultado.ok) {
