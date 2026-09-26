@@ -474,3 +474,68 @@ valores) contra el entorno vivo de produccion (contenedor +
 El bundle pre-purga (`/tmp/volkern-pre-purga-*.bundle`) sigue siendo el unico
 deposito de la historia vieja: borrarlo cuando se confirme que no hace falta,
 y mientras tanto tratandolo como documento confidencial.
+
+## 13. Purga de la historia con secretos (2026-09-26)
+
+**El hallazgo.** La advertencia que esta misma documentación arrastraba
+(«`.env.vps`, `.env.production.local` y `.db_pass` estan trackeados en git»)
+resulto **falsa**: la auditoria de la historia completa — `git ls-files`,
+`log --all --diff-filter=A --name-only` tras traer **todas** las refs
+(`fetch '+refs/heads/*'` y tags) y pickaxe `-S` por nombre — demostro que los
+tres nunca estuvieron en git. El fichero de entorno trackeado era otro:
+`nextjs_space/.env.backup-20260511`, añadido el 11-may-2026 en el commit de
+notificaciones Apprise (`0b3d35ad`), con seis secretos en claro (NEXTAUTH_
+SECRET, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, RESEND_API_KEY,
+FACEBOOK_APP_SECRET y DATABASE_URL de un proyecto anterior). El `.gitignore`
+ya tenia la regla `.env*`, pero **los patrones no purgan**: un fichero
+trackeado sigue trackeado hasta sacarlo a mano, y la regla no lo cubria
+porque habia entrado antes.
+
+**Procedimiento ejecutado (reproducible):**
+
+1. **Respaldo previo**: `git bundle create /tmp/volkern-pre-purga-<fecha>.bundle --all`
+   (52M). Es la unica copia de la historia vieja; tratarlo como confidencial
+   (contiene los secretos) y borrarlo cuando se confirme que no hace falta.
+2. **Clon aislado**: `git clone --no-local --no-hardlinks`, `core.bare true`
+   y fetch de heads y tags. La reescritura nunca se hace sobre el repo de
+   trabajo.
+3. **Reescritura**: `FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch --force
+   --index-filter 'git rm --cached --ignore-unmatch nextjs_space/.env.backup-20260511'
+   --prune-empty --tag-name-filter cat -- --all`. Todas las ramas cambiaron
+   de SHA (master `4b6e82bc` -> `6ee6df82`).
+4. **Limpieza del clon**: borrar `refs/original/*` (los respaldos del propio
+   filter-branch), las `refs/remotes/*` viejas y reflogs; `gc --prune=now`.
+5. **Force-push** de `'refs/heads/*:refs/heads/*'` y `'refs/tags/*:refs/tags/*'`.
+6. **Trampa 1 del metodo**: `filter-branch -- --all` no reescribe refs que no
+   esten en el clon — `feat/pdf-docs` se habia empujado sin fetcharla y su
+   ancestria remota siguio vieja; hay que fetcharla, reescribirla aparte y
+   empujarla. **Trampa 2**: las remote-tracking viejas del clon hacen que la
+   verificacion global (`--all`) vea fantasmas; verificar por ref
+   (`ls-tree`/`log` por cada ref) o tras purgar esas refs.
+7. **Locales**: alinear ramas y tags locales a las refs reescritas
+   (`branch -f`, `fetch --tags --force`), `reset --hard origin/master` en cada
+   worktree, y purgar las anclas que retienen objetos: reflogs,
+   `ORIG_HEAD`/`FETCH_HEAD` y — la que mas engaño — **`refs/stash`**: un
+   stash antiguo cuya ancestria llegaba al commit con secretos mantenia el
+   objeto vivo en ambos worktrees despues de dos `gc` consecutivos. El scan
+   que lo destapo: `for r in $(git for-each-ref --format='%(refname)'); do
+   git log "$r" -- <fichero> | wc -l; done`.
+8. **Verificacion definitiva**: clon **fresco** de GitHub con
+   `fetch --tags` + `log --all --diff-filter=A --name-only` -> sin rastro del
+   fichero en ninguna rama ni tag; y `cat-file -e <sha-viejo>` para confirmar
+   que el objeto ya no existe localmente.
+9. **Límite del método**: GitHub puede retener objetos inalcanzables un
+   tiempo (y los mantiene quien tenga fork o clon antiguo). Por eso el paso
+   que dimensiona el riesgo real no es la purga sino el veredicto de
+   exposicion del §12.1: ningun valor vivo y claves de proveedor revocadas.
+
+**Aviso de rotacion.** Los secretos estuvieron expuestos en el repo (privado)
+del 11-may al 26-sep. Veredicto completo en §12.1: huellas distintas o
+inexistentes en todos nuestros entornos, `STRIPE_SECRET_KEY` respondiendo 401
+y `RESEND_API_KEY` invalida (revocadas de facto por el proveedor), y la
+`DATABASE_URL` expuesta apuntando a un proyecto local anterior. Pendiente
+manual: confirmar en el dashboard de Meta la `FACEBOOK_APP_SECRET` si alguna
+vez hubo app de Facebook. Lecciones: (a) un patron de `.gitignore` nunca
+saca del indice lo ya trackeado; (b) «esta trackeado» se demuestra con
+`ls-files`, no con memoria; (c) el stash es parte de la superficie de
+secretos; (d) la purga solo se da por buena con clon fresco.
