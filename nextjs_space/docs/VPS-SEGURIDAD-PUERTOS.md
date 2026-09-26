@@ -434,8 +434,43 @@ tokens de telegram viven en claro (otros modelos).
 7. **Verificacion en la BD**: CREATE EXTENSION pgcrypto NO hace falta para
    el cifrado de la app (es Node); se dejo instalado al descartar la via SQL.
 
-Nunca escribir la clave en ficheros versionados (`.env.vps`,
-`.env.production.local` estan trackeados en git). El endurecimiento del
+Nunca escribir la clave en ficheros versionados. **Correccion del inventario
+(26 sep 2026)**: la advertencia original nombraba `.env.vps` y
+`.env.production.local` como trackeados y **era falsa** — la auditoria de la
+historia completa (ramas, tags y pickaxe) demostro que ninguno de los dos
+estuvo jamas en git; el fichero de entorno SI trackeado era otro:
+`.env.backup-20260511`, purgado de toda la historia ese mismo dia (ver
+12.1). El endurecimiento del
 codigo (aviso de arranque en produccion si falta la env, `Crypto.estaUsando-
 ClavePorDefecto()` y guardia `tests/core-crypto-default-key.test.ts`) viajo
 en el despliegue siguiente a la rotacion.
+
+### 12.1 - Veredicto de exposicion del backup purgado (26 sep 2026)
+
+Al purgar `.env.backup-20260511` de la historia se extraian sus secretos del
+bundle de respaldo y se comparaban **por huella sha256** (nunca imprimiendo
+valores) contra el entorno vivo de produccion (contenedor +
+`/root/volkern-erp/.env`), el `.env` de desarrollo y un pull de Vercel local
+(`.env.production.local`, nunca en git):
+
+- **Ningun valor expuesto esta vivo en ninguno de nuestros entornos.**
+  `NEXTAUTH_SECRET`, `STRIPE_SECRET_KEY` y `RESEND_API_KEY` del backup
+  difieren de los actuales; `STRIPE_WEBHOOK_SECRET` y `FACEBOOK_APP_SECRET`
+  ni siquiera existen en produccion; la `DATABASE_URL` del backup apuntaba a
+  `localhost:5432/fluy_crm` (proyecto anterior, contrasena placeholder), no a
+  la de produccion ni a la Neon.
+- **Las claves de proveedor expuestas estan muertas**: probadas contra sus
+  APIs en solo-lectura, la `STRIPE_SECRET_KEY` devuelve **401** y la
+  `RESEND_API_KEY`, «API key is invalid» — ambas revocadas por el proveedor.
+  Queda por comprobar manualmente en su dashboard la `FACEBOOK_APP_SECRET`
+  (sin API publica de verificacion) si alguna vez hubo app de Facebook
+  activa.
+- Procedimiento reproducible: extraer el fichero del bundle con
+  `git archive` (fuera del arbol del repo), hachear clave a clave y juntar
+  contra el `env` del contenedor traido por SSH; despues `curl` de
+  autenticacion por proveedor. Borrar los artefactos temporales con los
+  secretos en claro al terminar.
+
+El bundle pre-purga (`/tmp/volkern-pre-purga-*.bundle`) sigue siendo el unico
+deposito de la historia vieja: borrarlo cuando se confirme que no hace falta,
+y mientras tanto tratandolo como documento confidencial.
