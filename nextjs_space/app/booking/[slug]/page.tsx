@@ -27,6 +27,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import {
   CalendarDays,
   CheckCircle2,
@@ -274,6 +275,12 @@ function BookingCliente() {
   const [propiedad, setPropiedad] = useState<PropiedadUI | null>(null);
   const [catalogo, setCatalogo] = useState<UnidadCatalogo[]>([]);
   const [resenas, setResenas] = useState<ResumenResenas | null>(null);
+  // Modal del registro: se abre al pulsar «Elegir» (antes el formulario caía al
+  // pie de la página y se perdía).
+  const [modalAbierto, setModalAbierto] = useState(false);
+  // Plantilla y personalización del hotel (del GET público; defaults si falta).
+  const [plantilla, setPlantilla] = useState<string>('clasica');
+  const [aspecto, setAspecto] = useState({ colorPrimario: '#0f766e', colorFondo: '#ffffff', colorTexto: '#0f172a', radioTarjeta: '0.75rem' });
   const [extrasDisponibles, setExtrasDisponibles] = useState<ExtraPublico[]>([]);
   const [seleccionExtras, setSeleccionExtras] = useState<SeleccionExtraUI[]>([]);
   const [checkIn, setCheckIn] = useState(hoyMas(7));
@@ -314,6 +321,10 @@ function BookingCliente() {
         setCatalogo((data.unidades || []) as UnidadCatalogo[]);
         setResenas(data.resenas || null);
         setExtrasDisponibles(data.extras || []);
+        // Aspecto del hotel: plantilla y colores (defaults del módulo puro si
+        // el dato llega raro — la página no puede romperse por configuración).
+        if (data.plantilla) setPlantilla(data.plantilla);
+        if (data.personalizacion) setAspecto(normalizarAspecto(data.personalizacion));
       } catch {
         toast.error(t.errorCargarPropiedad);
       } finally {
@@ -466,9 +477,21 @@ function BookingCliente() {
     );
   }
 
+  // Colores del hotel como variables CSS sobre el contenedor de la página: los
+  // componentes (botones, tarjetas) heredan `--primary`/`--radius` del tema.
+  const estiloAspecto = {
+    '--booking-primario': aspecto.colorPrimario,
+    '--booking-fondo': aspecto.colorFondo,
+    '--booking-texto': aspecto.colorTexto,
+    '--booking-radio': aspecto.radioTarjeta,
+    '--primary': aspecto.colorPrimario,
+    '--primary-foreground': '#ffffff',
+    '--radius': aspecto.radioTarjeta,
+  } as React.CSSProperties;
+
   return (
-    <main className="min-h-screen p-4 sm:p-6 bg-muted/40">
-      <div className="max-w-3xl mx-auto space-y-4">
+    <main className="min-h-screen p-4 sm:p-6" style={{ background: 'var(--booking-fondo)' }}>
+      <div className="max-w-3xl mx-auto space-y-4" style={estiloAspecto}>
         <header className="pt-4 flex items-start justify-between gap-2">
           <div>
             <Badge variant="outline" className="mb-2 gap-1">
@@ -480,8 +503,11 @@ function BookingCliente() {
         </header>
 
         {/* Galería de la propiedad: portada, mosaico y visor a pantalla completa.
-            Sin fotos publicadas, un marco de relleno (nunca una imagen rota). */}
-        <GaleriaPropiedad nombre={propiedad?.nombre || ''} fotos={propiedad?.fotos ?? []} idioma={idioma} />
+            Sin fotos publicadas, un marco de relleno (nunca una imagen rota).
+            La plantilla `minimal` la oculta a propósito: texto y conversión. */}
+        {plantilla !== 'minimal' && (
+          <GaleriaPropiedad nombre={propiedad?.nombre || ''} fotos={propiedad?.fotos ?? []} idioma={idioma} />
+        )}
 
         {/* Datos de la propiedad: ubicación, capacidad, unidades publicadas,
             valoración, descripción y servicios del inventario. */}
@@ -626,7 +652,7 @@ function BookingCliente() {
                         <Badge variant="outline">{t.motivos[u.motivo || 'ocupada'] ?? u.motivo}</Badge>
                       )}
                       {u.disponible && (
-                        <Button size="sm" variant={elegida?.id === u.id ? 'default' : 'outline'} onClick={() => setElegida(u)}>
+                        <Button size="sm" variant={elegida?.id === u.id ? 'default' : 'outline'} onClick={() => { setElegida(u); setModalAbierto(true); }}>
                           {elegida?.id === u.id ? t.elegida : t.elegir}
                         </Button>
                       )}
@@ -673,6 +699,57 @@ function BookingCliente() {
         {resenas && resenas.total > 0 && <SeccionResenas resumen={resenas} idioma={idioma} />}
 
         {/* Paso 3: datos del huésped */}
+        {/* El registro (paso 3) abre en un MODAL sobre la página: antes se
+            renderizaba al pie y el huésped lo perdía tras elegir unidad. */}
+        <Dialog open={modalAbierto && !!elegida} onOpenChange={(open) => { if (!open) setModalAbierto(false); }}>
+          <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+            <DialogHeader>
+              <DialogTitle>{elegida ? interpolar(t.tusDatos, { unidad: elegida.nombre }) : ''}</DialogTitle>
+              <DialogDescription>
+                {elegida ? `${moneda(elegida.precioTotal || 0, elegida.moneda)} · ${noches} ${noches === 1 ? 'noche' : 'noches'}` : ''}
+              </DialogDescription>
+            </DialogHeader>
+            {elegida && (
+              <div className="space-y-3">
+              <Button variant="ghost" size="sm" onClick={() => setModalAbierto(false)}>
+                {t.elegir}
+              </Button>
+              {extrasDisponibles.length > 0 && <SelectorExtras extras={extrasDisponibles} idioma={idioma} seleccion={seleccionExtras} onChange={setSeleccionExtras} />}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="text-sm">
+                  <span className="font-medium flex items-center gap-1"><User className="h-3.5 w-3.5" /> {t.nombreCompleto}</span>
+                  <Input value={nombre} onChange={(e) => setNombre(e.target.value)} className="mt-1" autoComplete="name" />
+                </label>
+                <label className="text-sm">
+                  <span className="font-medium flex items-center gap-1"><Mail className="h-3.5 w-3.5" /> {t.email}</span>
+                  <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1" autoComplete="email" />
+                </label>
+                <label className="text-sm">
+                  <span className="font-medium flex items-center gap-1"><Phone className="h-3.5 w-3.5" /> {t.telefono}</span>
+                  <Input value={telefono} onChange={(e) => setTelefono(e.target.value)} className="mt-1" autoComplete="tel" />
+                </label>
+                <label className="text-sm">
+                  <span className="font-medium">{t.peticiones}</span>
+                  <Input value={notas} onChange={(e) => setNotas(e.target.value)} className="mt-1" placeholder={t.peticionesPlaceholder} />
+                </label>
+              </div>
+              <div className="flex items-center justify-between pt-1">
+                <div className="text-sm text-muted-foreground">
+                  {t.total}: <span className="font-bold text-foreground">
+                    {moneda(elegida.precioTotal || 0, elegida.moneda)}
+                  </span>
+                </div>
+                <Button onClick={reservar} disabled={creando}>
+                  {creando ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-1 h-4 w-4" />}
+                  {t.confirmarReserva}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">{t.documentoTitulo}: {t.documentoOpcional}</p>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
         {elegida && (
           <Card>
             <CardContent className="p-4 space-y-3">
@@ -942,6 +1019,17 @@ function ConmutadorIdioma({ actual }: { actual: Idioma }) {
       })}
     </div>
   );
+}
+
+/** Normaliza el aspecto que llega del API: lo inválido cae al default. */
+function normalizarAspecto(v: Record<string, unknown>) {
+  const hex = (x: unknown, d: string) => (typeof x === 'string' && /^#[0-9a-fA-F]{6}$/.test(x.trim()) ? x.trim().toLowerCase() : d);
+  return {
+    colorPrimario: hex(v.colorPrimario, '#0f766e'),
+    colorFondo: hex(v.colorFondo, '#ffffff'),
+    colorTexto: hex(v.colorTexto, '#0f172a'),
+    radioTarjeta: hex(v.radioTarjeta, '0.75rem'),
+  };
 }
 
 /** Extrae el [slug] de la ruta sin depender de useParams del servidor. */

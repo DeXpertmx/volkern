@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -170,6 +171,8 @@ export function BookingWizard({
   const [telefono, setTelefono] = useState('');
   const [notas, setNotas] = useState('');
   const [resultado, setResultado] = useState<ResultadoReservaUI | null>(null);
+  // Modal del paso 3: abierto desde «Elegir» y cerrado al éxito/cancelación.
+  const [modalAbierto, setModalAbierto] = useState(false);
 
   const caja = embebido ? 'w-full' : 'mx-auto w-full max-w-3xl';
 
@@ -247,6 +250,7 @@ export function BookingWizard({
         avisoDePago: datos.avisoDePago ?? null,
       });
       setPaso(4);
+      setModalAbierto(false);
     } catch {
       setError(t.errorSinConexion);
     } finally {
@@ -276,7 +280,9 @@ export function BookingWizard({
     <div className={caja}>
       <header className="mb-6 text-center">
         {rutaBase ? <ConmutadorIdiomaWizard actual={idioma} rutaBase={rutaBase} /> : null}
-        <h1 className="mt-3 text-2xl font-semibold">{config.titulo || alojamiento}</h1>
+        <h1 className="mt-3 text-2xl font-semibold" style={{ color: 'var(--booking-texto)' }}>
+          {config.titulo || alojamiento}
+        </h1>
         {config.descripcion ? (
           <p className="mt-2 text-sm text-muted-foreground">{config.descripcion}</p>
         ) : null}
@@ -486,6 +492,7 @@ export function BookingWizard({
                   onClick={() => {
                     setUnidad(u);
                     setPaso(3);
+                    setModalAbierto(true);
                   }}
                 >
                   {t.reservarEstaUnidad}
@@ -496,6 +503,41 @@ export function BookingWizard({
           ))}
         </div>
       ) : null}
+
+      {/* Paso 3 (datos del huésped) dentro de un MODAL: al pulsar «Elegir», el
+          formulario se abre sobre la página en vez de aparecer al pie — antes se
+          perdía por debajo del pliegue y muchos huéspedes no lo encontraban. El
+          respaldo en flujo (el bloque de siempre) se mantiene si el modal no
+          puede abrirse o si el huésped lo cierra: nada se rompe sin JS. */}
+      <Dialog open={modalAbierto && paso === 3 && !!unidad} onOpenChange={(open) => { if (!open) setModalAbierto(false); }}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t.tusDatos}</DialogTitle>
+            <DialogDescription>
+              {unidad ? `${unidad.nombre} · ${checkIn} → ${checkOut} · ${formatearImporte(unidad.desglose.total, moneda)}` : null}
+            </DialogDescription>
+          </DialogHeader>
+          {paso === 3 && unidad ? (
+            <FormularioHuesped
+              t={t}
+              unidad={unidad}
+              moneda={moneda}
+              config={config}
+              nombre={nombre}
+              setNombre={setNombre}
+              email={email}
+              setEmail={setEmail}
+              telefono={telefono}
+              setTelefono={setTelefono}
+              notas={notas}
+              setNotas={setNotas}
+              cargando={cargando}
+              reservar={reservar}
+              cerrar={() => setModalAbierto(false)}
+            />)
+          : null}
+        </DialogContent>
+      </Dialog>
 
       {paso === 3 && unidad ? (
         <Card>
@@ -511,63 +553,23 @@ export function BookingWizard({
               </p>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="grid gap-2 sm:col-span-2">
-                <Label htmlFor="nombre">{t.nombreApellidos}</Label>
-                <Input id="nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} autoComplete="name" />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="email">{t.email}</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  autoComplete="email"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="telefono">{t.telefono}</Label>
-                <Input
-                  id="telefono"
-                  value={telefono}
-                  onChange={(e) => setTelefono(e.target.value)}
-                  autoComplete="tel"
-                />
-              </div>
-              <div className="grid gap-2 sm:col-span-2">
-                <Label htmlFor="notas">{t.peticiones}</Label>
-                <Textarea
-                  id="notas"
-                  value={notas}
-                  onChange={(e) => setNotas(e.target.value)}
-                  placeholder={t.peticionesPlaceholder}
-                />
-              </div>
-            </div>
-
-            <p className="text-xs text-muted-foreground">{t.dejaContacto}</p>
-
-            {config.politicaCancelacion ? (
-              <p className="rounded-md border p-3 text-xs text-muted-foreground">
-                {config.politicaCancelacion}
-              </p>
-            ) : null}
-
-            <div className="flex items-center justify-between gap-2">
-              <Button variant="ghost" onClick={() => setPaso(2)} disabled={cargando}>
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                {t.volver}
-              </Button>
-              <Button onClick={reservar} disabled={cargando || !nombre || (!email && !telefono)}>
-                {cargando ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <CreditCard className="mr-2 h-4 w-4" />
-                )}
-                {config.requierePagoOnline ? t.pagarYReservar : t.confirmarReserva}
-              </Button>
-            </div>
+            <FormularioHuesped
+              t={t}
+              unidad={unidad}
+              moneda={moneda}
+              config={config}
+              nombre={nombre}
+              setNombre={setNombre}
+              email={email}
+              setEmail={setEmail}
+              telefono={telefono}
+              setTelefono={setTelefono}
+              notas={notas}
+              setNotas={setNotas}
+              cargando={cargando}
+              reservar={reservar}
+              cerrar={() => setPaso(2)}
+            />
           </CardContent>
         </Card>
       ) : null}
@@ -604,6 +606,81 @@ export function BookingWizard({
           {config.telefonoContacto ? <span>{config.telefonoContacto}</span> : null}
         </p>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * Formulario de datos del huésped (paso 3), compartido por el MODAL y el flujo
+ * de la página. Recibe estado y callbacks: no tiene vida propia.
+ */
+function FormularioHuesped({
+  t,
+  unidad,
+  moneda,
+  config,
+  nombre,
+  setNombre,
+  email,
+  setEmail,
+  telefono,
+  setTelefono,
+  notas,
+  setNotas,
+  cargando,
+  reservar,
+  cerrar,
+}: {
+  t: (typeof WIZARD_TEXTOS)[Idioma];
+  unidad: UnidadCotizadaUI;
+  moneda: string;
+  config: ConfigPublicaUI;
+  nombre: string;
+  setNombre: (v: string) => void;
+  email: string;
+  setEmail: (v: string) => void;
+  telefono: string;
+  setTelefono: (v: string) => void;
+  notas: string;
+  setNotas: (v: string) => void;
+  cargando: boolean;
+  reservar: () => void;
+  cerrar: () => void;
+}) {
+  return (
+    <div className="grid gap-4">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-2 sm:col-span-2">
+          <Label htmlFor="nombre">{t.nombreApellidos}</Label>
+          <Input id="nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} autoComplete="name" />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="email">{t.email}</Label>
+          <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="telefono">{t.telefono}</Label>
+          <Input id="telefono" value={telefono} onChange={(e) => setTelefono(e.target.value)} autoComplete="tel" />
+        </div>
+        <div className="grid gap-2 sm:col-span-2">
+          <Label htmlFor="notas">{t.peticiones}</Label>
+          <Textarea id="notas" value={notas} onChange={(e) => setNotas(e.target.value)} placeholder={t.peticionesPlaceholder} />
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground">{t.dejaContacto}</p>
+      {config.politicaCancelacion ? (
+        <p className="rounded-md border p-3 text-xs text-muted-foreground">{config.politicaCancelacion}</p>
+      ) : null}
+      <div className="flex items-center justify-between gap-2">
+        <Button variant="ghost" onClick={cerrar} disabled={cargando}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          {t.volver}
+        </Button>
+        <Button onClick={reservar} disabled={cargando || !nombre || (!email && !telefono)}>
+          {cargando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CreditCard className="mr-2 h-4 w-4" />}
+          {config.requierePagoOnline ? t.pagarYReservar : t.confirmarReserva}
+        </Button>
+      </div>
     </div>
   );
 }

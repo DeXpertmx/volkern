@@ -12,7 +12,7 @@
 // el fuente, no.
 
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from 'vitest';
-import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, waitFor, cleanup, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('sonner', () => ({
@@ -172,6 +172,26 @@ describe('Página pública de reserva', () => {
     expect(screen.getByText('No disponible en esas fechas')).toBeTruthy();
   });
 
+  it('el registro abre en modal al Elegir y se cierra sin reservar', async () => {
+    await cotizarYVerUnidades();
+
+    // Sin elegir, no hay diálogo.
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Elegir' }));
+
+    // El modal se abre con el título interpolado («Tus datos · Ámbar») y el
+    // formulario dentro.
+    const dialogo = await screen.findByRole('dialog');
+    expect(within(dialogo).getByText(/Tus datos ·/)).toBeTruthy();
+    expect(within(dialogo).getByLabelText(/Nombre completo/)).toBeTruthy();
+
+    // «Elegir» (elegir otra unidad) cierra el modal sin crear reserva: ningún POST.
+    await userEvent.click(within(dialogo).getByRole('button', { name: 'Elegir' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(llamadas.filter((l) => l.metodo === 'POST')).toHaveLength(0);
+  });
+
   it('muestra el total y la tarifa por noche de la unidad', async () => {
     await cotizarYVerUnidades();
 
@@ -179,17 +199,19 @@ describe('Página pública de reserva', () => {
     expect(screen.getByText(/1,200\.00\/noche/)).toBeTruthy();
   });
 
-  it('al elegir la unidad pide los datos del huésped y reserva con ESA unidad', async () => {
+  it('al elegir la unidad pide los datos del huésped en el MODAL y reserva con ESA unidad', async () => {
     await cotizarYVerUnidades();
 
     await userEvent.click(screen.getByRole('button', { name: 'Elegir' }));
 
-    // Paso 3: datos del huésped.
-    const nombre = await screen.findByLabelText(/Nombre completo/);
+    // Paso 3: ahora vive en un modal — los dos formularios (modal y respaldo en
+    // flujo) están montados, así que se consulta el que está DENTRO del diálogo.
+    const dialogo = await screen.findByRole('dialog');
+    const nombre = await within(dialogo).findByLabelText(/Nombre completo/);
     await userEvent.type(nombre, 'Ana García');
-    await userEvent.type(screen.getByLabelText(/Email/), 'ana@mail.com');
+    await userEvent.type(within(dialogo).getByLabelText(/Email/), 'ana@mail.com');
 
-    await userEvent.click(screen.getByRole('button', { name: /Confirmar reserva/ }));
+    await userEvent.click(within(dialogo).getByRole('button', { name: /Confirmar reserva/ }));
 
     // El POST lleva el id REAL de la unidad elegida, no undefined.
     await waitFor(() => {
