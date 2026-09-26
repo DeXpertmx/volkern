@@ -65,6 +65,8 @@ export default async function ReservarPage({
   const datosPlantilla: DatosPlantilla = {
     plantilla: pagina.datos.plantilla,
     personalizacion: pagina.datos.personalizacion,
+    // Logo del hotel para la cabecera (normalizado; null = sin logo).
+    logo: pagina.datos.logo,
     titulo: pagina.datos.config.titulo || pagina.datos.alojamiento,
     descripcion: pagina.datos.config.descripcion,
     ciudad: pagina.datos.propiedades.find((p) => p.ciudad)?.ciudad ?? null,

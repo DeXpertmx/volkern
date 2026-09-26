@@ -279,8 +279,8 @@ function BookingCliente() {
   // pie de la página y se perdía).
   const [modalAbierto, setModalAbierto] = useState(false);
   // Plantilla y personalización del hotel (del GET público; defaults si falta).
-  const [plantilla, setPlantilla] = useState<string>('clasica');
-  const [aspecto, setAspecto] = useState({ colorPrimario: '#0f766e', colorFondo: '#ffffff', colorTexto: '#0f172a', radioTarjeta: '0.75rem' });
+  const [plantilla, setPlantilla] = useState<string>('clasica');  const [aspecto, setAspecto] = useState({ colorPrimario: '#0f766e', colorFondo: '#ffffff', colorTexto: '#0f172a', radioTarjeta: '0.75rem' });
+  const [logo, setLogo] = useState<string | null>(null);
   const [extrasDisponibles, setExtrasDisponibles] = useState<ExtraPublico[]>([]);
   const [seleccionExtras, setSeleccionExtras] = useState<SeleccionExtraUI[]>([]);
   const [checkIn, setCheckIn] = useState(hoyMas(7));
@@ -325,6 +325,9 @@ function BookingCliente() {
         // el dato llega raro — la página no puede romperse por configuración).
         if (data.plantilla) setPlantilla(data.plantilla);
         if (data.personalizacion) setAspecto(normalizarAspecto(data.personalizacion));
+        // Logo del hotel para la cabecera (normalizado por el módulo puro;
+        // null/ausente = sin logo, la cabecera cae al título como siempre).
+        setLogo(typeof data.logo === 'string' && data.logo ? data.logo : null);
       } catch {
         toast.error(t.errorCargarPropiedad);
       } finally {
@@ -494,6 +497,15 @@ function BookingCliente() {
       <div className="max-w-3xl mx-auto space-y-4" style={estiloAspecto}>
         <header className="pt-4 flex items-start justify-between gap-2">
           <div>
+            {/* Cabecera con la marca del hotel: su logo si lo subió; sin
+                él, el título como siempre (nunca una imagen rota). */}
+            {logo ? (
+              <img
+                src={logo}
+                alt={propiedad?.nombre || t.reservaDirecta}
+                className="mb-2 h-12 w-auto max-w-[200px] object-contain"
+              />
+            ) : null}
             <Badge variant="outline" className="mb-2 gap-1">
               <Sparkles className="h-3 w-3" /> {t.reservaDirecta}
             </Badge>

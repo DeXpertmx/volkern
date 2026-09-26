@@ -113,6 +113,23 @@ export function cssDePersonalizacion(p: PersonalizacionBooking): Record<string, 
   };
 }
 
+// ─── Logo de la cabecera ─────────────────────────────────────────────────────
+
+/**
+ * La URL del logo que enseña la cabecera de la página pública, o null si lo
+ * guardado no sirve como imagen: vacío, no-texto o una "URL" sin http(s) ni
+ * ruta relativa. La página pública no puede quedarse con una imagen rota
+ * delante del huésped — sin logo válido, la cabecera cae al título.
+ */
+export function logoDeValor(valor: unknown): string | null {
+  if (typeof valor !== 'string') return null;
+  const v = valor.trim();
+  if (!v || v.length > 2048) return null;
+  // URL absoluta http(s) o ruta relativa de la propia app (/logo.png). Lo que
+  // no tenga ninguna de las dos formas no es una dirección de imagen.
+  return /^https?:\/\//i.test(v) || v.startsWith('/') ? v : null;
+}
+
 // ─── Dominio propio del tenant ─────────────────────────────────────────────
 
 export interface ResultadoDominio {

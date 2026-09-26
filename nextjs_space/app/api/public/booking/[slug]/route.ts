@@ -28,7 +28,7 @@ import {
 } from '@/lib/hospitality/booking-engine';
 import { crearReservaDeBookingDirecto } from '@/lib/hospitality/reservations';
 import { crearCobroReserva } from '@/lib/stripe/connect';
-import { plantillaDeValor, personalizacionDeValor } from '@/lib/hospitality/booking-plantillas';
+import { plantillaDeValor, personalizacionDeValor, logoDeValor } from '@/lib/hospitality/booking-plantillas';
 import { dispatchConnectivityPush } from '@/lib/hospitality/sync';
 import { dispararComunicacionReserva } from '@/lib/hospitality/comunicaciones';
 import { idiomaDeValor } from '@/lib/hospitality/booking-i18n';
@@ -54,7 +54,7 @@ async function propiedadPublicada(slug: string) {
           // Plantilla y personalización de la página pública del Booking Engine
           // (viven en la config del tenant; desconocido = clásica/defaults).
           hospitalityBookingConfig: {
-            select: { plantilla: true, personalizacion: true },
+            select: { plantilla: true, personalizacion: true, logo: true },
           },
         },
       },
@@ -193,6 +193,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
       const aspecto = {
         plantilla: plantillaDeValor(cfg?.plantilla),
         personalizacion: personalizacionDeValor(cfg?.personalizacion),
+        logo: logoDeValor(cfg?.logo),
       };
       return NextResponse.json({
         ...aspecto,

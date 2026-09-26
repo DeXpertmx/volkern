@@ -12,6 +12,7 @@ import { estadoDeCobroDelTenant } from './booking-payments';
 import {
   plantillaDeValor,
   personalizacionDeValor,
+  logoDeValor,
   type PlantillaBooking,
   type PersonalizacionBooking,
 } from './booking-plantillas';
@@ -39,6 +40,8 @@ export interface DatosPaginaPublica {
   plantilla: PlantillaBooking;
   /** Colores/radios normalizados para inyectar como CSS custom properties. */
   personalizacion: PersonalizacionBooking;
+  /** Logo del hotel para la cabecera (normalizado; null = sin logo). */
+  logo: string | null;
 }
 
 export type ResultadoDatosPagina =
@@ -71,6 +74,7 @@ export async function datosPaginaPublica(slug: string): Promise<ResultadoDatosPa
       propiedades: pagina.propiedades,
       plantilla: plantillaDeValor(pagina.config.plantilla),
       personalizacion: personalizacionDeValor(pagina.config.personalizacion),
+      logo: logoDeValor(pagina.config.logo),
     },
   };
 }

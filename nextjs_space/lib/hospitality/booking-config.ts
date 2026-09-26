@@ -21,6 +21,7 @@ import {
   esPlantillaValida,
   normalizarPersonalizacion,
   normalizarDominio,
+  logoDeValor,
 } from './booking-plantillas';
 import { monedaEfectiva, monedaEscritura } from '@/lib/moneda';
 import { TOP_LEVEL } from '@/lib/legacy-redirects';
@@ -49,6 +50,8 @@ export interface ConfigBooking {
   plantilla?: string | null;
   /** Personalización (colores/radios); null = defaults del módulo puro. */
   personalizacion?: unknown;
+  /** Logo del hotel (URL pública) para la cabecera de la página; null = sin logo. */
+  logo?: string | null;
   /** Dominio propio del tenant; null = sin dominio (solo volkern.app). */
   dominio?: string | null;
 }
@@ -177,6 +180,8 @@ export interface EntradaConfigBooking {
   plantilla?: unknown;
   /** Personalización (colores/radios): se normaliza al guardar. */
   personalizacion?: unknown;
+  /** Logo (URL pública): vacío = quitar; inválido = error legible. */
+  logo?: unknown;
   /** Dominio propio del tenant: vacío = quitar; se normaliza/valida. */
   dominio?: unknown;
   /** Dominio guardado actualmente (para saber si cambió y hay que reverificar). */
@@ -214,6 +219,21 @@ export async function guardarConfigBooking(
   if (!dominioResultado.ok) return { ok: false, error: dominioResultado.error! };
   const dominioNormalizado = dominioResultado.dominio ?? null;
 
+  // Logo de la cabecera: AUSENTE = sin cambio; null o vacío = quitar; lo que no
+  // sea una URL (o ruta de la app) válida es un error legible, como el dominio:
+  // una "URL" mal escrita que se guardara en silencio haría una imagen rota
+  // delante del huésped y el hotel no sabría por qué.
+  let logoValor: string | null | undefined;
+  if (entrada.logo === undefined) {
+    logoValor = undefined;
+  } else if (entrada.logo === null || (typeof entrada.logo === 'string' && entrada.logo.trim() === '')) {
+    logoValor = null;
+  } else if (typeof entrada.logo === 'string' && logoDeValor(entrada.logo)) {
+    logoValor = logoDeValor(entrada.logo);
+  } else {
+    return { ok: false, error: 'La URL del logo no parece válida: usa un enlace https:// a una imagen (o déjalo vacío para quitarlo).' };
+  }
+
   // Convención del repo para los tres campos nuevos: AUSENTE en el body = sin
   // cambio (los PUT del onboarding no los mandan y no deben borrar lo guardado);
   // presente e inválido = neutro (clásica/defaults); dominio vacío = quitar.
@@ -245,13 +265,14 @@ export async function guardarConfigBooking(
   try {
     const fila = await prisma.hospitalityBookingConfig.upsert({
       where: { tenantId },
-      // Alta: los tres campos nuevos nacen en su neutro (clásica, sin
-      // personalización —la página aplica defaults—, sin dominio propio).
+      // Alta: los campos nuevos nacen en su neutro (clásica, sin
+      // personalización —la página aplica defaults—, sin logo y sin dominio propio).
       create: {
         tenantId,
         ...datos,
         plantilla: plantillaValor ?? null,
         personalizacion: personalizacionValor ?? Prisma.DbNull,
+        logo: logoValor ?? null,
         dominio: dominioValor ?? null,
       },
       // Edición: undefined = no tocar; dominio cambiado ⇒ reverificar DNS.
@@ -259,6 +280,7 @@ export async function guardarConfigBooking(
         ...datos,
         plantilla: plantillaValor,
         personalizacion: personalizacionValor === undefined ? undefined : personalizacionValor,
+        ...(logoValor !== undefined ? { logo: logoValor } : {}),
         ...(dominioValor !== undefined ? { dominio: dominioValor } : {}),
         ...(dominioValor !== undefined &&
         !(dominioValor !== null && dominioValor === (entrada.dominioActual ?? null))

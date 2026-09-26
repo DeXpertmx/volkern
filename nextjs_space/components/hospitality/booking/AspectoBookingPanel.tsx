@@ -10,8 +10,8 @@
  * lo inválido no entra, y si el dominio cambia, la verificación se invalida.
  */
 
-import { useState } from 'react';
-import { Loader2, Globe, CheckCircle2, XCircle, RefreshCcw } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Loader2, Globe, CheckCircle2, XCircle, RefreshCcw, ImagePlus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,8 @@ import { PLANTILLAS_CATALOGO, type PlantillaBooking } from '@/lib/hospitality/bo
 export interface AspectoActual {
   plantilla: string | null;
   personalizacion: { colorPrimario: string; colorFondo: string; colorTexto: string; radioTarjeta: string } | null;
+  /** Logo del hotel (URL pública); null = sin logo (cabecera con el título). */
+  logo: string | null;
   dominio: string | null;
   dominioVerificado: boolean;
   slug: string;
@@ -36,6 +38,10 @@ export function AspectoBookingPanel({ actual, onGuardado }: { actual: AspectoAct
   const [colorFondo, setColorFondo] = useState(actual.personalizacion?.colorFondo || '#ffffff');
   const [colorTexto, setColorTexto] = useState(actual.personalizacion?.colorTexto || '#0f172a');
   const [dominio, setDominio] = useState(actual.dominio || '');
+  // Logo de la cabecera: URL pública (la que devuelve la subida a S3/R2).
+  const [logo, setLogo] = useState<string | null>(actual.logo ?? null);
+  const [subiendoLogo, setSubiendoLogo] = useState(false);
+  const inputLogoRef = useRef<HTMLInputElement>(null);
   const [verificado, setVerificado] = useState(actual.dominioVerificado);
   const [guardando, setGuardando] = useState(false);
   const [verificando, setVerificando] = useState(false);
@@ -50,6 +56,7 @@ export function AspectoBookingPanel({ actual, onGuardado }: { actual: AspectoAct
           slug: actual.slug,
           plantilla,
           personalizacion: { colorPrimario, colorFondo, colorTexto },
+          logo: logo ?? '',
           dominio: dominio.trim(),
         }),
       });
@@ -62,6 +69,29 @@ export function AspectoBookingPanel({ actual, onGuardado }: { actual: AspectoAct
       toast.error(e instanceof Error ? e.message : 'Error al guardar');
     } finally {
       setGuardando(false);
+    }
+  };
+
+  // Subida del logo: va a S3/R2 como archivo público y se guarda su URL en la
+  // configuración al pulsar «Guardar» (la subida sola no cambia la página).
+  const subirLogo = async (file: File) => {
+    setSubiendoLogo(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('tipo', 'booking-logo');
+      const res = await fetch('/api/upload', { method: 'POST', body: fd });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || 'No se pudo subir el logo');
+      const url = (data?.publicUrl || data?.downloadUrl || data?.url || '') as string;
+      if (!url) throw new Error('La subida no devolvió una URL');
+      setLogo(url);
+      toast.success('Logo listo: pulsa Guardar para aplicarlo');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al subir el logo');
+    } finally {
+      setSubiendoLogo(false);
+      if (inputLogoRef.current) inputLogoRef.current.value = '';
     }
   };
 
@@ -173,6 +203,52 @@ export function AspectoBookingPanel({ actual, onGuardado }: { actual: AspectoAct
               Reservar ahora
             </button>
           </div>
+        </div>
+
+        {/* ── Logo de la cabecera ── */}
+        <div>
+          <Label className="text-sm font-medium">Logo de tu página</Label>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Imagen (PNG, SVG o JPG), máx. 5 MB. Aparece encima del título en tu página de reservas.
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            {logo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={logo}
+                alt="Logo del hotel"
+                className="h-14 w-auto max-w-[180px] rounded-md border bg-white object-contain p-1"
+              />
+            ) : null}
+            <input
+              ref={inputLogoRef}
+              type="file"
+              accept="image/png,image/jpeg,image/svg+xml,image/webp,image/x-icon,.png,.jpg,.jpeg,.svg,.webp,.ico"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void subirLogo(f);
+              }}
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => inputLogoRef.current?.click()}
+              disabled={subiendoLogo}
+            >
+              {subiendoLogo ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ImagePlus className="mr-2 h-4 w-4" />}
+              {subiendoLogo ? 'Subiendo…' : logo ? 'Cambiar logo' : 'Subir logo'}
+            </Button>
+            {logo ? (
+              <Button type="button" size="sm" variant="ghost" onClick={() => setLogo(null)}>
+                <Trash2 className="mr-2 h-4 w-4" /> Quitar
+              </Button>
+            ) : null}
+          </div>
+          {logo && logo !== actual.logo ? (
+            <p className="mt-2 text-xs text-amber-600">Pulsa «Guardar aspecto y dominio» para aplicarlo.</p>
+          ) : null}
         </div>
 
         {/* ── Dominio propio ── */}

@@ -432,3 +432,22 @@ describe('Página pública de reserva — estancia en temporada', () => {
     expect(screen.queryByText(/\/noche/)).toBeNull();
   });
 });
+
+describe('Página pública de reserva — cabecera con el logo del hotel', () => {
+  it('pinta el logo del hotel encima del título cuando la API lo devuelve', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => json({ ...CATALOGO, logo: 'https://cdn.test/logo-hotel.png' })));
+    render(<BookingPublico />);
+    await screen.findByText('Hotel Volcán');
+
+    const logo = screen.getByAltText('Hotel Volcán');
+    expect(logo.getAttribute('src')).toBe('https://cdn.test/logo-hotel.png');
+  });
+
+  it('sin logo la cabecera cae al título: ninguna imagen rota delante del huésped', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => json(CATALOGO)));
+    render(<BookingPublico />);
+    await screen.findByText('Hotel Volcán');
+
+    expect(screen.queryByAltText('Hotel Volcán')).toBeNull();
+  });
+});

@@ -16,6 +16,8 @@ import type { PlantillaBooking, PersonalizacionBooking } from '@/lib/hospitality
 export interface DatosPlantilla {
   plantilla: PlantillaBooking;
   personalizacion: PersonalizacionBooking;
+  /** Logo del hotel (URL pública normalizada); null = cabecera sin logo. */
+  logo: string | null;
   /** Título de la página (config.titulo) o el nombre del alojamiento. */
   titulo: string;
   descripcion: string | null;
@@ -60,10 +62,28 @@ export function EnvolturaPlantilla({
   );
 }
 
+/**
+ * Logo del hotel para la cabecera de la página pública. Solo con URL válida:
+ * la imagen rota se queda en el panel, nunca delante del huésped (el módulo puro
+ * ya normalizó el valor; aquí la nulidad se traduce en "no pintar nada").
+ */
+function LogoHotel({ src, alt }: { src: string; alt: string }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={alt}
+      className="mx-auto mb-3 max-h-20 w-auto max-w-[220px] object-contain"
+      loading="eager"
+    />
+  );
+}
+
 /** Cabecera compartida: título, ciudad, capacidad y «desde» si hay tarifa. */
 function Cabecera({ d }: { d: DatosPlantilla }) {
   return (
     <header className="text-center">
+      {d.logo ? <LogoHotel src={d.logo} alt={d.titulo} /> : null}
       <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl" style={{ color: 'var(--booking-texto)' }}>
         {d.titulo}
       </h1>
@@ -98,6 +118,17 @@ export function PlantillaBookingPage({ plantilla, datos, wizard }: { plantilla: 
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={datos.fotoPortada} alt={datos.titulo} className="h-full w-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+          {datos.logo ? (
+            <div className="absolute top-4 left-4 right-4">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={datos.logo}
+                alt={datos.titulo}
+                className="h-12 w-auto max-w-[200px] rounded-md bg-white/95 object-contain p-1.5 shadow-sm"
+                loading="eager"
+              />
+            </div>
+          ) : null}
           <div className="absolute bottom-4 left-4 right-4 text-white">
             <h1 className="text-2xl font-semibold drop-shadow sm:text-3xl">{datos.titulo}</h1>
             <p className="text-sm opacity-90">

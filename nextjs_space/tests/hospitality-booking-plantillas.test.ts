@@ -8,6 +8,7 @@ import {
   cssDePersonalizacion,
   esPlantillaValida,
   hostVerificacionDominio,
+  logoDeValor,
   normalizarDominio,
   normalizarPersonalizacion,
   personalizacionDeValor,
@@ -103,5 +104,29 @@ describe('dominio propio del tenant', () => {
   it('el token de verificación liga dominio y slug del tenant', () => {
     expect(tokenVerificacionDominio('mi-hotel')).toBe('volkern-booking=mi-hotel');
     expect(hostVerificacionDominio('reservas.mihotel.com')).toBe('_volkern-booking.reservas.mihotel.com');
+  });
+});
+
+describe('logo de la cabecera', () => {
+  it('acepta URLs http(s) y rutas de la app, y recorta espacios', () => {
+    expect(logoDeValor('https://cdn.mihotel.com/logo.png')).toBe('https://cdn.mihotel.com/logo.png');
+    expect(logoDeValor('  https://cdn.mihotel.com/logo.png  ')).toBe('https://cdn.mihotel.com/logo.png');
+    expect(logoDeValor('/uploads/logo-booking.png')).toBe('/uploads/logo-booking.png');
+  });
+
+  it('lo que no es una URL de imagen vale «sin logo» (null), nunca una imagen rota', () => {
+    for (const basura of [
+      null,
+      undefined,
+      '',
+      '   ',
+      'logo.png',
+      'javascript:alert(1)',
+      'data:image/png;base64,AAAA',
+      42,
+      { url: 'https://x.com/l.png' },
+    ]) {
+      expect(logoDeValor(basura)).toBeNull();
+    }
   });
 });
