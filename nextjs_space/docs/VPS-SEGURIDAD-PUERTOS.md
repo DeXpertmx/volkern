@@ -471,9 +471,13 @@ valores) contra el entorno vivo de produccion (contenedor +
   autenticacion por proveedor. Borrar los artefactos temporales con los
   secretos en claro al terminar.
 
-El bundle pre-purga (`/tmp/volkern-pre-purga-*.bundle`) sigue siendo el unico
-deposito de la historia vieja: borrarlo cuando se confirme que no hace falta,
-y mientras tanto tratandolo como documento confidencial.
+**BORRADO el 26-sep-2026** tras confirmar que no hace falta: verificada la
+purga (clon fresco de GitHub sin rastro del fichero, objeto viejo ausente en
+los locales) y comprobado que el bundle aportaba 1.477 commits de `master`,
+todos íntegros en la historia nueva (1.480 hoy = 1.477 reescritos + 4
+posteriores); lo único que no viajó es el fichero con secretos, que era
+justo lo que había que perder. No queda ninguna copia de la historia vieja:
+GitHub y los locales solo tienen la historia limpia.
 
 ## 13. Purga de la historia con secretos (2026-09-26)
 
