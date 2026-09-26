@@ -92,6 +92,24 @@ services:
         - "traefik.http.routers.volkern_erp_dim.priority=100"
         - "traefik.http.routers.volkern_erp_dim.entrypoints=websecure"
         - "traefik.http.routers.volkern_erp_dim.tls.certresolver=letsencryptresolver"
+        # ─── Dominios propios de tenants (Booking Engine, 26-sep-2026) ───
+        # Cualquier dominio que NO sea uno de los conocidos de abajo es un
+        # dominio de cliente (hospitality_booking_config.dominio): cae aquí y
+        # lo sirve el ERP. TLS con Let's Encrypt al primer acceso (challenge
+        # HTTP del entrypoint web; el dominio del cliente apunta directo a la
+        # IP del VPS, sin Cloudflare delante). Con priority=2 gana al
+        # catch-all del legacy (volkern-custom, priority 1) para dominios de
+        # cliente, y pierde con TODOS los routers específicos (Host largo >
+        # HostRegexp; volkern.app/main van por 100). Los conocidos van
+        # negados para que cada dominio siga con su dueño: volkern.app y
+        # subdominios → ERP; table (eliminada), volkerntable.com,
+        # dimension.expert y terminator → legacy/landing; erp → ERP por su
+        # router propio. Detalle y receta de DNS: VPS-SEGURIDAD-PUERTOS §14.
+        - "traefik.http.routers.volkern_erp_custom.rule=HostRegexp(`{host:.+}`) && !Host(`volkern.app`) && !Host(`www.volkern.app`) && !Host(`table.volkern.app`) && !Host(`volkerntable.com`) && !Host(`www.volkerntable.com`) && !Host(`dimension.expert`) && !Host(`terminator.dimension.expert`) && !Host(`erp.dimension.expert`) && !HostRegexp(`{subdomain:[a-zA-Z0-9-]+}.volkern.app`) && !HostRegexp(`{subdomain:[a-zA-Z0-9-]+}.dimension.expert`)"
+        - "traefik.http.routers.volkern_erp_custom.entrypoints=websecure"
+        - "traefik.http.routers.volkern_erp_custom.tls=true"
+        - "traefik.http.routers.volkern_erp_custom.tls.certresolver=letsencryptresolver"
+        - "traefik.http.routers.volkern_erp_custom.priority=2"
         - "traefik.http.services.volkern_erp.loadbalancer.server.port=3000"
 
 volumes:

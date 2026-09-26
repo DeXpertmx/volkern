@@ -543,3 +543,59 @@ vez hubo app de Facebook. Lecciones: (a) un patron de `.gitignore` nunca
 saca del indice lo ya trackeado; (b) «esta trackeado» se demuestra con
 `ls-files`, no con memoria; (c) el stash es parte de la superficie de
 secretos; (d) la purga solo se da por buena con clon fresco.
+
+## 14. Dominios propios de tenants: Traefik y DNS (2026-09-26)
+
+Los clientes del Booking Engine pueden servir su pagina de reservas en su
+propio dominio (`hospitality_booking_config.dominio`, verificado por TXT).
+Para que el trafico llegue al ERP hace falta el borde: Traefik. Lo que se
+configuro y lo que queda del lado del cliente:
+
+**Lo hecho en el VPS (26-sep-2026):**
+
+- **Catch-all del ERP** (`volkern_erp_custom`, en `volkern-erp.yaml` del repo):
+  `HostRegexp({host:.+})` con TODOS los hosts conocidos negados (volkern.app,
+  www, table, volkerntable.com, dimension.expert, terminator, erp y los
+  subdominios de volkern.app/dimension.expert) y `priority=2`. TLS con
+  `letsencryptresolver`: el certificado de cada dominio de cliente se emite
+  automaticamente al primer acceso (challenge HTTP del entrypoint web; el
+  redirect 80→443 es permanente). Con priority=2 gana al catch-all del legacy
+  (`volkern-custom`, priority 1) y pierde con todos los routers especificos.
+- **Retiro de `table.volkern.app`**: el router `volkern-app` del stack heredado
+  (`/opt/volkern-table/docker-compose.yml`) pasa a `Host(table.volkern.app.RETIRO-20260926)`
+  (etiqueta de retiro que ya no matchea nada) y re-deploy del stack. Resultado:
+  table.volkern.app entra por el catch-all del ERP y responde **307 → /auth/login**
+  (la raiz del ERP redirige a login para hosts que no son volkern.app). Backup:
+  `/root/backups/traefik-dominios-20260926/` (los dos yaml pre-cambio).
+- **Trampas del re-deploy del legacy**: `docker stack deploy` exige las variables
+  del compose (`POSTGRES_PASSWORD`, `JWT_SECRET`) en el entorno — hacen falta con
+  `set -a && . ./.env && set +a` desde `/opt/volkern-table` (stack deploy NO lee
+  el `.env` del directorio). Un `service update --force` NO toca labels: para
+  cambiar el catch-all hace falta el `stack deploy` completo.
+- **Verificado**: volkern.app 200, www 200, app.volkern.app 200, volkerntable.com
+  200, dimension.expert 200, erp.dimension.expert 200 (el legacy sigue vivo para
+  lo suyo), table.volkern.app ahora 307 del ERP, y un Host de cliente simulado
+  sirve el ERP con 200 en `/` y en `/reservar/<slug>`.
+
+**Lo que hace el cliente (receta de DNS) para su dominio `reservas.mihotel.com`:**
+
+1. En su DNS crea un registro **A** `reservas.mihotel.com` → `62.171.134.195`
+   (o **CNAME** a `volkern.app` si prefiere seguir el destino; el A es mas
+   directo y no depende de Cloudflare).
+2. En su DNS crea el **TXT** de verificacion:
+   `_volkern-booking.reservas.mihotel.com` → `"volkern-booking=<su slug>"`.
+   (El panel le ensena el valor exacto; sin este TXT, la verificacion del
+   panel no pasa.)
+3. En el panel Booking Engine guarda el dominio y pulsa «Comprobar ahora».
+   Al primer acceso con el dominio apuntado, Traefik emite el certificado
+   Let's Encrypt automaticamente (HTTP-01): el primer load puede tardar unos
+   segundos mientras se emite.
+4. NO ponga el dominio detrás de un proxy naranja de Cloudflare: el challenge
+   HTTP-01 necesita llegar directo al VPS. Si usa Cloudflare, el registro en
+   gris (solo DNS).
+
+**Estado de los dominios heredados (despues del cambio):** table.volkern.app
+cae en el ERP (307); volkerntable.com, dimension.expert y
+terminator.dimension.expert siguen servidos por el legacy. Si el dia de
+manana se retira el stack heredado, sus dominios caeran igualmente en el
+catch-all del ERP (307 a la app) — no hace falta tocar nada mas.
