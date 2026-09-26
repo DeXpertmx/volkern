@@ -23,3 +23,6 @@ scratch/
 typecheck_output.txt
 # .husky/ is TRACKED — contains shared quality gates (typecheck, lint, fixture, vitest)
 # Husky v9 requires .husky/ to be committed so hooks are shared across developers.
+
+# credenciales locales: nunca versionar (recetas del VPS: VPS-SEGURIDAD-PUERTOS.md)
+.db_pass

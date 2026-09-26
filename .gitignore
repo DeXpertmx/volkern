@@ -17,3 +17,6 @@ fluy_crm.zip
 .freebuff/
 # Backup files
 *.bak
+
+# credenciales locales: nunca versionar
+.db_pass
