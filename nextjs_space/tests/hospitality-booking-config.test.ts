@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // La configuración habla con Prisma, pero lo que se prueba aquí son sus reglas
 // puras y el enlace firmado: la base no entra.
@@ -6,6 +6,7 @@ vi.mock('../lib/db', () => ({ prisma: {} }));
 
 import {
   codigoEmbedBooking,
+  logoCorporativoTenant,
   monedaPublicada,
   normalizarAnticipo,
   normalizarSlug,
@@ -15,6 +16,7 @@ import {
   urlPublicaBooking,
   validarSlug,
 } from '../lib/hospitality/booking-config';
+import { prisma } from '../lib/db';
 import {
   firmarTokenReserva,
   urlConfirmacionReserva,
@@ -127,6 +129,49 @@ describe('enlaces publicados', () => {
     expect(codigo).toContain('https://volkern.app/embed/reservar/mi-casa');
     expect(codigo).toContain('title="Casa Sol"');
     expect(codigo.startsWith('<iframe')).toBe(true);
+  });
+});
+
+describe('logo corporativo del tenant (cabecera de la página pública)', () => {
+  const findFirst = vi.fn();
+
+  beforeEach(() => {
+    (prisma as unknown as { configuracion: { findFirst: typeof findFirst } }).configuracion = { findFirst };
+    findFirst.mockReset();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('sin logo configurado devuelve null: la página no enseña ninguno', async () => {
+    findFirst.mockResolvedValue(null);
+    await expect(logoCorporativoTenant('t1')).resolves.toBeNull();
+    findFirst.mockResolvedValue({ valor: '   ' });
+    await expect(logoCorporativoTenant('t1')).resolves.toBeNull();
+  });
+
+  it('una URL pública pasa tal cual (y lo que no es URL de imagen cae a null)', async () => {
+    findFirst.mockResolvedValue({ valor: 'https://cdn.hotel.com/logo.png' });
+    await expect(logoCorporativoTenant('t1')).resolves.toBe('https://cdn.hotel.com/logo.png');
+    findFirst.mockResolvedValue({ valor: 'javascript:alert(1)' });
+    await expect(logoCorporativoTenant('t1')).resolves.toBeNull();
+  });
+
+  it('el valor JSON-codificado se desenvuelve', async () => {
+    findFirst.mockResolvedValue({ valor: '"https://cdn.hotel.com/logo.png"' });
+    await expect(logoCorporativoTenant('t1')).resolves.toBe('https://cdn.hotel.com/logo.png');
+  });
+
+  it('una clave de S3/R2 se convierte a URL pública directa, sin firma que caduque', async () => {
+    vi.stubEnv('NEXT_PUBLIC_CDN_URL', 'https://cdn.test');
+    findFirst.mockResolvedValue({ valor: 'public/configuracion/logo-123.png' });
+    await expect(logoCorporativoTenant('t1')).resolves.toBe('https://cdn.test/public/configuracion/logo-123.png');
+  });
+
+  it('si la consulta falla la página se sirve sin logo (auxiliar, nunca rota)', async () => {
+    findFirst.mockRejectedValue(new Error('bd caída'));
+    await expect(logoCorporativoTenant('t1')).resolves.toBeNull();
   });
 });
 

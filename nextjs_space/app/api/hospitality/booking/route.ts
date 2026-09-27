@@ -19,7 +19,7 @@ import { getEnlaceAppUrl } from '@/lib/hospitality/compliance-link';
 /**
  * Configuración del Booking Engine del tenant.
  *
- * GET devuelve la configuración —incluidos plantilla, personalización, logo y
+ * GET devuelve la configuración —incluidos plantilla, personalización y
  * dominio propio—, el estado real de la cuenta de cobro (para poder
  * avisar en la pantalla de que el cobro online no está disponible en vez de
  * dejarlo como una casilla sin efecto), los enlaces publicados y las propiedades
@@ -81,7 +81,7 @@ export async function GET(req: NextRequest) {
  * Body: { slug, titulo?, descripcion?, emailContacto?, telefonoContacto?, moneda?,
  *         politicaCancelacion?, anticipoPorcentaje?, tarifaLimpieza?,
  *         requierePagoOnline?, propiedadesPublicadas?, activo?, plantilla?,
- *         personalizacion?, logo?, dominio? }
+ *         personalizacion?, dominio? }
  */
 export async function PUT(req: NextRequest) {
   try {
@@ -115,10 +115,8 @@ export async function PUT(req: NextRequest) {
             (id) => typeof id === 'string'
           )
         : [],
-      activo: (body as Record<string, unknown>).activo !== false,
-      plantilla: (body as Record<string, unknown>).plantilla,
+      activo: (body as Record<string, unknown>).activo !== false,      plantilla: (body as Record<string, unknown>).plantilla,
       personalizacion: (body as Record<string, unknown>).personalizacion,
-      logo: (body as Record<string, unknown>).logo,
       dominio: (body as Record<string, unknown>).dominio,
       dominioActual: configActual?.dominio ?? null,
     });

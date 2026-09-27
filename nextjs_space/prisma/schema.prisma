@@ -8854,10 +8854,6 @@ model HospitalityBookingConfig {
   // Personalización visual libre (colores, radios) en JSON. El módulo puro
   // valida y completa defaults: lo que llegue malformado no rompe la página.
   personalizacion       Json?
-  // Logo del hotel para la cabecera de la página pública. Guarda la URL
-  // pública del archivo (S3/R2 vía /api/upload o externa): una cadena vacía
-  // o basura es «sin logo» para el módulo puro, y la cabecera cae al título.
-  logo                  String?
   // Dominio propio del tenant para su página de reserva (ej: reservas.mihotel.com).
   // Normalizado minúscula/sin www por el módulo; único en toda la plataforma.
   // La verificación DNS se guarda aparte y se re-checa desde el panel.

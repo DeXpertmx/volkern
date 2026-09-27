@@ -28,7 +28,8 @@ import {
 } from '@/lib/hospitality/booking-engine';
 import { crearReservaDeBookingDirecto } from '@/lib/hospitality/reservations';
 import { crearCobroReserva } from '@/lib/stripe/connect';
-import { plantillaDeValor, personalizacionDeValor, logoDeValor } from '@/lib/hospitality/booking-plantillas';
+import { plantillaDeValor, personalizacionDeValor } from '@/lib/hospitality/booking-plantillas';
+import { logoCorporativoTenant } from '@/lib/hospitality/booking-config';
 import { dispatchConnectivityPush } from '@/lib/hospitality/sync';
 import { dispararComunicacionReserva } from '@/lib/hospitality/comunicaciones';
 import { idiomaDeValor } from '@/lib/hospitality/booking-i18n';
@@ -54,7 +55,7 @@ async function propiedadPublicada(slug: string) {
           // Plantilla y personalización de la página pública del Booking Engine
           // (viven en la config del tenant; desconocido = clásica/defaults).
           hospitalityBookingConfig: {
-            select: { plantilla: true, personalizacion: true, logo: true },
+            select: { plantilla: true, personalizacion: true },
           },
         },
       },
@@ -188,12 +189,15 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
     // Sin fechas: catálogo público (lo que ve el visitante al entrar).
     if (!checkIn || !checkOut) {
       // Plantilla y personalización elegidas por el hotel (normalizadas por el
-      // módulo puro: lo inválido llega como clásica/defaults, nunca rompe).
+      // módulo puro: lo inválido llega como clásica/defaults, nunca rompe) y el
+      // logo corporativo del tenant —el mismo que Configuración → Empresa—:
+      // sin él, sin logo en la cabecera.
       const cfg = propiedad.tenant?.hospitalityBookingConfig;
+      const logo = await logoCorporativoTenant(propiedad.tenantId);
       const aspecto = {
         plantilla: plantillaDeValor(cfg?.plantilla),
         personalizacion: personalizacionDeValor(cfg?.personalizacion),
-        logo: logoDeValor(cfg?.logo),
+        logo,
       };
       return NextResponse.json({
         ...aspecto,

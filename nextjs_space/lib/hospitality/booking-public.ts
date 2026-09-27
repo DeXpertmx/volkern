@@ -9,10 +9,10 @@
 
 import { resolverPaginaPublica, type PropiedadPublica } from './booking-engine';
 import { estadoDeCobroDelTenant } from './booking-payments';
+import { logoCorporativoTenant } from './booking-config';
 import {
   plantillaDeValor,
   personalizacionDeValor,
-  logoDeValor,
   type PlantillaBooking,
   type PersonalizacionBooking,
 } from './booking-plantillas';
@@ -40,7 +40,7 @@ export interface DatosPaginaPublica {
   plantilla: PlantillaBooking;
   /** Colores/radios normalizados para inyectar como CSS custom properties. */
   personalizacion: PersonalizacionBooking;
-  /** Logo del hotel para la cabecera (normalizado; null = sin logo). */
+  /** Logo corporativo del tenant (Configuración → Empresa); null = sin logo. */
   logo: string | null;
 }
 
@@ -53,6 +53,9 @@ export async function datosPaginaPublica(slug: string): Promise<ResultadoDatosPa
   if (!pagina.ok) return { ok: false, motivo: pagina.motivo, mensaje: pagina.mensaje };
 
   const cobro = await estadoDeCobroDelTenant(pagina.config.tenantId);
+  // La marca de la cabecera es la del ERP: el logo corporativo del tenant.
+  // Sin logo configurado, la página no enseña ninguno.
+  const logo = await logoCorporativoTenant(pagina.config.tenantId);
 
   return {
     ok: true,
@@ -74,7 +77,7 @@ export async function datosPaginaPublica(slug: string): Promise<ResultadoDatosPa
       propiedades: pagina.propiedades,
       plantilla: plantillaDeValor(pagina.config.plantilla),
       personalizacion: personalizacionDeValor(pagina.config.personalizacion),
-      logo: logoDeValor(pagina.config.logo),
+      logo,
     },
   };
 }

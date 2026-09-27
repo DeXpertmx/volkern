@@ -120,7 +120,6 @@ export default function BookingEngineConfig() {
           setAspecto({
             plantilla: c.plantilla ?? null,
             personalizacion: c.personalizacion ?? null,
-            logo: c.logo ?? null,
             dominio: c.dominio ?? null,
             dominioVerificado: Boolean(c.dominioVerificado),
             slug: c.slug ?? '',
