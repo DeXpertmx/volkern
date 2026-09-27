@@ -280,7 +280,7 @@ function BookingCliente() {
   const [modalAbierto, setModalAbierto] = useState(false);
   // Plantilla y personalización del hotel (del GET público; defaults si falta).
   const [plantilla, setPlantilla] = useState<string>('clasica');  const [aspecto, setAspecto] = useState({ colorPrimario: '#0f766e', colorFondo: '#ffffff', colorTexto: '#0f172a', radioTarjeta: '0.75rem' });
-  const [logo, setLogo] = useState<string | null>(null);
+  const [logo, setLogo] = useState<string | null>(null);
   const [extrasDisponibles, setExtrasDisponibles] = useState<ExtraPublico[]>([]);
   const [seleccionExtras, setSeleccionExtras] = useState<SeleccionExtraUI[]>([]);
   const [checkIn, setCheckIn] = useState(hoyMas(7));
@@ -425,6 +425,10 @@ function BookingCliente() {
   const amenidades = Array.from(
     new Set(catalogo.flatMap((unidad) => unidad.amenidades || []).filter((a) => typeof a === 'string' && a.trim()))
   ).slice(0, 20);
+  // La foto de la unidad elegida para el modal del registro: el huésped ve
+  // QUÉ está reservando, no solo su nombre (la suya o, si no tiene, la de la
+  // propiedad — el mismo criterio de las tarjetas).
+  const fotoElegida = elegida ? fotoDeUnidad(elegida, propiedad) : null;
   const capacidadMaxima = catalogo.reduce((mayor, unidad) => Math.max(mayor, unidad.capacidad || 0), 0);
 
   if (noDisponible) {
@@ -718,11 +722,25 @@ function BookingCliente() {
             <DialogHeader>
               <DialogTitle>{elegida ? interpolar(t.tusDatos, { unidad: elegida.nombre }) : ''}</DialogTitle>
               <DialogDescription>
-                {elegida ? `${moneda(elegida.precioTotal || 0, elegida.moneda)} · ${noches} ${noches === 1 ? 'noche' : 'noches'}` : ''}
+                {/* Fechas en claro (formato largo, nunca ISO que se lee al revés),
+                    noches y total: lo que está reservando, sin ambigüedad. */}
+                {elegida
+                  ? `${fechaLarga(fechaDeNoche(checkIn), idioma) || checkIn} → ${
+                      fechaLarga(fechaDeNoche(checkOut), idioma) || checkOut
+                    } · ${noches} ${noches === 1 ? t.noche : t.noches} · ${moneda(elegida.precioTotal || 0, elegida.moneda)}`
+                  : ''}
               </DialogDescription>
             </DialogHeader>
             {elegida && (
               <div className="space-y-3">
+              {/* La unidad elegida, a la vista: su foto encima del formulario. */}
+              {fotoElegida ? (
+                <img
+                  src={fotoElegida}
+                  alt={elegida.nombre}
+                  className="h-28 w-full rounded-md border object-cover"
+                />
+              ) : null}
               <Button variant="ghost" size="sm" onClick={() => setModalAbierto(false)}>
                 {t.elegir}
               </Button>

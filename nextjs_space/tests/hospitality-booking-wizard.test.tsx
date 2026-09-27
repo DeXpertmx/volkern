@@ -12,7 +12,7 @@
 // de siempre, y los importes siguen saliendo del servidor.
 
 import { describe, it, expect, vi, afterEach, beforeAll } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { BookingWizard } from '@/components/hospitality/booking/BookingWizard';
@@ -186,5 +186,71 @@ describe('el asistente enseña la estancia en temporada noche a noche', () => {
     expect(await screen.findByText(/×/)).toBeTruthy();
     expect(screen.queryByText('Precio por noche')).toBeNull();
     expect(screen.getByText(/3,700\.00/)).toBeTruthy();
+  });
+});
+
+describe('El modal del registro muestra lo elegido (foto + fechas en claro)', () => {
+  const PROPIEDADES_CON_FOTOS = [
+    {
+      ...PROPIEDADES[0],
+      unidades: [{ ...PROPIEDADES[0].unidades[0], fotos: ['https://cdn.test/loft.jpg'] }],
+    },
+  ];
+
+  it('el resumen lleva la foto de la unidad y las fechas EN CLARO, no ISO', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => json({ ok: true, noches: 2, moneda: 'MXN', unidades: [{ ...UNIDAD_BASE, tarifaPorNoche: 1200, desgloseNoches: null, desglose: { alojamiento: 2400, limpieza: 0, total: 2400, anticipo: 0, saldo: 2400 } }] }))
+    );
+    render(
+      <BookingWizard
+        slug={SLUG}
+        alojamiento="Hotel Volcán"
+        moneda="MXN"
+        config={CONFIG}
+        propiedades={PROPIEDADES_CON_FOTOS}
+      />
+    );
+    await userEvent.click(screen.getByRole('button', { name: /Ver disponibilidad/ }));
+    await userEvent.click(await screen.findByRole('button', { name: /Reservar esta unidad/i }));
+
+    const dialogo = await screen.findByRole('dialog');
+    // La foto de la unidad elegida, dentro del modal.
+    const foto = within(dialogo).getByAltText('Loft Bosque');
+    expect(foto.getAttribute('src')).toBe('https://cdn.test/loft.jpg');
+
+    // Las fechas en formato legible (mes en palabras) y la ISO cruda FUERA:
+    // «2026-09-19» se puede leer al revés (9 de julio) y eso es un error del
+    // huésped esperando a ocurrir.
+    expect(within(dialogo).getAllByText(/→/).length).toBeGreaterThan(0);
+    const texto = dialogo.textContent || '';
+    expect(texto).not.toMatch(/2026-09-19 \u2192 2026-09-21/);
+    expect(texto).toMatch(/septiembre|September/);
+    // Noches y total del servidor en el mismo resumen.
+    expect(texto).toMatch(/2 /);
+    expect(texto).toMatch(/2,400\.00/);
+  });
+
+  it('sin fotos publicadas el resumen queda sin imagen, nunca una rota', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => json({ ok: true, noches: 1, moneda: 'MXN', unidades: [{ ...UNIDAD_BASE, tarifaPorNoche: 1200, desgloseNoches: null, desglose: { alojamiento: 1200, limpieza: 0, total: 1200, anticipo: 0, saldo: 1200 } }] }))
+    );
+    render(
+      <BookingWizard
+        slug={SLUG}
+        alojamiento="Hotel Volcán"
+        moneda="MXN"
+        config={CONFIG}
+        propiedades={PROPIEDADES}
+      />
+    );
+    await userEvent.click(screen.getByRole('button', { name: /Ver disponibilidad/ }));
+    await userEvent.click(await screen.findByRole('button', { name: /Reservar esta unidad/i }));
+
+    const dialogo = await screen.findByRole('dialog');
+    expect(within(dialogo).queryByRole('img')).toBeNull();
+    // Las fechas siguen en claro sin foto.
+    expect((dialogo.textContent || '')).toMatch(/septiembre|September/);
   });
 });

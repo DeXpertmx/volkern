@@ -60,6 +60,8 @@ export interface UnidadPublicaUI {
   capacidad: number;
   descripcion: string | null;
   tarifaPorNoche: number;
+  /** Fotos de la unidad (o de su propiedad): la que enseña el resumen del modal. */
+  fotos: string[];
 }
 
 export interface PropiedadPublicaUI {
@@ -514,9 +516,29 @@ export function BookingWizard({
           <DialogHeader>
             <DialogTitle>{t.tusDatos}</DialogTitle>
             <DialogDescription>
-              {unidad ? `${unidad.nombre} · ${checkIn} → ${checkOut} · ${formatearImporte(unidad.desglose.total, moneda)}` : null}
+              {unidad
+                ? `${fechaLarga(fechaDeNoche(checkIn), idioma) || checkIn} → ${
+                    fechaLarga(fechaDeNoche(checkOut), idioma) || checkOut
+                  } · ${formatearImporte(unidad.desglose.total, moneda)}`
+                : null}
             </DialogDescription>
           </DialogHeader>
+          {/* Lo elegido, a la vista: la foto de la unidad y las fechas en claro.
+              Antes el modal solo decía «2026-09-19 → 2026-09-21»: una fecha ISO
+              se puede leer al revés (mes/día) y sin foto no se sabía qué cama se
+              estaba reservando. El huésped confirma lo que ve. */}
+          {paso === 3 && unidad ? (
+            <ResumenElegido
+              unidad={unidad}
+              foto={fotoDePropiedades(propiedades, unidad.unitId)}
+              checkIn={checkIn}
+              checkOut={checkOut}
+              noches={noches}
+              idioma={idioma}
+              moneda={moneda}
+              total={unidad.desglose.total}
+            />
+          ) : null}
           {paso === 3 && unidad ? (
             <FormularioHuesped
               t={t}
@@ -545,13 +567,16 @@ export function BookingWizard({
             <CardTitle className="text-base">{t.tusDatos}</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4">
-            <div className="rounded-md bg-muted p-3 text-sm">
-              <p className="font-medium">{unidad.nombre}</p>
-              <p className="text-muted-foreground">
-                {checkIn} → {checkOut} · {noches} {nocheONoches(idioma, noches)} ·{' '}
-                {formatearImporte(unidad.desglose.total, moneda)}
-              </p>
-            </div>
+            <ResumenElegido
+              unidad={unidad}
+              foto={fotoDePropiedades(propiedades, unidad.unitId)}
+              checkIn={checkIn}
+              checkOut={checkOut}
+              noches={noches}
+              idioma={idioma}
+              moneda={moneda}
+              total={unidad.desglose.total}
+            />
 
             <FormularioHuesped
               t={t}
@@ -725,6 +750,68 @@ function ConmutadorIdiomaWizard({ actual, rutaBase }: { actual: Idioma; rutaBase
           </a>
         )
       )}
+    </div>
+  );
+}
+
+/** Primera foto publicada de la unidad elegida (caí a las fotos de su propiedad). */
+function fotoDePropiedades(propiedades: PropiedadPublicaUI[], unitId: string): string | null {
+  for (const p of propiedades) {
+    const unidad = p.unidades.find((u) => u.id === unitId);
+    if (unidad?.fotos?.length) return unidad.fotos[0];
+  }
+  return null;
+}
+
+/**
+ * Lo elegido, a la vista: foto de la unidad, fechas en claro (formato largo del
+ * idioma, nunca ISO que se lee al revés) y el total. Vive dentro del modal del
+ * registro y en el respaldo en flujo: el huésped confirma lo que ve, no lo que
+ * intuye — sin foto no se sabía qué cama reservaba y una fecha ISO «2026-09-19»
+ * se confunde con 9 de julio.
+ */
+function ResumenElegido({
+  unidad,
+  foto,
+  checkIn,
+  checkOut,
+  noches,
+  idioma,
+  moneda,
+  total,
+}: {
+  unidad: { nombre: string; tipo: string };
+  foto: string | null;
+  checkIn: string;
+  checkOut: string;
+  noches: number;
+  idioma: Idioma;
+  moneda: string;
+  total: number;
+}) {
+  const llegada = fechaLarga(fechaDeNoche(checkIn), idioma) || checkIn;
+  const salida = fechaLarga(fechaDeNoche(checkOut), idioma) || checkOut;
+  return (
+    <div className="flex items-center gap-3 rounded-md border bg-muted/50 p-3">
+      {foto ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={foto}
+          alt={unidad.nombre}
+          className="h-16 w-20 shrink-0 rounded-md border object-cover"
+          loading="eager"
+        />
+      ) : null}
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">{unidad.nombre}</p>
+        <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+          <CalendarDays className="h-3 w-3 shrink-0" aria-hidden />
+          {llegada} → {salida}
+        </p>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {noches} {nocheONoches(idioma, noches)} · {formatearImporte(total, moneda)}
+        </p>
+      </div>
     </div>
   );
 }
