@@ -39,11 +39,23 @@ function parseFecha(raw?: string): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
-function nombreHuesped(guestData: unknown): string {
+/**
+ * Nombre del huésped para listados humanos (briefing, estado del día).
+ *
+ * La forma CANÓNICA con la que escriben los canales (conectividad/webhook) es
+ * `firstName` + `lastName` — la misma que ya respetan money-query.ts y
+ * guests.ts. `guestName`/`nombre`/`name` son variantes del formulario público
+ * y de seeds. Leer solo estas últimas pintaba «Sin nombre» para cualquier
+ * reserva que llegara por OTA aunque trajera nombre completo.
+ * (Exportada para tests.)
+ */
+export function nombreHuesped(guestData: unknown): string {
   if (!guestData || typeof guestData !== 'object') return 'Sin nombre';
   const g = guestData as Record<string, unknown>;
-  const nombre = (g.guestName || g.nombre || g.name) as string | undefined;
-  return typeof nombre === 'string' && nombre.trim() ? nombre.trim() : 'Sin nombre';
+  const texto = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+  const nombre = [texto(g.firstName), texto(g.lastName)].filter(Boolean).join(' ')
+    || texto(g.guestName) || texto(g.nombre) || texto(g.name);
+  return nombre || 'Sin nombre';
 }
 
 /** Suma los días indicados a un día local empezando a medianoche. */

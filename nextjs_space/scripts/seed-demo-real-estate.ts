@@ -1055,6 +1055,94 @@ async function main() {
   });
   console.log('   ✓ Tareas de seguimiento procesadas.');
 
+  // 10b. Hospitalidad: propiedades, unidades y reservas de la semana.
+  //   El briefing matutino (resumen_diario) necesita LLEGADAS y SALIDAS con
+  //   huésped con nombre REAL: la forma canónica de los canales es
+  //   guestData {firstName, lastName} (la misma que ya respetan money-query y
+  //   guests.ts). Las fechas flotan con HOY (frescas en cada re-ejecución): la
+  //   llegada de hoy produce un cobro pendiente y la de mañana alimenta la
+  //   línea «Mañana» del briefing. Idempotente: IDs fijos + upsert.
+  console.log('🏨 Sembrando hospitalidad (propiedades, unidades, reservas)...');
+  const hoyBase = new Date();
+  hoyBase.setHours(12, 0, 0, 0);
+  const dia = (offset: number) => {
+    const d = new Date(hoyBase);
+    d.setDate(d.getDate() + offset);
+    return d;
+  };
+  const ISO = (d: Date) => d.toISOString().slice(0, 10);
+
+  const propiedadesHospitality = [
+    { id: 'hprop_demo01', nombre: 'Villa Mar Azul — Playa del Carmen', ciudad: 'Playa del Carmen', pais: 'MX', timezone: 'America/Cancun' },
+    { id: 'hprop_demo02', nombre: 'Casa Palmeras — Tulum', ciudad: 'Tulum', pais: 'MX', timezone: 'America/Cancun' },
+  ];
+  for (const p of propiedadesHospitality) {
+    await prisma.hospitalityProperty.upsert({
+      where: { id: p.id },
+      update: { nombre: p.nombre, ciudad: p.ciudad, pais: p.pais, timezone: p.timezone, estado: 'activa' },
+      create: { id: p.id, tenantId: tenant.id, nombre: p.nombre, ciudad: p.ciudad, pais: p.pais, timezone: p.timezone, estado: 'activa' },
+    });
+  }
+
+  const unidadesHospitality = [
+    { id: 'hunit_d01', propertyId: 'hprop_demo01', codigo: 'MAR-302', nombre: 'Loft Marina', tipo: 'loft', capacidad: 2, tarifaBase: 3200 },
+    { id: 'hunit_d02', propertyId: 'hprop_demo01', codigo: 'SUI-101', nombre: 'Suite Oceano', tipo: 'suite', capacidad: 4, tarifaBase: 4500 },
+    { id: 'hunit_d03', propertyId: 'hprop_demo02', codigo: 'CASA-01', nombre: 'Casa Completa', tipo: 'casa', capacidad: 6, tarifaBase: 5900 },
+  ];
+  for (const u of unidadesHospitality) {
+    await prisma.hospitalityUnit.upsert({
+      where: { id: u.id },
+      update: { nombre: u.nombre, codigo: u.codigo, tarifaBase: u.tarifaBase, moneda: 'EUR' },
+      create: { id: u.id, tenantId: tenant.id, propertyId: u.propertyId, nombre: u.nombre, codigo: u.codigo, tipo: u.tipo, capacidad: u.capacidad, tarifaBase: u.tarifaBase, moneda: 'EUR' },
+    });
+  }
+
+  // Un contacto demo para las reservas (la identidad del huésped vive en
+  // guestData; el contactId es opcional y aquí queda aparte del CRM).
+  const huespedContact = await prisma.contact.upsert({
+    where: { id: 'contact-huesped-demo' },
+    update: { nombre: 'Elena Navarro', email: 'elena.navarro@example.com' },
+    create: { id: 'contact-huesped-demo', tenantId: tenant.id, nombre: 'Elena Navarro', email: 'elena.navarro@example.com', tipo: 'person' },
+  });
+
+  const reservasHospitality = [
+    { id: 'hres-dre-1', externalBookingId: 'DEMO-ELENA-001', unitId: 'hunit_d01', entrada: 0, noches: 3, importe: 4500, huesped: { firstName: 'Elena', lastName: 'Navarro Ruiz', email: 'elena.navarro@example.com' }, contactId: huespedContact.id },
+    { id: 'hres-dre-2', externalBookingId: 'DEMO-SOFIA-002', unitId: 'hunit_d02', entrada: 1, noches: 2, importe: 5900, huesped: { firstName: 'Sofía', lastName: 'Márquez', email: 'sofia.marquez@example.com' }, contactId: null },
+  ];
+  for (const r of reservasHospitality) {
+    const checkIn = dia(r.entrada);
+    const checkOut = dia(r.entrada + r.noches);
+    const bookedOn = dia(r.entrada - 5);
+    await prisma.hospitalityReservation.upsert({
+      where: { tenantId_channel_externalBookingId: { tenantId: tenant.id, channel: 'Direct', externalBookingId: r.externalBookingId } },
+      update: {
+        propertyId: r.unitId === 'hunit_d01' ? 'hprop_demo01' : 'hprop_demo02',
+        unitId: r.unitId,
+        estado: 'confirmed',
+        checkIn, checkOut, bookedOn,
+        amountAfterTax: r.importe,
+        currency: 'EUR',
+        guestData: r.huesped,
+        contactId: r.contactId,
+      },
+      create: {
+        id: r.id,
+        tenantId: tenant.id,
+        propertyId: r.unitId === 'hunit_d01' ? 'hprop_demo01' : 'hprop_demo02',
+        unitId: r.unitId,
+        channel: 'Direct',
+        externalBookingId: r.externalBookingId,
+        estado: 'confirmed',
+        checkIn, checkOut, bookedOn,
+        amountAfterTax: r.importe,
+        currency: 'EUR',
+        guestData: r.huesped,
+        contactId: r.contactId,
+      },
+    });
+  }
+  console.log('   ✓ 2 propiedades, 3 unidades y 2 reservas de la semana con huéspedes con nombre.');
+
   // 10. Notas / historial (los modelos Note e Interaction no llevan tenantId)
   // Idempotencia: limpiar historial previo de estos leads y recrearlo
   console.log('📝 Creando historial de notas e interacciones...');

@@ -9,6 +9,7 @@ import {
   anotar_pago,
   resumen_diario,
   soloProducen,
+  nombreHuesped,
 } from '@/lib/skills/hospitality-skills';
 import { skills, listSkills, type SkillName } from '@/lib/skills';
 import { MCP_TOOLS, handleListTools } from '@/lib/mcp/mcp-handler';
@@ -480,5 +481,23 @@ describe('hospitality-skills · registro en el motor y en MCP', () => {
     expect(soloProducen('checked_in')).toBe(true);
     expect(soloProducen('cancelled')).toBe(false);
     expect(soloProducen('no_show')).toBe(false);
+  });
+
+  it('el nombre del huésped respeta la forma canónica firstName+lastName (OTA), no solo guestName', () => {
+    // Lo que escriben los canales/conectividad (igual que money-query y guests)
+    expect(nombreHuesped({ firstName: 'From', lastName: 'AioSell' })).toBe('From AioSell');
+    expect(nombreHuesped({ firstName: 'Elena', lastName: 'Navarro Ruiz' })).toBe('Elena Navarro Ruiz');
+    expect(nombreHuesped({ firstName: 'Elena', lastName: null })).toBe('Elena');
+    // Variantes del formulario público y de seeds siguen funcionando
+    expect(nombreHuesped({ guestName: 'Ana García' })).toBe('Ana García');
+    expect(nombreHuesped({ nombre: 'Luis' })).toBe('Luis');
+    expect(nombreHuesped({ name: '  María  ' })).toBe('María');
+    // Espacios y tipos raros no filtran basura al nombre
+    expect(nombreHuesped({ firstName: '  ', lastName: 'Solo' })).toBe('Solo');
+    expect(nombreHuesped({ firstName: 42, lastName: 'X' })).toBe('X');
+    // Sin datos útiles: el marcador de siempre
+    expect(nombreHuesped(null)).toBe('Sin nombre');
+    expect(nombreHuesped({})).toBe('Sin nombre');
+    expect(nombreHuesped({ firstName: '', lastName: '' })).toBe('Sin nombre');
   });
 });
