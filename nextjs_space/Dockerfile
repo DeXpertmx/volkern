@@ -109,6 +109,12 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 
+# La caché ISR (/app/.next/cache) se escribe en runtime y COPY deja .next en
+# propiedad de root mientras el proceso corre como volkern (uid 1001): sin este
+# mkdir+chown cada revalidación registra «Failed to update prerender cache ...
+# EACCES: permission denied, mkdir '/app/.next/cache'».
+RUN mkdir -p ./.next/cache && chown volkern:volkern ./.next/cache
+
 # CA intermedia de FNMT (AC Componentes Informáticos): los endpoints de
 # SES.HOSPEDAJES (hospedajes.pre-ses.mir.es / hospedajes.ses.mir.es) no sirven
 # el intermedio en el handshake TLS y Node no lo trae en su store raíz.
