@@ -990,6 +990,69 @@ export const MCP_TOOLS: MCPTool[] = [
       required: ['tituloPagina', 'tenantId'],
     },
   },
+  // ========== HOSPITALITY (PMS + Booking Engine) ==========
+  {
+    name: 'estado_del_dia',
+    description: 'Estado de la casa hoy y mañana: ocupación, llegadas, salidas y resumen de la ventana próxima. Úsalo cuando pregunten «qué tal va el hotel», «quién llega hoy» o «qué tenemos mañana».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tenantId: { type: 'string', description: 'ID del tenant' },
+        dias: { type: 'number', description: 'Ventana de resumen en días (1–90, defecto 7)' },
+      },
+      required: ['tenantId'],
+    },
+  },
+  {
+    name: 'llegadas_salidas_hoy',
+    description: 'Llegadas y salidas de hoy con huésped y unidad, y ocupación del día. Atajo de estado_del_dia para recepción.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tenantId: { type: 'string', description: 'ID del tenant' },
+      },
+      required: ['tenantId'],
+    },
+  },
+  {
+    name: 'buscar_reservas',
+    description: 'Buscar reservas del PMS por estado (pending, confirmed, checked_in, checked_out, cancelled, no_show), canal (Airbnb, Booking.com, Directa…) o huésped, de los últimos N días.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tenantId: { type: 'string', description: 'ID del tenant' },
+        estado: { type: 'string', description: 'Filtrar por estado de la reserva' },
+        canal: { type: 'string', description: 'Filtrar por canal (ej. Airbnb, Directa)' },
+        huesped: { type: 'string', description: 'Buscar por nombre del huésped' },
+        dias: { type: 'number', description: 'Ventana hacia atrás en días (1–365, defecto 30)' },
+        limit: { type: 'number', description: 'Máximo de resultados (1–50, defecto 15)' },
+      },
+      required: ['tenantId'],
+    },
+  },
+  {
+    name: 'rentabilidad_reserva',
+    description: 'Rentabilidad de una reserva por referencia: bruto, desglose, comisión OTA, neto, margen, cobrado y pendiente. La respuesta que ningún channel manager da.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tenantId: { type: 'string', description: 'ID del tenant' },
+        referencia: { type: 'string', description: 'Referencia externa de la reserva o su id' },
+      },
+      required: ['tenantId', 'referencia'],
+    },
+  },
+  {
+    name: 'estado_booking_engine',
+    description: 'Estado del motor de reservas directo: URL pública, propiedades publicadas, unidades con tarifa y ventas directas de los últimos 30 días.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tenantId: { type: 'string', description: 'ID del tenant' },
+      },
+      required: ['tenantId'],
+    },
+  },
 ];
 
 // ============== HANDLERS MCP ==============

@@ -43,6 +43,7 @@ import * as marketingSkills from './marketing-skills';
 import * as adSkills from './ads-skills';
 import * as realEstateSkills from './real-estate-skills';
 import * as insuranceSkills from './insurance-skills';
+import * as hospitalitySkills from './hospitality-skills';
 import * as siniestrosSkills from './siniestros-skills';
 import * as logisticsSkills from './logistics-skills';
 import * as attendanceSkills from './attendance-skills';
@@ -4288,6 +4289,14 @@ export const skills = {
   list_siniestros: listSiniestrosWrapper,
   update_siniestro: updateSiniestroWrapper,
 
+  // Hospitality (PMS + Booking Engine): consulta la casa sin abrir el panel.
+  // Los totales respetan la regla del módulo: cancelada/no-show no producen.
+  estado_del_dia: hospitalitySkills.estado_del_dia,
+  llegadas_salidas_hoy: hospitalitySkills.llegadas_salidas_hoy,
+  buscar_reservas: hospitalitySkills.buscar_reservas,
+  rentabilidad_reserva: hospitalitySkills.rentabilidad_reserva,
+  estado_booking_engine: hospitalitySkills.estado_booking_engine,
+
   // ERP Logística
   // Logística (wrappers: mapean tracking/pedidoId/vehiculoId/almacenId del
   // chatbot a trackingNumber/orderRef/warehouseId del core)
@@ -4476,6 +4485,13 @@ export function listSkills(): Array<{ name: SkillName; description: string; cate
     { name: 'calculate_property_quality_score', description: 'Calcular score de calidad (0-100) basado en completitud de datos e imágenes', category: 'real_estate' },
     { name: 'search_properties_by_filters', description: 'Buscar propiedades por filtros en lenguaje natural (para chatbot)', category: 'real_estate' },
     { name: 'recommend_properties', description: 'Recomendar propiedades basado en preferencias del usuario', category: 'real_estate' },
+
+    // Hospitality (PMS + Booking Engine)
+    { name: 'estado_del_dia', description: 'Ocupación de hoy, llegadas y salidas del día y de mañana, y resumen de la ventana próxima', category: 'hospitality' },
+    { name: 'llegadas_salidas_hoy', description: 'Llegadas y salidas de hoy con huésped y unidad, y ocupación del día', category: 'hospitality' },
+    { name: 'buscar_reservas', description: 'Buscar reservas por estado, canal o huésped de los últimos N días', category: 'hospitality' },
+    { name: 'rentabilidad_reserva', description: 'Rentabilidad de una reserva por referencia: bruto, comisiones, margen, cobrado y pendiente', category: 'hospitality' },
+    { name: 'estado_booking_engine', description: 'Estado del motor de reservas directo: web pública, propiedades publicadas y ventas de los últimos 30 días', category: 'hospitality' },
 
     // ERP Logística
     { name: 'get_shipment_status', description: 'Consultar estado de un envío por tracking o referencia', category: 'logistics' },

@@ -42,7 +42,7 @@ export interface OrchestratorInput {
  * Mapeo completo de todos los intents a sus skills correspondientes.
  * ~75+ intents organizados por dominio.
  */
-const INTENT_TO_SKILL: Record<string, string> = {
+export const INTENT_TO_SKILL: Record<string, string> = {
   // ─── CRM: Contactos & Leads ───
   'crear_lead': 'create_lead',
   'crear_contacto': 'create_contact',
@@ -226,6 +226,13 @@ const INTENT_TO_SKILL: Record<string, string> = {
   'crear_siniestro': 'create_siniestro',
   'listar_siniestros': 'list_siniestros',
   'actualizar_siniestro': 'update_siniestro',
+
+  // ─── Hospitality (PMS + Booking Engine) ───
+  'estado_del_hotel': 'estado_del_dia',
+  'llegadas_hoy': 'llegadas_salidas_hoy',
+  'buscar_reservas_hotel': 'buscar_reservas',
+  'rentabilidad_reserva_hotel': 'rentabilidad_reserva',
+  'estado_motor_reservas': 'estado_booking_engine',
 
   // ─── Operaciones ───
   'auditar_integridad': 'audit_finance_integrity',
@@ -1235,6 +1242,13 @@ Puedo ayudarte con:
       'create_siniestro': 'Reportar un siniestro contra una póliza',
       'list_siniestros': 'Listar siniestros del tenant',
       'update_siniestro': 'Avanzar el estado de un siniestro',
+
+      // Hospitality
+      'estado_del_dia': 'Estado del día del hotel',
+      'llegadas_salidas_hoy': 'Llegadas y salidas de hoy',
+      'buscar_reservas': 'Buscar reservas del PMS',
+      'rentabilidad_reserva': 'Rentabilidad de una reserva',
+      'estado_booking_engine': 'Estado del motor de reservas',
 
       // Operaciones
       'audit_finance_integrity': 'Auditar integridad financiera',
