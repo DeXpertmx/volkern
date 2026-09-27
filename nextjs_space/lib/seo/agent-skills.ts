@@ -112,6 +112,40 @@ Skills: create_booking, confirm_booking, cancel_booking, get_upcoming_bookings, 
 `,
   },
   {
+    name: 'volkern-hospitality',
+    type: 'skill-md',
+    description:
+      'Consulta la operación del PMS de alojamientos: ocupación, llegadas y salidas, reservas por estado/canal/huésped, rentabilidad por reserva y estado del motor de reservas. Úsalo para la gestión diaria del módulo Hospitality.',
+    skillMd: `---
+name: volkern-hospitality
+description: Consulta ocupación, llegadas y salidas, reservas, rentabilidad por reserva y estado del booking engine del PMS de Volkern.
+---
+
+# Volkern Hospitality
+
+Operación del módulo Hospitality (PMS + Booking Engine) de Volkern CRM/ERP.
+
+## Cuándo usarlo
+
+- "¿Qué tal va la casa hoy? ¿Quién llega mañana?"
+- "Reservas de Airbnb del último mes" o "Reservas de Ana García"
+- "¿Cuánto ganamos con la reserva WEB-123?" (margen, comisión OTA, pendiente de cobro)
+- "¿Funciona la web de reservas directa?"
+
+## Uso
+
+POST /api/skills/user/{userId}/execute con Bearer API key (scope agent:skill):
+
+\`\`\`json
+{ "skill": "estado_del_dia", "arguments": { "dias": 7 } }
+\`\`\`
+
+Skills: estado_del_dia, llegadas_salidas_hoy, buscar_reservas (filtros estado/canal/huésped/días), rentabilidad_reserva (por referencia o id), estado_booking_engine.
+
+Las canceladas y no-show no cuentan como producción: ocupación, noches e ingresos las excluyen.
+`,
+  },
+  {
     name: 'volkern-expenses',
     type: 'skill-md',
     description:

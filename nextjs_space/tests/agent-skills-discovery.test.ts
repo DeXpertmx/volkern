@@ -72,6 +72,14 @@ describe('/.well-known/agent-skills/index.json (Discovery v0.2.0)', () => {
     })
   })
 
+  it('volkern-hospitality: publicado y expone las 5 herramientas del PMS en su SKILL.md', async () => {
+    const skill = AGENT_SKILLS.find(a => a.name === 'volkern-hospitality')
+    expect(skill, 'volkern-hospitality debe estar en el índice de discovery').toBeTruthy()
+    for (const nombre of ['estado_del_dia', 'llegadas_salidas_hoy', 'buscar_reservas', 'rentabilidad_reserva', 'estado_booking_engine']) {
+      expect(skill!.skillMd).toContain(nombre)
+    }
+  })
+
   it('devuelve 404 para skills inexistentes', async () => {
     await withoutEnv(async () => {
       const mod = await import('@/app/.well-known/agent-skills/[skill]/SKILL.md/route')
