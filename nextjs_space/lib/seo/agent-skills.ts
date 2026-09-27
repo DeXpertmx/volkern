@@ -115,10 +115,10 @@ Skills: create_booking, confirm_booking, cancel_booking, get_upcoming_bookings, 
     name: 'volkern-hospitality',
     type: 'skill-md',
     description:
-      'Consulta la operación del PMS de alojamientos: ocupación, llegadas y salidas, reservas por estado/canal/huésped, rentabilidad por reserva y estado del motor de reservas. Úsalo para la gestión diaria del módulo Hospitality.',
+      'Opera el PMS de alojamientos: consulta ocupación, llegadas y salidas, reservas por estado/canal/huésped, rentabilidad por reserva y estado del motor de reservas; y también escribe: registra incidencias (unidad fuera de venta), cambia el estado de reservas y anota pagos.',
     skillMd: `---
 name: volkern-hospitality
-description: Consulta ocupación, llegadas y salidas, reservas, rentabilidad por reserva y estado del booking engine del PMS de Volkern.
+description: Consulta y opera el PMS de Volkern — ocupación, reservas, rentabilidad y booking engine; registra incidencias, cambia estados de reserva y anota pagos.
 ---
 
 # Volkern Hospitality
@@ -143,6 +143,14 @@ POST /api/skills/user/{userId}/execute con Bearer API key (scope agent:skill):
 Skills: estado_del_dia, llegadas_salidas_hoy, buscar_reservas (filtros estado/canal/huésped/días), rentabilidad_reserva (por referencia o id), estado_booking_engine.
 
 Las canceladas y no-show no cuentan como producción: ocupación, noches e ingresos las excluyen.
+
+## Operaciones de escritura
+
+- "La bañera del Loft Marina está rota" → registrar_incidencia (unidad, descripción, días): deja la unidad fuera de venta como bloqueo de mantenimiento.
+- "Confirma la reserva WEB-123" o "Haz el check-out de la OTA-9" → cambiar_estado_reserva (referencia, estado): mismas transiciones que el panel; el no-show emite la penalización de la política.
+- "Anota un pago en efectivo de la WEB-123" → anotar_pago (referencia, importe, metodo): devuelve el estado de cobro resultante.
+
+Skills: registrar_incidencia, cambiar_estado_reserva, anotar_pago. Una reserva cancelada o terminada no se reabre desde el chat.
 `,
   },
   {

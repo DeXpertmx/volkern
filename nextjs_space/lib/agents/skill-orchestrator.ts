@@ -233,6 +233,9 @@ export const INTENT_TO_SKILL: Record<string, string> = {
   'buscar_reservas_hotel': 'buscar_reservas',
   'rentabilidad_reserva_hotel': 'rentabilidad_reserva',
   'estado_motor_reservas': 'estado_booking_engine',
+  'registrar_incidencia_hotel': 'registrar_incidencia',
+  'cambiar_estado_reserva_hotel': 'cambiar_estado_reserva',
+  'anotar_pago_hotel': 'anotar_pago',
 
   // ─── Operaciones ───
   'auditar_integridad': 'audit_finance_integrity',
@@ -1249,6 +1252,9 @@ Puedo ayudarte con:
       'buscar_reservas': 'Buscar reservas del PMS',
       'rentabilidad_reserva': 'Rentabilidad de una reserva',
       'estado_booking_engine': 'Estado del motor de reservas',
+      'registrar_incidencia': 'Registrar una incidencia (unidad fuera de venta)',
+      'cambiar_estado_reserva': 'Cambiar el estado de una reserva',
+      'anotar_pago': 'Anotar un pago de una reserva',
 
       // Operaciones
       'audit_finance_integrity': 'Auditar integridad financiera',

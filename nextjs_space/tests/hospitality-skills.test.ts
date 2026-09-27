@@ -4,6 +4,9 @@ import {
   buscar_reservas,
   rentabilidad_reserva,
   estado_booking_engine,
+  registrar_incidencia,
+  cambiar_estado_reserva,
+  anotar_pago,
   soloProducen,
 } from '@/lib/skills/hospitality-skills';
 import { skills, listSkills, type SkillName } from '@/lib/skills';
@@ -29,13 +32,16 @@ beforeEach(() => {
 
 vi.mock('@/lib/db', () => ({
   prisma: {
-    hospitalityUnit: { count: vi.fn() },
+    hospitalityUnit: { count: vi.fn(), findFirst: vi.fn() },
     hospitalityReservation: {
       findMany: vi.fn(),
       findFirst: vi.fn(),
+      update: vi.fn(),
     },
     hospitalityBookingConfig: { findUnique: vi.fn() },
-    hospitalityProperty: { findMany: vi.fn() },
+    hospitalityProperty: { findMany: vi.fn(), findFirst: vi.fn() },
+    hospitalityUnitBlock: { findFirst: vi.fn(), create: vi.fn() },
+    hospitalityPayment: { create: vi.fn(), findMany: vi.fn() },
   },
 }));
 
@@ -229,9 +235,140 @@ describe('hospitality-skills · estado_booking_engine', () => {
   });
 });
 
+// ─── Escritura: registrar_incidencia ────────────────────────────────────────
+
+describe('hospitality-skills · registrar_incidencia', () => {
+  it('resuelve la unidad por nombre, crea el bloqueo y respeta la ventana', async () => {
+    vi.mocked(prisma.hospitalityUnit.findFirst).mockResolvedValue({ id: 'u1', nombre: 'Loft Marina' } as any);
+    vi.mocked(prisma.hospitalityUnitBlock.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.hospitalityUnitBlock.create).mockResolvedValue({ id: 'b1', fechaInicio: fecha(0), fechaFin: fecha(3) } as any);
+
+    const resultado = await registrar_incidencia({ tenantId: TENANT, unidad: 'loft marina', descripcion: 'Bañera rota', dias: 3 });
+
+    // Resolución por nombre insensible a mayúsculas (el operador no dice cuids).
+    const unidadWhere = vi.mocked(prisma.hospitalityUnit.findFirst).mock.calls[0][0]!.where as any;
+    expect(unidadWhere.OR[1].nombre).toEqual({ equals: 'loft marina', mode: 'insensitive' });
+    // Tipo por defecto: mantenimiento.
+    const creado = vi.mocked(prisma.hospitalityUnitBlock.create).mock.calls[0][0]!.data as any;
+    expect(creado.tipo).toBe('mantenimiento');
+    expect(creado.estado).toBe('activo');
+    expect(resultado.ok).toBe(true);
+    expect(resultado.dias).toBe(3);
+    expect(resultado.mensaje).toContain('Bañera rota');
+  });
+
+  it('no duplica bloqueos: si ya hay uno activo que se solapa, avisa y no crea', async () => {
+    vi.mocked(prisma.hospitalityUnit.findFirst).mockResolvedValue({ id: 'u1', nombre: 'Loft Marina' } as any);
+    vi.mocked(prisma.hospitalityUnitBlock.findFirst).mockResolvedValue({ tipo: 'propietario', fechaFin: fecha(2) } as any);
+
+    const resultado = await registrar_incidencia({ tenantId: TENANT, unidad: 'u1', descripcion: 'Fuga' });
+
+    expect(resultado.ok).toBe(false);
+    expect(resultado.mensaje).toContain('propietario');
+    expect(prisma.hospitalityUnitBlock.create).not.toHaveBeenCalled();
+  });
+});
+
+// ─── Escritura: cambiar_estado_reserva ───────────────────────────────────
+
+describe('hospitality-skills · cambiar_estado_reserva', () => {
+  it('check-out desde checked_in guarda la salida real (opción B del panel)', async () => {
+    vi.mocked(prisma.hospitalityReservation.findFirst).mockResolvedValue({
+      id: 'r1',
+      externalBookingId: 'WEB-123',
+      estado: 'checked_in',
+      checkOut: fecha(2),
+      propertyId: 'hprop_1',
+      channel: 'Directa',
+    } as any);
+    vi.mocked(prisma.hospitalityProperty.findFirst).mockResolvedValue({ politicaSalidaAnticipada: null } as any);
+    vi.mocked(prisma.hospitalityReservation.update).mockResolvedValue({ id: 'r1', estado: 'checked_out', checkOutReal: new Date() } as any);
+
+    const resultado = await cambiar_estado_reserva({ tenantId: TENANT, referencia: 'WEB-123', estado: 'checked_out' });
+
+    const data = vi.mocked(prisma.hospitalityReservation.update).mock.calls[0][0]!.data as any;
+    expect(data.estado).toBe('checked_out');
+    expect(data.checkOutReal).toBeTruthy();
+    expect(resultado.ok).toBe(true);
+    expect(resultado.estadoAnterior).toBe('checked_in');
+    expect(resultado.mensaje).toContain('checked_in → checked_out');
+  });
+
+  it('rechaza transiciones fuera de la máquina de estados del panel', async () => {
+    vi.mocked(prisma.hospitalityReservation.findFirst).mockResolvedValue({
+      id: 'r2',
+      externalBookingId: 'OTA-9',
+      estado: 'cancelled',
+      checkOut: fecha(1),
+      propertyId: 'hprop_1',
+      channel: 'Airbnb',
+    } as any);
+
+    const resultado = await cambiar_estado_reserva({ tenantId: TENANT, referencia: 'OTA-9', estado: 'confirmed' });
+
+    expect(resultado.ok).toBe(false);
+    expect(resultado.mensaje).toContain('No se puede pasar de «cancelled»');
+    expect(prisma.hospitalityReservation.update).not.toHaveBeenCalled();
+  });
+
+  it('estado desconocido: error de validación, ni consulta ni escritura', async () => {
+    await expect(cambiar_estado_reserva({ tenantId: TENANT, referencia: 'WEB-123', estado: 'abierta' })).rejects.toThrow('Estado inválido');
+    expect(prisma.hospitalityReservation.findFirst).not.toHaveBeenCalled();
+  });
+});
+
+// ─── Escritura: anotar_pago ──────────────────────────────────────────────
+
+describe('hospitality-skills · anotar_pago', () => {
+  it('crea el pago y deriva el cobro con el módulo de finanzas (todos los pagos)', async () => {
+    vi.mocked(prisma.hospitalityReservation.findFirst).mockResolvedValue({
+      id: 'r1',
+      externalBookingId: 'WEB-123',
+      propertyId: 'hprop_1',
+      unitId: 'u1',
+      currency: 'EUR',
+      amountAfterTax: 5840,
+    } as any);
+    vi.mocked(prisma.hospitalityPayment.create).mockResolvedValue({ id: 'p1', importe: 3000, moneda: 'EUR', metodo: 'efectivo', estado: 'pagado' } as any);
+    vi.mocked(prisma.hospitalityPayment.findMany).mockResolvedValue([
+      { importe: 3000, estado: 'pagado', metodo: 'efectivo' },
+      { importe: 2840, estado: 'pagado', metodo: 'stripe' },
+    ] as any);
+
+    const resultado = await anotar_pago({ tenantId: TENANT, referencia: 'WEB-123', importe: 3000, metodo: 'efectivo' });
+
+    const data = vi.mocked(prisma.hospitalityPayment.create).mock.calls[0][0]!.data as any;
+    expect(data.moneda).toBe('EUR'); // la moneda es la de la reserva, no se inventa
+    expect(data.fechaPago).toBeTruthy(); // pagado → fecha de pago de hoy
+    expect(resultado.ok).toBe(true);
+    expect(resultado.cobro).toMatchObject({ cobrado: 5840, pendiente: 0, estadoCobro: 'pagado' });
+  });
+
+  it('valida importe y método antes de tocar la base de datos', async () => {
+    await expect(anotar_pago({ tenantId: TENANT, referencia: 'WEB-123', importe: -5 })).rejects.toThrow('importe');
+    await expect(anotar_pago({ tenantId: TENANT, referencia: 'WEB-123', importe: 100, metodo: 'paypal' })).rejects.toThrow('Método inválido');
+    expect(prisma.hospitalityReservation.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('referencia desconocida: ok:false sin excepción', async () => {
+    vi.mocked(prisma.hospitalityReservation.findFirst).mockResolvedValue(null);
+    const resultado = await anotar_pago({ tenantId: TENANT, referencia: 'NO-EXISTE', importe: 10 });
+    expect(resultado).toMatchObject({ ok: false, encontrado: false });
+  });
+});
+
 // ─── Registro: skills y MCP expuestos ───────────────────────────────────────
 
-const HOSPITALITY_SKILLS = ['estado_del_dia', 'llegadas_salidas_hoy', 'buscar_reservas', 'rentabilidad_reserva', 'estado_booking_engine'] as const;
+const HOSPITALITY_SKILLS = [
+  'estado_del_dia',
+  'llegadas_salidas_hoy',
+  'buscar_reservas',
+  'rentabilidad_reserva',
+  'estado_booking_engine',
+  'registrar_incidencia',
+  'cambiar_estado_reserva',
+  'anotar_pago',
+] as const;
 
 describe('hospitality-skills · registro en el motor y en MCP', () => {
   it('los 5 skills existen en el registro y en listSkills con categoría hospitality', () => {
@@ -262,6 +399,9 @@ describe('hospitality-skills · registro en el motor y en MCP', () => {
     expect(INTENT_TO_SKILL['buscar_reservas_hotel']).toBe('buscar_reservas');
     expect(INTENT_TO_SKILL['rentabilidad_reserva_hotel']).toBe('rentabilidad_reserva');
     expect(INTENT_TO_SKILL['estado_motor_reservas']).toBe('estado_booking_engine');
+    expect(INTENT_TO_SKILL['registrar_incidencia_hotel']).toBe('registrar_incidencia');
+    expect(INTENT_TO_SKILL['cambiar_estado_reserva_hotel']).toBe('cambiar_estado_reserva');
+    expect(INTENT_TO_SKILL['anotar_pago_hotel']).toBe('anotar_pago');
   });
 
   it('la regla de producción del módulo se respeta (guardia del wrapper)', () => {

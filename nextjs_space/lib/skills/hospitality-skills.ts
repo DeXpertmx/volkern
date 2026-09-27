@@ -18,12 +18,15 @@
  */
 
 import { prisma } from '@/lib/db';
-import { aportaProduccion } from '@/lib/hospitality/estados';
+import { aportaProduccion, esEstadoValido, ESTADOS_RESERVA, type EstadoReserva } from '@/lib/hospitality/estados';
 import { resumenReservas } from '@/lib/hospitality/analytics';
 import { nightsBetween, startOfDay } from '@/lib/hospitality/calendar';
+import { esTipoBloqueoValido } from '@/lib/hospitality/block-types';
+import { datosDeSalida } from '@/lib/hospitality/checkout';
 import {
   calcularRentabilidad,
   lineasDesdeImporteExterno,
+  redondear,
   type LineaReserva,
   type PagoReserva,
 } from '@/lib/hospitality/finance';
@@ -298,6 +301,256 @@ export async function llegadas_salidas_hoy(input: { tenantId: string }) {
     detalleLlegadas: estado.hoy.detalleLlegadas,
     detalleSalidas: estado.hoy.detalleSalidas,
     ocupacionHoyPct: estado.ocupacionHoyPct,
+  };
+}
+
+// ─── 6. Escritura: registrar una incidencia (unidad fuera de venta) ────────
+
+/**
+ * «Incidencia» en el vocabulario del PMS = bloqueo de mantenimiento de la
+ * unidad (HospitalityUnitBlock, tipo `mantenimiento`): la unidad deja de
+ * venderse mientras se arregla. Es el mismo mecanismo del planning, con la
+ * misma guarda anti-solape que la API de bloques.
+ */
+export async function registrar_incidencia(input: {
+  tenantId: string;
+  unidad: string;
+  descripcion: string;
+  dias?: number;
+  tipo?: string;
+}) {
+  const descripcion = (input.descripcion || '').trim();
+  if (!descripcion) throw new Error('Describe la incidencia: qué pasa en la unidad.');
+
+  const clave = (input.unidad || '').trim();
+  if (!clave) throw new Error('Indica la unidad afectada.');
+  const tipo = esTipoBloqueoValido(input.tipo) ? input.tipo : 'mantenimiento';
+
+  // El operador habla de «Loft Marina», no de cuids: resolver por id o nombre.
+  const unidad = await prisma.hospitalityUnit.findFirst({
+    where: { tenantId: input.tenantId, OR: [{ id: clave }, { nombre: { equals: clave, mode: 'insensitive' } }] },
+    select: { id: true, nombre: true },
+  });
+  if (!unidad) {
+    return { ok: false, mensaje: `No encuentro ninguna unidad «${input.unidad}».` };
+  }
+
+  const inicio = startOfDay(new Date());
+  const dias = Math.max(1, Math.min(30, input.dias || 1));
+  const fin = diaMas(inicio, dias);
+
+  // Misma guarda que la API de bloques: no duplicar bloqueos activos que se
+  // solapen; el solape de bloqueos rompe el cálculo de disponibilidad.
+  const solape = await prisma.hospitalityUnitBlock.findFirst({
+    where: {
+      tenantId: input.tenantId,
+      unitId: unidad.id,
+      estado: 'activo',
+      fechaInicio: { lt: fin },
+      fechaFin: { gt: inicio },
+    },
+    select: { tipo: true, fechaFin: true },
+  });
+  if (solape) {
+    return {
+      ok: false,
+      mensaje: `La unidad ${unidad.nombre} ya está bloqueada (${solape.tipo}) hasta ${solape.fechaFin.toISOString().slice(0, 10)}. Ajusta ese bloqueo desde el planning.`,
+    };
+  }
+
+  const bloqueo = await prisma.hospitalityUnitBlock.create({
+    data: {
+      tenantId: input.tenantId,
+      unitId: unidad.id,
+      fechaInicio: inicio,
+      fechaFin: fin,
+      tipo,
+      motivo: descripcion,
+      estado: 'activo',
+    },
+    select: { id: true, fechaInicio: true, fechaFin: true },
+  });
+
+  return {
+    ok: true,
+    bloqueoId: bloqueo.id,
+    unidad: unidad.nombre,
+    tipo,
+    desde: bloqueo.fechaInicio.toISOString().slice(0, 10),
+    hasta: bloqueo.fechaFin.toISOString().slice(0, 10),
+    dias,
+    mensaje: `Unidad ${unidad.nombre} fuera de venta ${dias} día(s) (${tipo}): ${descripcion}`,
+  };
+}
+
+// ─── 7. Escritura: cambiar el estado de una reserva ─────────────────────────
+
+/**
+ * Las mismas transiciones que permite la UI (una cancelada o terminada no se
+ * reabre desde el chat; el check-out cierra la estancia). El estado manda,
+ * los efectos colaterales acompañan.
+ */
+const TRANSICIONES_PERMITIDAS: Record<string, readonly string[]> = {
+  pending: ['confirmed', 'cancelled', 'no_show'],
+  confirmed: ['checked_in', 'cancelled', 'no_show'],
+  checked_in: ['checked_out'],
+  checked_out: [],
+  cancelled: [],
+  no_show: [],
+};
+
+export async function cambiar_estado_reserva(input: { tenantId: string; referencia: string; estado: string }) {
+  if (!esEstadoValido(input.estado)) {
+    throw new Error(`Estado inválido «${input.estado}». Válidos: ${ESTADOS_RESERVA.join(', ')}.`);
+  }
+  const estado = input.estado as EstadoReserva;
+  const ref = (input.referencia || '').trim();
+  if (!ref) throw new Error('Indica la referencia de la reserva.');
+
+  const reserva = await prisma.hospitalityReservation.findFirst({
+    where: { tenantId: input.tenantId, OR: [{ externalBookingId: ref }, { id: ref }] },
+    select: { id: true, externalBookingId: true, estado: true, checkOut: true, propertyId: true, channel: true },
+  });
+  if (!reserva) {
+    return { ok: false, encontrado: false, mensaje: `No hay ninguna reserva con la referencia «${ref}».` };
+  }
+
+  if (reserva.estado === estado) {
+    return { ok: true, sinCambio: true, referencia: reserva.externalBookingId, estado, mensaje: `La reserva ya estaba en ${estado}.` };
+  }
+
+  const permitidas = TRANSICIONES_PERMITIDAS[reserva.estado] || [];
+  if (!permitidas.includes(estado)) {
+    return {
+      ok: false,
+      mensaje: `No se puede pasar de «${reserva.estado}» a «${estado}». Transiciones posibles desde aquí: ${permitidas.length ? permitidas.join(', ') : 'ninguna'}.`,
+    };
+  }
+
+  // Salida anticipada: misma opción B que el check-out operativo — el checkOut
+  // real se guarda aparte y las noches vendidas quedan intactas.
+  const datos: { estado: EstadoReserva; checkOut?: Date; checkOutReal?: Date } = { estado };
+  if (estado === 'checked_out') {
+    const property = await prisma.hospitalityProperty.findFirst({
+      where: { id: reserva.propertyId, tenantId: input.tenantId },
+      select: { politicaSalidaAnticipada: true },
+    });
+    Object.assign(datos, datosDeSalida(property?.politicaSalidaAnticipada, { checkOutPrevisto: new Date(reserva.checkOut) }));
+  }
+
+  const actualizada = await prisma.hospitalityReservation.update({
+    where: { id: reserva.id },
+    data: datos,
+    select: { id: true, estado: true, checkOutReal: true },
+  });
+
+  // Efectos colaterales de la UI, cada uno degrada solo: un push o una traza
+  // fallida no deshace el cambio de estado que ya está hecho.
+  if (reserva.estado === 'pending' && estado === 'confirmed') {
+    const { registrarHoldConfirmado } = await import('@/lib/hospitality/holds-audit');
+    await registrarHoldConfirmado({
+      tenantId: input.tenantId,
+      reservationId: reserva.id,
+      propertyId: reserva.propertyId,
+      channel: reserva.channel,
+      origen: 'operador',
+    }).catch(() => {});
+  }
+
+  let penalizacion: { emitida: boolean; importe: number; moneda: string } | null = null;
+  if (estado === 'no_show') {
+    const { aplicarPenalizacionNoShow } = await import('@/lib/hospitality/penalizaciones');
+    const p = await aplicarPenalizacionNoShow(input.tenantId, reserva.id).catch(() => null);
+    if (p) penalizacion = { emitida: p.emitida, importe: p.importe, moneda: p.moneda };
+  }
+
+  const { dispatchConnectivityPush } = await import('@/lib/hospitality/sync');
+  await dispatchConnectivityPush(input.tenantId, reserva.propertyId, 'reserva_modificada', { skipRates: true }).catch(() => {});
+
+  return {
+    ok: true,
+    referencia: reserva.externalBookingId,
+    estadoAnterior: reserva.estado,
+    estado: actualizada.estado,
+    checkOutReal: actualizada.checkOutReal,
+    penalizacion,
+    mensaje: `Reserva ${reserva.externalBookingId}: ${reserva.estado} → ${actualizada.estado}.`,
+  };
+}
+
+// ─── 8. Escritura: anotar un pago (el cobro lo deriva el módulo de finanzas) ─
+
+const METODOS_PAGO = ['stripe', 'transferencia', 'efectivo', 'manual', 'otro'];
+const ESTADOS_PAGO = ['pendiente', 'pagado', 'parcial', 'reembolsado', 'fallido'];
+
+export async function anotar_pago(input: {
+  tenantId: string;
+  referencia: string;
+  importe: number;
+  metodo?: string;
+  estado?: string;
+  notas?: string;
+}) {
+  const ref = (input.referencia || '').trim();
+  if (!ref) throw new Error('Indica la referencia de la reserva.');
+  const importe = Number(input.importe);
+  if (!Number.isFinite(importe) || importe <= 0) throw new Error('El importe debe ser mayor que cero.');
+
+  const metodo = input.metodo || 'manual';
+  if (!METODOS_PAGO.includes(metodo)) {
+    throw new Error(`Método inválido «${metodo}». Válidos: ${METODOS_PAGO.join(', ')}.`);
+  }
+  const estadoPago = input.estado || 'pagado';
+  if (!ESTADOS_PAGO.includes(estadoPago)) {
+    throw new Error(`Estado de pago inválido «${estadoPago}». Válidos: ${ESTADOS_PAGO.join(', ')}.`);
+  }
+
+  const reserva = await prisma.hospitalityReservation.findFirst({
+    where: { tenantId: input.tenantId, OR: [{ externalBookingId: ref }, { id: ref }] },
+    select: { id: true, externalBookingId: true, propertyId: true, unitId: true, currency: true, amountAfterTax: true },
+  });
+  if (!reserva) {
+    return { ok: false, encontrado: false, mensaje: `No hay ninguna reserva con la referencia «${ref}».` };
+  }
+
+  const pago = await prisma.hospitalityPayment.create({
+    data: {
+      tenantId: input.tenantId,
+      reservationId: reserva.id,
+      propertyId: reserva.propertyId,
+      unitId: reserva.unitId,
+      importe: redondear(importe),
+      moneda: reserva.currency,
+      metodo,
+      estado: estadoPago,
+      fechaPago: estadoPago === 'pagado' ? new Date() : null,
+      notas: input.notas || null,
+    },
+    select: { id: true, importe: true, moneda: true, metodo: true, estado: true },
+  });
+
+  // El cobro resultante lo decide el módulo de finanzas con TODOS los pagos,
+  // no este skill: aquí solo se informa (cobrado/pendiente/estadoCobro).
+  const [pagos, lineasInfo] = await Promise.all([
+    prisma.hospitalityPayment.findMany({
+      where: { reservationId: reserva.id, tenantId: input.tenantId },
+      select: { importe: true, estado: true, metodo: true },
+    }),
+    Promise.resolve(lineasDesdeImporteExterno(reserva.amountAfterTax || 0)),
+  ]);
+  const rentabilidad = calcularRentabilidad({
+    lineas: lineasInfo,
+    pagos: pagos.map((p) => ({ importe: p.importe, estado: p.estado, metodo: p.metodo })),
+    moneda: reserva.currency,
+  });
+
+  return {
+    ok: true,
+    pagoId: pago.id,
+    reserva: reserva.externalBookingId,
+    pago: { importe: pago.importe, moneda: pago.moneda, metodo: pago.metodo, estado: pago.estado },
+    cobro: { cobrado: rentabilidad.cobrado, pendiente: rentabilidad.pendiente, estadoCobro: rentabilidad.estadoCobro },
+    mensaje: `Pago de ${pago.importe} ${pago.moneda} (${pago.metodo}) anotado en ${reserva.externalBookingId}. Cobro: ${rentabilidad.estadoCobro}, pendiente ${rentabilidad.pendiente} ${pago.moneda}.`,
   };
 }
 

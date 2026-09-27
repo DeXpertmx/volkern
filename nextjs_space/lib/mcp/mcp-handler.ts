@@ -1053,6 +1053,50 @@ export const MCP_TOOLS: MCPTool[] = [
       required: ['tenantId'],
     },
   },
+  {
+    name: 'registrar_incidencia',
+    description: 'Registra una incidencia en una unidad: la deja fuera de venta como bloqueo de mantenimiento (u owner/administrativo) desde hoy por N días. Avisa si ya hay un bloqueo activo que se solapa en vez de duplicarlo.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tenantId: { type: 'string', description: 'ID del tenant' },
+        unidad: { type: 'string', description: 'Id o nombre de la unidad afectada (ej. Loft Marina)' },
+        descripcion: { type: 'string', description: 'Qué pasa en la unidad (motivo del bloqueo)' },
+        dias: { type: 'number', description: 'Días fuera de venta (1–30, defecto 1)' },
+        tipo: { type: 'string', description: 'Tipo de bloqueo: mantenimiento (defecto), propietario o administrativo' },
+      },
+      required: ['tenantId', 'unidad', 'descripcion'],
+    },
+  },
+  {
+    name: 'cambiar_estado_reserva',
+    description: 'Cambia el estado de una reserva con las mismas transiciones del panel: confirmar pending, check-in de confirmed, check-out de checked_in (guarda salida real), cancelar o marcar no_show (emite la penalización de la política). Rechaza reabrir canceladas o terminadas.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tenantId: { type: 'string', description: 'ID del tenant' },
+        referencia: { type: 'string', description: 'Referencia externa de la reserva o su id' },
+        estado: { type: 'string', description: 'Estado destino: pending, confirmed, checked_in, checked_out, cancelled o no_show' },
+      },
+      required: ['tenantId', 'referencia', 'estado'],
+    },
+  },
+  {
+    name: 'anotar_pago',
+    description: 'Anota un pago de una reserva (stripe, transferencia, efectivo, manual u otro) y devuelve el estado de cobro resultante calculado con el módulo de finanzas: cobrado, pendiente y estadoCobro.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tenantId: { type: 'string', description: 'ID del tenant' },
+        referencia: { type: 'string', description: 'Referencia externa de la reserva o su id' },
+        importe: { type: 'number', description: 'Importe del pago (> 0, en la moneda de la reserva)' },
+        metodo: { type: 'string', description: 'Método: stripe, transferencia, efectivo, manual (defecto) u otro' },
+        estado: { type: 'string', description: 'Estado del pago: pagado (defecto), pendiente, parcial, reembolsado o fallido' },
+        notas: { type: 'string', description: 'Notas del pago' },
+      },
+      required: ['tenantId', 'referencia', 'importe'],
+    },
+  },
 ];
 
 // ============== HANDLERS MCP ==============

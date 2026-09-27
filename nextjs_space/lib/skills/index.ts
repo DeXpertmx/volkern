@@ -4297,6 +4297,13 @@ export const skills = {
   rentabilidad_reserva: hospitalitySkills.rentabilidad_reserva,
   estado_booking_engine: hospitalitySkills.estado_booking_engine,
 
+  // Escritura de hospitality: mismas reglas que la UI — transiciones de
+  // estado del panel, guarda anti-solape de bloques y cobro derivado del
+  // módulo de finanzas (nunca recalculado aquí).
+  registrar_incidencia: hospitalitySkills.registrar_incidencia,
+  cambiar_estado_reserva: hospitalitySkills.cambiar_estado_reserva,
+  anotar_pago: hospitalitySkills.anotar_pago,
+
   // ERP Logística
   // Logística (wrappers: mapean tracking/pedidoId/vehiculoId/almacenId del
   // chatbot a trackingNumber/orderRef/warehouseId del core)
@@ -4492,6 +4499,9 @@ export function listSkills(): Array<{ name: SkillName; description: string; cate
     { name: 'buscar_reservas', description: 'Buscar reservas por estado, canal o huésped de los últimos N días', category: 'hospitality' },
     { name: 'rentabilidad_reserva', description: 'Rentabilidad de una reserva por referencia: bruto, comisiones, margen, cobrado y pendiente', category: 'hospitality' },
     { name: 'estado_booking_engine', description: 'Estado del motor de reservas directo: web pública, propiedades publicadas y ventas de los últimos 30 días', category: 'hospitality' },
+    { name: 'registrar_incidencia', description: 'Registrar una incidencia en una unidad: bloqueo de mantenimiento que la deja fuera de venta N días desde hoy', category: 'hospitality' },
+    { name: 'cambiar_estado_reserva', description: 'Cambiar el estado de una reserva (confirmar, check-in, check-out, cancelar, no-show) con las transiciones del panel', category: 'hospitality' },
+    { name: 'anotar_pago', description: 'Anotar un pago de una reserva y devolver el estado de cobro resultante (cobrado, pendiente, estadoCobro)', category: 'hospitality' },
 
     // ERP Logística
     { name: 'get_shipment_status', description: 'Consultar estado de un envío por tracking o referencia', category: 'logistics' },
