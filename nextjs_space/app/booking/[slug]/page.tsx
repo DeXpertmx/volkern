@@ -718,7 +718,7 @@ function BookingCliente() {
         {/* El registro (paso 3) abre en un MODAL sobre la página: antes se
             renderizaba al pie y el huésped lo perdía tras elegir unidad. */}
         <Dialog open={modalAbierto && !!elegida} onOpenChange={(open) => { if (!open) setModalAbierto(false); }}>
-          <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+          <DialogContent className="max-h-[90vh] content-start overflow-y-auto sm:max-w-xl">
             <DialogHeader>
               <DialogTitle>{elegida ? interpolar(t.tusDatos, { unidad: elegida.nombre }) : ''}</DialogTitle>
               <DialogDescription>

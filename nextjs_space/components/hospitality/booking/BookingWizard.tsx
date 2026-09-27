@@ -512,7 +512,10 @@ export function BookingWizard({
           respaldo en flujo (el bloque de siempre) se mantiene si el modal no
           puede abrirse o si el huésped lo cierra: nada se rompe sin JS. */}
       <Dialog open={modalAbierto && paso === 3 && !!unidad} onOpenChange={(open) => { if (!open) setModalAbierto(false); }}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+        {/* content-start: sin él, la rejilla del diálogo reparte el alto
+            sobrante entre las filas y el encabezado «flota» sobre un hueco
+            vacío (275px medidos en producción). */}
+        <DialogContent className="max-h-[90vh] content-start overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{t.tusDatos}</DialogTitle>
             <DialogDescription>
