@@ -17,7 +17,46 @@ cada pantalla se ha contrastado con su código fuente (listado al final).
 
 ---
 
+## Quick-start para recepción
+
+**La rutina del día en una página.** El resto de esta guía es referencia; esto es lo que
+se usa en cada turno.
+
+**1 · Abre el día** — `Hospitality → Reservas`. Las píldoras de arriba dicen la carga de
+hoy: «X llegadas hoy» y «X salidas hoy». Púlsalas para filtrar la lista.
+
+**2 · Llegadas (check-in)** — para cada reserva de hoy:
+- ¿Faltan los datos del viajero? (aviso amarillo, icono de persona en la fila) → botón
+  **Enlace de check-in**: cópialo y envíalo al huésped; lo completa en dos minutos desde
+  su móvil, sin cuenta ni contraseñas (§8).
+- Datos completos → desplegable de estado **Check-in**: la unidad pasa a «Ocupada» y el
+  huésped recibe sola la comunicación con las instrucciones de acceso (§7).
+- **Fianza** (escudo en la fila): registra y cobra el depósito al entrar; quedará como
+  «Cobrada — devolver a la salida».
+
+**3 · Salidas (check-out)** — desplegable **Check-out**: la unidad pasa a «Limpieza» y la
+tarea se crea sola (limpieza la cierra Operaciones). Con daños, la fianza se **aplica a
+daños**; si no, se **devuelve** (§7).
+
+**4 · Imprime la hoja del día** — botón **Imprimir**: unidades, horarios y notas para
+housekeeping, con el mismo filtro que tengas puesto.
+
+**5 · Prepara mañana** — `Hospitality → Dashboard`, tablón «Movimiento de mañana»: quién
+llega y a qué unidad, y quién sale (para limpiezas).
+
+| Si pasa esto… | Ve a |
+| --- | --- |
+| El huésped no llega (no-show) | Marca **No-show**: la unidad queda libre y el cargo se emite y factura desde la fila (§7) |
+| Cobrar un extra, ver lo pagado o lo pendiente | **Finanzas** — el dinero vive ahí, no en Reservas (§12) |
+| El Ministerio rechazó un parte | El motivo está en la fila de Reservas; corrige el dato y reenvía (§8) |
+| No ves un botón que necesitas | Tu rol no tiene esa capacidad: pídesela al Anfitrión (§4) |
+| Cualquier otra duda | Tabla de errores frecuentes (§18) |
+
+---
+
 ## Índice
+
+- [Quick-start para recepción](#quick-start-para-recepción)
 
 1. [Mapa del módulo](#1-mapa-del-módulo)
 2. [Primeros pasos: crear propiedad y unidades](#2-primeros-pasos-crear-propiedad-y-unidades)
@@ -266,18 +305,33 @@ pagar (§12: la cuenta de cobro se muestra en Finanzas).
 
 ### La experiencia del huésped
 
-El huésped recorre un **wizard de 4 pasos**, en español o inglés (`?lang=en`):
+El huésped recorre un **wizard de 4 pasos**, en español o inglés (`?lang=en`).
+Capturas del flujo real en producción (tenant demo, `/reservar/volkern-demo`):
 
-1. **Fechas** — calendario + nº de huéspedes → «Ver disponibilidad». Consulta el motor
-   de disponibilidad real (reservas + bloqueos).
-2. **Unidad** — tarjetas de las unidades libres con su **foto**, descripción, capacidad y
-   **precio por noche**. «Elegir» abre el paso 3.
-3. **Tus datos** — modal con la **foto de la unidad elegida**, las **fechas en claro**
-   («sábado, 3 de octubre → lunes, 5 de octubre · 2 noches»), las **noches** y el **total**.
-   Rellena nombre, email y teléfono; añade extras (selector con cantidades) y envía. El
-   desglose enseña alojamiento + limpieza + extras, el **anticipo** («paga ahora el X%»)
-   y el **saldo** a la llegada.
-4. **Confirmación** — la reserva queda creada y aparece el enlace de confirmación.
+**Paso 1 · Fechas** — calendario + nº de huéspedes → «Ver disponibilidad». Consulta el
+motor de disponibilidad real (reservas + bloqueos). Arriba, la cabecera de la página con
+el logo corporativo del hotel, la foto de portada y la tarifa «desde»:
+
+![Paso 1: elegir fechas y huéspedes](img/booking-guia/paso1-fechas.jpg)
+
+**Paso 2 · Unidad** — tarjetas de las unidades libres con su **precio por noche** y el
+desglose completo (noches × tarifa + limpieza = total). «Reservar esta unidad» abre el
+paso 3:
+
+![Paso 2: disponibilidad y precios](img/booking-guia/paso2-disponibilidad.jpg)
+
+**Paso 3 · Tus datos** — modal con la **foto de la unidad elegida**, las **fechas en
+claro** («sábado, 10 de octubre → lunes, 12 de octubre»), las **noches** y el **total**.
+Rellena nombre, email y teléfono; añade extras (selector con cantidades) y envía:
+
+![Paso 3: modal con foto y fechas](img/booking-guia/paso3-modal-datos.jpg)
+
+![Paso 3: formulario relleno](img/booking-guia/paso4-datos.jpg)
+
+**Paso 4 · Confirmación** — la reserva queda creada con su **referencia** (`WEB-…`) y un
+enlace de detalle que el huésped debe guardar como comprobante:
+
+![Paso 4: reserva confirmada con referencia](img/booking-guia/paso5-confirmacion.jpg)
 
 Reglas que conviene conocer:
 - **El precio lo calcula el servidor**: la web no inventa importes (anti-manipulación).
