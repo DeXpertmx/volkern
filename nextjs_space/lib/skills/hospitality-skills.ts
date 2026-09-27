@@ -554,6 +554,97 @@ export async function anotar_pago(input: {
   };
 }
 
+// ─── 9. Briefing matutino: la foto del día para empezar la jornada ─────────
+
+/**
+ * El resumen que el propietario pide con el café: qué hay hoy, qué vino de
+ * anoche (incidencias) y qué dinero falta (cobros). Reutiliza `estado_del_dia`
+ * para la operación del día y añade dos consultas propias — bloques activos
+ * (incidencias/mantenimiento/propietario/administrativo) y saldos pendientes —
+ * sin duplicar ninguna regla del módulo.
+ */
+export async function resumen_diario(input: { tenantId: string }) {
+  const dia = await estado_del_dia({ tenantId: input.tenantId, dias: 1 });
+
+  const hoy = startOfDay(new Date());
+  const [bloques, rentabilidades] = await Promise.all([
+    prisma.hospitalityUnitBlock.findMany({
+      where: { tenantId: input.tenantId, estado: 'activo', fechaInicio: { lte: diaMas(hoy, 1) }, fechaFin: { gt: hoy } },
+      select: { tipo: true, motivo: true, fechaInicio: true, fechaFin: true, unit: { select: { nombre: true } } },
+      orderBy: { fechaInicio: 'asc' },
+    }),
+    // Cobros pendientes: rentabilidad de las reservas con producción en la
+    // ventana (la misma consulta que el briefing de operaciones pide dos
+    // veces). Los estados sin producción no se cobran: regla del módulo.
+    prisma.hospitalityReservation.findMany({
+      where: {
+        tenantId: input.tenantId,
+        checkIn: { lt: diaMas(hoy, 1) },
+        checkOut: { gt: hoy },
+        estado: { notIn: ['cancelled', 'no_show'] },
+      },
+      select: { id: true, externalBookingId: true, currency: true, amountAfterTax: true, commission: true, items: { select: { tipo: true, concepto: true, cantidad: true, importeUnitario: true, importeTotal: true } }, payments: { select: { importe: true, estado: true, metodo: true } } },
+      take: 200,
+      orderBy: { checkIn: 'asc' },
+    }),
+  ]);
+
+  // Incidencias activas: bloqueos que tocan hoy (cualquier tipo — una
+  // incidencia registrada ayer para 3 días sigue siendo hoy una unidad
+  // fuera de venta).
+  const incidencias = bloques.map((b) => ({
+    unidad: b.unit?.nombre || 'Sin asignar',
+    tipo: b.tipo,
+    motivo: b.motivo,
+    desde: b.fechaInicio.toISOString().slice(0, 10),
+    hasta: b.fechaFin.toISOString().slice(0, 10),
+  }));
+
+  // Cobros: la rentabilidad la calcula el módulo de finanzas con TODOS los
+  // pagos de cada reserva; aquí solo se clasifica lo que queda pendiente.
+  const cobrosPendientes = rentabilidades
+    .map((r) => {
+      const lineas = r.items.length > 0 ? r.items : lineasDesdeImporteExterno(r.amountAfterTax || 0);
+      const rentabilidad = calcularRentabilidad({
+        lineas,
+        pagos: r.payments.map((p) => ({ importe: p.importe, estado: p.estado, metodo: p.metodo })),
+        comisionOta: r.commission ?? undefined,
+        moneda: r.currency || undefined,
+      });
+      return {
+        referencia: r.externalBookingId,
+        moneda: r.currency,
+        pendiente: rentabilidad.pendiente,
+        estadoCobro: rentabilidad.estadoCobro,
+      };
+    })
+    .filter((c) => c.pendiente > 0)
+    .sort((a, b) => b.pendiente - a.pendiente)
+    .slice(0, 10);
+
+  return {
+    fecha: dia.fecha,
+    ocupacionHoyPct: dia.ocupacionHoyPct,
+    totalUnidades: dia.totalUnidades,
+    unidadesOcupadas: dia.unidadesOcupadas,
+    llegadasHoy: dia.hoy.llegadas,
+    salidasHoy: dia.hoy.salidas,
+    detalleLlegadas: dia.hoy.detalleLlegadas,
+    detalleSalidas: dia.hoy.detalleSalidas,
+    llegadasManana: dia.manana.llegadas.length,
+    salidasManana: dia.manana.salidas.length,
+    incidenciasAbiertas: incidencias.length,
+    incidencias,
+    cobrosPendientes: cobrosPendientes.length,
+    mayoresPendientes: cobrosPendientes,
+    totalPendientePorMoneda: cobrosPendientes.reduce<Record<string, number>>((acc, c) => {
+      const moneda = c.moneda || '—';
+      acc[moneda] = (acc[moneda] || 0) + c.pendiente;
+      return acc;
+    }, {}),
+  };
+}
+
 // ─── Guardia de producción: todo skill respeta la regla de estados ─────────
 
 /** Verificable en tests: los totales excluyen canceladas y no-show. */

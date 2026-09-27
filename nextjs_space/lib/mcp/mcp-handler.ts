@@ -1097,6 +1097,17 @@ export const MCP_TOOLS: MCPTool[] = [
       required: ['tenantId', 'referencia', 'importe'],
     },
   },
+  {
+    name: 'resumen_diario',
+    description: 'Briefing matutino del PMS: ocupación de hoy, llegadas y salidas de hoy y mañana con huésped, incidencias activas (unidades fuera de venta) y los mayores cobros pendientes con su estado de cobro.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tenantId: { type: 'string', description: 'ID del tenant' },
+      },
+      required: ['tenantId'],
+    },
+  },
 ];
 
 // ============== HANDLERS MCP ==============

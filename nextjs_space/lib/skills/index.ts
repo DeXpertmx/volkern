@@ -4303,6 +4303,7 @@ export const skills = {
   registrar_incidencia: hospitalitySkills.registrar_incidencia,
   cambiar_estado_reserva: hospitalitySkills.cambiar_estado_reserva,
   anotar_pago: hospitalitySkills.anotar_pago,
+  resumen_diario: hospitalitySkills.resumen_diario,
 
   // ERP Logística
   // Logística (wrappers: mapean tracking/pedidoId/vehiculoId/almacenId del
@@ -4502,6 +4503,7 @@ export function listSkills(): Array<{ name: SkillName; description: string; cate
     { name: 'registrar_incidencia', description: 'Registrar una incidencia en una unidad: bloqueo de mantenimiento que la deja fuera de venta N días desde hoy', category: 'hospitality' },
     { name: 'cambiar_estado_reserva', description: 'Cambiar el estado de una reserva (confirmar, check-in, check-out, cancelar, no-show) con las transiciones del panel', category: 'hospitality' },
     { name: 'anotar_pago', description: 'Anotar un pago de una reserva y devolver el estado de cobro resultante (cobrado, pendiente, estadoCobro)', category: 'hospitality' },
+    { name: 'resumen_diario', description: 'Briefing matutino: ocupación, llegadas y salidas, incidencias activas y mayores cobros pendientes del día', category: 'hospitality' },
 
     // ERP Logística
     { name: 'get_shipment_status', description: 'Consultar estado de un envío por tracking o referencia', category: 'logistics' },

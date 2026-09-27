@@ -7,6 +7,7 @@ import {
   registrar_incidencia,
   cambiar_estado_reserva,
   anotar_pago,
+  resumen_diario,
   soloProducen,
 } from '@/lib/skills/hospitality-skills';
 import { skills, listSkills, type SkillName } from '@/lib/skills';
@@ -40,7 +41,7 @@ vi.mock('@/lib/db', () => ({
     },
     hospitalityBookingConfig: { findUnique: vi.fn() },
     hospitalityProperty: { findMany: vi.fn(), findFirst: vi.fn() },
-    hospitalityUnitBlock: { findFirst: vi.fn(), create: vi.fn() },
+    hospitalityUnitBlock: { findFirst: vi.fn(), create: vi.fn(), findMany: vi.fn() },
     hospitalityPayment: { create: vi.fn(), findMany: vi.fn() },
   },
 }));
@@ -357,6 +358,73 @@ describe('hospitality-skills · anotar_pago', () => {
   });
 });
 
+// ─── Briefing: resumen_diario ────────────────────────────────────────────
+
+describe('hospitality-skills · resumen_diario', () => {
+  it('compone el briefing: operación del día, incidencias activas y cobros pendientes', async () => {
+    vi.mocked(prisma.hospitalityUnit.count).mockResolvedValue(4);
+    vi.mocked(prisma.hospitalityReservation.findMany).mockImplementation(async ({ where }: any) => {
+      const checkIn = where?.checkIn as { gte?: Date; lt?: Date } | undefined;
+      const checkOut = where?.checkOut as { gte?: Date; lt?: Date; gt?: Date } | undefined;
+      const estados = where?.estado as { in?: string[]; notIn?: string[] } | undefined;
+
+      // Cruce del día (reservas en casa).
+      if (checkIn?.lt && checkOut?.gt && estados?.in) return [{ id: 'r1', unitId: 'u1' }];
+      // Llegadas/salidas del día o de mañana.
+      if (estados?.notIn?.length === 1) {
+        return [
+          { id: 'r2', estado: 'confirmed', checkIn: fecha(0), checkOut: fecha(2), guestData: { guestName: 'Ana García' }, unit: { nombre: 'Loft Marina' }, property: { nombre: 'Villa Mar Azul' } },
+        ];
+      }
+      // Ventana del briefing y cobros: dos reservas con producción — una
+      // saldada y otra sin pagos (el huésped debe el bruto; la comisión OTA
+      // es coste del neto, no se cobra al huésped).
+      return [
+        {
+          externalBookingId: 'WEB-123', currency: 'EUR', amountAfterTax: 5840, commission: 0,
+          items: [
+            { tipo: 'alojamiento', concepto: 'Alojamiento', cantidad: 2, importeUnitario: 2890, importeTotal: 5780 },
+            { tipo: 'limpieza', concepto: 'Limpieza', cantidad: 1, importeUnitario: 60, importeTotal: 60 },
+          ],
+          payments: [{ importe: 5840, estado: 'pagado', metodo: 'stripe' }],
+        },
+        { externalBookingId: 'OTA-9', currency: 'EUR', amountAfterTax: 300, commission: 45, items: [], payments: [] },
+      ];
+    });
+    vi.mocked(prisma.hospitalityUnitBlock.findMany).mockResolvedValue([
+      { tipo: 'mantenimiento', motivo: 'Bañera rota', fechaInicio: fecha(-1), fechaFin: fecha(2), unit: { nombre: 'Loft Marina' } },
+    ] as any);
+
+    const briefing = await resumen_diario({ tenantId: TENANT });
+
+    // Operación del día: reutiliza estado_del_dia, no una copia.
+    expect(briefing.ocupacionHoyPct).toBe(25);
+    expect(briefing.llegadasHoy).toBe(1);
+    expect(briefing.detalleLlegadas[0]).toMatchObject({ huesped: 'Ana García', unidad: 'Loft Marina' });
+    // Incidencias: bloqueos activos que tocan hoy.
+    expect(briefing.incidenciasAbiertas).toBe(1);
+    expect(briefing.incidencias[0]).toMatchObject({ unidad: 'Loft Marina', tipo: 'mantenimiento', motivo: 'Bañera rota' });
+    // Cobros: WEB-123 saldada se descarta; OTA-9 debe el bruto completo (la
+    // comisión de la OTA no se cobra al huésped).
+    expect(briefing.cobrosPendientes).toBe(1);
+    expect(briefing.mayoresPendientes[0]).toMatchObject({ referencia: 'OTA-9', pendiente: 300, estadoCobro: 'pendiente' });
+    expect(briefing.totalPendientePorMoneda).toEqual({ EUR: 300 });
+  });
+
+  it('sin incidencias ni pendientes: briefing en cero, sin excepciones', async () => {
+    vi.mocked(prisma.hospitalityUnit.count).mockResolvedValue(0);
+    vi.mocked(prisma.hospitalityReservation.findMany).mockResolvedValue([]);
+    vi.mocked(prisma.hospitalityUnitBlock.findMany).mockResolvedValue([]);
+
+    const briefing = await resumen_diario({ tenantId: TENANT });
+
+    expect(briefing.ocupacionHoyPct).toBe(0);
+    expect(briefing.incidenciasAbiertas).toBe(0);
+    expect(briefing.cobrosPendientes).toBe(0);
+    expect(briefing.totalPendientePorMoneda).toEqual({});
+  });
+});
+
 // ─── Registro: skills y MCP expuestos ───────────────────────────────────────
 
 const HOSPITALITY_SKILLS = [
@@ -368,6 +436,7 @@ const HOSPITALITY_SKILLS = [
   'registrar_incidencia',
   'cambiar_estado_reserva',
   'anotar_pago',
+  'resumen_diario',
 ] as const;
 
 describe('hospitality-skills · registro en el motor y en MCP', () => {
@@ -402,6 +471,8 @@ describe('hospitality-skills · registro en el motor y en MCP', () => {
     expect(INTENT_TO_SKILL['registrar_incidencia_hotel']).toBe('registrar_incidencia');
     expect(INTENT_TO_SKILL['cambiar_estado_reserva_hotel']).toBe('cambiar_estado_reserva');
     expect(INTENT_TO_SKILL['anotar_pago_hotel']).toBe('anotar_pago');
+    expect(INTENT_TO_SKILL['resumen_diario_hotel']).toBe('resumen_diario');
+    expect(INTENT_TO_SKILL['briefing_matutino']).toBe('resumen_diario');
   });
 
   it('la regla de producción del módulo se respeta (guardia del wrapper)', () => {

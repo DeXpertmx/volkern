@@ -236,6 +236,8 @@ export const INTENT_TO_SKILL: Record<string, string> = {
   'registrar_incidencia_hotel': 'registrar_incidencia',
   'cambiar_estado_reserva_hotel': 'cambiar_estado_reserva',
   'anotar_pago_hotel': 'anotar_pago',
+  'resumen_diario_hotel': 'resumen_diario',
+  'briefing_matutino': 'resumen_diario',
 
   // ─── Operaciones ───
   'auditar_integridad': 'audit_finance_integrity',
@@ -1255,6 +1257,7 @@ Puedo ayudarte con:
       'registrar_incidencia': 'Registrar una incidencia (unidad fuera de venta)',
       'cambiar_estado_reserva': 'Cambiar el estado de una reserva',
       'anotar_pago': 'Anotar un pago de una reserva',
+      'resumen_diario': 'Briefing matutino: ocupación, incidencias y cobros',
 
       // Operaciones
       'audit_finance_integrity': 'Auditar integridad financiera',

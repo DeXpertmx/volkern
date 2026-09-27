@@ -151,6 +151,12 @@ Las canceladas y no-show no cuentan como producción: ocupación, noches e ingre
 - "Anota un pago en efectivo de la WEB-123" → anotar_pago (referencia, importe, metodo): devuelve el estado de cobro resultante.
 
 Skills: registrar_incidencia, cambiar_estado_reserva, anotar_pago. Una reserva cancelada o terminada no se reabre desde el chat.
+
+## Briefing matutino
+
+- "¿Qué tal arranca el día?" → resumen_diario: ocupación, llegadas y salidas de hoy y mañana, incidencias activas (unidades fuera de venta) y los mayores cobros pendientes.
+
+Skills: resumen_diario.
 `,
   },
   {
