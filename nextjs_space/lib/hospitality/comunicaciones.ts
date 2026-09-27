@@ -32,6 +32,7 @@ export const COMUNICACION_EVENTOS = [
   'check_in',
   'post_salida',
   'resena',
+  'briefing_diario',
 ] as const
 
 export type ComunicacionEvento = (typeof COMUNICACION_EVENTOS)[number]
@@ -42,6 +43,7 @@ export const COMUNICACION_EVENTOS_LABEL: Record<string, string> = {
   check_in: 'Check-in',
   post_salida: 'Post-salida',
   resena: 'Solicitud de reseña',
+  briefing_diario: 'Briefing matutino',
 }
 
 export const COMUNICACION_EVENTOS_DESC: Record<string, string> = {
@@ -50,6 +52,7 @@ export const COMUNICACION_EVENTOS_DESC: Record<string, string> = {
   check_in: 'Instrucciones de acceso el día del check-in',
   post_salida: 'Agradecimiento después de la salida',
   resena: 'Pedir reseña según las reglas configuradas',
+  briefing_diario: 'Cada mañana al equipo: ocupación, llegadas, salidas, incidencias y cobros pendientes del día',
 }
 
 /**

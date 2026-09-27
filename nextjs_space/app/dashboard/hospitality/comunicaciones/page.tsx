@@ -60,6 +60,7 @@ const EVENTOS = [
   { id: 'check_in', label: 'Check-in', desc: 'Instrucciones de acceso el día del check-in', icon: '🔑' },
   { id: 'post_salida', label: 'Post-salida', desc: 'Agradecimiento después de la salida', icon: '👋' },
   { id: 'resena', label: 'Solicitud de reseña', desc: 'Pedir reseña según las reglas configuradas', icon: '⭐' },
+  { id: 'briefing_diario', label: 'Briefing matutino', desc: 'Cada mañana al equipo: ocupación, llegadas, salidas, incidencias y cobros del día', icon: '🌅' },
 ];
 
 const VARIABLES = [
