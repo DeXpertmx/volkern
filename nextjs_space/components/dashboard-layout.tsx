@@ -2,6 +2,7 @@
 
 import { Sidebar } from '@/components/sidebar'
 import { TrialBanner } from '@/components/trial-banner'
+import { SessionIdleWarning } from '@/components/session-idle-warning'
 import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { DashboardHeader } from '@/components/dashboard-header'
@@ -91,6 +92,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         <PushPrompt />
         <IncomingCallPopup />
         <VolkernGuide />
+        <SessionIdleWarning />
       </main>
     </div>
   )

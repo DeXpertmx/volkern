@@ -1,10 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import {
   getSessionIdleTimeoutSeconds,
+  getSessionWarningSeconds,
   isSessionIdleExpired,
   refreshSessionClaims,
+  secondsUntilIdleExpiry,
+  shouldWarnIdleExpiry,
   SESSION_COOKIE_NAME,
   SESSION_ABSOLUTE_MAX_AGE_SECONDS,
+  SESSION_STATUS_PATH,
+  SESSION_RENEW_PATH,
 } from '@/lib/session-policy';
 
 describe('session-policy — timeout de inactividad', () => {
@@ -75,9 +80,59 @@ describe('session-policy — refresco deslizante', () => {
   });
 });
 
+describe('session-policy — aviso de expiración inminente', () => {
+  const NOW = 1_800_000_000;
+
+  it('la ventana de aviso es de 2 min con el timeout de 30 min', () => {
+    delete process.env.SESSION_IDLE_TIMEOUT_SECONDS;
+    expect(getSessionWarningSeconds()).toBe(120);
+  });
+
+  it('la ventana de aviso nunca supera la mitad del timeout', () => {
+    expect(getSessionWarningSeconds(120)).toBe(60);
+    expect(getSessionWarningSeconds(60)).toBe(30);
+    expect(getSessionWarningSeconds(1)).toBe(1); // nunca 0
+  });
+
+  it('secondsUntilIdleExpiry devuelve los segundos que quedan', () => {
+    delete process.env.SESSION_IDLE_TIMEOUT_SECONDS;
+    expect(secondsUntilIdleExpiry({ lastActivity: NOW - 1700 }, NOW)).toBe(100);
+  });
+
+  it('secondsUntilIdleExpiry puede ser negativo si ya expiró', () => {
+    expect(secondsUntilIdleExpiry({ lastActivity: NOW - 3600 }, NOW)).toBe(-1800);
+  });
+
+  it('secondsUntilIdleExpiry es null sin lastActivity (sesión legacy: no expira por inactividad)', () => {
+    expect(secondsUntilIdleExpiry({}, NOW)).toBeNull();
+    expect(secondsUntilIdleExpiry(null, NOW)).toBeNull();
+    expect(secondsUntilIdleExpiry(undefined, NOW)).toBeNull();
+  });
+
+  it('shouldWarnIdleExpiry avisa solo dentro de la ventana', () => {
+    delete process.env.SESSION_IDLE_TIMEOUT_SECONDS;
+    expect(shouldWarnIdleExpiry({ lastActivity: NOW - 1700 }, 120, NOW)).toBe(true); // quedan 100 s
+    expect(shouldWarnIdleExpiry({ lastActivity: NOW - 1600 }, 120, NOW)).toBe(false); // quedan 200 s
+  });
+
+  it('shouldWarnIdleExpiry también avisa si la sesión ya expiró', () => {
+    expect(shouldWarnIdleExpiry({ lastActivity: NOW - 3600 }, 120, NOW)).toBe(true);
+  });
+
+  it('una sesión legacy (sin lastActivity) nunca dispara el aviso', () => {
+    expect(shouldWarnIdleExpiry({}, 120, NOW)).toBe(false);
+    expect(shouldWarnIdleExpiry(null, 120, NOW)).toBe(false);
+  });
+});
+
 describe('session-policy — constantes', () => {
   it('cookie y vida absoluta coinciden con authOptions', () => {
     expect(SESSION_COOKIE_NAME).toBe('next-auth.session-token');
     expect(SESSION_ABSOLUTE_MAX_AGE_SECONDS).toBe(24 * 60 * 60);
+  });
+
+  it('las rutas del aviso son las que exime/refresca el middleware', () => {
+    expect(SESSION_STATUS_PATH).toBe('/api/session/status');
+    expect(SESSION_RENEW_PATH).toBe('/api/session/renew');
   });
 });

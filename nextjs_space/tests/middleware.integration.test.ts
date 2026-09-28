@@ -301,4 +301,41 @@ describe('middleware — cierre de sesión por inactividad', () => {
     const res = await middleware(makeRequest('/api/auth/session'));
     expect(res.status).toBe(200);
   });
+
+  it('GET /api/session/status informa pero NO re-emite la cookie (sondearlo no renueva la sesión)', async () => {
+    vi.mocked(getToken).mockResolvedValueOnce({
+      sub: 'u1',
+      lastActivity: NOW - 60,
+    } as never);
+
+    const res = await middleware(makeRequest('/api/session/status'));
+
+    expect(res.status).toBe(200);
+    expect(res.cookies.get('next-auth.session-token')).toBeUndefined();
+  });
+
+  it('POST /api/session/renew sí re-emite la cookie deslizante (el botón renueva)', async () => {
+    vi.mocked(getToken).mockResolvedValueOnce({
+      sub: 'u1',
+      lastActivity: NOW - 60,
+    } as never);
+
+    const res = await middleware(makeRequest('/api/session/renew', { method: 'POST' }));
+
+    expect(res.status).toBe(200);
+    expect(res.cookies.get('next-auth.session-token')?.value).toBe('jwt-re-emitido');
+  });
+
+  it('/api/session/status con sesión inactiva: 401 SESSION_IDLE_EXPIRED (no informa una sesión ya muerta)', async () => {
+    vi.mocked(getToken).mockResolvedValueOnce({
+      sub: 'u1',
+      lastActivity: NOW - 3600,
+    } as never);
+
+    const res = await middleware(makeRequest('/api/session/status'));
+
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    expect(body.code).toBe('SESSION_IDLE_EXPIRED');
+  });
 });

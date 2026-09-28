@@ -8,6 +8,7 @@ import {
   refreshSessionClaims,
   SESSION_COOKIE_NAME,
   SESSION_ABSOLUTE_MAX_AGE_SECONDS,
+  SESSION_STATUS_PATH,
 } from '@/lib/session-policy'
 import { checkEdgeRateLimit } from '@/lib/edge-rate-limiter'
 import {
@@ -363,7 +364,14 @@ export async function middleware(request: NextRequest) {
     }
     // La actividad de API también refresca la ventana de inactividad (el
     // dashboard es client-heavy: no todo uso pasa por una carga de página).
-    if (apiToken && typeof (apiToken as any).lastActivity === 'number') {
+    // EXCEPCIÓN: /api/session/status solo INFORMA del tiempo restante; si
+    // refrescara la cookie, el sondeo del aviso mantendría la sesión viva para
+    // siempre y el cierre por inactividad nunca llegaría.
+    if (
+      apiToken &&
+      typeof (apiToken as any).lastActivity === 'number' &&
+      pathname !== SESSION_STATUS_PATH
+    ) {
       try {
         slidingJwt = await encode({
           token: refreshSessionClaims(apiToken as any) as any,

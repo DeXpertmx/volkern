@@ -5,7 +5,12 @@ import { prisma } from '@/lib/db'
 import bcrypt from 'bcryptjs'
 import { TwoFactorService } from './security/two-factor'
 import { logger } from '@/lib/logger'
-import { isSessionIdleExpired, type SessionClaims } from './session-policy'
+import {
+  isSessionIdleExpired,
+  getSessionIdleTimeoutSeconds,
+  getSessionWarningSeconds,
+  type SessionClaims,
+} from './session-policy'
 import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
@@ -289,6 +294,11 @@ export const authOptions: NextAuthOptions = {
         ;(session.user as any).tokenVersion = token.tokenVersion as number
         ;(session.user as any).tenantSubdomain = token.tenantSubdomain as string
         ;(session.user as any).sessionVersion = claims.sessionVersion ?? claims.tokenVersion
+        // Datos del cierre por inactividad que consume el aviso del dashboard
+        // (GET /api/session/status) para no duplicar la política en el cliente.
+        ;(session.user as any).lastActivity = claims.lastActivity
+        ;(session.user as any).idleTimeoutSeconds = getSessionIdleTimeoutSeconds()
+        ;(session.user as any).idleWarningSeconds = getSessionWarningSeconds()
       }
       return session
     },

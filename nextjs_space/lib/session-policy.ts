@@ -81,3 +81,50 @@ export function refreshSessionClaims(
 
 /** Nombre de la cookie de sesión (idéntico a authOptions.cookies.sessionToken.name). */
 export const SESSION_COOKIE_NAME = 'next-auth.session-token'
+
+/**
+ * Antelación con la que se avisa al usuario de que su sesión se cierra por
+ * inactividad, en segundos (2 min).
+ */
+export const SESSION_EXPIRY_WARNING_SECONDS = 2 * 60
+
+/**
+ * Ventana real de aviso: nunca superior a la mitad del timeout, para que un
+ * timeout corto no deje el aviso visible de forma permanente.
+ */
+export function getSessionWarningSeconds(
+  timeoutSeconds: number = getSessionIdleTimeoutSeconds()
+): number {
+  return Math.max(1, Math.min(SESSION_EXPIRY_WARNING_SECONDS, Math.floor(timeoutSeconds / 2)))
+}
+
+/**
+ * Segundos que le quedan a la sesión antes del cierre por inactividad.
+ * `null` si el token no lleva `lastActivity` (sesión legacy: no expira por
+ * inactividad). Puede ser negativo si ya expiró.
+ */
+export function secondsUntilIdleExpiry(
+  token: SessionClaims | null | undefined,
+  nowSeconds: number = Math.floor(Date.now() / 1000)
+): number | null {
+  if (!token || typeof token.lastActivity !== 'number') return null
+  return token.lastActivity + getSessionIdleTimeoutSeconds() - nowSeconds
+}
+
+/** ¿Toca avisar al usuario de que la sesión está a punto de expirar? */
+export function shouldWarnIdleExpiry(
+  token: SessionClaims | null | undefined,
+  warnSeconds: number = getSessionWarningSeconds(),
+  nowSeconds: number = Math.floor(Date.now() / 1000)
+): boolean {
+  const remaining = secondsUntilIdleExpiry(token, nowSeconds)
+  return remaining !== null && remaining <= warnSeconds
+}
+
+/**
+ * Rutas del aviso de sesión. `status` solo informa (el middleware NO refresca
+ * la cookie, para que consultarlo no mantenga viva la sesión por inactividad);
+ * `renew` sí la refresca (es su propósito).
+ */
+export const SESSION_STATUS_PATH = '/api/session/status'
+export const SESSION_RENEW_PATH = '/api/session/renew'
