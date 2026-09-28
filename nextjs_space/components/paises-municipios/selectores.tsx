@@ -7,12 +7,19 @@
  * los consumen el check-in del huésped, el parte de viajeros y los formularios
  * del CRM donde hay teléfono o país.
  *
+ * NOTA RADIX 2: estos selectores viven a menudo DENTRO de un Dialog modal
+ * («Datos del viajero», lápiz de Reservas, paso 3 del wizard). Un Popover
+ * no-modal dentro de un diálogo modal pelea con la trampa de foco del diálogo
+ * y la lista se monta y se cierra al instante (síntoma «aparece y desaparece»);
+ * por eso todos los Popover de este fichero son modal={true} — receta oficial
+ * Radix/shadcn para combobox dentro de Dialog.
+ *
  * NOTA RADIX: ninguna opción puede llevar `value=""` (la cadena vacía es el
  * «limpiar selección» interno y el Select crashea al montar). Todos los
  * «sin valor» de estos selectores usan el centinela `VALOR_VACIO` y los
  * callbacks reciben '' normalizado.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Check, ChevronsUpDown, Phone } from 'lucide-react';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -61,7 +68,7 @@ export function SelectorPais({
   }, [busqueda]);
 
   return (
-    <Popover open={abierto} onOpenChange={setAbierto}>
+    <Popover open={abierto} onOpenChange={setAbierto} modal={true}>
       <PopoverTrigger asChild disabled={disabled}>
         <Button
           type="button"
@@ -77,6 +84,7 @@ export function SelectorPais({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[320px] p-0" align="start">
+
         <Command shouldFilter={false}>
           <CommandInput placeholder="Buscar país…" value={busqueda} onValueChange={setBusqueda} />
           <CommandList>
@@ -192,22 +200,31 @@ export function SelectorMunicipioINE({
   className?: string;
   disabled?: boolean;
 }) {
-  const provinciaActual = (codigoMunicipio || '').slice(0, 2);
-  const municipios = useMemo(() => municipiosDeProvincia(provinciaActual), [provinciaActual]);
+  /** La provincia vive en estado propio: derivarla del código del municipio
+   * hacía que elegir provincia solo limpiara el municipio y la selección
+   * «saltaba» de vuelta a «Provincia…» sin llegar a quedarse. */
+  const provinciaDelCodigo = (codigoMunicipio || '').slice(0, 2);
+  const [provincia, setProvincia] = useState(provinciaDelCodigo);
+  // Si el código llega de fuera (ficha guardada), la provincia sigue al código.
+  useEffect(() => {
+    if (provinciaDelCodigo) setProvincia(provinciaDelCodigo);
+  }, [provinciaDelCodigo]);
+  const municipios = useMemo(() => municipiosDeProvincia(provincia), [provincia]);
   const nombreActual = municipios.find((m) => m.codigo === codigoMunicipio)?.nombre
-    ?? (codigoMunicipio && NOMBRES_PROVINCIA[provinciaActual] ? codigoMunicipio : '');
+    ?? (codigoMunicipio && NOMBRES_PROVINCIA[provincia] ? codigoMunicipio : '');
 
   return (
     <div className={cn('grid gap-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]', className)}>
       <select
         aria-label="Provincia"
         className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-        value={provinciaActual}
+        value={provincia}
         disabled={disabled}
         onChange={(e) => {
           // Cambiar de provincia limpia el municipio: los códigos son distintos.
           const nueva = e.target.value;
-          if (nueva !== provinciaActual) onChange('');
+          setProvincia(nueva);
+          if (nueva !== provinciaDelCodigo) onChange('');
         }}
       >
         <option value="">Provincia…</option>
@@ -221,13 +238,13 @@ export function SelectorMunicipioINE({
         aria-label="Municipio (código INE)"
         className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
         value={codigoMunicipio}
-        disabled={disabled || !provinciaActual}
+        disabled={disabled || !provincia}
         onChange={(e) => onChange(e.target.value)}
       >
         <option value="">
           {nombreActual
             ? `${nombreActual}${codigoMunicipio ? ` (${codigoMunicipio})` : ''}`
-            : provinciaActual
+            : provincia
               ? 'Municipio…'
               : 'Elige provincia primero'}
         </option>

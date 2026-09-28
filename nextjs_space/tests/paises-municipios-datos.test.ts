@@ -58,6 +58,15 @@ describe('Normalización de teléfonos', () => {
   });
 });
 
+describe('Selectores UI (guardia de fuente)', () => {
+  const readFileSync = require('node:fs').readFileSync;
+  const fuente = readFileSync('components/paises-municipios/selectores.tsx', 'utf8');
+
+  it('los Popover son modal={true} (combobox dentro de Dialog modal, si no la lista aparece y desaparece)', () => {
+    expect(fuente).toContain('modal={true}');
+  });
+});
+
 describe('Catálogo de municipios INE', () => {
   it('cubre las 52 provincias y Madrid está entre ellas', () => {
     const provs = provinciasINE();

@@ -152,8 +152,12 @@ describe('Página pública de check-in', () => {
     await userEvent.type(screen.getAllByLabelText(/^Fecha de nacimiento/)[0], '1990-01-01');
     await userEvent.type(screen.getAllByLabelText(/^Dirección/)[0], 'C/Mayor 1');
     await userEvent.type(screen.getAllByLabelText(/^Código postal/)[0], '28001');
-    await userEvent.type(screen.getAllByLabelText(/^País/)[0], 'ESP');
-    await userEvent.type(screen.getAllByLabelText(/^Municipio/)[0], '28079');
+    // País y municipio van con selectores de catálogo (ya no hay input libre):
+    // abrir el combobox, elegir España y luego provincia → municipio INE.
+    await userEvent.click(screen.getAllByLabelText(/^País/)[0]);
+    await userEvent.click(await screen.findByText('España'));
+    await userEvent.selectOptions(await screen.findByLabelText('Provincia'), '28');
+    await userEvent.selectOptions(await screen.findByLabelText('Municipio (código INE)'), '28079');
 
     // Un acompañante más: la ficha vacía no viaja como persona si no se rellena.
     await userEvent.click(screen.getByRole('button', { name: /Añadir acompañante/ }));
