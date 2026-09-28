@@ -30,6 +30,17 @@ import {
 } from '@/components/ui/dialog';
 import { etiquetasDeCampos } from '@/lib/hospitality/booking-i18n';
 import type { CampoViajero } from '@/lib/hospitality/guest-checkin';
+// Selectores de catálogos: país (alfa-3), teléfono con prefijo y municipio
+// INE (provincia → municipio). El operador ya no teclea códigos: elige de la
+// lista y el valor que viaja al Ministerio es exactamente el del catálogo.
+import {
+  CampoTelefonoConPais,
+  SelectorMunicipioINE,
+  SelectorPais,
+} from '@/components/paises-municipios/selectores';
+
+/** Campos que van con selector de catálogo (no Input libre). */
+const CAMPOS_CON_SELECTOR = new Set(['nacionalidad', 'telefono', 'codigoMunicipio', 'pais']);
 
 /** Reserva cuyo parte se va a completar. La referencia solo se enseña. */
 export interface ReservaDelParte {
@@ -52,6 +63,8 @@ const VIAJERO_VACIO = {
   correo: '',
   direccion: '',
   codigoMunicipio: '',
+  /** Nombre del municipio cuando el país NO es España (lo pide el Ministerio). */
+  ciudadExtranjera: '',
   codigoPostal: '',
   pais: 'ESP',
 };
@@ -140,7 +153,8 @@ export function CompletarParteVijerosDialog({
               sexo: viajero.sexo || null,
               direccion: {
                 direccion: viajero.direccion,
-                codigoMunicipio: viajero.codigoMunicipio || null,
+                codigoMunicipio: viajero.pais === 'ESP' ? viajero.codigoMunicipio || null : null,
+                nombreMunicipio: viajero.pais === 'ESP' ? null : viajero.ciudadExtranjera || null,
                 codigoPostal: viajero.codigoPostal,
                 pais: viajero.pais,
               },
@@ -180,15 +194,77 @@ export function CompletarParteVijerosDialog({
         </DialogHeader>
 
         <div className="grid gap-3 md:grid-cols-3">
-          {CAMPOS.map(([campo, etiqueta]) => (
-            <div key={campo}>
-              <Label className="text-xs">{etiqueta}</Label>
-              <Input
-                value={viajero[campo as CampoFormulario]}
-                onChange={(e) => setViajero({ ...viajero, [campo]: e.target.value })}
-              />
-            </div>
-          ))}
+          {CAMPOS.map(([campo, etiqueta]) => {
+            // Los campos de catálogo van con selector: país, teléfono con
+            // prefijo y municipio INE (provincia → municipio). El resto, Input.
+            if (campo === 'nacionalidad') {
+              return (
+                <div key={campo}>
+                  <Label className="text-xs">{etiqueta}</Label>
+                  <SelectorPais
+                    value={viajero.nacionalidad}
+                    onChange={(codigo) => setViajero({ ...viajero, nacionalidad: codigo })}
+                  />
+                </div>
+              );
+            }
+            if (campo === 'pais') {
+              return (
+                <div key={campo}>
+                  <Label className="text-xs">{etiqueta}</Label>
+                  <SelectorPais
+                    value={viajero.pais}
+                    onChange={(codigo) =>
+                      setViajero({ ...viajero, pais: codigo, codigoMunicipio: '' })
+                    }
+                  />
+                </div>
+              );
+            }
+            if (campo === 'telefono') {
+              return (
+                <div key={campo} className="md:col-span-2">
+                  <Label className="text-xs">{etiqueta}</Label>
+                  <CampoTelefonoConPais
+                    telefono={viajero.telefono}
+                    pais={viajero.pais}
+                    onTelefono={(valor) => setViajero({ ...viajero, telefono: valor })}
+                    onPais={(codigo) => setViajero({ ...viajero, pais: codigo, codigoMunicipio: '' })}
+                  />
+                </div>
+              );
+            }
+            if (campo === 'codigoMunicipio') {
+              return viajero.pais === 'ESP' ? (
+                <div key={campo} className="md:col-span-3">
+                  <Label className="text-xs">{etiqueta}</Label>
+                  <SelectorMunicipioINE
+                    codigoMunicipio={viajero.codigoMunicipio}
+                    onChange={(codigo) => setViajero({ ...viajero, codigoMunicipio: codigo })}
+                  />
+                </div>
+              ) : (
+                // Fuera de España el Ministerio pide el NOMBRE del municipio;
+                // el código INE no aplica. Se reusa el mismo hueco del form.
+                <div key={campo} className="md:col-span-3">
+                  <Label className="text-xs">Ciudad / municipio</Label>
+                  <Input
+                    value={viajero.ciudadExtranjera || ''}
+                    onChange={(e) => setViajero({ ...viajero, ciudadExtranjera: e.target.value })}
+                  />
+                </div>
+              );
+            }
+            return (
+              <div key={campo}>
+                <Label className="text-xs">{etiqueta}</Label>
+                <Input
+                  value={viajero[campo as CampoFormulario]}
+                  onChange={(e) => setViajero({ ...viajero, [campo]: e.target.value })}
+                />
+              </div>
+            );
+          })}
         </div>
 
         <DialogFooter>

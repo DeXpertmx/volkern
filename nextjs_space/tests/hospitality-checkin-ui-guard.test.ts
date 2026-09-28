@@ -58,7 +58,16 @@ describe('check-in online (pantalla del huésped)', () => {
   it('un `id` de datalist por página (no uno por viajero)', () => {
     const ocurrencias = page.match(/id="tipos-documento"/g) ?? [];
     expect(ocurrencias).toHaveLength(1);
-    expect(page.match(/id="paises"/g) ?? []).toHaveLength(1);
+  });
+
+  it('país y municipio van con selectores de catálogo, no con input libre', () => {
+    // El Ministerio valida contra su catálogo: un input libre generaba
+    // rechazos («España», «ESP », códigos INE mal tecleados).
+    expect(page).toContain('SelectorPais');
+    expect(page).toContain('SelectorMunicipioINE');
+    expect(page).toContain('CampoTelefonoConPais');
+    // Y los datos que viajan siguen siendo los del borrador del huésped.
+    expect(page).toContain('codigoMunicipio: codigo');
   });
 
   it('dice qué falta con las etiquetas del huésped, no con códigos internos', () => {

@@ -47,6 +47,14 @@ import {
 } from '@/lib/hospitality/booking-i18n';
 import type { CampoViajero, DocumentacionReserva, ViajeroCheckin } from '@/lib/hospitality/guest-checkin';
 import type { PreguntaCheckin } from '@/lib/hospitality/checkin-preguntas';
+// Selectores de catálogos: país (alfa-3), teléfono con prefijo y municipio INE
+// (provincia → municipio). Sustituyen a los input libres que generaban
+// errores («ESP», «Esp», «España»…) en los datos que valida el Ministerio.
+import {
+  CampoTelefonoConPais,
+  SelectorMunicipioINE,
+  SelectorPais,
+} from '@/components/paises-municipios/selectores';
 
 /** Ficha editable del formulario (la dirección se edita por partes). */
 interface Borrador {
@@ -528,12 +536,7 @@ function FichaViajero({
             <Input value={borrador.soporteDocumento} onChange={(e) => onCambio({ soporteDocumento: e.target.value })} />
           </Campo>
           <Campo etiqueta={c.nacionalidad}>
-            <Input
-              list="paises"
-              maxLength={3}
-              value={borrador.nacionalidad}
-              onChange={(e) => onCambio({ nacionalidad: e.target.value })}
-            />
+            <SelectorPais value={borrador.nacionalidad} onChange={(codigo) => onCambio({ nacionalidad: codigo })} />
           </Campo>
           <Campo etiqueta={c.sexo}>
             <select
@@ -549,7 +552,12 @@ function FichaViajero({
           {/* Los dos campos juntos cubren el `contacto` que exige el servicio:
               con teléfono o email basta, no hacen falta los dos. */}
           <Campo etiqueta={t.campoTelefono}>
-            <Input value={borrador.telefono} onChange={(e) => onCambio({ telefono: e.target.value })} autoComplete="tel" />
+            <CampoTelefonoConPais
+              telefono={borrador.telefono}
+              pais={borrador.direccion.pais || borrador.nacionalidad}
+              onTelefono={(valor) => onCambio({ telefono: valor })}
+              onPais={(codigo) => onCambioDireccion({ pais: codigo })}
+            />
           </Campo>
           <Campo etiqueta={t.campoEmail}>
             <Input
@@ -580,19 +588,24 @@ function FichaViajero({
             />
           </Campo>
           <Campo etiqueta={c['direccion.pais']} ayuda={t.ayudaPais}>
-            <Input
-              list="paises"
-              maxLength={3}
+            <SelectorPais
               value={borrador.direccion.pais}
-              onChange={(e) => onCambioDireccion({ pais: e.target.value })}
-              autoComplete="country"
+              onChange={(codigo) => onCambioDireccion({ pais: codigo, codigoMunicipio: '', nombreMunicipio: '' })}
             />
           </Campo>
           <Campo etiqueta={c['direccion.municipio']} ayuda={t.ayudaMunicipio}>
-            <Input
-              value={borrador.direccion.codigoMunicipio}
-              onChange={(e) => onCambioDireccion({ codigoMunicipio: e.target.value })}
-            />
+            {borrador.direccion.pais === 'ESP' ? (
+              <SelectorMunicipioINE
+                codigoMunicipio={borrador.direccion.codigoMunicipio}
+                onChange={(codigo) => onCambioDireccion({ codigoMunicipio: codigo })}
+              />
+            ) : (
+              <Input
+                value={borrador.direccion.nombreMunicipio || ''}
+                onChange={(e) => onCambioDireccion({ nombreMunicipio: e.target.value })}
+                placeholder={t.ayudaMunicipio}
+              />
+            )}
           </Campo>
         </div>
       </CardContent>
@@ -614,20 +627,9 @@ function Catalogos() {
         <option value="NIE" />
         <option value="PAS" />
       </datalist>
-      <datalist id="paises">
-        <option value="ESP" />
-        <option value="FRA" />
-        <option value="DEU" />
-        <option value="ITA" />
-        <option value="PRT" />
-        <option value="GBR" />
-        <option value="USA" />
-        <option value="MEX" />
-        <option value="ARG" />
-        <option value="BRA" />
-        <option value="COL" />
-        <option value="CHL" />
-      </datalist>
+      {/* País y municipio ya no usan datalist: van con los selectores de
+          catálogo (components/paises-municipios), que llevan búsqueda y valores
+          exactos del INE / ISO. */}
     </>
   );
 }

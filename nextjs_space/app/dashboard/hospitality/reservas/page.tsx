@@ -58,6 +58,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+// Teléfono del huésped con país (prefijo por selector, valor E.164 normalizado).
+import { CampoTelefonoConPais } from '@/components/paises-municipios/selectores';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import Link from 'next/link';
@@ -345,6 +347,7 @@ const EMPTY_FORM = {
   huespedNombre: '',
   huespedEmail: '',
   huespedTelefono: '',
+  huespedPaisTelefono: 'ESP',
   canal: 'Directa',
   checkin: '',
   checkout: '',
@@ -490,6 +493,13 @@ export default function HospitalityReservasPage() {
       huespedNombre: huesped.firstName || r.contact?.nombre || '',
       huespedEmail: huesped.email || r.contact?.email || '',
       huespedTelefono: huesped.phone || r.contact?.telefono || '',
+      // El país del teléfono se deduce del prefijo guardado (si hay); el
+      // selector solo acompaña al número: no se envía a la API.
+      huespedPaisTelefono: (huesped.phone || r.contact?.telefono || '').startsWith('+33')
+        ? 'FRA'
+        : (huesped.phone || r.contact?.telefono || '').startsWith('+1')
+          ? 'USA'
+          : 'ESP',
       canal: r.channel,
       checkin: r.checkIn.slice(0, 10),
       checkout: r.checkOut.slice(0, 10),
@@ -1705,7 +1715,12 @@ export default function HospitalityReservasPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="r-tel" className="flex items-center gap-1"><Phone className="h-3 w-3" /> Teléfono</Label>
-                  <Input id="r-tel" value={form.huespedTelefono} onChange={(e) => setForm({ ...form, huespedTelefono: e.target.value })} placeholder="+52 ..." />
+                  <CampoTelefonoConPais
+                    telefono={form.huespedTelefono}
+                    pais={form.huespedPaisTelefono}
+                    onTelefono={(valor) => setForm({ ...form, huespedTelefono: valor })}
+                    onPais={(codigo) => setForm({ ...form, huespedPaisTelefono: codigo })}
+                  />
                 </div>
               </div>
             </div>

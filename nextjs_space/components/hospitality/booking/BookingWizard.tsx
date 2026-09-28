@@ -40,6 +40,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { formatearImporte } from '@/lib/moneda';
 import { toIsoDate } from '@/lib/hospitality/calendar';
+// Teléfono con país: prefijo por selector (evita números sin +34/+33…) en el
+// paso de datos del huésped.
+import { CampoTelefonoConPais } from '@/components/paises-municipios/selectores';
 import { porcentajeTotalDeAjustes, type AjusteAplicado } from '@/lib/hospitality/ajustes';
 import {
   IDIOMAS,
@@ -171,6 +174,8 @@ export function BookingWizard({
   const [nombre, setNombre] = useState('');
   const [email, setEmail] = useState('');
   const [telefono, setTelefono] = useState('');
+  // País del teléfono (solo para el prefijo del selector; no se envía aparte).
+  const [paisTelefono, setPaisTelefono] = useState('ESP');
   const [notas, setNotas] = useState('');
   const [resultado, setResultado] = useState<ResultadoReservaUI | null>(null);
   // Modal del paso 3: abierto desde «Elegir» y cerrado al éxito/cancelación.
@@ -554,6 +559,8 @@ export function BookingWizard({
               setEmail={setEmail}
               telefono={telefono}
               setTelefono={setTelefono}
+              paisTelefono={paisTelefono}
+              setPaisTelefono={setPaisTelefono}
               notas={notas}
               setNotas={setNotas}
               cargando={cargando}
@@ -592,6 +599,8 @@ export function BookingWizard({
               setEmail={setEmail}
               telefono={telefono}
               setTelefono={setTelefono}
+              paisTelefono={paisTelefono}
+              setPaisTelefono={setPaisTelefono}
               notas={notas}
               setNotas={setNotas}
               cargando={cargando}
@@ -653,6 +662,8 @@ function FormularioHuesped({
   setEmail,
   telefono,
   setTelefono,
+  paisTelefono,
+  setPaisTelefono,
   notas,
   setNotas,
   cargando,
@@ -669,6 +680,8 @@ function FormularioHuesped({
   setEmail: (v: string) => void;
   telefono: string;
   setTelefono: (v: string) => void;
+  paisTelefono: string;
+  setPaisTelefono: (v: string) => void;
   notas: string;
   setNotas: (v: string) => void;
   cargando: boolean;
@@ -688,7 +701,13 @@ function FormularioHuesped({
         </div>
         <div className="grid gap-2">
           <Label htmlFor="telefono">{t.telefono}</Label>
-          <Input id="telefono" value={telefono} onChange={(e) => setTelefono(e.target.value)} autoComplete="tel" />
+          <CampoTelefonoConPais
+            telefono={telefono}
+            pais={paisTelefono}
+            onTelefono={setTelefono}
+            onPais={setPaisTelefono}
+            className="sm:min-w-[260px]"
+          />
         </div>
         <div className="grid gap-2 sm:col-span-2">
           <Label htmlFor="notas">{t.peticiones}</Label>

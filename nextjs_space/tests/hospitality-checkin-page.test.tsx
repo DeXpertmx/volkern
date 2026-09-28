@@ -10,9 +10,45 @@
 // (el primero es el titular: el registro de viajeros le asigna el rol por
 // posición). Grepear el código no ve un formulario que no se puede rellenar.
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from 'vitest';
 import { render, screen, waitFor, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+
+// Polyfills jsdom para Radix/cmdk (el combobox de país usa cmdk, que mide con
+// ResizeObserver y hace scrollIntoView; jsdom no los trae — mismo apaño que el
+// resto de suites UI).
+beforeAll(() => {
+  if (!global.ResizeObserver) {
+    (global as any).ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    };
+  }
+  if (!Element.prototype.scrollIntoView) {
+    Element.prototype.scrollIntoView = () => {};
+  }
+  if (!global.PointerEvent) {
+    (global as any).PointerEvent = class PointerEvent extends Event {
+      button = 0;
+      pointerType = 'mouse';
+      isPrimary = true;
+      hasPointerCapture() {
+        return false;
+      }
+      releasePointerCapture() {}
+      constructor(type: string, init?: any) {
+        super(type, init);
+      }
+    } as any;
+  }
+  if (!HTMLElement.prototype.hasPointerCapture) {
+    HTMLElement.prototype.hasPointerCapture = () => false;
+  }
+  if (!HTMLElement.prototype.releasePointerCapture) {
+    HTMLElement.prototype.releasePointerCapture = () => {};
+  }
+});
 
 vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() },
