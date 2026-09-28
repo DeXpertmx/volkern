@@ -2,7 +2,13 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { resolveLegacyRedirect } from '@/lib/legacy-redirects'
 import { applyDiscoveryLinks } from '@/lib/seo/discovery-links'
-import { getToken } from 'next-auth/jwt'
+import { getToken, encode } from 'next-auth/jwt'
+import {
+  isSessionIdleExpired,
+  refreshSessionClaims,
+  SESSION_COOKIE_NAME,
+  SESSION_ABSOLUTE_MAX_AGE_SECONDS,
+} from '@/lib/session-policy'
 import { checkEdgeRateLimit } from '@/lib/edge-rate-limiter'
 import {
   PARTNER_RATE_LIMITS,
@@ -50,10 +56,38 @@ const PUBLIC_API_RATE_LIMITED = [
   '/api/subscriptions',
 ];
 
+/**
+ * Redirect al login conservando el subdominio del tenant (branding +
+ * validación cruzada de authorize() en lib/auth.ts). NO usar request.url:
+ * detrás de Traefik el standalone la reconstruye con HOSTNAME=0.0.0.0.
+ * Se deriva el origin de host/x-forwarded-*; si el host no es de confianza
+ * (interno o desconocido), se cae al apex canónico.
+ * Además limpia la cookie de sesión (p. ej. expirada por inactividad).
+ */
+function loginRedirect(request: NextRequest, pathname: string): NextResponse {
+  const fwdHost = (request.headers.get('x-forwarded-host') || request.headers.get('host') || '').trim()
+  const hostClean = fwdHost.replace(/:.*/, '').toLowerCase()
+  const TRUSTED = /(^|\.)volkern\.app$|(^|\.)volkern\.com$|(^|\.)dimension\.expert$/
+  const isLocal = hostClean === 'localhost' || hostClean === '127.0.0.1'
+  let loginOrigin = process.env.NEXTAUTH_URL || 'https://volkern.app'
+  if (fwdHost && hostClean !== '0.0.0.0' && (isLocal || TRUSTED.test(hostClean))) {
+    const proto = request.headers.get('x-forwarded-proto') || (isLocal ? 'http' : 'https')
+    loginOrigin = `${proto}://${fwdHost}`
+  }
+  const loginUrl = new URL('/auth/login', loginOrigin)
+  loginUrl.searchParams.set('callbackUrl', pathname)
+  const res = NextResponse.redirect(loginUrl)
+  res.cookies.set(SESSION_COOKIE_NAME, '', { path: '/', maxAge: 0 })
+  return res
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const host = request.headers.get('host') || ''
   const subdomain = getSubdomain(host)
+  // JWT re-emitido con lastActivity actualizado (rolling session); se adjunta
+  // a la respuesta final si alguna rama lo calculó.
+  let slidingJwt: string | null = null
 
   // ─── Custom domain resolution ─────────────────────────────────────────
   // Detecta dominios personalizados (no locales, no volkern.app, no subdominios)
@@ -311,6 +345,35 @@ export async function middleware(request: NextRequest) {
       return withHeaders(res)
     }
     // Other API routes need auth - let them through to handler (headers will be set below)
+
+    // Cierre por inactividad: si el JWT existe pero la sesión lleva más del
+    // timeout sin actividad, 401 inmediato sin llegar al handler (la segunda
+    // línea de defensa está en el session callback de lib/auth.ts, que
+    // también devuelve sesión vacía a getServerSession()).
+    const apiToken = await getToken({
+      req: request,
+      secret: process.env.NEXTAUTH_SECRET,
+      cookieName: 'next-auth.session-token'
+    })
+    if (apiToken && isSessionIdleExpired(apiToken as any)) {
+      return withHeaders(NextResponse.json(
+        { error: 'Sesión expirada por inactividad', code: 'SESSION_IDLE_EXPIRED' },
+        { status: 401 }
+      ))
+    }
+    // La actividad de API también refresca la ventana de inactividad (el
+    // dashboard es client-heavy: no todo uso pasa por una carga de página).
+    if (apiToken && typeof (apiToken as any).lastActivity === 'number') {
+      try {
+        slidingJwt = await encode({
+          token: refreshSessionClaims(apiToken as any) as any,
+          secret: process.env.NEXTAUTH_SECRET!,
+          maxAge: SESSION_ABSOLUTE_MAX_AGE_SECONDS,
+        })
+      } catch {
+        // Sin refresco: la cookie sigue válida hasta su exp actual.
+      }
+    }
   }
 
   // Static files and images - allow through
@@ -331,22 +394,40 @@ export async function middleware(request: NextRequest) {
     })
     if (!token) {
       // Redirect al login del MISMO host para conservar el subdominio del tenant
-      // (branding + validación cruzada de authorize() en lib/auth.ts).
-      // NO usar request.url: detrás de Traefik el standalone la reconstruye con
-      // HOSTNAME=0.0.0.0. Se deriva el origin de host/x-forwarded-*; si el host
-      // no es de confianza (interno o desconocido), se cae al apex canónico.
-      const fwdHost = (request.headers.get('x-forwarded-host') || request.headers.get('host') || '').trim()
-      const hostClean = fwdHost.replace(/:.*/, '').toLowerCase()
-      const TRUSTED = /(^|\.)volkern\.app$|(^|\.)volkern\.com$|(^|\.)dimension\.expert$/
-      const isLocal = hostClean === 'localhost' || hostClean === '127.0.0.1'
-      let loginOrigin = process.env.NEXTAUTH_URL || 'https://volkern.app'
-      if (fwdHost && hostClean !== '0.0.0.0' && (isLocal || TRUSTED.test(hostClean))) {
-        const proto = request.headers.get('x-forwarded-proto') || (isLocal ? 'http' : 'https')
-        loginOrigin = `${proto}://${fwdHost}`
+      return withHeaders(loginRedirect(request, pathname))
+    }
+    // Cierre por inactividad (ver lib/session-policy.ts): la cookie se
+    // limpia para que la siguiente petición vaya directa al !token.
+    if (isSessionIdleExpired(token as any)) {
+      return withHeaders(loginRedirect(request, pathname))
+    }
+    // Refresco deslizante (rolling session): re-emite el JWT con
+    // lastActivity = ahora para que el timeout de inactividad cuente desde
+    // la última petición. Los tokens sin lastActivity (legacy) no se tocan.
+    if (typeof (token as any).lastActivity === 'number') {
+      try {
+        const refreshed = refreshSessionClaims(token as any)
+        const jwt = await encode({
+          token: refreshed as any,
+          secret: process.env.NEXTAUTH_SECRET!,
+          maxAge: SESSION_ABSOLUTE_MAX_AGE_SECONDS,
+        })
+        const res = NextResponse.next()
+        const cookieOptions: Record<string, unknown> = {
+          httpOnly: true,
+          sameSite: 'lax',
+          path: '/',
+          secure: process.env.NODE_ENV === 'production',
+          maxAge: SESSION_ABSOLUTE_MAX_AGE_SECONDS,
+        }
+        if (process.env.NODE_ENV === 'production' && process.env.AUTH_COOKIE_DOMAIN !== 'none') {
+          cookieOptions.domain = process.env.AUTH_COOKIE_DOMAIN || '.volkern.app'
+        }
+        res.cookies.set(SESSION_COOKIE_NAME, jwt, cookieOptions as any)
+        return withHeaders(res)
+      } catch {
+        // Sin refresco: la cookie sigue válida hasta su exp actual.
       }
-      const loginUrl = new URL('/auth/login', loginOrigin)
-      loginUrl.searchParams.set('callbackUrl', pathname)
-      return withHeaders(NextResponse.redirect(loginUrl))
     }
   }
 
@@ -358,6 +439,19 @@ export async function middleware(request: NextRequest) {
   }
   if (apiKey) {
     res.headers.set('x-api-key', apiKey)
+  }
+  if (slidingJwt) {
+    const cookieOptions: Record<string, unknown> = {
+      httpOnly: true,
+      sameSite: 'lax',
+      path: '/',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: SESSION_ABSOLUTE_MAX_AGE_SECONDS,
+    }
+    if (process.env.NODE_ENV === 'production' && process.env.AUTH_COOKIE_DOMAIN !== 'none') {
+      cookieOptions.domain = process.env.AUTH_COOKIE_DOMAIN || '.volkern.app'
+    }
+    res.cookies.set(SESSION_COOKIE_NAME, slidingJwt, cookieOptions as any)
   }
   return withHeaders(res)
 }

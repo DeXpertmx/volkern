@@ -3,8 +3,10 @@ import { NextRequest } from 'next/server';
 
 // ─── Mocks de módulos externos del middleware ─────────────────────────
 // getToken: sin sesión por defecto (verifica redirect a login)
+// encode: devuelve un JWT "re-emitido" fijo para el refresco deslizante
 vi.mock('next-auth/jwt', () => ({
   getToken: vi.fn(async () => null),
+  encode: vi.fn(async () => 'jwt-re-emitido'),
 }));
 
 // Rate limiters: no queremos red/Upstash en el test
@@ -218,5 +220,85 @@ describe('middleware — subdominio en raíz', () => {
     const res = await middleware(makeRequest('/', { host: 'empresa.volkern.app' }));
 
     expect(res.headers.get('x-tenant-subdomain')).toBe('empresa');
+  });
+});
+
+describe('middleware — cierre de sesión por inactividad', () => {
+  // Epoch del momento del test: los offsets se aplican sobre el reloj real
+  // para que lastActivity siempre quede en el pasado/presente real.
+  const NOW = Math.floor(Date.now() / 1000);
+
+  beforeEach(() => {
+    delete process.env.SESSION_IDLE_TIMEOUT_SECONDS;
+  });
+
+  it('página protegida con sesión inactiva > 30 min: redirect a login y cookie limpiada', async () => {
+    vi.mocked(getToken).mockResolvedValueOnce({
+      sub: 'u1',
+      lastActivity: NOW - 1801,
+    } as never);
+
+    const res = await middleware(makeRequest('/dashboard'));
+
+    expect(res.status).toBe(307);
+    expect(res.headers.get('location')).toContain('/auth/login');
+    const cookie = res.cookies.get('next-auth.session-token');
+    expect(cookie).toBeDefined();
+    expect(cookie!.value).toBe('');
+  });
+
+  it('página protegida dentro de la ventana: pasa y re-emite la cookie deslizante', async () => {
+    vi.mocked(getToken).mockResolvedValueOnce({
+      sub: 'u1',
+      lastActivity: NOW - 60,
+    } as never);
+
+    const res = await middleware(makeRequest('/dashboard'));
+
+    expect(res.status).toBe(200);
+    const cookie = res.cookies.get('next-auth.session-token');
+    expect(cookie).toBeDefined();
+    expect(cookie!.value).toBe('jwt-re-emitido');
+  });
+
+  it('token legacy sin lastActivity: pasa sin re-emitir cookie', async () => {
+    vi.mocked(getToken).mockResolvedValueOnce({ sub: 'u1' } as never);
+
+    const res = await middleware(makeRequest('/dashboard'));
+
+    expect(res.status).toBe(200);
+    expect(res.cookies.get('next-auth.session-token')).toBeUndefined();
+  });
+
+  it('API autenticada con sesión inactiva: 401 con código SESSION_IDLE_EXPIRED', async () => {
+    vi.mocked(getToken).mockResolvedValueOnce({
+      sub: 'u1',
+      lastActivity: NOW - 3600,
+    } as never);
+
+    const res = await middleware(makeRequest('/api/deals/metrics'));
+
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    expect(body.code).toBe('SESSION_IDLE_EXPIRED');
+  });
+
+  it('API autenticada dentro de la ventana: pasa y re-emite la cookie', async () => {
+    vi.mocked(getToken).mockResolvedValueOnce({
+      sub: 'u1',
+      lastActivity: NOW - 60,
+    } as never);
+
+    const res = await middleware(makeRequest('/api/deals/metrics'));
+
+    expect(res.status).toBe(200);
+    const cookie = res.cookies.get('next-auth.session-token');
+    expect(cookie).toBeDefined();
+    expect(cookie!.value).toBe('jwt-re-emitido');
+  });
+
+  it('API pública (/api/auth/*) no exige inactividad: pasa sin sesión', async () => {
+    const res = await middleware(makeRequest('/api/auth/session'));
+    expect(res.status).toBe(200);
   });
 });

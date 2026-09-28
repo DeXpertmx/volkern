@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db'
 import bcrypt from 'bcryptjs'
 import { TwoFactorService } from './security/two-factor'
 import { logger } from '@/lib/logger'
+import { isSessionIdleExpired, type SessionClaims } from './session-policy'
 import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
@@ -180,6 +181,25 @@ export const authOptions: NextAuthOptions = {
           logger.error({ err: mfaError, event: 'mfa_check_error' }, 'Error verificando 2FA (se continúa para no bloquear el login si el esquema falla)')
         }
 
+        // ── SESIÓN ÚNICA POR USUARIO ──
+        // Cada login incrementa tokenVersion en BD: el JWT de la sesión
+        // anterior deja de coincidir con la versión vigente y el session
+        // callback la rechaza (el dispositivo previo vuelve al login).
+        let sessionVersion = user.tokenVersion
+        try {
+          const updated = await prisma.user.update({
+            where: { id: user.id },
+            data: { tokenVersion: { increment: 1 } },
+            select: { tokenVersion: true },
+          })
+          sessionVersion = updated.tokenVersion
+        } catch (e) {
+          // Si el bump falla no bloqueamos el login: la sesión nace con la
+          // versión actual (las sesiones previas seguirían válidas hasta el
+          // próximo login exitoso).
+          logger.error({ err: e, event: 'session_bump_failed', userId: user.id }, 'No se pudo incrementar tokenVersion en login')
+        }
+
         return {
           id: user.id,
           email: user.email,
@@ -190,7 +210,7 @@ export const authOptions: NextAuthOptions = {
           roleName: user.role?.nombre,
           accountType: user.tenant?.accountType,
           tenantSubdomain: user.tenant?.subdomain,
-          tokenVersion: user.tokenVersion,
+          tokenVersion: sessionVersion,
         }
       }
     })
@@ -211,11 +231,56 @@ export const authOptions: NextAuthOptions = {
         token.accountType = (user as any).accountType
         token.tokenVersion = (user as any).tokenVersion
         token.tenantSubdomain = (user as any).tenantSubdomain
+        // Sesión única + cierre por inactividad (ver lib/session-policy.ts):
+        token.sessionVersion = (user as any).tokenVersion
+        token.lastActivity = Math.floor(Date.now() / 1000)
       }
       return token
     },
     async session({ session, token }) {
       if (token && session.user) {
+        const claims = token as unknown as SessionClaims
+
+        // ── Cierre por inactividad ──
+        // Segunda línea de defensa (la primera es el middleware): si la
+        // sesión lleva más tiempo sin actividad que el timeout, se devuelve
+        // una sesión vacía y todos los getServerSession() la tratan como
+        // no autenticada.
+        if (isSessionIdleExpired(claims)) {
+          return {} as any
+        }
+
+        // ── Sesión única por usuario ──
+        // El JWT debe llevar la versión de sesión vigente en BD. Tokens sin
+        // sessionVersion (anteriores al cambio o acuñados a mano) se comparan
+        // por el claim legacy tokenVersion; si no llevan ninguno, se aceptan
+        // hasta que expiren solos (24 h).
+        const expectedVersion =
+          typeof claims.sessionVersion === 'number'
+            ? claims.sessionVersion
+            : typeof claims.tokenVersion === 'number'
+              ? claims.tokenVersion
+              : null
+        if (expectedVersion !== null) {
+          try {
+            const row = await prisma.user.findUnique({
+              where: { id: token.sub! },
+              select: { tokenVersion: true },
+            })
+            if (!row) return {} as any // usuario eliminado
+            if (row.tokenVersion !== expectedVersion) {
+              // Sesión reemplazada por un login posterior o revocada
+              // (p. ej. /api/auth/logout-all): sesión inválida.
+              return {} as any
+            }
+          } catch (e) {
+            // Fail-open: un error puntual de BD no debe cerrar en bloque
+            // todas las sesiones; el rechazo solo aplica con respuesta
+            // definitiva de BD.
+            logger.warn({ err: e, event: 'session_version_check_unavailable' }, 'No se pudo verificar tokenVersion; se permite la sesión')
+          }
+        }
+
         (session.user as any).id = token.sub!
         ;(session.user as any).tenantId = token.tenantId as string
         ;(session.user as any).roleId = token.roleId as string
@@ -223,6 +288,7 @@ export const authOptions: NextAuthOptions = {
         ;(session.user as any).accountType = token.accountType as string
         ;(session.user as any).tokenVersion = token.tokenVersion as number
         ;(session.user as any).tenantSubdomain = token.tenantSubdomain as string
+        ;(session.user as any).sessionVersion = claims.sessionVersion ?? claims.tokenVersion
       }
       return session
     },
