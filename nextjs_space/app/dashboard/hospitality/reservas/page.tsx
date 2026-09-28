@@ -144,6 +144,17 @@ const ESTADOS = [
 
 const CANALES = ['Airbnb', 'Booking.com', 'Expedia', 'Directa', 'Volkern'];
 
+/**
+ * Valor del Select para «Sin asignar» en el formulario de reservas.
+ *
+ * Radix prohibe una opción de Select con la cadena vacía como valor (es su
+ * «limpiar selección» interno) y el diálogo explota al montar: así crasheaba
+ * el lápiz de Reservas. El centinela solo vive en la UI: al abrir se mapea
+ * desde/to la cadena vacía y al guardar significa unidad sin asignar
+ * (`unitId: null` en la API).
+ */
+const UNIDAD_SIN_ASIGNAR = '__sin_asignar__';
+
 const ESTADO_BADGE: Record<string, string> = {
   pending: 'bg-amber-100 text-amber-800',
   confirmed: 'bg-emerald-100 text-emerald-800',
@@ -475,7 +486,7 @@ export default function HospitalityReservasPage() {
     const huesped = r.guestData || {};
     setForm({
       propertyId: r.propertyId,
-      unitId: r.unitId || '',
+      unitId: r.unitId || UNIDAD_SIN_ASIGNAR,
       huespedNombre: huesped.firstName || r.contact?.nombre || '',
       huespedEmail: huesped.email || r.contact?.email || '',
       huespedTelefono: huesped.phone || r.contact?.telefono || '',
@@ -504,7 +515,7 @@ export default function HospitalityReservasPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           propertyId: form.propertyId || undefined,
-          unitId: form.unitId || null,
+          unitId: form.unitId && form.unitId !== UNIDAD_SIN_ASIGNAR ? form.unitId : null,
           huespedNombre: form.huespedNombre || undefined,
           huespedEmail: form.huespedEmail || undefined,
           huespedTelefono: form.huespedTelefono || undefined,
@@ -1604,7 +1615,7 @@ export default function HospitalityReservasPage() {
                 <Label>Propiedad *</Label>
                 <Select
                   value={form.propertyId}
-                  onValueChange={(v) => setForm({ ...form, propertyId: v, unitId: '' })}
+                  onValueChange={(v) => setForm({ ...form, propertyId: v, unitId: UNIDAD_SIN_ASIGNAR })}
                   disabled={!!editing}
                 >
                   <SelectTrigger><SelectValue placeholder="Selecciona" /></SelectTrigger>
@@ -1617,10 +1628,10 @@ export default function HospitalityReservasPage() {
               </div>
               <div className="space-y-2">
                 <Label>Unidad</Label>
-                <Select value={form.unitId} onValueChange={(v) => setForm({ ...form, unitId: v })}>
+                <Select value={form.unitId || UNIDAD_SIN_ASIGNAR} onValueChange={(v) => setForm({ ...form, unitId: v })}>
                   <SelectTrigger><SelectValue placeholder="Sin asignar" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Sin asignar</SelectItem>
+                    <SelectItem value={UNIDAD_SIN_ASIGNAR}>Sin asignar</SelectItem>
                     {unidadesDePropiedad.map((u) => (
                       <SelectItem key={u.id} value={u.id}>
                         {u.nombre} ({u.capacidad} pers.)
