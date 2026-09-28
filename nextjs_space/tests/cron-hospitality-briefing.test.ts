@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, vi } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { runHospitalityBriefingScan, contextoBriefing, ACCION_BRIEFING } from '@/lib/cron/hospitality-briefing';
 import { prisma } from '@/lib/db';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
@@ -133,6 +133,18 @@ describe('destinatariosBriefing', () => {
 });
 
 describe('runHospitalityBriefingScan', () => {
+  // El cron sella cada mensaje y el guard diario con la fecha REAL del día
+  // (hoy = new Date()). Sin reloj congelado, la aserción del asunto se rompía
+  // al cruzar la medianoche UTC entre corridas (falló en CI el 2026-09-28
+  // esperando el asunto de '2026-09-27'). Congelado, todo el describe es
+  // determinista y coincide con la fecha fija de RESUMEN.
+  beforeEach(() => {
+    vi.useFakeTimers({ now: new Date('2026-09-27T12:00:00Z') });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('envía el briefing a los operadores por la plantilla activa y audita el día', async () => {
     vi.mocked(prisma.hospitalityCommunicationTemplate.findMany).mockImplementation(async (args: any) => {
       if (args?.distinct) return [{ tenantId: 'tenant-1' }];
