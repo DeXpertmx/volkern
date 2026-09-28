@@ -140,14 +140,14 @@ Procedimiento completo, canal por canal, en
 
 ## Webhook de reservas (proveedor → PMS)
 
-Un único endpoint POST interno recibe `book` / `modify` / `cancel`,
+Un único endpoint POST interno recibe `book` / `modify` / `cancel` / `no_show`,
 diferenciados por el campo `action`.
 
 ### Campos del payload (Book)
 
 | Campo | Tipo | Requerido | Descripción |
 | --- | --- | --- | --- |
-| `action` | string | ✅ | `book` \| `modify` \| `cancel` |
+| `action` | string | ✅ | `book` \| `modify` \| `cancel` \| `no_show` |
 | `hotelCode` | string | ✅ | Identificador de propiedad compartido. |
 | `channel` | string | ✅ | Canal/OTA de origen. |
 | `bookingId` | string | ✅ | ID único de reserva del OTA. |
@@ -373,6 +373,47 @@ mueve una reserva sin que una persona lo decida.
   El PMS debe reemplazar el estado anterior, no mezcla parcialmente.
 - **Cancel**: payload reducido que identifica la reserva (`hotelCode`, `bookingId`,
   `cmBookingId`, `action: "cancel"`) para localizarla y cancelarla.
+
+### Respuesta de éxito del webhook (y qué esperar en cada caso)
+
+Todo 200 comparte la misma forma: `success: true`, el `status` que dice qué
+hizo el PMS con el evento, y el `reservationId` interno de la reserva tocada.
+El proveedor NO debe reenviar un evento que respondió 200: la idempotencia por
+`bookingId` hace que un reenvío responda `duplicado` — inofensivo, pero ruido.
+
+| `status` | Cuándo ocurre | Cuerpo (200) | Qué debe hacer el proveedor |
+| --- | --- | --- | --- |
+| `creada` | `book` de un `bookingId` nuevo. | `{"success":true,"status":"creada","reservationId":"<id>","penalizacion":null}` | Nada. La reserva ya vive en el PMS. |
+| `duplicado` | Mismo `bookingId` (mismo canal) ya registrado: el evento no vuelve a crear ni a modificar nada. | `{"success":true,"status":"duplicado","reservationId":"<id>","penalizacion":null}` | Nada. **No reintente**: el original ya está aplicado — tratarlo como éxito. |
+| `actualizada` | `modify` aplicado (y `no_show`, ver su ciclo completo más abajo). | `{"success":true,"status":"actualizada","reservationId":"<id>","penalizacion":null}` | Nada. `modify` es estado completo nuevo: el siguiente cambio llega como modify entero, no como delta. |
+| `cancelada` | `cancel` localizó la reserva y la dejó `cancelled`. | `{"success":true,"status":"cancelada","reservationId":"<id>","penalizacion":null}` | Nada. Reenviar el cancel responde `cancelada` de nuevo (idempotente). |
+| `no_encontrada` | `cancel`/`no_show` de un `bookingId` que aquí no existe (típico: el `book` se perdió). **No es 200**: responde **404** con `Retry-After: 300`. | `{"success":false,"error":"Reserva no encontrada para cancelar"}` | Reintentar con backoff (5 min → 1 h) hasta 24 h; si el `book` sigue sin aparecer, escalar — el evento no puede aplicarse sin su reserva. |
+| `error` | Fallo de negocio del payload: `sin_mapping` (roomCode sin vínculo, con su intento de resolución asistida), multi-habitación (el motor registra una reserva por booking). **No es 200**: responde **400**, sin reintento. | `{"success":false,"error":"Sin mapping de unidad para hotelCode … y roomCode … (rateplan …)"}` | Detener reintentos: no es transitorio. Corregir el vínculo (el operador ve el incidente en el panel) o partir el booking y reenviar. |
+
+Ejemplos reales de un ciclo completo (`book` → reintento → `modify` →
+`cancel`), tal como respondió el entorno desplegado durante el ensayo del
+día H:
+
+```json
+// 1) book (bookingId nuevo)
+{"success":true,"status":"creada","reservationId":"cmukx7ycp003lod01f9ze29dh","penalizacion":null}
+
+// 2) el MISMO book repetido (idempotencia: el original ya estaba)
+{"success":true,"status":"duplicado","reservationId":"cmukx7ycp003lod01f9ze29dh","penalizacion":null}
+
+// 3) modify (estado completo nuevo; aquí la salida se movió 1 día)
+{"success":true,"status":"actualizada","reservationId":"cmukx7ycp003lod01f9ze29dh","penalizacion":null}
+
+// 4) cancel
+{"success":true,"status":"cancelada","reservationId":"cmukx7ycp003lod01f9ze29dh","penalizacion":null}
+```
+
+En `no_show` el campo `penalizacion` deja de ser un marcador y trae
+`{ emitida, importe, motivo }` — su semántica completa, con la tabla de
+respuestas y reintentos, está en «Ciclo completo de un no_show entrante»
+(más abajo). Fuera del 200, la política de reintentos viaja en el propio HTTP:
+404 lleva `Retry-After: 300`, 503/500 llevan `Retry-After: 60`, y 400/401 no
+llevan cabecera (no reintentar).
 
 ### Barrido de cancels perdidos (reconciliación diaria)
 
