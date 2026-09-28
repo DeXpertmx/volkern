@@ -9,6 +9,11 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
+import {
+  MOTIVOS_RECHAZO,
+  ETIQUETAS_MOTIVO,
+  CONSEJOS_MOTIVO,
+} from '@/lib/hospitality/conectividad-rechazo';
 
 const RAIZ = path.resolve(__dirname, '..');
 
@@ -58,6 +63,41 @@ describe('Panel de conectividad — diagnóstico del badge', () => {
     expect(fuente).not.toContain('getConnectivityCredentials');
     expect(fuente).not.toContain("from '@/lib/hospitality/connectivity'");
     expect(fuente).not.toContain('decrypt');
+  });
+});
+
+describe('Panel «Cómo debe llamarnos el PMS» — contrato del webhook sin secretos', () => {
+  const fuente = leer('app/admin/conectividad/page.tsx');
+
+  it('existe el panel y nombra las cabeceras que exige el contrato', () => {
+    expect(fuente).toContain('Cómo debe llamarnos el PMS');
+    expect(fuente).toContain('Authorization: Basic base64(USUARIO_API:CONTRASEÑA_API)');
+    expect(fuente).toContain('Content-Type: application/json');
+  });
+
+  it('el ejemplo curl usa marcadores, nunca credenciales reales', () => {
+    expect(fuente).toContain("-u 'USUARIO_API:CONTRASEÑA_API'");
+    expect(fuente).toContain('HOTEL_CODE');
+    expect(fuente).toContain('ROOM_CODE');
+    // El ejemplo explica la idempotencia: repetir bookingId responde duplicado.
+    expect(fuente).toContain('duplicado');
+    expect(fuente).toContain('bookingId');
+  });
+
+  it('el catálogo de motivos se consume de la pieza pura, no de copias', () => {
+    expect(fuente).toContain("from '@/lib/hospitality/conectividad-rechazo'");
+    expect(fuente).toContain('MOTIVOS_RECHAZO.map');
+    expect(fuente).toContain('ETIQUETAS_MOTIVO[motivo]');
+    expect(fuente).toContain('CONSEJOS_MOTIVO[motivo]');
+  });
+
+  it('la pieza pura cubre TODOS los motivos con etiqueta y consejo', () => {
+    // Si mañana se añade un motivo nuevo al webhook y nadie le escribe su
+    // consejo, esta guardia lo detecta: el panel no puede renderizar huecos.
+    for (const motivo of MOTIVOS_RECHAZO) {
+      expect(ETIQUETAS_MOTIVO[motivo], `sin etiqueta: ${motivo}`).toBeTruthy();
+      expect(CONSEJOS_MOTIVO[motivo], `sin consejo: ${motivo}`).toBeTruthy();
+    }
   });
 });
 

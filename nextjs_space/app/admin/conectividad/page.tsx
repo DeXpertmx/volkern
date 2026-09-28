@@ -20,6 +20,7 @@ import {
   RefreshCcw,
   Scale,
   EyeOff,
+  Info,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -53,6 +54,14 @@ import {
   ETIQUETAS_CAMPO,
   type AvisoPreflight,
 } from '@/lib/hospitality/connectivity-preflight';
+// Catálogo del diagnóstico 401 del webhook entrante: pieza pura compartida con
+// el webhook y el estado público. Las etiquetas y consejos del panel de ayuda
+// se consumen de aquí — duplicarlos haría que el panel y el 401 divergieran.
+import {
+  MOTIVOS_RECHAZO,
+  ETIQUETAS_MOTIVO,
+  CONSEJOS_MOTIVO,
+} from '@/lib/hospitality/conectividad-rechazo';
 
 interface EstadoConectividad {
   configurado: boolean;
@@ -166,6 +175,8 @@ export default function AdminConectividad() {
   /** Avisos que devuelve la API al guardar (bloqueantes o advertencias). */
   const [avisosGuardado, setAvisosGuardado] = useState<AvisoPreflight[]>([]);
   const [copied, setCopied] = useState(false);
+  /** Copia del ejemplo curl del panel de integración. */
+  const [copiedCurl, setCopiedCurl] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testHotel, setTestHotel] = useState('');
   const [testResult, setTestResult] = useState<{
@@ -370,6 +381,34 @@ export default function AdminConectividad() {
       ? `${window.location.origin}/api/hospitality/webhook/reservations`
       : '';
 
+  /**
+   * Ejemplo curl del webhook de reservas, SIN secretos: las credenciales van
+   * como marcadores (curl -u las convierte en Basic Auth) y los códigos
+   * externos como placeholders. El operador copia y sustituye; nada de la
+   * pantalla revela el par guardado.
+   */
+  const ejemploCurl = webhookUrl
+    ? `curl -X POST '${webhookUrl}' \\
+  -H 'Content-Type: application/json' \\
+  -u 'USUARIO_API:CONTRASEÑA_API' \\
+  -d '{
+    "action": "book",
+    "hotelCode": "HOTEL_CODE",
+    "channel": "Direct",
+    "bookingId": "BKG-123",
+    "cmBookingId": null,
+    "bookedOn": "2026-09-28",
+    "checkin": "2026-09-29",
+    "checkout": "2026-10-02",
+    "segment": "Walk-in",
+    "specialRequests": null,
+    "pah": false,
+    "amount": { "amountAfterTax": 2000.0, "amountBeforeTax": 2000.0, "tax": 0.0, "currency": "EUR", "commission": 0.0, "tcs": null, "tds": null },
+    "guest": { "firstName": "Elena", "lastName": "Navarro", "email": "elena@example.com", "phone": null, "address": null },
+    "rooms": [{ "roomCode": "ROOM_CODE", "rateplanCode": "RATEPLAN_CODE", "guestName": "Elena Navarro", "occupancy": { "adults": 1, "children": 0 }, "prices": [{ "date": "2026-09-29", "sellRate": 2000.0 }] }]
+  }'`
+    : '';
+
   const handleTest = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setTesting(true);
@@ -401,6 +440,14 @@ export default function AdminConectividad() {
     setCopied(true);
     toast.success('URL copiada al portapapeles');
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const copiarCurl = () => {
+    if (!ejemploCurl) return;
+    navigator.clipboard.writeText(ejemploCurl);
+    setCopiedCurl(true);
+    toast.success('Ejemplo copiado al portapapeles');
+    setTimeout(() => setCopiedCurl(false), 2000);
   };
 
   const handleReconciliar = async () => {
@@ -718,6 +765,80 @@ export default function AdminConectividad() {
               con credenciales distintas queda aquí (motivo, longitudes y huellas, nunca el valor).
             </p>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Cómo debe llamarnos el PMS: contrato del webhook entrante, sin secretos */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Info className="h-5 w-5 text-primary" />
+            Cómo debe llamarnos el PMS
+          </CardTitle>
+          <CardDescription>
+            El contrato del webhook de reservas en una pantalla: cabeceras exigidas, un ejemplo listo
+            para copiar y el significado de cada motivo del diagnóstico 401. Comparte esta página con
+            quien integre el emisor.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* 1. Cabeceras exigidas */}
+          <div>
+            <p className="text-sm font-medium">Cabeceras obligatorias</p>
+            <ul className="mt-1 space-y-1 text-xs text-muted-foreground">
+              <li>
+                <code>Authorization: Basic base64(USUARIO_API:CONTRASEÑA_API)</code> — el mismo usuario y
+                contraseña guardados en esta pantalla (los emite el proveedor en el onboarding).
+              </li>
+              <li>
+                <code>Content-Type: application/json</code> — todas las peticiones.
+              </li>
+            </ul>
+          </div>
+
+          {/* 2. Ejemplo curl sin secretos */}
+          {ejemploCurl && (
+            <div>
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium">Ejemplo listo para copiar (sin secretos)</p>
+                <Button variant="outline" size="sm" onClick={copiarCurl}>
+                  {copiedCurl ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  {copiedCurl ? 'Copiado' : 'Copiar ejemplo'}
+                </Button>
+              </div>
+              <pre className="mt-1 bg-muted p-3 rounded-lg text-xs overflow-x-auto whitespace-pre">
+                {ejemploCurl}
+              </pre>
+              <p className="text-xs text-muted-foreground mt-1">
+                Sustituye los marcadores: <code>USUARIO_API</code> y <code>CONTRASEÑA_API</code> son los
+                guardados aquí; <code>HOTEL_CODE</code> y <code>ROOM_CODE</code> salen del mapping de la
+                propiedad (columna «Código externo» de la tabla por propiedad). El envío se
+                comprueba por respuesta: éxito <code>success:true</code> con <code>status</code>
+                {' '}creada/actualizada/cancelada/duplicado; repetir el mismo <code>bookingId</code>{' '}
+                responde <code>duplicado</code> (idempotencia, no crea dos veces).
+              </p>
+            </div>
+          )}
+
+          {/* 3. Catálogo de motivos del 401 — la MISMA pieza pura que alimenta el diagnóstico real */}
+          <div>
+            <p className="text-sm font-medium">Qué significa cada motivo del 401</p>
+            <p className="text-xs text-muted-foreground mt-0.5 mb-2">
+              Cuando el webhook rechaza un intento, la respuesta trae <code>diagnostico.motivo</code> y el
+              panel lo muestra arriba (con huellas para cotejar, nunca el valor). Estos son todos los
+              motivos posibles y su arreglo.
+            </p>
+            <ul className="space-y-2">
+              {MOTIVOS_RECHAZO.map((motivo) => (
+                <li key={motivo} className="rounded-lg border p-3">
+                  <div className="flex flex-wrap items-baseline gap-x-2">
+                    <code className="text-xs font-semibold">{motivo}</code>
+                    <span className="text-xs text-muted-foreground">· {ETIQUETAS_MOTIVO[motivo]}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">{CONSEJOS_MOTIVO[motivo]}</p>
+                </li>))}
+            </ul>
+          </div>
         </CardContent>
       </Card>
 
