@@ -398,6 +398,14 @@ async function main(): Promise<void> {
     );
 
     cabecera('3. Configuración y catálogo (property_details)');
+    // EL SNAPSHOT VA ANTES DEL PRIMER GUARDADO. Sin él, la restauración final
+    // no tenía nada que restaurar y el ensayo dejaba las credenciales del
+    // simulador (y su partnerId) en la configuración real de producción.
+    // Falló en producción el 2026-09-28: quedó el partnerId del simulador y la
+    // conectividad real dejó de llamar al proveedor. Desde aquí, snapshot
+    // SIEMPRE precede al primer saveConnectivityConfig.
+    await snapshotProveedor();
+    exito('Configuración previa guardada para restaurarla al final (snapshot)');
     process.env.CONNECTIVITY_BASE_URL = revision.urlContrato!;
     const guardado = await saveConnectivityConfig(CLAVES);
     comprobar(guardado.ok && guardado.configurado, 'Credenciales guardadas y completas', guardado);
@@ -615,6 +623,21 @@ async function main(): Promise<void> {
       'La reconciliación recupera la reserva del proveedor',
       { ok: traidas.ok, devueltas: traidas.reservas?.length, error: traidas.error },
     );
+
+    // no_show ENTRANTE (regla 7 del plan): el proveedor reporta que el huésped
+    // no se presentó. El motor marca el estado con el vocabulario único y emite
+    // la penalización con el MISMO emisor que el PATCH del operador (regla 8);
+    // la respuesta trae cómo quedó el cargo (emitida/importe/motivo).
+    const noShowRes = await empujarWebhook({ ...payload, action: 'no_show' } as unknown as Record<string, unknown>);
+    comprobar(
+      noShowRes.cuerpo?.status === 'actualizada' && noShowRes.cuerpo?.penalizacion !== undefined,
+      'no_show marca la reserva y responde cómo quedó la penalización',
+      noShowRes.cuerpo,
+    );
+    const trasNoShow = await prisma.hospitalityReservation.findFirst({
+      where: { tenantId: fixtures.tenantId, externalBookingId: BOOKING_ID },
+    });
+    comprobar(trasNoShow?.estado === 'no_show', 'Estado no_show en la base de datos', trasNoShow?.estado);
 
     const cancelada = await empujarWebhook({ ...payload, action: 'cancel' } as unknown as Record<string, unknown>);
     comprobar(cancelada.cuerpo?.status === 'cancelada', 'cancel deja la reserva cancelada', cancelada.cuerpo);
