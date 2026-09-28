@@ -403,7 +403,7 @@ export default function AdminConectividad() {
     "segment": "Walk-in",
     "specialRequests": null,
     "pah": false,
-    "amount": { "amountAfterTax": 2000.0, "amountBeforeTax": 2000.0, "tax": 0.0, "currency": "EUR", "commission": 0.0, "tcs": null, "tds": null },
+    "amount": { "amountAfterTax": 2000.0, "amountBeforeTax": 2000.0, "tax": 0.0, "currency": "DIVISA", "commission": 0.0, "tcs": null, "tds": null },
     "guest": { "firstName": "Elena", "lastName": "Navarro", "email": "elena@example.com", "phone": null, "address": null },
     "rooms": [{ "roomCode": "ROOM_CODE", "rateplanCode": "RATEPLAN_CODE", "guestName": "Elena Navarro", "occupancy": { "adults": 1, "children": 0 }, "prices": [{ "date": "2026-09-29", "sellRate": 2000.0 }] }]
   }'`
@@ -812,7 +812,8 @@ export default function AdminConectividad() {
               <p className="text-xs text-muted-foreground mt-1">
                 Sustituye los marcadores: <code>USUARIO_API</code> y <code>CONTRASEÑA_API</code> son los
                 guardados aquí; <code>HOTEL_CODE</code> y <code>ROOM_CODE</code> salen del mapping de la
-                propiedad (columna «Código externo» de la tabla por propiedad). El envío se
+                propiedad (columna «Código externo» de la tabla por propiedad) y <code>DIVISA</code> es
+                el código ISO de la moneda del hotel. El envío se
                 comprueba por respuesta: éxito <code>success:true</code> con <code>status</code>
                 {' '}creada/actualizada/cancelada/duplicado; repetir el mismo <code>bookingId</code>{' '}
                 responde <code>duplicado</code> (idempotencia, no crea dos veces).
