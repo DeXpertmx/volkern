@@ -145,3 +145,51 @@ export function normalizarTelefono(valor: string, codigoPais?: string | null): s
 export function nombrePais(codigo: string | null | undefined): string {
   return paisPorCodigo(codigo)?.nombre ?? (codigo || '');
 }
+
+/** País alfa-3 para preseleccionar un selector a partir de un valor guardado:
+ * acepta alfa-2/alfa-3 o el nombre en español (el formato histórico del CRM).
+ * Devuelve '' si el valor no está en el catálogo (el selector mostrará el
+ * placeholder y el valor original se conserva al guardar). */
+export function paisASelector(valor: string | null | undefined): string {
+  const v = (valor || '').trim();
+  if (!v) return '';
+  const porCodigo = paisPorCodigo(v);
+  if (porCodigo) return porCodigo.codigo;
+  const iso2A3: Record<string, string> = {
+    ES: 'ESP', MX: 'MEX', US: 'USA', GB: 'GBR', UK: 'GBR', FR: 'FRA',
+    DE: 'DEU', IT: 'ITA', PT: 'PRT', CA: 'CAN', AR: 'ARG', CL: 'CHL',
+    CO: 'COL', PE: 'PER', BR: 'BRA', IE: 'IRL', BE: 'BEL', NL: 'NLD',
+    CH: 'CHE', AT: 'AUT', SE: 'SWE', NO: 'NOR', DK: 'DNK', PL: 'POL',
+    JP: 'JPN', CN: 'CHN', IN: 'IND', AU: 'AUS', NZ: 'NZL', MA: 'MAR',
+  };
+  if (iso2A3[v.toUpperCase()]) return iso2A3[v.toUpperCase()];
+  const q = v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  return (
+    PAISES.find((p) => {
+      const n = p.nombre.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      return n === q;
+    })?.codigo ?? ''
+  );
+}
+
+/** Valor a guardar tras elegir en el selector: el nombre en español (mismo
+ * formato que ya guardan los formularios del CRM); fuera del catálogo se
+ * conserva el valor previo para no perder lo que había. */
+export function selectorAPais(codigo: string | null | undefined, previo?: string | null): string {
+  if (!codigo) return '';
+  return paisPorCodigo(codigo)?.nombre ?? (previo || '');
+}
+
+/** País alfa-3 deducido de un teléfono guardado (+34… → ESP). Coincidencia
+ * por prefijo más largo primero (así +52 no se come +5, etc.); '' si no
+ * empieza por + o el prefijo no está en el catálogo. */
+export function paisDesdeTelefono(telefono: string | null | undefined): string {
+  const t = (telefono || '').trim();
+  if (!t.startsWith('+')) return '';
+  const coincidencias = PAISES.filter((p) => t.startsWith(p.prefijo));
+  const maxLongitud = Math.max(0, ...coincidencias.map((p) => p.prefijo.length));
+  const mejores = coincidencias.filter((p) => p.prefijo.length === maxLongitud);
+  // Prefijos compartidos (p. ej. +1: EE. UU./Canadá) no identifican país;
+  // dejar el selector sin preselección es más seguro que inventar uno.
+  return mejores.length === 1 ? mejores[0].codigo : '';
+}

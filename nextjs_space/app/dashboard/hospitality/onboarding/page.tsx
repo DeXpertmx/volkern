@@ -26,6 +26,8 @@ import { MONEDAS_SELECCIONABLES, formatearImporte, monedaEfectiva } from '@/lib/
 import { useMonedaTenant } from '@/lib/use-moneda-tenant';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { SelectorPais } from '@/components/paises-municipios/selectores';
+import { paisASelector, selectorAPais } from '@/lib/paises-municipios/paises';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -868,10 +870,13 @@ export default function HospitalityOnboardingPage() {
       </div>
       <div>
         <Label>País</Label>
-        <Input
-          value={nuevaPropiedad.pais}
-          onChange={(e) => setNuevaPropiedad({ ...nuevaPropiedad, pais: e.target.value })}
-          placeholder="México"
+        <SelectorPais
+          value={paisASelector(nuevaPropiedad.pais)}
+          ariaLabel="País de la propiedad"
+          onChange={(codigo) =>
+            setNuevaPropiedad((actual) => ({ ...actual, pais: selectorAPais(codigo, actual.pais) }))
+          }
+          placeholder="Selecciona un país"
         />
       </div>
       <div className="sm:col-span-2">

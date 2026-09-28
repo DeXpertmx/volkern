@@ -231,5 +231,8 @@ describe('onboarding paso 5 — activación del canal en la OTA (requisito exter
     // Se pinta el texto del módulo, no uno copiado a mano en la pantalla.
     expect(fuente).not.toContain('El código de propiedad y el catálogo los publica');
     expect(fuente).toContain("paso('mapping_externo')");
+    // El primer paso evita errores de país por texto libre.
+    expect(fuente).toContain('<SelectorPais');
+    expect(fuente).toContain('ariaLabel="País de la propiedad"');
   });
 });

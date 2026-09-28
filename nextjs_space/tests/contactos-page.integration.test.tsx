@@ -7,6 +7,16 @@ import React from 'react'
 
 // Polyfill PointerEvent for Radix UI + jsdom compatibility
 beforeAll(() => {
+  if (!global.ResizeObserver) {
+    (global as any).ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    };
+  }
+  if (!Element.prototype.scrollIntoView) {
+    Element.prototype.scrollIntoView = () => {};
+  }
   if (!global.PointerEvent) {
     (global as any).PointerEvent = class PointerEvent extends Event {
       button = 0
@@ -20,14 +30,12 @@ beforeAll(() => {
     } as any
   }
   if (!global.HTMLElement.prototype.hasPointerCapture) {
-    HTMLElement.prototype.hasPointerCapture = () => false
+    global.HTMLElement.prototype.hasPointerCapture = () => false
   }
   if (!global.HTMLElement.prototype.releasePointerCapture) {
-    HTMLElement.prototype.releasePointerCapture = () => {}
+    global.HTMLElement.prototype.releasePointerCapture = () => {}
   }
 })
-
-// --- Mocks ---
 
 vi.mock('next-auth/react', () => ({
   useSession: vi.fn(() => ({ data: { user: { id: 'test-user' } } })),
@@ -52,7 +60,6 @@ vi.mock('next/link', () => ({
   default: ({ children, ...props }: any) => React.createElement('a', props, children),
 }))
 
-// Import after mocks
 import ContactosPage from '@/app/dashboard/contactos/page'
 
 const mockContacts = [
@@ -76,40 +83,35 @@ function mockResponse(data: any) {
   return { ok: true, json: async () => data }
 }
 
+function prepararMocksIniciales(contactos: any[] = mockContacts) {
+  // Ambas peticiones iniciales son concurrentes: resolver según la URL evita
+  // que sus respuestas queden cruzadas en el mock secuencial.
+  mockApiFetch.mockImplementation((url: string) =>
+    Promise.resolve(mockResponse(url.includes('tipo=company') ? [] : contactos))
+  )
+}
+
 describe('ContactosPage integración', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockApiFetch.mockReset()
     localStorage.clear()
-    mockApiFetch
-      .mockResolvedValueOnce(mockResponse(mockContacts))
-      .mockResolvedValueOnce(mockResponse([]))
+    prepararMocksIniciales()
   })
 
   it('debe mostrar loading inicialmente y luego los contactos', async () => {
     render(<ContactosPage />)
-
-    // Loading state
     expect(screen.getByText('Cargando contactos...')).toBeDefined()
-
-    // Wait for contacts to load
-    await waitFor(() => {
-      expect(screen.getByText('Juan Pérez')).toBeDefined()
-    })
-
+    await waitFor(() => expect(screen.getByText('Juan Pérez')).toBeDefined())
     expect(screen.getByText('María García')).toBeDefined()
     expect(screen.getByText('Total Contactos')).toBeDefined()
   })
 
   it('debe filtrar contactos por búsqueda', async () => {
     render(<ContactosPage />)
-
-    await waitFor(() => {
-      expect(screen.getByText('Juan Pérez')).toBeDefined()
-    })
-
+    await waitFor(() => expect(screen.getByText('Juan Pérez')).toBeDefined())
     const searchInput = screen.getByPlaceholderText(/Buscar por nombre/i)
     await userEvent.type(searchInput, 'María')
-
     await waitFor(() => {
       expect(screen.queryByText('Juan Pérez')).toBeNull()
       expect(screen.getByText('María García')).toBeDefined()
@@ -118,59 +120,62 @@ describe('ContactosPage integración', () => {
 
   it('el botón Limpiar filtros debe restaurar los filtros', async () => {
     render(<ContactosPage />)
-
-    await waitFor(() => {
-      expect(screen.getByText('Juan Pérez')).toBeDefined()
-    })
-
-    // Apply a search filter
+    await waitFor(() => expect(screen.getByText('Juan Pérez')).toBeDefined())
     const searchInput = screen.getByPlaceholderText(/Buscar por nombre/i)
     await userEvent.type(searchInput, 'María')
-
-    // Click clear filters
-    const clearButton = screen.getByText('Limpiar filtros')
-    await userEvent.click(clearButton)
-
+    await userEvent.click(screen.getByText('Limpiar filtros'))
     await waitFor(() => {
       expect(screen.getByText('Juan Pérez')).toBeDefined()
       expect(screen.getByText('María García')).toBeDefined()
     })
-
     expect((searchInput as HTMLInputElement).value).toBe('')
   })
 
   it('debe mostrar estado vacío cuando no hay contactos', async () => {
-    mockApiFetch
-      .mockReset()
-      .mockResolvedValueOnce(mockResponse([]))
-      .mockResolvedValueOnce(mockResponse([]))
-
+    mockApiFetch.mockReset()
+    prepararMocksIniciales([])
     render(<ContactosPage />)
+    await waitFor(() => expect(screen.getByText('No hay contactos')).toBeDefined())
+    expect(screen.getByText('Crear Primer Contacto')).toBeDefined()
+  })
+
+  it('el formulario de contacto crea el país y el teléfono usando selectores', async () => {
+    const usuario = userEvent.setup()
+    render(<ContactosPage />)
+    await waitFor(() => expect(screen.getByText('Juan Pérez')).toBeDefined())
+    await usuario.click(screen.getByRole('button', { name: 'Nuevo Contacto' }))
+    await usuario.type(screen.getByLabelText('Nombre Completo *'), 'Ana Contacto')
+    await usuario.type(screen.getByLabelText('Email *'), 'ana@example.com')
+    await usuario.selectOptions(screen.getByLabelText('País del teléfono'), 'MEX')
+    await usuario.type(screen.getByLabelText('Teléfono'), '5512345678')
+    await usuario.selectOptions(screen.getByLabelText('País de contacto'), 'MEX')
+
+    mockApiFetch.mockImplementation((url: string, opciones?: RequestInit) => {
+      if (opciones?.method === 'POST') return Promise.resolve(mockResponse({ id: 'new-contact' }))
+      return Promise.resolve(mockResponse(url.includes('tipo=company') ? [] : mockContacts))
+    })
+    await usuario.click(screen.getByRole('button', { name: 'Crear Contacto' }))
 
     await waitFor(() => {
-      expect(screen.getByText('No hay contactos')).toBeDefined()
+      const llamada = mockApiFetch.mock.calls.find(([, opciones]) => (opciones as RequestInit | undefined)?.method === 'POST')
+      expect(llamada).toBeDefined()
+      const payload = JSON.parse(String((llamada![1] as RequestInit).body))
+      expect(payload.telefono).toBe('+525512345678')
+      expect(payload.pais).toBe('México')
+      expect(payload).not.toHaveProperty('paisTlfn')
     })
-
-    expect(screen.getByText('Crear Primer Contacto')).toBeDefined()
   })
 
   it('debe persistir searchTerm en localStorage', async () => {
     render(<ContactosPage />)
-
-    await waitFor(() => {
-      expect(screen.getByText('Juan Pérez')).toBeDefined()
-    })
-
-    // Type in search
+    await waitFor(() => expect(screen.getByText('Juan Pérez')).toBeDefined())
     const searchInput = screen.getByPlaceholderText(/Buscar por nombre/i)
     await userEvent.type(searchInput, 'test')
 
-    // Check localStorage was written
     await waitFor(() => {
       const saved = localStorage.getItem('volkern-contacts-filters')
       expect(saved).not.toBeNull()
-      const parsed = JSON.parse(saved!)
-      expect(parsed.searchTerm).toBe('test')
+      expect(JSON.parse(saved!).searchTerm).toBe('test')
     })
   })
 })

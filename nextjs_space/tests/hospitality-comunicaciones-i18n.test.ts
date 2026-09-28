@@ -87,6 +87,9 @@ describe('plantillas sugeridas bilingües (módulo único)', () => {
     // El selector de idioma y su explicación están.
     expect(ui).toContain('cambiarIdioma');
     expect(ui).toContain('si no existe, la española');
+    // El destinatario WhatsApp de prueba usa el selector de país + número E.164.
+    expect(ui).toContain('<CampoTelefonoConPais');
+    expect(ui).toContain('País del teléfono de prueba');
   });
 
   it('la página pública guarda el idioma en guestData y la comunicación lo lee', async () => {

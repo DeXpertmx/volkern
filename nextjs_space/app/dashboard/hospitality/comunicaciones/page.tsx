@@ -18,6 +18,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { CampoTelefonoConPais } from '@/components/paises-municipios/selectores';
+import { paisDesdeTelefono } from '@/lib/paises-municipios/paises';
 import { AccionHospitality } from '@/components/hospitality/AccionHospitality';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -105,6 +107,7 @@ export default function HospitalityComunicacionesPage() {
   const [deleteTarget, setDeleteTarget] = useState<Plantilla | null>(null);
   const [testTarget, setTestTarget] = useState<Plantilla | null>(null);
   const [testDest, setTestDest] = useState('');
+  const [testPaisTelefono, setTestPaisTelefono] = useState('');
   const [testSending, setTestSending] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
 
@@ -263,6 +266,10 @@ export default function HospitalityComunicacionesPage() {
       toast.error('Escribe el email o teléfono de prueba');
       return;
     }
+    if (testTarget.canal === 'whatsapp' && !testPaisTelefono) {
+      toast.error('Selecciona el país del teléfono de prueba');
+      return;
+    }
     setTestSending(true);
     setTestResult(null);
     try {
@@ -380,7 +387,7 @@ export default function HospitalityComunicacionesPage() {
                           </Badge>
                         </div>
                         <div className="flex items-center gap-1">
-                          <Button size="icon" variant="ghost" className="h-7 w-7" title="Enviar prueba" onClick={() => { setTestTarget(p); setTestDest(''); setTestResult(null); }}>
+                          <Button size="icon" variant="ghost" className="h-7 w-7" title="Enviar prueba" onClick={() => { setTestTarget(p); setTestDest(''); setTestPaisTelefono(''); setTestResult(null); }}>
                             <Send className="h-3.5 w-3.5" />
                           </Button>
                           <Button size="icon" variant="ghost" className="h-7 w-7" title="Editar" onClick={() => openEdit(p)}>
@@ -539,12 +546,26 @@ export default function HospitalityComunicacionesPage() {
               {testTarget ? EVENTOS.find((e) => e.id === testTarget.evento)?.label : ''} · {testTarget?.canal}
             </div>
             <div className="space-y-1">
-              <Label>Email o teléfono de prueba</Label>
-              <Input
-                value={testDest}
-                onChange={(e) => setTestDest(e.target.value)}
-                placeholder={testTarget?.canal === 'email' ? 'destino@email.com' : '+52 999 000 0000'}
-              />
+              <Label htmlFor={testTarget?.canal === 'whatsapp' ? 'telefono-prueba' : 'email-prueba'}>Email o teléfono de prueba</Label>
+              {testTarget?.canal === 'whatsapp' ? (
+                <CampoTelefonoConPais
+                  telefono={testDest}
+                  pais={testPaisTelefono}
+                  paisAriaLabel="País del teléfono de prueba"
+                  id="telefono-prueba"
+                  placeholder="999 000 0000"
+                  onTelefono={setTestDest}
+                  onPais={(codigo) => setTestPaisTelefono(codigo)}
+                />
+              ) : (
+                <Input
+                  id="email-prueba"
+                  type="email"
+                  value={testDest}
+                  onChange={(e) => setTestDest(e.target.value)}
+                  placeholder="destino@email.com"
+                />
+              )}
             </div>
             {testResult && (
               <p className={`text-sm ${testResult.startsWith('✅') ? 'text-emerald-600' : 'text-destructive'}`}>

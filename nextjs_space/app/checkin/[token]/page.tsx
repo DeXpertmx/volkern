@@ -47,14 +47,20 @@ import {
 } from '@/lib/hospitality/booking-i18n';
 import type { CampoViajero, DocumentacionReserva, ViajeroCheckin } from '@/lib/hospitality/guest-checkin';
 import type { PreguntaCheckin } from '@/lib/hospitality/checkin-preguntas';
-// Selectores de catálogos: país (alfa-3), teléfono con prefijo y municipio INE
-// (provincia → municipio). Sustituyen a los input libres que generaban
-// errores («ESP», «Esp», «España»…) en los datos que valida el Ministerio.
+import { paisDesdeTelefono } from '@/lib/paises-municipios/paises';
+import { InputFechaNacimiento } from '@/components/hospitality/input-fecha-nacimiento';
+// Selectores de catálogo para país, teléfono, tipo de documento, sexo y
+// municipio. El huésped busca el nombre; la app añade el código oficial.
 import {
   CampoTelefonoConPais,
   SelectorMunicipioINE,
   SelectorPais,
+  SelectorSexoViajero,
+  SelectorTipoDocumentoViajero,
+  normalizarTipoDocumentoViajero,
 } from '@/components/paises-municipios/selectores';
+
+const AYUDA_NUMERO_SOPORTE = 'https://sede.agenciatributaria.gob.es/Sede/ayuda/consultas-informaticas/firma-digital-sistema-clave-pin-tecnica/incidencias-tecnicas-clave-pin.html';
 
 /** Ficha editable del formulario (la dirección se edita por partes). */
 interface Borrador {
@@ -76,6 +82,8 @@ interface Borrador {
     nombreMunicipio: string;
   };
   telefono: string;
+  /** Solo UI: el país/prefijo del teléfono no es el país del domicilio. */
+  paisTelefono: string;
   correo: string;
   parentesco: string;
 }
@@ -116,6 +124,7 @@ function borradorVacio(): Borrador {
       nombreMunicipio: '',
     },
     telefono: '',
+    paisTelefono: '',
     correo: '',
     parentesco: '',
   };
@@ -135,6 +144,7 @@ function aBorrador(v: Partial<ViajeroCheckin>): Borrador {
     nacionalidad: v.nacionalidad ?? '',
     sexo: v.sexo ?? '',
     telefono: v.telefono ?? '',
+    paisTelefono: paisDesdeTelefono(v.telefono),
     correo: v.correo ?? '',
     parentesco: v.parentesco ?? '',
     direccion: {
@@ -229,7 +239,9 @@ export default function CheckinPublico() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          viajeros: borradores,
+          // país del teléfono es un estado solo visual, no forma parte del
+          // contrato del viajero; el valor E.164 ya va en «telefono».
+          viajeros: borradores.map(({ paisTelefono: _paisTelefono, ...viajero }) => viajero),
           heredarDireccion: mismaDireccion,
           respuestas,
         }),
@@ -519,44 +531,64 @@ function FichaViajero({
           <Campo etiqueta={c.apellido2}>
             <Input value={borrador.apellido2} onChange={(e) => onCambio({ apellido2: e.target.value })} />
           </Campo>
-          <Campo etiqueta={c.fechaNacimiento}>
-            <Input type="date" value={borrador.fechaNacimiento} onChange={(e) => onCambio({ fechaNacimiento: e.target.value })} />
+          <Campo etiqueta={`${c.fechaNacimiento} (DD/MM/AAAA)`}>
+            <InputFechaNacimiento
+              ariaLabel={`${c.fechaNacimiento.replace(/\s*\*$/, '')} (DD/MM/AAAA)`}
+              value={borrador.fechaNacimiento}
+              onChange={(fechaNacimiento) => onCambio({ fechaNacimiento })}
+            />
           </Campo>
           <Campo etiqueta={c.tipoDocumento} ayuda={t.ayudaDocumento}>
-            <Input
-              list="tipos-documento"
+            <SelectorTipoDocumentoViajero
               value={borrador.tipoDocumento}
-              onChange={(e) => onCambio({ tipoDocumento: e.target.value })}
+              ariaLabel={idioma === 'en' ? 'Document type' : 'Tipo de documento'}
+              placeholder={t.placeholderDocumento}
+              onChange={(tipoDocumento) => onCambio({
+                tipoDocumento,
+                soporteDocumento: tipoDocumento === 'NIF' || tipoDocumento === 'NIE' ? borrador.soporteDocumento : '',
+              })}
             />
           </Campo>
           <Campo etiqueta={c.numeroDocumento}>
             <Input value={borrador.numeroDocumento} onChange={(e) => onCambio({ numeroDocumento: e.target.value })} />
           </Campo>
-          <Campo etiqueta={c.soporteDocumento} ayuda={t.ayudaSoporte}>
-            <Input value={borrador.soporteDocumento} onChange={(e) => onCambio({ soporteDocumento: e.target.value })} />
-          </Campo>
+          {(normalizarTipoDocumentoViajero(borrador.tipoDocumento) === 'NIF' || normalizarTipoDocumentoViajero(borrador.tipoDocumento) === 'NIE') && (
+            <Campo etiqueta={`${c.soporteDocumento} *`}>
+              <Input
+                aria-label={c.soporteDocumento}
+                value={borrador.soporteDocumento}
+                onChange={(e) => onCambio({ soporteDocumento: e.target.value })}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t.ayudaSoporte}{' '}
+                <a href={AYUDA_NUMERO_SOPORTE} target="_blank" rel="noreferrer" className="underline underline-offset-2">{t.ayudaOficial}</a>
+              </p>
+            </Campo>
+          )}
           <Campo etiqueta={c.nacionalidad}>
-            <SelectorPais value={borrador.nacionalidad} onChange={(codigo) => onCambio({ nacionalidad: codigo })} />
+            <SelectorPais
+              value={borrador.nacionalidad}
+              ariaLabel={idioma === 'en' ? 'Nationality' : 'Nacionalidad'}
+              onChange={(codigo) => onCambio({ nacionalidad: codigo })}
+            />
           </Campo>
           <Campo etiqueta={c.sexo}>
-            <select
-              className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            <SelectorSexoViajero
               value={borrador.sexo}
-              onChange={(e) => onCambio({ sexo: e.target.value })}
-            >
-              <option value="" />
-              <option value="H">H</option>
-              <option value="M">M</option>
-            </select>
+              ariaLabel={idioma === 'en' ? 'Sex' : 'Sexo'}
+              placeholder={t.placeholderSexo}
+              onChange={(sexo) => onCambio({ sexo })}
+            />
           </Campo>
           {/* Los dos campos juntos cubren el `contacto` que exige el servicio:
               con teléfono o email basta, no hacen falta los dos. */}
           <Campo etiqueta={t.campoTelefono}>
             <CampoTelefonoConPais
               telefono={borrador.telefono}
-              pais={borrador.direccion.pais || borrador.nacionalidad}
+              pais={borrador.paisTelefono}
+              paisAriaLabel={idioma === 'en' ? 'Phone country' : 'País del teléfono'}
               onTelefono={(valor) => onCambio({ telefono: valor })}
-              onPais={(codigo) => onCambioDireccion({ pais: codigo })}
+              onPais={(codigo) => onCambio({ paisTelefono: codigo })}
             />
           </Campo>
           <Campo etiqueta={t.campoEmail}>
@@ -590,6 +622,7 @@ function FichaViajero({
           <Campo etiqueta={c['direccion.pais']} ayuda={t.ayudaPais}>
             <SelectorPais
               value={borrador.direccion.pais}
+              ariaLabel={idioma === 'en' ? 'Address country' : 'País del domicilio'}
               onChange={(codigo) => onCambioDireccion({ pais: codigo, codigoMunicipio: '', nombreMunicipio: '' })}
             />
           </Campo>
@@ -597,14 +630,17 @@ function FichaViajero({
             {borrador.direccion.pais === 'ESP' ? (
               <SelectorMunicipioINE
                 codigoMunicipio={borrador.direccion.codigoMunicipio}
-                onChange={(codigo) => onCambioDireccion({ codigoMunicipio: codigo })}
+                nombreMunicipio={borrador.direccion.nombreMunicipio}
+                onChange={(codigo, nombre) => onCambioDireccion({ codigoMunicipio: codigo, nombreMunicipio: nombre })}
               />
-            ) : (
+            ) : borrador.direccion.pais ? (
               <Input
                 value={borrador.direccion.nombreMunicipio || ''}
                 onChange={(e) => onCambioDireccion({ nombreMunicipio: e.target.value })}
                 placeholder={t.ayudaMunicipio}
               />
+            ) : (
+              <Input disabled placeholder="Selecciona primero el país" />
             )}
           </Campo>
         </div>
@@ -613,25 +649,9 @@ function FichaViajero({
   );
 }
 
-/**
- * Sugerencias de los catálogos (una sola vez para toda la página: el `id` de un
- * `<datalist>` es único en el documento). Los catálogos los publica el propio
- * servicio del Ministerio y aquí solo se ofrecen los códigos del ejemplo
- * oficial: son sugerencias, el campo acepta cualquier código del catálogo.
- */
+/** Los controles de catálogo no requieren elementos flotantes compartidos. */
 function Catalogos() {
-  return (
-    <>
-      <datalist id="tipos-documento">
-        <option value="NIF" />
-        <option value="NIE" />
-        <option value="PAS" />
-      </datalist>
-      {/* País y municipio ya no usan datalist: van con los selectores de
-          catálogo (components/paises-municipios), que llevan búsqueda y valores
-          exactos del INE / ISO. */}
-    </>
-  );
+  return null;
 }
 
 function Campo({

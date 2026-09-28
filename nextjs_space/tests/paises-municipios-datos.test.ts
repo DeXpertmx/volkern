@@ -7,7 +7,8 @@
 // WhatsApp que no sale.
 
 import { describe, it, expect } from 'vitest';
-import { PAISES, paisPorCodigo, prefijoDePais, normalizarTelefono, nombrePais } from '@/lib/paises-municipios/paises';
+import { normalizarTipoDocumentoViajero } from '@/components/paises-municipios/selectores';
+import { PAISES, paisPorCodigo, prefijoDePais, normalizarTelefono, nombrePais, paisASelector, selectorAPais, paisDesdeTelefono } from '@/lib/paises-municipios/paises';
 import { provinciasINE, municipiosDeProvincia, nombreMunicipioINE } from '@/lib/paises-municipios/municipios-ine';
 
 describe('Catálogo de países', () => {
@@ -36,6 +37,31 @@ describe('Catálogo de países', () => {
     expect(nombrePais('FRA')).toBe('Francia');
     expect(nombrePais('ZZZ')).toBe('ZZZ'); // desconocido: el código tal cual
   });
+
+  it('adapta nombres antiguos e ISO-2 al selector sin cambiar el formato persistido', () => {
+    expect(paisASelector('España')).toBe('ESP');
+    expect(paisASelector('MX')).toBe('MEX');
+    expect(selectorAPais('MEX')).toBe('México');
+    expect(selectorAPais('MEX', 'país legado')).toBe('México');
+  });
+
+  it('deduce el país del teléfono por el prefijo internacional', () => {
+    expect(paisDesdeTelefono('+34612345678')).toBe('ESP');
+    expect(paisDesdeTelefono('+525512345678')).toBe('MEX');
+    expect(paisDesdeTelefono('+14155552671')).toBe(''); // prefijo +1 compartido
+    expect(paisDesdeTelefono('612345678')).toBe('');
+  });
+});
+
+describe('Tipos de documento permitidos en el formulario de viajeros', () => {
+  it('limita el valor guardado a los cuatro códigos disponibles y normaliza alias heredados', () => {
+    expect(normalizarTipoDocumentoViajero('NIF')).toBe('NIF');
+    expect(normalizarTipoDocumentoViajero('DNI')).toBe('NIF');
+    expect(normalizarTipoDocumentoViajero('NIE')).toBe('NIE');
+    expect(normalizarTipoDocumentoViajero('PASAPORTE')).toBe('PAS');
+    expect(normalizarTipoDocumentoViajero('OTRO')).toBe('OTRO');
+    expect(normalizarTipoDocumentoViajero('CIF')).toBe('');
+  });
 });
 
 describe('Normalización de teléfonos', () => {
@@ -62,8 +88,29 @@ describe('Selectores UI (guardia de fuente)', () => {
   const readFileSync = require('node:fs').readFileSync;
   const fuente = readFileSync('components/paises-municipios/selectores.tsx', 'utf8');
 
-  it('los Popover son modal={true} (combobox dentro de Dialog modal, si no la lista aparece y desaparece)', () => {
-    expect(fuente).toContain('modal={true}');
+  it('los selectores de país y provincia son nativos y evitan portales en diálogos', () => {
+    expect(fuente).toContain('<select');
+    expect(fuente).not.toContain('PopoverContent');
+    expect(fuente).not.toContain('CommandDialog');
+  });
+
+  it('municipio se busca por nombre y documento/sexo son selectores con valores acotados', () => {
+    expect(fuente).toContain('aria-label="Municipio"');
+    expect(fuente).toContain('Escribe el nombre del municipio');
+    expect(fuente).toContain('onChange(exactas.length === 1 ? exactas[0].codigo : \'\', nombre)');
+    expect(fuente).toContain("export type TipoDocumentoViajero = 'NIF' | 'NIE' | 'PAS' | 'OTRO'");
+    expect(fuente).toContain('<option value="H">Hombre</option>');
+    expect(fuente).toContain('<option value="M">Mujer</option>');
+  });
+
+  it('país del teléfono es un dato independiente del país del domicilio', () => {
+    const checkin = readFileSync('app/checkin/[token]/page.tsx', 'utf8');
+    const parte = readFileSync('components/hospitality/completar-parte-viajeros-dialog.tsx', 'utf8');
+    expect(checkin).toContain('paisTelefono: paisDesdeTelefono(v.telefono)');
+    expect(checkin).toContain('viajeros: borradores.map(({ paisTelefono: _paisTelefono, ...viajero }) => viajero)');
+    expect(parte).toContain("paisTelefono: 'ESP'");
+    expect(parte).toContain('pais={viajero.paisTelefono}');
+    expect(parte).toContain('ariaLabel="País del domicilio"');
   });
 });
 

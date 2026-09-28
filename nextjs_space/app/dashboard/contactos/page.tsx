@@ -5,6 +5,8 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { apiFetch } from '@/lib/api-client'
+import { CampoTelefonoConPais, SelectorPais } from '@/components/paises-municipios/selectores'
+import { paisASelector, paisDesdeTelefono, selectorAPais } from '@/lib/paises-municipios/paises'
 import {
   UserCheck,
   Building2,
@@ -132,6 +134,7 @@ export default function ContactosPage() {
     nombre: '',
     email: '',
     telefono: '',
+    paisTlfn: '',
     tipo: 'person',
     companyId: '',
     cargo: '',
@@ -231,9 +234,12 @@ export default function ContactosPage() {
       
       const method = editingContact ? 'PUT' : 'POST'
       
+      // `paisTlfn` solo controla el selector E.164 de UI, no forma parte del
+      // modelo de contacto ni se envía como dato adicional a la API.
+      const { paisTlfn: _paisTlfn, ...datosContacto } = formData;
       // Limpiar datos antes de enviar
       const dataToSend = {
-        ...formData,
+        ...datosContacto,
         companyId: formData.companyId || null,
         telefono: formData.telefono || null,
         cargo: formData.cargo || null,
@@ -285,10 +291,14 @@ export default function ContactosPage() {
 
   const handleEdit = (contact: Contact) => {
     setEditingContact(contact)
+    // El prefijo telefónico se deriva del número guardado cuando viene en E.164.
+    const paisTlfn = paisDesdeTelefono(contact.telefono)
     setFormData({
       nombre: contact.nombre,
       email: contact.email,
       telefono: contact.telefono || '',
+      paisTlfn,
+      pais: contact.pais || '',
       tipo: contact.tipo,
       companyId: contact.company?.id || '',
       cargo: contact.cargo || '',
@@ -296,7 +306,6 @@ export default function ContactosPage() {
       direccion: contact.direccion || '',
       ciudad: contact.ciudad || '',
       codigoPostal: contact.codigoPostal || '',
-      pais: contact.pais || '',
       linkedin: contact.linkedin || '',
       notas: contact.notas || '',
       tags: contact.tags || ''
@@ -344,6 +353,7 @@ export default function ContactosPage() {
       nombre: '',
       email: '',
       telefono: '',
+      paisTlfn: '',
       tipo: 'person',
       companyId: '',
       cargo: '',
@@ -663,12 +673,12 @@ export default function ContactosPage() {
                     </div>
                     <div>
                       <Label htmlFor="telefono">Teléfono</Label>
-                      <Input
+                      <CampoTelefonoConPais
                         id="telefono"
-                        value={formData.telefono}
-                        onChange={(e) =>
-                          setFormData({ ...formData, telefono: e.target.value })
-                        }
+                        telefono={formData.telefono}
+                        pais={formData.paisTlfn}
+                        onTelefono={(valor) => setFormData((actual) => ({ ...actual, telefono: valor }))}
+                        onPais={(codigo) => setFormData((actual) => ({ ...actual, paisTlfn: codigo }))}
                       />
                     </div>
                   </div>
@@ -755,13 +765,13 @@ export default function ContactosPage() {
                     </div>
                     <div>
                       <Label htmlFor="pais">País</Label>
-                      <Input
-                        id="pais"
-                        value={formData.pais}
-                        onChange={(e) =>
-                          setFormData({ ...formData, pais: e.target.value })
+                      <SelectorPais
+                        value={paisASelector(formData.pais)}
+                        ariaLabel="País de contacto"
+                        onChange={(codigo) =>
+                          setFormData({ ...formData, pais: selectorAPais(codigo, formData.pais) })
                         }
-                        placeholder="México, España, etc."
+                        placeholder="Selecciona un país"
                       />
                     </div>
                   </div>

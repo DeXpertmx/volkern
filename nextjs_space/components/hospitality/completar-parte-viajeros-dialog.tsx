@@ -1,19 +1,6 @@
 'use client';
 
-/**
- * Completar el parte de viajeros de una reserva (RD 933/2021).
- *
- * Los canales no mandan documento, nacionalidad ni domicilio del huésped, y el
- * Ministerio rechaza el parte sin ellos. Este diálogo es el camino del
- * operador: los pone tal como figuran en el documento de identidad y, al
- * guardar, el parte sale **en el momento** (sin esperar al barrido horario).
- *
- * Se usa desde dos pantallas —la del registro de viajeros y la de reservas—
- * porque es la misma tarea: por eso vive aquí y no duplicado en cada página.
- * El envío lo hace la API del producto (`accion: 'completar'`), que delega en
- * el módulo del contrato oficial: aquí no se construye ningún XML.
- */
-
+/** Completar el parte de viajeros de una reserva (RD 933/2021). */
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
@@ -30,40 +17,39 @@ import {
 } from '@/components/ui/dialog';
 import { etiquetasDeCampos } from '@/lib/hospitality/booking-i18n';
 import type { CampoViajero } from '@/lib/hospitality/guest-checkin';
-// Selectores de catálogos: país (alfa-3), teléfono con prefijo y municipio
-// INE (provincia → municipio). El operador ya no teclea códigos: elige de la
-// lista y el valor que viaja al Ministerio es exactamente el del catálogo.
+import { InputFechaNacimiento } from '@/components/hospitality/input-fecha-nacimiento';
 import {
   CampoTelefonoConPais,
   SelectorMunicipioINE,
   SelectorPais,
+  SelectorSexoViajero,
+  SelectorTipoDocumentoViajero,
+  normalizarTipoDocumentoViajero,
 } from '@/components/paises-municipios/selectores';
 
-/** Campos que van con selector de catálogo (no Input libre). */
-const CAMPOS_CON_SELECTOR = new Set(['nacionalidad', 'telefono', 'codigoMunicipio', 'pais']);
+const AYUDA_NUMERO_SOPORTE = 'https://sede.agenciatributaria.gob.es/Sede/ayuda/consultas-informaticas/firma-digital-sistema-clave-pin-tecnica/incidencias-tecnicas-clave-pin.html';
 
-/** Reserva cuyo parte se va a completar. La referencia solo se enseña. */
 export interface ReservaDelParte {
   id: string;
   referencia?: string | null;
 }
 
-/** Formulario vacío: los mismos campos que pide el check-in del huésped. */
 const VIAJERO_VACIO = {
   nombre: '',
   apellido1: '',
   apellido2: '',
-  tipoDocumento: 'NIF',
+  tipoDocumento: '',
   numeroDocumento: '',
   soporteDocumento: '',
   fechaNacimiento: '',
   nacionalidad: 'ESP',
-  sexo: 'H',
+  sexo: '',
   telefono: '',
+  paisTelefono: 'ESP',
   correo: '',
   direccion: '',
   codigoMunicipio: '',
-  /** Nombre del municipio cuando el país NO es España (lo pide el Ministerio). */
+  nombreMunicipio: '',
   ciudadExtranjera: '',
   codigoPostal: '',
   pais: 'ESP',
@@ -73,38 +59,28 @@ const CAMPOS = [
   ['nombre', 'Nombre'],
   ['apellido1', 'Primer apellido'],
   ['apellido2', 'Segundo apellido'],
-  ['fechaNacimiento', 'Fecha de nacimiento (AAAA-MM-DD)'],
+  ['fechaNacimiento', 'Fecha de nacimiento'],
   ['tipoDocumento', 'Tipo de documento'],
   ['numeroDocumento', 'Número de documento'],
   ['soporteDocumento', 'Número de soporte'],
-  ['nacionalidad', 'Nacionalidad (ISO-3)'],
+  ['nacionalidad', 'Nacionalidad'],
   ['sexo', 'Sexo'],
   ['telefono', 'Teléfono'],
   ['correo', 'Correo'],
   ['direccion', 'Domicilio'],
-  ['codigoMunicipio', 'Municipio (INE, 5 dígitos)'],
+  ['codigoMunicipio', 'Municipio'],
   ['codigoPostal', 'Código postal'],
-  ['pais', 'País (ISO-3)'],
+  ['pais', 'País'],
 ] as const;
 
 type CampoFormulario = (typeof CAMPOS)[number][0];
-
-/** Errores de validación que devuelve el servicio (o de la API). */
-type ErroresDelParte =
-  | Array<{ campo: string; mensaje: string }>
-  | { error?: string }
-  | null
-  | undefined;
+type ErroresDelParte = Array<{ campo: string; mensaje: string }> | { error?: string } | null | undefined;
 
 function faltantesLegibles(errores: ErroresDelParte): string {
   if (!errores) return 'revisa el formulario';
   if (Array.isArray(errores)) {
-    return (
-      etiquetasDeCampos(
-        errores.map((e) => e.campo as CampoViajero),
-        'es'
-      ) || errores.map((e) => e.mensaje).filter(Boolean).join(' · ')
-    );
+    return etiquetasDeCampos(errores.map((e) => e.campo as CampoViajero), 'es')
+      || errores.map((e) => e.mensaje).filter(Boolean).join(' · ');
   }
   return errores.error || 'revisa el formulario';
 }
@@ -114,19 +90,17 @@ export function CompletarParteVijerosDialog({
   onCerrar,
   onCompletado,
 }: {
-  /** Reserva a completar. `null` cierra el diálogo. */
   reserva: ReservaDelParte | null;
   onCerrar: () => void;
-  /** Se llama cuando el parte se guardó (aceptado, enviado o pendiente de lote). */
   onCompletado?: () => void | Promise<void>;
 }) {
   const [viajero, setViajero] = useState({ ...VIAJERO_VACIO });
+  const [errorMunicipio, setErrorMunicipio] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
-  // Cada reserva empieza con el formulario en blanco: reutilizar lo tecleado
-  // para otra reserva sería ponerle a un huésped el documento de otro.
   useEffect(() => {
     setViajero({ ...VIAJERO_VACIO });
+    setErrorMunicipio(false);
   }, [reserva?.id]);
 
   async function guardarYEnviar() {
@@ -139,29 +113,29 @@ export function CompletarParteVijerosDialog({
         body: JSON.stringify({
           accion: 'completar',
           reservaId: reserva.id,
-          viajeros: [
-            {
-              rol: 'VI',
-              nombre: viajero.nombre,
-              apellido1: viajero.apellido1,
-              apellido2: viajero.apellido2 || null,
-              tipoDocumento: viajero.tipoDocumento || null,
-              numeroDocumento: viajero.numeroDocumento || null,
-              soporteDocumento: viajero.soporteDocumento || null,
-              fechaNacimiento: viajero.fechaNacimiento,
-              nacionalidad: viajero.nacionalidad || null,
-              sexo: viajero.sexo || null,
-              direccion: {
-                direccion: viajero.direccion,
-                codigoMunicipio: viajero.pais === 'ESP' ? viajero.codigoMunicipio || null : null,
-                nombreMunicipio: viajero.pais === 'ESP' ? null : viajero.ciudadExtranjera || null,
-                codigoPostal: viajero.codigoPostal,
-                pais: viajero.pais,
-              },
-              telefono: viajero.telefono || null,
-              correo: viajero.correo || null,
+          viajeros: [{
+            rol: 'VI',
+            nombre: viajero.nombre,
+            apellido1: viajero.apellido1,
+            apellido2: viajero.apellido2 || null,
+            tipoDocumento: viajero.tipoDocumento || null,
+            numeroDocumento: viajero.numeroDocumento || null,
+            soporteDocumento: viajero.soporteDocumento || null,
+            fechaNacimiento: viajero.fechaNacimiento,
+            nacionalidad: viajero.nacionalidad || null,
+            sexo: viajero.sexo || null,
+            direccion: {
+              direccion: viajero.direccion,
+              codigoMunicipio: viajero.pais === 'ESP' ? viajero.codigoMunicipio || null : null,
+              nombreMunicipio: viajero.pais === 'ESP'
+                ? viajero.nombreMunicipio || null
+                : viajero.ciudadExtranjera || null,
+              codigoPostal: viajero.codigoPostal,
+              pais: viajero.pais,
             },
-          ],
+            telefono: viajero.telefono || null,
+            correo: viajero.correo || null,
+          }],
         }),
       });
       const datos = await res.json().catch(() => ({}));
@@ -181,86 +155,144 @@ export function CompletarParteVijerosDialog({
     }
   }
 
+  const tipoDocumento = normalizarTipoDocumentoViajero(viajero.tipoDocumento);
+  const pideSoporte = tipoDocumento === 'NIF' || tipoDocumento === 'NIE';
+  const requiereSegundoApellido = pideSoporte;
+
   return (
     <Dialog open={!!reserva} onOpenChange={(abierto) => !abierto && onCerrar()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Datos del viajero</DialogTitle>
           <DialogDescription>
             {reserva?.referencia ? `Reserva ${reserva.referencia}. ` : ''}
-            El canal no envía documento, nacionalidad ni domicilio: se completan aquí, tal como
-            figuran en el documento de identidad. Al guardar se envía el parte al Ministerio.
+            Completa los datos tal como aparecen en el documento. La fecha se elige con el selector en formato DD/MM/AAAA y se guarda como AAAA-MM-DD.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           {CAMPOS.map(([campo, etiqueta]) => {
-            // Los campos de catálogo van con selector: país, teléfono con
-            // prefijo y municipio INE (provincia → municipio). El resto, Input.
+            if (campo === 'tipoDocumento') {
+              return (
+                <div key={campo} className="min-w-0">
+                  <Label className="text-xs">{etiqueta}</Label>
+                  <SelectorTipoDocumentoViajero
+                    className="mt-1"
+                    ariaLabel="Tipo de documento"
+                    value={viajero.tipoDocumento}
+                    onChange={(value) => setViajero((actual) => ({
+                      ...actual,
+                      tipoDocumento: value,
+                      soporteDocumento: value === 'NIF' || value === 'NIE' ? actual.soporteDocumento : '',
+                    }))}
+                  />
+                </div>
+              );
+            }
+            if (campo === 'sexo') {
+              return (
+                <div key={campo} className="min-w-0">
+                  <Label className="text-xs">{etiqueta}</Label>
+                  <SelectorSexoViajero value={viajero.sexo} className="mt-1" ariaLabel="Sexo" onChange={(sexo) => setViajero((actual) => ({ ...actual, sexo }))} />
+                </div>
+              );
+            }
+            if (campo === 'fechaNacimiento') {
+              return (
+                <div key={campo} className="min-w-0">
+                  <Label htmlFor="parte-fecha-nacimiento" className="text-xs">Fecha de nacimiento (DD/MM/AAAA)</Label>
+                  <InputFechaNacimiento
+                    id="parte-fecha-nacimiento"
+                    ariaLabel="Fecha de nacimiento (DD/MM/AAAA)"
+                    value={viajero.fechaNacimiento}
+                    onChange={(fechaNacimiento) => setViajero((actual) => ({ ...actual, fechaNacimiento }))}
+                  />
+                </div>
+              );
+            }
+            if (campo === 'apellido2' && !requiereSegundoApellido) return null;
+            if (campo === 'soporteDocumento') {
+              if (!pideSoporte) return null;
+              return (
+                <div key={campo} className="min-w-0">
+                  <Label className="text-xs">{etiqueta} *</Label>
+                  <Input
+                    aria-label="Número de soporte"
+                    value={viajero.soporteDocumento}
+                    onChange={(e) => setViajero((actual) => ({ ...actual, soporteDocumento: e.target.value }))}
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Para NIF/DNI: anverso, bajo «NUM SOPORT» o «IDESP». Para NIE/TIE: anverso de la tarjeta, número de soporte que empieza por E. No se pide con pasaporte.{' '}
+                    <a className="underline underline-offset-2" href={AYUDA_NUMERO_SOPORTE} target="_blank" rel="noreferrer">Ver guía oficial</a>
+                  </p>
+                </div>
+              );
+            }
             if (campo === 'nacionalidad') {
               return (
-                <div key={campo}>
+                <div key={campo} className="min-w-0">
                   <Label className="text-xs">{etiqueta}</Label>
-                  <SelectorPais
-                    value={viajero.nacionalidad}
-                    onChange={(codigo) => setViajero({ ...viajero, nacionalidad: codigo })}
-                  />
+                  <SelectorPais className="mt-1" value={viajero.nacionalidad} ariaLabel="Nacionalidad" onChange={(codigo) => setViajero((actual) => ({ ...actual, nacionalidad: codigo }))} />
                 </div>
               );
             }
             if (campo === 'pais') {
               return (
-                <div key={campo}>
+                <div key={campo} className="min-w-0">
                   <Label className="text-xs">{etiqueta}</Label>
                   <SelectorPais
                     value={viajero.pais}
-                    onChange={(codigo) =>
-                      setViajero({ ...viajero, pais: codigo, codigoMunicipio: '' })
-                    }
+                    ariaLabel="País del domicilio"
+                    onChange={(codigo) => setViajero((actual) => ({ ...actual, pais: codigo, codigoMunicipio: '', nombreMunicipio: '', ciudadExtranjera: '' }))}
                   />
                 </div>
               );
             }
             if (campo === 'telefono') {
               return (
-                <div key={campo} className="md:col-span-2">
+                <div key={campo} className="min-w-0">
                   <Label className="text-xs">{etiqueta}</Label>
                   <CampoTelefonoConPais
                     telefono={viajero.telefono}
-                    pais={viajero.pais}
-                    onTelefono={(valor) => setViajero({ ...viajero, telefono: valor })}
-                    onPais={(codigo) => setViajero({ ...viajero, pais: codigo, codigoMunicipio: '' })}
+                    pais={viajero.paisTelefono}
+                    paisAriaLabel="País del teléfono"
+                    onTelefono={(telefono) => setViajero((actual) => ({ ...actual, telefono }))}
+                    onPais={(paisTelefono) => setViajero((actual) => ({ ...actual, paisTelefono }))}
                   />
                 </div>
               );
             }
             if (campo === 'codigoMunicipio') {
               return viajero.pais === 'ESP' ? (
-                <div key={campo} className="md:col-span-3">
-                  <Label className="text-xs">{etiqueta}</Label>
+                <div key={campo} className="min-w-0 sm:col-span-2">
+                  <Label className="text-xs">{etiqueta} *</Label>
                   <SelectorMunicipioINE
                     codigoMunicipio={viajero.codigoMunicipio}
-                    onChange={(codigo) => setViajero({ ...viajero, codigoMunicipio: codigo })}
+                    nombreMunicipio={viajero.nombreMunicipio}
+                    onChange={(codigoMunicipio, nombreMunicipio) => {
+                      setErrorMunicipio(Boolean(nombreMunicipio && !codigoMunicipio));
+                      setViajero((actual) => ({ ...actual, codigoMunicipio, nombreMunicipio }));
+                    }}
                   />
+                  {errorMunicipio && <p className="mt-1 text-xs text-destructive">Selecciona un municipio de la lista para asignar el código oficial.</p>}
                 </div>
               ) : (
-                // Fuera de España el Ministerio pide el NOMBRE del municipio;
-                // el código INE no aplica. Se reusa el mismo hueco del form.
-                <div key={campo} className="md:col-span-3">
-                  <Label className="text-xs">Ciudad / municipio</Label>
+                <div key={campo} className="min-w-0 sm:col-span-2">
+                  <Label className="text-xs">Ciudad / municipio *</Label>
                   <Input
-                    value={viajero.ciudadExtranjera || ''}
-                    onChange={(e) => setViajero({ ...viajero, ciudadExtranjera: e.target.value })}
+                    aria-label="Ciudad / municipio"
+                    value={viajero.ciudadExtranjera}
+                    onChange={(e) => setViajero((actual) => ({ ...actual, ciudadExtranjera: e.target.value }))}
                   />
                 </div>
               );
             }
             return (
-              <div key={campo}>
+              <div key={campo} className="min-w-0">
                 <Label className="text-xs">{etiqueta}</Label>
                 <Input
                   value={viajero[campo as CampoFormulario]}
-                  onChange={(e) => setViajero({ ...viajero, [campo]: e.target.value })}
+                  onChange={(e) => setViajero((actual) => ({ ...actual, [campo]: e.target.value }))}
                 />
               </div>
             );
@@ -268,10 +300,18 @@ export function CompletarParteVijerosDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onCerrar} disabled={guardando}>
-            Cancelar
-          </Button>
-          <Button onClick={() => void guardarYEnviar()} disabled={guardando}>
+          <Button variant="outline" onClick={onCerrar} disabled={guardando}>Cancelar</Button>
+          <Button
+            onClick={() => {
+              if (viajero.pais === 'ESP' && viajero.nombreMunicipio && !viajero.codigoMunicipio) {
+                setErrorMunicipio(true);
+                return;
+              }
+              setErrorMunicipio(false);
+              void guardarYEnviar();
+            }}
+            disabled={guardando}
+          >
             {guardando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Guardar y enviar
           </Button>
         </DialogFooter>

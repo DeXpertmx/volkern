@@ -55,6 +55,7 @@ vi.mock('sonner', () => ({
 }));
 
 import CheckinPublico from '@/app/checkin/[token]/page';
+import { InputFechaNacimiento } from '@/components/hospitality/input-fecha-nacimiento';
 
 const TOKEN = 'TOKEN-CHECKIN';
 
@@ -145,19 +146,26 @@ describe('Página pública de check-in', () => {
 
     // El primer apellido ya venía prerrellenado del titular.
     expect((screen.getAllByLabelText(/^Primer apellido/)[0] as HTMLInputElement).value).toBe('García');
-    await userEvent.type(screen.getAllByLabelText(/^Tipo de documento/)[0], 'NIF');
+    expect(screen.getByLabelText('Tipo de documento').tagName).toBe('SELECT');
+    expect(screen.getByLabelText('Tipo de documento').querySelectorAll('option')).toHaveLength(5);
+    expect(screen.getByLabelText('Tipo de documento').querySelector('option[value="PAS"]')?.textContent).toBe('Pasaporte');
+    expect(screen.getByLabelText('Tipo de documento').querySelector('option[value="OTRO"]')?.textContent).toBe('Otro documento');
+    expect(screen.getAllByLabelText('Fecha de nacimiento (DD/MM/AAAA)')[0].getAttribute('type')).toBe('date');
+    await userEvent.selectOptions(screen.getByLabelText('Tipo de documento'), 'NIF');
+    expect(screen.getByLabelText('Sexo').tagName).toBe('SELECT');
+    expect(screen.getByLabelText('Sexo').querySelectorAll('option')).toHaveLength(3);
     await userEvent.type(screen.getAllByLabelText(/^Número de documento/)[0], '00000000T');
     await userEvent.type(screen.getAllByLabelText(/^Número de soporte/)[0], '999999999');
     await userEvent.type(screen.getAllByLabelText(/^Segundo apellido/)[0], 'López');
     await userEvent.type(screen.getAllByLabelText(/^Fecha de nacimiento/)[0], '1990-01-01');
     await userEvent.type(screen.getAllByLabelText(/^Dirección/)[0], 'C/Mayor 1');
     await userEvent.type(screen.getAllByLabelText(/^Código postal/)[0], '28001');
-    // País y municipio van con selectores de catálogo (ya no hay input libre):
-    // abrir el combobox, elegir España y luego provincia → municipio INE.
-    await userEvent.click(screen.getAllByLabelText(/^País/)[0]);
-    await userEvent.click(await screen.findByText('España'));
-    await userEvent.selectOptions(await screen.findByLabelText('Provincia'), '28');
-    await userEvent.selectOptions(await screen.findByLabelText('Municipio (código INE)'), '28079');
+    // El municipio se busca por texto, sin escribir su código INE.
+    await userEvent.selectOptions(screen.getByLabelText('País del domicilio'), 'ESP');
+    await userEvent.type(screen.getByLabelText('Municipio'), 'Madrid');
+    expect((screen.getByLabelText('Municipio') as HTMLInputElement).value).toBe('Madrid');
+    // Cambiar el prefijo telefónico no debe cambiar el país de la dirección.
+    await userEvent.selectOptions(screen.getByLabelText('País del teléfono'), 'FRA');
 
     // Un acompañante más: la ficha vacía no viaja como persona si no se rellena.
     await userEvent.click(screen.getByRole('button', { name: /Añadir acompañante/ }));
@@ -176,8 +184,24 @@ describe('Página pública de check-in', () => {
     // El titular va primero (rol por posición) con lo que escribió el huésped.
     expect(viajeros[0]).toMatchObject({ nombre: 'Ana', apellido1: 'García', tipoDocumento: 'NIF' });
     expect((viajeros[0].direccion as Record<string, string>).codigoPostal).toBe('28001');
+    expect((viajeros[0].direccion as Record<string, string>).pais).toBe('ESP');
+    expect((viajeros[0].direccion as Record<string, string>).codigoMunicipio).toBe('28079');
+    expect((viajeros[0].direccion as Record<string, string>).nombreMunicipio).toBe('Madrid');
+    expect(screen.getAllByLabelText('Fecha de nacimiento (DD/MM/AAAA)')[0].getAttribute('type')).toBe('date');
+    expect(viajeros[0].fechaNacimiento).toBe('1990-01-01');
+    expect(viajeros[0].telefono).toBe('+33666666666');
+    expect(viajeros[0]).not.toHaveProperty('paisTelefono');
     // El consentimiento de la dirección compartida viaja explícito.
     expect(post.cuerpo?.heredarDireccion).toBe(true);
+  });
+
+  it('el campo compartido conserva el formato ISO AAAA-MM-DD en ambas pantallas', () => {
+    const onChange = vi.fn();
+    render(<InputFechaNacimiento ariaLabel="Fecha de nacimiento" value="1990-01-01" onChange={onChange} />);
+    const fecha = screen.getByLabelText('Fecha de nacimiento') as HTMLInputElement;
+    expect(fecha.type).toBe('date');
+    expect(fecha.value).toBe('1990-01-01');
+    expect(fecha.lang).toBe('es');
   });
 
   it('con todo completo confirma al huésped que su grupo está listo', async () => {

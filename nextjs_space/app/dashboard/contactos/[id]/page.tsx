@@ -2,6 +2,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { CampoTelefonoConPais, SelectorPais } from '@/components/paises-municipios/selectores'
+import { paisASelector, paisDesdeTelefono, selectorAPais } from '@/lib/paises-municipios/paises'
 import { useRouter, useParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import Link from 'next/link'
@@ -177,6 +179,7 @@ export default function ContactoDetallePage() {
     nombre: '',
     email: '',
     telefono: '',
+    paisTlfn: '',
     cargo: '',
     ubicacion: '',
     direccion: '',
@@ -234,16 +237,20 @@ export default function ContactoDetallePage() {
       if (contactData.success) {
         const c = contactData.data;
         setContact(c)
+        // Un prefijo único preselecciona el país telefónico; para prefijos
+        // compartidos, el selector queda sin elección para evitar adivinar.
+        const paisTlfn = paisDesdeTelefono(c.telefono)
         setEditForm({
           nombre: c.nombre || '',
           email: c.email || '',
           telefono: c.telefono || '',
+          paisTlfn,
+          pais: c.pais || '',
           cargo: c.cargo || '',
           ubicacion: c.ubicacion || '',
           direccion: c.direccion || '',
           ciudad: c.ciudad || '',
           codigoPostal: c.codigoPostal || '',
-          pais: c.pais || '',
           linkedin: c.linkedin || '',
           notas: c.notas || '',
           tags: c.tags || ''
@@ -671,6 +678,7 @@ export default function ContactoDetallePage() {
                           nombre: contact.nombre || '',
                           email: contact.email || '',
                           telefono: contact.telefono || '',
+                          paisTlfn: paisDesdeTelefono(contact.telefono) || paisASelector(contact.pais),
                           cargo: contact.cargo || '',
                           ubicacion: contact.ubicacion || '',
                           direccion: contact.direccion || '',
@@ -715,10 +723,12 @@ export default function ContactoDetallePage() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="edit-telefono">Teléfono</Label>
-                      <Input
+                      <CampoTelefonoConPais
                         id="edit-telefono"
-                        value={editForm.telefono}
-                        onChange={(e) => setEditForm({ ...editForm, telefono: e.target.value })}
+                        telefono={editForm.telefono}
+                        pais={editForm.paisTlfn}
+                        onTelefono={(valor) => setEditForm((actual) => ({ ...actual, telefono: valor }))}
+                        onPais={(codigo) => setEditForm((actual) => ({ ...actual, paisTlfn: codigo }))}
                       />
                     </div>
                     {contact.tipo === 'person' && (
@@ -784,10 +794,13 @@ export default function ContactoDetallePage() {
                     </div>
                     <div className="space-y-2 md:col-span-2">
                       <Label htmlFor="edit-pais">País</Label>
-                      <Input
-                        id="edit-pais"
-                        value={editForm.pais}
-                        onChange={(e) => setEditForm({ ...editForm, pais: e.target.value })}
+                      <SelectorPais
+                        value={paisASelector(editForm.pais)}
+                        ariaLabel="País de contacto"
+                        onChange={(codigo) =>
+                          setEditForm((actual) => ({ ...actual, pais: selectorAPais(codigo, actual.pais) }))
+                        }
+                        placeholder="Selecciona un país"
                       />
                     </div>
                   </div>

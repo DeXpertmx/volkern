@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button';
 import { AccionHospitality } from '@/components/hospitality/AccionHospitality';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { CampoTelefonoConPais } from '@/components/paises-municipios/selectores';
+import { paisDesdeTelefono } from '@/lib/paises-municipios/paises';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { channelStyle, statusLabel } from '@/lib/hospitality/calendar';
@@ -88,6 +90,9 @@ export default function HospitalityHuespedesPage() {
   const [contactos, setContactos] = useState<ContactoCRM[]>([]);
   const [linkingId, setLinkingId] = useState<string | null>(null);
   const [creatingContact, setCreatingContact] = useState(false);
+  const [mostrarAltaContacto, setMostrarAltaContacto] = useState(false);
+  const [telefonoNuevoContacto, setTelefonoNuevoContacto] = useState('');
+  const [paisTelefonoNuevoContacto, setPaisTelefonoNuevoContacto] = useState('');
 
   const cargar = useCallback(async () => {
     try {
@@ -144,6 +149,9 @@ export default function HospitalityHuespedesPage() {
     setLinkTarget(null);
     setLinkSearch('');
     setContactos([]);
+    setMostrarAltaContacto(false);
+    setTelefonoNuevoContacto('');
+    setPaisTelefonoNuevoContacto('');
   };
 
   const vincular = async (contacto: ContactoCRM) => {
@@ -190,7 +198,7 @@ export default function HospitalityHuespedesPage() {
         body: JSON.stringify({
           nombre: linkTarget.nombre,
           email: linkTarget.email || '',
-          telefono: linkTarget.telefono || undefined,
+          telefono: telefonoNuevoContacto.trim() || undefined,
           tipo: 'person',
           tags: 'huesped',
         }),
@@ -491,7 +499,7 @@ export default function HospitalityHuespedesPage() {
       </Sheet>
 
       {/* Diálogo de vinculación manual a contacto del CRM */}
-      <Dialog open={!!linkTarget} onOpenChange={(open) => { if (!open) { setLinkTarget(null); setLinkSearch(''); setContactos([]); } }}>
+      <Dialog open={!!linkTarget} onOpenChange={(open) => { if (!open) cerrarDialogo(); }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -525,18 +533,48 @@ export default function HospitalityHuespedesPage() {
                   variant="outline"
                   size="sm"
                   disabled={creatingContact}
-                  onClick={crearContactoNuevo}
-                  title="Crea un contacto en el CRM con los datos del huésped y lo vincula"
+                  onClick={() => {
+                    setTelefonoNuevoContacto(linkTarget?.telefono || '');
+                    setPaisTelefonoNuevoContacto(paisDesdeTelefono(linkTarget?.telefono));
+                    setMostrarAltaContacto(true);
+                  }}
+                  title="Crear el contacto CRM con los datos del huésped"
                 >
-                  {creatingContact ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <UserPlus className="h-4 w-4 mr-1" />
-                  )}
-                  {creatingContact ? '' : 'Crear contacto nuevo'}
+                  <UserPlus className="h-4 w-4 mr-1" /> Crear contacto nuevo
                 </Button>
               </AccionHospitality>
             </div>
+
+            {mostrarAltaContacto && linkTarget && (
+              <div className="space-y-3 rounded-md border p-3">
+                <div>
+                  <p className="text-sm font-medium">Nuevo contacto: {linkTarget.nombre}</p>
+                  {linkTarget.email && <p className="text-xs text-muted-foreground">{linkTarget.email}</p>}
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">Teléfono</p>
+                  <CampoTelefonoConPais
+                    telefono={telefonoNuevoContacto}
+                    pais={paisTelefonoNuevoContacto}
+                    paisAriaLabel="País del teléfono del huésped"
+                    placeholder="Número de teléfono"
+                    onTelefono={setTelefonoNuevoContacto}
+                    onPais={setPaisTelefonoNuevoContacto}
+                  />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setMostrarAltaContacto(false)} disabled={creatingContact}>
+                    Cancelar
+                  </Button>
+                  <AccionHospitality capacidad="reservas.editar">
+                    <Button onClick={() => void crearContactoNuevo()} disabled={creatingContact}>
+                      {creatingContact && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Crear y vincular
+                    </Button>
+                  </AccionHospitality>
+                </div>
+              </div>
+            )}
 
             <div className="max-h-72 overflow-y-auto space-y-2">
               {searching ? (

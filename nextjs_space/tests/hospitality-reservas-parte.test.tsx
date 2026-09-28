@@ -315,8 +315,25 @@ describe('Pantalla de reservas: aviso del parte de viajeros', () => {
     expect(screen.getByText(/Reserva AB-1/)).toBeTruthy();
     // Los campos que el Ministerio exige están en el formulario.
     expect(screen.getByText('Número de documento')).toBeTruthy();
-    expect(screen.getByText('Número de soporte')).toBeTruthy();
-    expect(screen.getByText('Fecha de nacimiento (AAAA-MM-DD)')).toBeTruthy();
+    expect(screen.getByText('Fecha de nacimiento (DD/MM/AAAA)')).toBeTruthy();
+    expect(screen.getByLabelText('Fecha de nacimiento (DD/MM/AAAA)').getAttribute('type')).toBe('date');
+    expect(screen.getByLabelText('Fecha de nacimiento (DD/MM/AAAA)').getAttribute('lang')).toBe('es');
+    expect(screen.getByLabelText('Tipo de documento').querySelectorAll('option')).toHaveLength(5);
+    expect(screen.getByLabelText('Tipo de documento').querySelector('option[value="OTRO"]')?.textContent).toBe('Otro documento');
+    expect(screen.getByLabelText('Tipo de documento').tagName).toBe('SELECT');
+    await usuario.selectOptions(screen.getByLabelText('Tipo de documento'), 'NIF');
+    expect(screen.getByLabelText('Tipo de documento').querySelector('option[value="PAS"]')?.textContent).toBe('Pasaporte');
+    expect(screen.getByLabelText('Sexo').tagName).toBe('SELECT');
+    expect(screen.getByLabelText('Sexo').querySelector('option[value="H"]')?.textContent).toBe('Hombre');
+    expect(screen.getByLabelText('Sexo').querySelector('option[value="M"]')?.textContent).toBe('Mujer');
+    expect(screen.getByLabelText('Número de soporte')).toBeTruthy();
+    expect(screen.getByText(/bajo «NUM SOPORT» o «IDESP»/)).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Ver guía oficial' }).getAttribute('href')).toContain('agenciatributaria.gob.es');
+    expect(screen.getByLabelText('Fecha de nacimiento (DD/MM/AAAA)').getAttribute('type')).toBe('date');
+    expect(screen.getByLabelText('Nacionalidad').tagName).toBe('SELECT');
+    expect(screen.getByLabelText('País del teléfono').tagName).toBe('SELECT');
+    expect(screen.getByLabelText('País del domicilio').tagName).toBe('SELECT');
+    expect(screen.getByLabelText('Municipio').tagName).toBe('INPUT');
   });
 
   it('avisa del parte RECHAZADO con el motivo del Ministerio y qué corregir', async () => {

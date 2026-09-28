@@ -1,38 +1,20 @@
 'use client';
 
 /**
- * Selectores compartidos de datos «catálogo»: país, teléfono con prefijo y
- * municipio INE. Viven en un solo fichero a propósito — comparten el combobox
- * con búsqueda y el manejo de la cadena vacía (ver el centinela de abajo) — y
- * los consumen el check-in del huésped, el parte de viajeros y los formularios
- * del CRM donde hay teléfono o país.
- *
- * NOTA RADIX 2: estos selectores viven a menudo DENTRO de un Dialog modal
- * («Datos del viajero», lápiz de Reservas, paso 3 del wizard). Un Popover
- * no-modal dentro de un diálogo modal pelea con la trampa de foco del diálogo
- * y la lista se monta y se cierra al instante (síntoma «aparece y desaparece»);
- * por eso todos los Popover de este fichero son modal={true} — receta oficial
- * Radix/shadcn para combobox dentro de Dialog.
- *
- * NOTA RADIX: ninguna opción puede llevar `value=""` (la cadena vacía es el
- * «limpiar selección» interno y el Select crashea al montar). Todos los
- * «sin valor» de estos selectores usan el centinela `VALOR_VACIO` y los
- * callbacks reciben '' normalizado.
+ * Selectores compartidos para datos del viajero y CRM. País y sexo usan
+ * controles nativos (sin portales que rompan los diálogos); teléfono entrega
+ * el número en E.164 y el municipio se busca por nombre sin exponer el INE.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { Check, ChevronsUpDown, Phone } from 'lucide-react';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Button } from '@/components/ui/button';
+import { Phone } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { PAISES, normalizarTelefono, paisPorCodigo } from '@/lib/paises-municipios/paises';
-import { municipiosDeProvincia, NOMBRES_PROVINCIA, provinciasINE } from '@/lib/paises-municipios/municipios-ine';
+import { municipiosDeProvincia, NOMBRES_PROVINCIA, nombreMunicipioINE, provinciasINE } from '@/lib/paises-municipios/municipios-ine';
 
-/** Centinela de «sin valor» para los Select/Command de estos selectores. */
-const VALOR_VACIO = '__sin_valor__';
+const CONTROL_NATIVO = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
-// ─── Selector de país (combobox con búsqueda) ───────────────────────────────
+// ─── Selector de país ───────────────────────────────────────────────────────
 
 export function SelectorPais({
   value,
@@ -40,88 +22,113 @@ export function SelectorPais({
   placeholder = 'Selecciona un país',
   className,
   disabled,
+  ariaLabel = 'País',
 }: {
-  /** Código ISO alfa-3 ('' = sin elegir). */
   value: string;
   onChange: (codigo: string) => void;
   placeholder?: string;
   className?: string;
   disabled?: boolean;
+  ariaLabel?: string;
 }) {
-  const [abierto, setAbierto] = useState(false);
-  const [busqueda, setBusqueda] = useState('');
-  const actual = paisPorCodigo(value);
-
-  const filtrados = useMemo(() => {
-    const q = busqueda
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .trim();
-    if (!q) return PAISES;
-    return PAISES.filter(
-      (p) =>
-        p.nombre.toLowerCase().includes(q) ||
-        p.codigo.toLowerCase().includes(q) ||
-        p.bandera.includes(busqueda)
-    );
-  }, [busqueda]);
-
   return (
-    <Popover open={abierto} onOpenChange={setAbierto} modal={true}>
-      <PopoverTrigger asChild disabled={disabled}>
-        <Button
-          type="button"
-          variant="outline"
-          role="combobox"
-          aria-expanded={abierto}
-          className={cn('w-full justify-between font-normal', className)}
-        >
-          <span className={cn('truncate', !actual && 'text-muted-foreground')}>
-            {actual ? `${actual.bandera} ${actual.nombre} (${actual.codigo})` : placeholder}
-          </span>
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[320px] p-0" align="start">
+    <select
+      aria-label={ariaLabel}
+      className={cn(CONTROL_NATIVO, !value && 'text-muted-foreground', className)}
+      value={value || ''}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      <option value="" disabled>{placeholder}</option>
+      {PAISES.map((p) => (
+        <option key={p.codigo} value={p.codigo}>{p.bandera} {p.nombre} ({p.codigo})</option>
+      ))}
+    </select>
+  );
+}
 
-        <Command shouldFilter={false}>
-          <CommandInput placeholder="Buscar país…" value={busqueda} onValueChange={setBusqueda} />
-          <CommandList>
-            <CommandEmpty>Sin resultados</CommandEmpty>
-            <CommandGroup>
-              {filtrados.map((p) => (
-                <CommandItem
-                  key={p.codigo}
-                  value={p.codigo || VALOR_VACIO}
-                  onSelect={() => {
-                    onChange(p.codigo);
-                    setAbierto(false);
-                    setBusqueda('');
-                  }}
-                >
-                  <Check className={cn('mr-1 h-4 w-4', value === p.codigo ? 'opacity-100' : 'opacity-0')} />
-                  <span className="mr-2">{p.bandera}</span>
-                  <span className="flex-1 truncate">{p.nombre}</span>
-                  <span className="text-xs text-muted-foreground">{p.codigo}</span>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+// ─── Tipos de documento y sexo permitidos por el formulario MIR ─────────────
+
+export type TipoDocumentoViajero = 'NIF' | 'NIE' | 'PAS' | 'OTRO';
+const OPCIONES_DOCUMENTO: Array<{ value: TipoDocumentoViajero; label: string }> = [
+  { value: 'NIF', label: 'NIF (DNI)' },
+  { value: 'NIE', label: 'NIE' },
+  { value: 'PAS', label: 'Pasaporte' },
+  { value: 'OTRO', label: 'Otro documento' },
+];
+
+export function normalizarTipoDocumentoViajero(value: string | null | undefined): TipoDocumentoViajero | '' {
+  const codigo = (value || '').trim().toUpperCase();
+  if (codigo === 'DNI') return 'NIF';
+  if (codigo === 'PASAPORTE' || codigo === 'PASSPORT') return 'PAS';
+  return OPCIONES_DOCUMENTO.some((opcion) => opcion.value === codigo)
+    ? codigo as TipoDocumentoViajero
+    : '';
+}
+
+export function SelectorTipoDocumentoViajero({
+  value,
+  onChange,
+  ariaLabel = 'Tipo de documento',
+  placeholder = 'Selecciona tipo de documento',
+  className,
+  disabled,
+}: {
+  value: string;
+  onChange: (codigo: TipoDocumentoViajero | '') => void;
+  ariaLabel?: string;
+  placeholder?: string;
+  className?: string;
+  disabled?: boolean;
+}) {
+  const valor = normalizarTipoDocumentoViajero(value);
+  return (
+    <select
+      aria-label={ariaLabel}
+      className={cn(CONTROL_NATIVO, !valor && 'text-muted-foreground', className)}
+      value={valor}
+      disabled={disabled}
+      onChange={(e) => onChange(normalizarTipoDocumentoViajero(e.target.value))}
+    >
+      <option value="" disabled>{placeholder}</option>
+      {OPCIONES_DOCUMENTO.map((opcion) => <option key={opcion.value} value={opcion.value}>{opcion.label}</option>)}
+    </select>
+  );
+}
+
+export function SelectorSexoViajero({
+  value,
+  onChange,
+  ariaLabel = 'Sexo',
+  placeholder = 'Selecciona sexo',
+  className,
+  disabled,
+}: {
+  value: string;
+  onChange: (codigo: 'H' | 'M' | '') => void;
+  ariaLabel?: string;
+  placeholder?: string;
+  className?: string;
+  disabled?: boolean;
+}) {
+  const sexo = value === 'H' || value === 'M' ? value : '';
+  return (
+    <select
+      aria-label={ariaLabel}
+      className={cn(CONTROL_NATIVO, !sexo && 'text-muted-foreground', className)}
+      value={sexo}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value === 'H' || e.target.value === 'M' ? e.target.value : '')}
+    >
+      <option value="" disabled>{placeholder}</option>
+      <option value="H">Hombre</option>
+      <option value="M">Mujer</option>
+    </select>
   );
 }
 
 // ─── Teléfono: país (prefijo) + número ──────────────────────────────────────
 
-/**
- * Teléfono con país: el selector pone el prefijo, el input recibe el número
- * local. El valor que sale por `onChange` va normalizado a E.164 «ligero»
- * (+34612345678) cuando el país tiene prefijo conocido y el humano no escribió
- * ya el «+»; si el país no está en el catálogo, sale lo tecleado.
- */
 export function CampoTelefonoConPais({
   telefono,
   pais,
@@ -129,46 +136,50 @@ export function CampoTelefonoConPais({
   onPais,
   placeholder = '600 123 456',
   paisPlaceholder = 'País',
+  paisAriaLabel = 'País del teléfono',
   id,
   disabled,
   className,
 }: {
   telefono: string;
-  /** País del teléfono (alfa-3); '' = sin prefijo conocido. */
   pais: string;
   onTelefono: (normalizado: string) => void;
   onPais: (codigo: string) => void;
   placeholder?: string;
   paisPlaceholder?: string;
+  paisAriaLabel?: string;
   id?: string;
   disabled?: boolean;
   className?: string;
 }) {
   const paisActual = paisPorCodigo(pais);
   const prefijo = paisActual?.prefijo ?? '';
-  // En el input se muestra el número SIN el prefijo si vino normalizado con él.
   const visible = useMemo(() => {
     if (!telefono) return '';
-    if (prefijo && telefono.startsWith(prefijo)) return telefono.slice(prefijo.length);
+    if (prefijo && telefono.startsWith(prefijo)) return telefono.slice(prefijo.length).replace(/^[\s-]+/, '');
     return telefono;
   }, [telefono, prefijo]);
 
   return (
-    <div className={cn('flex gap-1', className)}>
+    <div className={cn('flex min-w-0 gap-1', className)}>
       <div className="w-[132px] shrink-0">
         <SelectorPais
           value={pais}
-          onChange={onPais}
+          onChange={(codigo) => {
+            const numeroLocal = prefijo && telefono.startsWith(prefijo)
+              ? telefono.slice(prefijo.length).replace(/^[\s-]+/, '')
+              : telefono;
+            onPais(codigo);
+            if (numeroLocal) onTelefono(normalizarTelefono(numeroLocal, codigo));
+          }}
           placeholder={paisPlaceholder}
+          ariaLabel={paisAriaLabel}
           disabled={disabled}
-          className="justify-start px-2 text-xs"
+          className="px-2 text-xs"
         />
-        {/* El prefijo viaja dentro del país del selector; se muestra como ayuda. */}
-        {prefijo && (
-          <p className="mt-0.5 text-[10px] text-muted-foreground text-center">{prefijo}</p>
-        )}
+        {prefijo && <p className="mt-0.5 text-center text-[10px] text-muted-foreground">{prefijo}</p>}
       </div>
-      <div className="relative flex-1">
+      <div className="relative min-w-0 flex-1">
         <Phone className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           id={id}
@@ -186,74 +197,95 @@ export function CampoTelefonoConPais({
   );
 }
 
-// ─── Municipio INE: provincia → municipio (dos selects dependientes) ────────
+// ─── Municipio INE: buscar por nombre, código oficial automático ────────────
+
+function normalizarNombreMunicipio(nombre: string): string {
+  return nombre.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLocaleLowerCase('es');
+}
+
+const MUNICIPIOS_ESPANA = provinciasINE().flatMap((provincia) =>
+  municipiosDeProvincia(provincia.codigo).map((municipio) => ({
+    ...municipio,
+    nombreNormalizado: normalizarNombreMunicipio(municipio.nombre),
+    nombreProvincia: NOMBRES_PROVINCIA[provincia.codigo] || provincia.nombre,
+  }))
+);
+
+type MunicipioConProvincia = (typeof MUNICIPIOS_ESPANA)[number];
 
 export function SelectorMunicipioINE({
   codigoMunicipio,
+  nombreMunicipio = '',
   onChange,
   className,
   disabled,
 }: {
-  /** Código INE de 5 dígitos ('' = sin elegir). */
   codigoMunicipio: string;
-  onChange: (codigo: string) => void;
+  nombreMunicipio?: string;
+  onChange: (codigo: string, nombre: string) => void;
   className?: string;
   disabled?: boolean;
 }) {
-  /** La provincia vive en estado propio: derivarla del código del municipio
-   * hacía que elegir provincia solo limpiara el municipio y la selección
-   * «saltaba» de vuelta a «Provincia…» sin llegar a quedarse. */
-  const provinciaDelCodigo = (codigoMunicipio || '').slice(0, 2);
-  const [provincia, setProvincia] = useState(provinciaDelCodigo);
-  // Si el código llega de fuera (ficha guardada), la provincia sigue al código.
+  const [nombreEscrito, setNombreEscrito] = useState(nombreMunicipio);
+  const busqueda = normalizarNombreMunicipio(nombreEscrito);
+
   useEffect(() => {
-    if (provinciaDelCodigo) setProvincia(provinciaDelCodigo);
-  }, [provinciaDelCodigo]);
-  const municipios = useMemo(() => municipiosDeProvincia(provincia), [provincia]);
-  const nombreActual = municipios.find((m) => m.codigo === codigoMunicipio)?.nombre
-    ?? (codigoMunicipio && NOMBRES_PROVINCIA[provincia] ? codigoMunicipio : '');
+    setNombreEscrito(codigoMunicipio ? nombreMunicipioINE(codigoMunicipio) || nombreMunicipio : nombreMunicipio);
+  }, [codigoMunicipio, nombreMunicipio]);
+
+  const coincidencias = useMemo(
+    () => MUNICIPIOS_ESPANA.filter((municipio) => municipio.nombreNormalizado === busqueda),
+    [busqueda]
+  );
+  const sugerencias = useMemo(() => {
+    if (busqueda.length < 2) return [];
+    return MUNICIPIOS_ESPANA.filter((municipio) => municipio.nombreNormalizado.includes(busqueda)).slice(0, 8);
+  }, [busqueda]);
+
+  function elegirMunicipio(municipio: MunicipioConProvincia) {
+    setNombreEscrito(municipio.nombre);
+    onChange(municipio.codigo, municipio.nombre);
+  }
 
   return (
-    <div className={cn('grid gap-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]', className)}>
-      <select
-        aria-label="Provincia"
-        className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-        value={provincia}
+    <div className={cn('min-w-0', className)}>
+      <Input
+        aria-label="Municipio"
+        className="w-full"
+        value={nombreEscrito}
         disabled={disabled}
+        placeholder="Escribe el nombre del municipio"
+        autoComplete="off"
         onChange={(e) => {
-          // Cambiar de provincia limpia el municipio: los códigos son distintos.
-          const nueva = e.target.value;
-          setProvincia(nueva);
-          if (nueva !== provinciaDelCodigo) onChange('');
+          const nombre = e.target.value;
+          const normalizado = normalizarNombreMunicipio(nombre);
+          setNombreEscrito(nombre);
+          const exactas = MUNICIPIOS_ESPANA.filter((municipio) => municipio.nombreNormalizado === normalizado);
+          onChange(exactas.length === 1 ? exactas[0].codigo : '', nombre);
         }}
-      >
-        <option value="">Provincia…</option>
-        {provinciasINE().map((p) => (
-          <option key={p.codigo} value={p.codigo}>
-            {p.nombre}
-          </option>
-        ))}
-      </select>
-      <select
-        aria-label="Municipio (código INE)"
-        className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-        value={codigoMunicipio}
-        disabled={disabled || !provincia}
-        onChange={(e) => onChange(e.target.value)}
-      >
-        <option value="">
-          {nombreActual
-            ? `${nombreActual}${codigoMunicipio ? ` (${codigoMunicipio})` : ''}`
-            : provincia
-              ? 'Municipio…'
-              : 'Elige provincia primero'}
-        </option>
-        {municipios.map((m) => (
-          <option key={m.codigo} value={m.codigo}>
-            {m.nombre} ({m.codigo})
-          </option>
-        ))}
-      </select>
+      />
+      {busqueda.length >= 2 && coincidencias.length !== 1 && sugerencias.length > 0 && (
+        <ul aria-label="Municipios sugeridos" className="mt-1 max-h-40 overflow-y-auto rounded-md border bg-background p-1 shadow-sm">
+          {sugerencias.map((municipio) => (
+            <li key={municipio.codigo}>
+              <button
+                type="button"
+                className="w-full rounded px-2 py-1.5 text-left text-sm hover:bg-accent"
+                onClick={() => elegirMunicipio(municipio)}
+              >
+                {municipio.nombre} <span className="text-muted-foreground">— {municipio.nombreProvincia}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {nombreEscrito && !codigoMunicipio && (
+        <p className="mt-1 text-xs text-muted-foreground">
+          {coincidencias.length > 1
+            ? 'Hay varios municipios con ese nombre; selecciona uno de la lista.'
+            : 'Elige una sugerencia para asignar el código oficial automáticamente.'}
+        </p>
+      )}
     </div>
   );
 }

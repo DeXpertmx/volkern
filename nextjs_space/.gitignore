@@ -26,3 +26,4 @@ typecheck_output.txt
 
 # credenciales locales: nunca versionar (recetas del VPS: VPS-SEGURIDAD-PUERTOS.md)
 .db_pass
+.env.e2e-dia-h

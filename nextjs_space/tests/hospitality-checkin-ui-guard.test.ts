@@ -55,9 +55,10 @@ describe('check-in online (pantalla del huésped)', () => {
     expect(page).toContain('setMismaDireccion');
   });
 
-  it('un `id` de datalist por página (no uno por viajero)', () => {
-    const ocurrencias = page.match(/id="tipos-documento"/g) ?? [];
-    expect(ocurrencias).toHaveLength(1);
+  it('usa selectores cerrados para tipo de documento y sexo, no datalist editables', () => {
+    expect(page).toContain('SelectorTipoDocumentoViajero');
+    expect(page).toContain('SelectorSexoViajero');
+    expect(page).not.toContain('id="tipos-documento"');
   });
 
   it('país y municipio van con selectores de catálogo, no con input libre', () => {

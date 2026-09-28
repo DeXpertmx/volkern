@@ -476,6 +476,9 @@ export interface CheckinTextos {
   ayudaPais: string;
   ayudaMunicipio: string;
   ayudaDocumento: string;
+  placeholderDocumento: string;
+  placeholderSexo: string;
+  ayudaOficial: string;
   guardar: string;
   guardando: string;
   /** «Guardado. Revisa todavía: {campos}» */
@@ -526,16 +529,19 @@ export const CHECKIN_TEXTOS: Record<Idioma, CheckinTextos> = {
       'direccion.calle': 'Dirección *',
       'direccion.codigoPostal': 'Código postal *',
       'direccion.pais': 'País *',
-      'direccion.municipio': 'Municipio (código INE) *',
+      'direccion.municipio': 'Municipio *',
       contacto: 'Contacto: teléfono o email *',
       parentesco: 'Parentesco (solo si es menor de edad)',
     },
     campoTelefono: 'Teléfono *',
     campoEmail: 'Email *',
-    ayudaSoporte: 'El número que acompaña al documento (NIF/NIE).',
+    ayudaSoporte: 'DNI: anverso, bajo «NUM SOPORT» o «IDESP». NIE/TIE: número de soporte del anverso de la tarjeta (empieza por E). No se pide con pasaporte.',
     ayudaPais: 'Código de 3 letras: ESP, FRA, USA…',
-    ayudaMunicipio: 'Código INE de 5 dígitos (por ejemplo, 28079 para Madrid).',
-    ayudaDocumento: 'Código del catálogo del Ministerio: NIF, NIE, PAS…',
+    ayudaMunicipio: 'Escribe el nombre del municipio; en España se asigna automáticamente su código oficial.',
+    ayudaDocumento: 'Selecciona el tipo que aparece en el documento de identidad.',
+    placeholderDocumento: 'Selecciona tipo de documento',
+    placeholderSexo: 'Selecciona sexo',
+    ayudaOficial: 'Ver guía oficial para localizarlo',
     preguntasTitulo: 'Preguntas de tu estancia',
     preguntaOpcional: '(opcional)',
     preguntaElige: 'Elige una opción',
@@ -578,16 +584,19 @@ export const CHECKIN_TEXTOS: Record<Idioma, CheckinTextos> = {
       'direccion.calle': 'Address *',
       'direccion.codigoPostal': 'Postcode *',
       'direccion.pais': 'Country *',
-      'direccion.municipio': 'Municipality (INE code) *',
+      'direccion.municipio': 'Municipality *',
       contacto: 'Contact: phone or email *',
       parentesco: 'Relationship (only if under 18)',
     },
     campoTelefono: 'Phone *',
     campoEmail: 'Email *',
-    ayudaSoporte: 'The number printed next to the document (NIF/NIE).',
+    ayudaSoporte: 'DNI: front, under “NUM SOPORT” or “IDESP”. NIE/TIE: support number on the front of the card (starts with E). Not required for passports.',
     ayudaPais: '3-letter code: ESP, FRA, USA…',
-    ayudaMunicipio: '5-digit INE code (for example, 28079 for Madrid).',
-    ayudaDocumento: 'Ministry catalogue code: NIF, NIE, PAS…',
+    ayudaMunicipio: 'Enter the municipality name; for Spain, its official code is assigned automatically.',
+    ayudaDocumento: 'Choose the type shown on the identity document.',
+    placeholderDocumento: 'Select document type',
+    placeholderSexo: 'Select sex',
+    ayudaOficial: 'View official guide to find it',
     preguntasTitulo: 'Questions about your stay',
     preguntaOpcional: '(optional)',
     preguntaElige: 'Choose an option',
