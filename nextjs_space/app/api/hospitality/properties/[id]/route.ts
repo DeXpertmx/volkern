@@ -62,7 +62,7 @@ export async function PATCH(req: NextRequest, ctx: Params) {
     const {
       nombre, descripcion, codigo, zona, direccion, ciudad, estadoProvincia,
       pais, cp, latitud, longitud, fotos, timezone, estado, politicaNoShow,
-      politicaSalidaAnticipada, holdHoras,
+      politicaSalidaAnticipada, holdHoras, detalleAlojamiento,
     } = data || {};
 
     // La política de no-show decide cuánto se cobra: si llega, tiene que ser
@@ -91,6 +91,79 @@ export async function PATCH(req: NextRequest, ctx: Params) {
       );
     }
 
+    // Las fotos admiten dos formas: URLs sueltas (dialog rápido, clientes
+    // antiguos) y objetos { url, titulo?, portada? } (editor por secciones).
+    // Cuando llegan URLs puras y en BD hay objetos ricos, se conservan los
+    // metadatos (título/portada) casando por URL y por posición: sin esto,
+    // un guardado del dialog rápido machacaría el trabajo del editor.
+    let fotosFinales: Prisma.InputJsonValue[] | null = null;
+    if (fotos !== undefined) {
+      if (!Array.isArray(fotos)) {
+        fotosFinales = null; // Prisma.DbNull, como siempre
+      } else {
+        const previas = Array.isArray(existing.fotos) ? (existing.fotos as unknown[]) : [];
+        const ricaDe = (i: number): Prisma.InputJsonValue => {
+          const entrada = fotos[i];
+          const previa = previas[i];
+          if (entrada && typeof entrada === 'object') return entrada as Prisma.InputJsonValue;
+          if (typeof entrada !== 'string') return entrada as Prisma.InputJsonValue;
+          const mismaUrl =
+            previa && typeof previa === 'object' && (previa as { url?: unknown }).url === entrada;
+          const rica = mismaUrl
+            ? previa
+            : previas.find(
+                (f) => f && typeof f === 'object' && (f as { url?: unknown }).url === entrada
+              );
+          if (rica && typeof rica === 'object') return rica as Prisma.InputJsonValue;
+          return { url: entrada } as Prisma.InputJsonValue;
+        };
+        // Solo se enriquece si las fotos nuevas son todas strings: el editor
+        // envía la forma completa y debe pasar tal cual.
+        const todasStrings = fotos.every((f) => typeof f === 'string');
+        const previasConMeta = previas.some((f) => f && typeof f === 'object');
+        fotosFinales = todasStrings && previasConMeta ? fotos.map((_, i) => ricaDe(i)) : (fotos as Prisma.InputJsonValue[]);
+      }
+    }
+
+    const sesEntrante = (data as { sesHospedajes?: unknown }).sesHospedajes;
+    const sesHospedajesFinal =
+      sesEntrante !== undefined && sesEntrante !== null && typeof sesEntrante === 'object'
+        ? { ...((existing.sesHospedajes as Record<string, unknown>) || {}), ...(sesEntrante as Record<string, unknown>) }
+        : undefined;
+
+    // Detalle declarado del alojamiento (Vista global del editor): habitaciones,
+    // camas y servicios según los catálogos del editor. Se sanea antes de
+    // persistir: el JSONB acepta cualquier forma y un mapa corrupto rompería
+    // los contadores. `null` limpia el detalle; forma inválida no toca nada.
+    const contadoresSanos = (valor: unknown): Record<string, number> => {
+      if (!valor || typeof valor !== 'object' || Array.isArray(valor)) return {};
+      const salida: Record<string, number> = {};
+      for (const [clave, n] of Object.entries(valor as Record<string, unknown>)) {
+        const num = Number(n);
+        if (clave.length > 0 && Number.isInteger(num) && num >= 0) salida[clave] = num;
+      }
+      return salida;
+    };
+    let detalleFinal: Prisma.InputJsonValue | null | undefined;
+    if (detalleAlojamiento !== undefined) {
+      if (detalleAlojamiento === null) {
+        detalleFinal = null;
+      } else if (detalleAlojamiento && typeof detalleAlojamiento === 'object' && !Array.isArray(detalleAlojamiento)) {
+        const d = detalleAlojamiento as Record<string, unknown>;
+        const habitaciones = contadoresSanos(d.habitaciones);
+        const camas = contadoresSanos(d.camas);
+        const servicios = Array.isArray(d.servicios)
+          ? d.servicios.filter((s): s is string => typeof s === 'string')
+          : [];
+        detalleFinal =
+          Object.keys(habitaciones).length > 0 ||
+          Object.keys(camas).length > 0 ||
+          servicios.length > 0
+            ? ({ habitaciones, camas, servicios } as Prisma.InputJsonValue)
+            : null;
+      }
+    }
+
     const property = await prisma.hospitalityProperty.update({
       where: { id: existing.id },
       data: {
@@ -105,7 +178,11 @@ export async function PATCH(req: NextRequest, ctx: Params) {
         ...(cp !== undefined ? { cp } : {}),
         ...(latitud !== undefined ? { latitud: latitud === null || latitud === '' ? null : Number(latitud) } : {}),
         ...(longitud !== undefined ? { longitud: longitud === null || longitud === '' ? null : Number(longitud) } : {}),
-        ...(fotos !== undefined ? { fotos: Array.isArray(fotos) ? (fotos as Prisma.InputJsonValue[]) : Prisma.DbNull } : {}),
+        ...(fotosFinales !== undefined ? { fotos: fotosFinales === null ? Prisma.DbNull : fotosFinales } : {}),
+        ...(sesHospedajesFinal ? { sesHospedajes: sesHospedajesFinal as Prisma.InputJsonValue } : {}),
+        ...(detalleFinal !== undefined
+          ? { detalleAlojamiento: detalleFinal === null ? Prisma.DbNull : detalleFinal }
+          : {}),
         ...(timezone !== undefined ? { timezone } : {}),
         ...(estado !== undefined ? { estado } : {}),
         ...(politicaNoShow !== undefined ? { politicaNoShow } : {}),

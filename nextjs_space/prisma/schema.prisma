@@ -8159,6 +8159,14 @@ model HospitalityProperty {
    * Es referencia externa, nunca identidad interna de Volkern.
    */
   sesHospedajes  Json?
+  /**
+   * Detalle declarado del alojamiento para el editor estilo Airbnb:
+   * `{ habitaciones: Record<id, n>, camas: Record<id, n>, servicios: string[] }`.
+   * Los ids son del catálogo de lib/hospitality/property-editor-config.ts;
+   * es descripción de ficha (no inventario de unidades, que viven en
+   * HospitalityUnit con sus amenidades).
+   */
+  detalleAlojamiento Json?
   timezone       String    @default("America/Mexico_City")
   estado         String    @default("activa")
   // Penalización por no-show de esta propiedad: ninguna|primera_noche|estancia_completa.
