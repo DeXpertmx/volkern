@@ -1,0 +1,862 @@
+/**
+ * Volkern Hospitality — Configuración del editor de propiedades por secciones.
+ *
+ * Porta al vertical de hospedaje el editor guiado que ya existe en Real
+ * Estate: barra lateral con secciones agrupadas y estado de completado, y un
+ * panel principal por sección. Todo lo que vive aquí es puro y no toca Prisma,
+ * para que lo use el navegador y los tests sin arrastrar la base de datos.
+ *
+ * Diferencia con real-estate: aquí la ficha es la PROPERTY (el establecimiento)
+ * con sus políticas de operación; las fotos ya viven en el Json `fotos`, el
+ * registro SES.HOSPEDAJES en `sesHospedajes` y el detalle declarado
+ * (habitaciones, camas, servicios) en el Json `detalleAlojamiento`. El borrador
+ * usa la forma de la API tal cual ({ property, units }), porque el editor edita
+ * la propiedad y las unidades se listan/enlazan (su edición granular ya existe
+ * en el módulo).
+ */
+
+// ─── Tipos ───────────────────────────────────────────────────────────────────
+
+export type SeccionHospedaje =
+  | 'global'
+  | 'descripcion'
+  | 'fotos'
+  | 'ubicacion'
+  | 'unidades'
+  | 'operacion'
+  | 'cumplimiento';
+
+export interface SeccionHospedajeInfo {
+  id: SeccionHospedaje;
+  grupo: string;
+  label: string;
+}
+
+/** Secciones del editor de hospedaje, en orden de presentación. */
+export const SECCIONES_HOSPEDAJE: readonly SeccionHospedajeInfo[] = [
+  { id: 'global', grupo: 'Vista global', label: 'Vista global' },
+  { id: 'descripcion', grupo: 'Detalles del establecimiento', label: 'Descripción general' },
+  { id: 'fotos', grupo: 'Detalles del establecimiento', label: 'Fotos' },
+  { id: 'ubicacion', grupo: 'Detalles del establecimiento', label: 'Ubicación' },
+  { id: 'unidades', grupo: 'Configuración de reserva', label: 'Unidades' },
+  { id: 'operacion', grupo: 'Configuración de reserva', label: 'Operación' },
+  { id: 'cumplimiento', grupo: 'Cumplimiento', label: 'SES.HOSPEDAJES' },
+];
+
+/** Primera sección del editor: la Vista global. */
+export const PRIMERA_SECCION_HOSPEDAJE: SeccionHospedaje = 'global';
+
+/** Ficha de una sección por id, o `undefined`. */
+export function infoSeccionHospedaje(id: string): SeccionHospedajeInfo | undefined {
+  return SECCIONES_HOSPEDAJE.find((s) => s.id === id);
+}
+
+// ─── Forma de los datos en el hilo cliente ↔ API ─────────────────────────────
+
+/** Foto de la propiedad: URL más título opcional y marca de portada. */
+export interface FotoHospedaje {
+  url: string;
+  titulo?: string;
+  portada?: boolean;
+}
+
+/** Unidad tal como la devuelve `GET /api/hospitality/properties/[id]`. */
+export interface UnidadWire {
+  id: string;
+  nombre: string;
+  codigo?: string | null;
+  tipo?: string | null;
+  capacidad?: number | null;
+  tarifaBase?: number | null;
+  moneda?: string | null;
+  estado?: string | null;
+}
+
+/**
+ * Detalle declarado del alojamiento, tal como vive en el Json
+ * `detalleAlojamiento` de la propiedad y en el borrador del editor.
+ */
+export interface DetalleAlojamiento {
+  habitaciones: Record<string, number>;
+  camas: Record<string, number>;
+  servicios: string[];
+}
+
+export const DETALLE_VACIO: DetalleAlojamiento = {
+  habitaciones: {},
+  camas: {},
+  servicios: [],
+};
+
+/** Normaliza el Json `detalleAlojamiento` al borrador editable. */
+export function detalleAlojamientoDe(raw: unknown): DetalleAlojamiento {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ...DETALLE_VACIO };
+  const o = raw as Record<string, unknown>;
+  const contadores = (v: unknown): Record<string, number> => {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
+    const salida: Record<string, number> = {};
+    for (const [clave, n] of Object.entries(v as Record<string, unknown>)) {
+      const num = Number(n);
+      if (clave && Number.isInteger(num) && num >= 0) salida[clave] = num;
+    }
+    return salida;
+  };
+  return {
+    habitaciones: contadores(o.habitaciones),
+    camas: contadores(o.camas),
+    servicios: Array.isArray(o.servicios)
+      ? o.servicios.filter((s): s is string => typeof s === 'string')
+      : [],
+  };
+}
+
+/** Propiedad tal como la devuelve la API (fechas en string ISO por JSON). */
+export interface PropertyWire {
+  id: string;
+  nombre: string;
+  descripcion?: string | null;
+  codigo?: string | null;
+  zona?: string | null;
+  direccion?: string | null;
+  ciudad?: string | null;
+  estadoProvincia?: string | null;
+  pais?: string | null;
+  cp?: string | null;
+  latitud?: number | null;
+  longitud?: number | null;
+  fotos?: unknown;
+  sesHospedajes?: unknown;
+  detalleAlojamiento?: unknown;
+  timezone?: string | null;
+  estado?: string | null;
+  politicaNoShow?: string | null;
+  politicaSalidaAnticipada?: string | null;
+  holdHoras?: number | null;
+  units?: UnidadWire[];
+}
+
+/** Borrador editable del editor de hospedaje (inputs como strings). */
+export interface DraftHospedaje {
+  nombre: string;
+  descripcion: string;
+  codigo: string;
+
+  direccion: string;
+  ciudad: string;
+  estadoProvincia: string;
+  pais: string;
+  cp: string;
+  zona: string;
+  lat: string;
+  lng: string;
+
+  fotos: FotoHospedaje[];
+
+  timezone: string;
+  estado: string;
+  politicaNoShow: string;
+  politicaSalidaAnticipada: string;
+  holdHoras: string;
+
+  sesCodigo: string;
+  sesMunicipio: string;
+
+  /** Detalle declarado: habitaciones, camas y servicios (editor Airbnb). */
+  detalle: DetalleAlojamiento;
+
+  units: UnidadWire[];
+}
+
+/** Normaliza el Json `fotos` a fotos `{ url, titulo?, portada? }`. */
+export function fotosHospedaje(raw: unknown): FotoHospedaje[] {
+  if (!Array.isArray(raw)) return [];
+  const salida: FotoHospedaje[] = [];
+  for (const f of raw) {
+    if (typeof f === 'string' && f.length > 0) {
+      salida.push({ url: f });
+    } else if (f && typeof f === 'object' && typeof (f as any).url === 'string') {
+      const titulo = (f as any).titulo;
+      salida.push({
+        url: (f as any).url,
+        ...(typeof titulo === 'string' && titulo.length > 0 ? { titulo } : {}),
+        ...(typeof (f as any).portada === 'boolean' ? { portada: (f as any).portada } : {}),
+      });
+    }
+  }
+  return salida;
+}
+
+/** Código SES.HOSPEDAJES y municipio INE desde el Json `sesHospedajes`. */
+export function sesDeProperty(raw: unknown): { codigo: string; municipio: string } {
+  if (!raw || typeof raw !== 'object') return { codigo: '', municipio: '' };
+  const o = raw as Record<string, unknown>;
+  return {
+    codigo: typeof o.codigoEstablecimiento === 'string' ? o.codigoEstablecimiento : '',
+    municipio: typeof o.municipioIne === 'string' ? o.municipioIne : '',
+  };
+}
+
+/** Convierte la propiedad de la API en borrador editable. */
+export function borradorDesdeProperty(p: PropertyWire): DraftHospedaje {
+  const ses = sesDeProperty(p.sesHospedajes);
+  const detalle = detalleAlojamientoDe(p.detalleAlojamiento);
+  return {
+    nombre: p.nombre || '',
+    descripcion: p.descripcion || '',
+    codigo: p.codigo || '',
+
+    direccion: p.direccion || '',
+    ciudad: p.ciudad || '',
+    estadoProvincia: p.estadoProvincia || '',
+    pais: p.pais || '',
+    cp: p.cp || '',
+    zona: p.zona || '',
+    lat: p.latitud != null ? String(p.latitud) : '',
+    lng: p.longitud != null ? String(p.longitud) : '',
+
+    fotos: fotosHospedaje(p.fotos),
+
+    timezone: p.timezone || 'America/Mexico_City',
+    estado: p.estado || 'activa',
+    politicaNoShow: p.politicaNoShow || 'primera_noche',
+    politicaSalidaAnticipada: p.politicaSalidaAnticipada || 'salida_real',
+    holdHoras: p.holdHoras != null ? String(p.holdHoras) : '24',
+
+    sesCodigo: ses.codigo,
+    sesMunicipio: ses.municipio,
+
+    detalle,
+
+    units: p.units || [],
+  };
+}
+
+/** Número desde texto: `undefined` si vacío o inválido. */
+function numero(valor: string): number | undefined {
+  if (valor.trim() === '') return undefined;
+  const n = Number(valor);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+/** Entero ≥ 0 desde texto: `undefined` si no procede. */
+function enteroNoNegativo(valor: string): number | undefined {
+  const n = numero(valor);
+  return n !== undefined && Number.isInteger(n) && n >= 0 ? n : undefined;
+}
+
+/**
+ * Payload del PATCH: solo los campos que la API ya acepta. `fotos` sale
+ * siempre (el editor es su dueño) con la portada marcada en la foto elegida.
+ */
+export function payloadDesdeBorradorHospedaje(d: DraftHospedaje): Record<string, unknown> {
+  return {
+    nombre: d.nombre,
+    descripcion: d.descripcion || null,
+    codigo: d.codigo || null,
+
+    direccion: d.direccion || null,
+    ciudad: d.ciudad || null,
+    estadoProvincia: d.estadoProvincia || null,
+    pais: d.pais || null,
+    cp: d.cp || null,
+    zona: d.zona || null,
+    latitud: numero(d.lat) ?? null,
+    longitud: numero(d.lng) ?? null,
+
+    fotos: d.fotos.map((f) => ({
+      url: f.url,
+      ...(f.titulo && f.titulo.length > 0 ? { titulo: f.titulo } : {}),
+      ...(f.portada ? { portada: true } : {}),
+    })),
+
+    timezone: d.timezone,
+    estado: d.estado,
+    politicaNoShow: d.politicaNoShow,
+    politicaSalidaAnticipada: d.politicaSalidaAnticipada,
+    holdHoras: enteroNoNegativo(d.holdHoras) ?? 24,
+
+    ...(d.sesCodigo || d.sesMunicipio
+      ? {
+          sesHospedajes: {
+            ...(d.sesCodigo ? { codigoEstablecimiento: d.sesCodigo } : {}),
+            ...(d.sesMunicipio ? { municipioIne: d.sesMunicipio } : {}),
+          },
+        }
+      : {}),
+
+    ...(hayDetalle(d.detalle)
+      ? {
+          detalleAlojamiento: {
+            ...(Object.keys(d.detalle.habitaciones).length > 0
+              ? { habitaciones: d.detalle.habitaciones }
+              : {}),
+            ...(Object.keys(d.detalle.camas).length > 0
+              ? { camas: d.detalle.camas }
+              : {}),
+            ...(d.detalle.servicios.length > 0 ? { servicios: d.detalle.servicios } : {}),
+          },
+        }
+      : { detalleAlojamiento: null }),
+  };
+}
+
+/** ¿Hay algo declarado en el detalle? (para no escribir JSON vacío). */
+export function hayDetalle(d: DetalleAlojamiento): boolean {
+  return (
+    Object.keys(d.habitaciones).length > 0 ||
+    Object.keys(d.camas).length > 0 ||
+    d.servicios.length > 0
+  );
+}
+
+// ─── Fotos de la tarjeta de la Vista global ─────────────────────────────
+
+/** Miniatura segura para la tarjeta de fotos: URL válida, sin portada. */
+export interface MiniaturaHospedaje {
+  url: string;
+  titulo?: string;
+}
+
+/** Fotos con URL válida, normalizadas desde strings u objetos ricos. */
+interface FotoNormalizadaHospedaje {
+  url: string;
+  titulo?: string;
+  portada?: boolean;
+}
+
+function fotosValidasHospedaje(fotos: unknown): FotoNormalizadaHospedaje[] {
+  const salida: FotoNormalizadaHospedaje[] = [];
+  if (!Array.isArray(fotos)) return salida;
+  for (const f of fotos) {
+    if (typeof f === 'string') {
+      if (f.length > 0) salida.push({ url: f });
+    } else if (f !== null && typeof f === 'object' && 'url' in f) {
+      const url = (f as { url?: unknown }).url;
+      if (typeof url !== 'string' || url.length === 0) continue;
+      const titulo = (f as { titulo?: unknown }).titulo;
+      const portada = (f as { portada?: unknown }).portada;
+      salida.push({
+        url,
+        ...(typeof titulo === 'string' && titulo.length > 0 ? { titulo } : {}),
+        ...(portada === true ? { portada: true } : {}),
+      });
+    }
+  }
+  return salida;
+}
+
+/**
+ * Miniaturas de la tarjeta de fotos de la Vista global: primeras fotos válidas
+ * (la portada —la primera— incluida), limitadas a `max`.
+ */
+export function miniaturasHospedaje(fotos: unknown, max = 4): MiniaturaHospedaje[] {
+  return fotosValidasHospedaje(fotos)
+    .slice(0, max)
+    .map(({ url, titulo }) => (titulo ? { url, titulo } : { url }));
+}
+
+/**
+ * Portada para el fondo de la tarjeta de fotos: la foto marcada como portada
+ * o, si no hay marca, la primera válida. `null` si no hay fotos.
+ */
+export function portadaHospedaje(fotos: unknown): MiniaturaHospedaje | null {
+  const validas = fotosValidasHospedaje(fotos);
+  if (validas.length === 0) return null;
+  const elegida = validas.find((f) => f.portada === true) ?? validas[0];
+  return elegida.titulo ? { url: elegida.url, titulo: elegida.titulo } : { url: elegida.url };
+}
+
+/**
+ * Reordena fotos moviendo la de `desde` a `hasta` (índices sobre el array
+ * completo, incluida la portada). Índices inválidos o iguales: copia intacta.
+ */
+export function reordenarFotosHospedaje<T>(
+  fotos: readonly T[],
+  desde: number,
+  hasta: number
+): T[] {
+  if (!Array.isArray(fotos)) return [];
+  const n = fotos.length;
+  if (
+    !Number.isInteger(desde) ||
+    !Number.isInteger(hasta) ||
+    desde < 0 ||
+    hasta < 0 ||
+    desde >= n ||
+    hasta >= n ||
+    desde === hasta
+  ) {
+    return [...fotos];
+  }
+  const copia = [...fotos];
+  const [movida] = copia.splice(desde, 1);
+  copia.splice(hasta, 0, movida);
+  return copia;
+}
+
+/** Resumen textual de la tarjeta de fotos: «3 fotos · portada asignada». */
+export function resumenFotosHospedaje(fotos: unknown): string {
+  const total = contarFotosHospedaje(fotos);
+  if (total === 0) return 'Sin fotos';
+  const portada =
+    Array.isArray(fotos) &&
+    fotos.some(
+      (f) => f && typeof f === 'object' && 'portada' in f && (f as { portada?: unknown }).portada === true
+    );
+  return `${total} ${total === 1 ? 'foto' : 'fotos'}${portada ? ' · portada asignada' : ''}`;
+}
+
+/** Proyección del borrador para las reglas de completado. */
+export interface EstadoHospedajeIn {
+  nombre?: string | null;
+  descripcion?: string | null;
+  fotos?: unknown;
+  direccion?: string | null;
+  ciudad?: string | null;
+  pais?: string | null;
+  units?: UnidadWire[] | null;
+  timezone?: string | null;
+  politicaNoShow?: string | null;
+  politicaSalidaAnticipada?: string | null;
+  holdHoras?: number | string | null;
+  sesCodigo?: string | null;
+  habitaciones?: Record<string, number> | null;
+  camas?: Record<string, number> | null;
+  servicios?: string[] | null;
+}
+
+// ─── Estado de completado ────────────────────────────────────────────────────
+
+/** Número de fotos válidas de `fotos` (URLs sueltas u objetos `{ url }`). */
+export function contarFotosHospedaje(fotos: unknown): number {
+  if (!Array.isArray(fotos)) return 0;
+  return fotos.filter((f) => {
+    if (typeof f === 'string') return f.length > 0;
+    if (f && typeof f === 'object' && 'url' in f) {
+      const url = (f as { url?: unknown }).url;
+      return typeof url === 'string' && url.length > 0;
+    }
+    return false;
+  }).length;
+}
+
+/**
+ * ¿Está completa cada sección? El criterio es «publicable», no exhaustivo:
+ * una propiedad con ciudad pero sin coordenadas cuenta como ubicada.
+ */
+export function estadoSeccionesHospedaje(
+  p: EstadoHospedajeIn
+): Record<SeccionHospedaje, boolean> {
+  const texto = (v: unknown) => (typeof v === 'string' && v.trim().length > 0 ? v.trim() : null);
+  return {
+    global: Boolean(
+      texto(p.nombre) &&
+        texto(p.descripcion) &&
+        ((p.units?.length ?? 0) > 0 || sumarContadores(p.habitaciones) > 0)
+    ),
+    descripcion: Boolean(texto(p.nombre) && texto(p.descripcion)),
+    fotos: contarFotosHospedaje(p.fotos) > 0,
+    ubicacion: Boolean(texto(p.ciudad) || texto(p.direccion)),
+    unidades: (p.units?.length ?? 0) > 0,
+    operacion:
+      Boolean(texto(p.timezone)) &&
+      Boolean(texto(p.politicaNoShow)) &&
+      Boolean(texto(p.politicaSalidaAnticipada)) &&
+      numero(String(p.holdHoras ?? '')) !== undefined,
+    cumplimiento: Boolean(texto(p.sesCodigo)),
+  };
+}
+
+/** Suma de los contadores de un detalle (habitaciones o camas). */
+export function sumarContadores(detalle: Record<string, number> | null | undefined): number {
+  if (!detalle || typeof detalle !== 'object') return 0;
+  return Object.values(detalle).reduce((acc, n) => acc + (Number(n) || 0), 0);
+}
+
+/** Progreso global en porcentaje entero 0–100. */
+export function progresoHospedaje(p: EstadoHospedajeIn): number {
+  const estado = estadoSeccionesHospedaje(p);
+  const claves = Object.keys(estado) as SeccionHospedaje[];
+  const completas = claves.filter((k) => estado[k]).length;
+  return Math.round((completas / claves.length) * 100);
+}
+
+/** Portada = mover la foto elegida al frente. */
+export function hacerPortadaHospedaje(
+  fotos: FotoHospedaje[],
+  indice: number
+): FotoHospedaje[] {
+  if (indice <= 0 || indice >= fotos.length) return fotos;
+  const copia = [...fotos];
+  const [foto] = copia.splice(indice, 1);
+  return [foto, ...copia];
+}
+
+// ─── Catálogos de la sección Operación ───────────────────────────────────────
+
+export const POLITICAS_NO_SHOW: readonly { value: string; label: string }[] = [
+  { value: 'ninguna', label: 'Ninguna' },
+  { value: 'primera_noche', label: 'Primera noche' },
+  { value: 'estancia_completa', label: 'Estancia completa' },
+];
+
+export const POLITICAS_SALIDA: readonly { value: string; label: string }[] = [
+  { value: 'cerrar_estancia', label: 'Cerrar estancia (libera noches no usadas)' },
+  { value: 'salida_real', label: 'Salida real (conserva noches vendidas)' },
+];
+
+export const ESTADOS_PROPERTY: readonly { value: string; label: string }[] = [
+  { value: 'activa', label: 'Activa' },
+  { value: 'inactiva', label: 'Inactiva' },
+];
+
+// ─── Unidades desde la Vista global ─────────────────────────────────────────
+
+/** Estados operativos de una unidad, tal como los lista la portada. */
+export const ESTADOS_UNIDAD_HOSPEDAJE: readonly { value: string; label: string }[] = [
+  { value: 'available', label: 'Disponible' },
+  { value: 'occupied', label: 'Ocupada' },
+  { value: 'cleaning', label: 'Limpieza' },
+  { value: 'dirty', label: 'Sucia' },
+  { value: 'maintenance', label: 'Mantenimiento' },
+  { value: 'out_of_service', label: 'Fuera de servicio' },
+];
+
+/** Tipos de unidad del alta rápida y de la portada. */
+export const TIPOS_UNIDAD_HOSPEDAJE: readonly string[] = [
+  'apartamento',
+  'habitacion',
+  'casa',
+  'villa',
+  'estudio',
+  'loft',
+  'bungalow',
+  'otro',
+];
+
+/** Ficha de unidad para la lista del modal de la Vista global. */
+export interface FormUnidadWire {
+  id: string;
+  nombre: string;
+  codigo?: string;
+  tipo?: string;
+  capacidad?: number;
+  estado?: string;
+}
+
+/** Borrador del formulario de unidad del modal de la Vista global. */
+export interface FormUnidadHospedaje {
+  nombre: string;
+  codigo: string;
+  tipo: string;
+  capacidad: string;
+  estado: string;
+}
+
+export const FORM_UNIDAD_VACIO: FormUnidadHospedaje = {
+  nombre: '',
+  codigo: '',
+  tipo: 'apartamento',
+  capacidad: '2',
+  estado: 'available',
+};
+
+/**
+ * Ficha de una unidad de la lista desde la fila de la API: los campos que el
+ * modal de la Vista global muestra y edita. `null` = unidad inválida.
+ */
+export function fichaUnidadDeWire(u: unknown): FormUnidadWire | null {
+  if (!u || typeof u !== 'object') return null;
+  const o = u as Record<string, unknown>;
+  const id = o.id;
+  const nombre = o.nombre;
+  if (typeof id !== 'string' || typeof nombre !== 'string' || !nombre.trim()) return null;
+  const num = (v: unknown): number | null => {
+    const n = Number(v);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  };
+  const texto = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v : null);
+  const capacidad = num(o.capacidad);
+  const estado = texto(o.estado);
+  return {
+    id,
+    nombre: nombre.trim(),
+    ...(typeof o.codigo === 'string' && o.codigo.trim() ? { codigo: o.codigo.trim() } : {}),
+    ...(typeof o.tipo === 'string' && o.tipo ? { tipo: o.tipo } : {}),
+    ...(capacidad != null ? { capacidad } : {}),
+    ...(estado ? { estado } : {}),
+  };
+}
+
+/** Payload del POST/PATCH de una unidad desde el formulario del modal. */
+export function payloadUnidadHospedaje(
+  f: FormUnidadHospedaje,
+  propertyId: string
+): Record<string, unknown> | null {
+  const nombre = f.nombre.trim();
+  if (!nombre) return null;
+  const capacidad = parseInt(f.capacidad, 10);
+  return {
+    propertyId,
+    nombre,
+    codigo: f.codigo.trim() || undefined,
+    tipo: f.tipo,
+    capacidad: Number.isFinite(capacidad) && capacidad > 0 ? capacidad : 2,
+    estado: f.estado,
+  };
+}
+
+// ─── Catálogos de la Vista global (modales de detalle) ───────────────────────
+
+/**
+ * Detalle por tipo para las tarjetas de la Vista global (estilo resumen de
+ * camas de real-estate): pares ordenados `[id, n]` con n > 0, en el orden del
+ * catálogo. Devuelve `null` si no hay nada configurado.
+ */
+export function detalleHabitacionesHospedaje(
+  detalle: DetalleAlojamiento | null | undefined
+): Array<readonly [string, number]> | null {
+  return paresPorTipo(detalle?.habitaciones, HABITACIONES_GRUPOS_HOSPEDAJE.flatMap((g) => g.items));
+}
+
+export function detalleCamasHospedaje(
+  detalle: DetalleAlojamiento | null | undefined
+): Array<readonly [string, number]> | null {
+  return paresPorTipo(detalle?.camas, CAMAS_CATALOGO_HOSPEDAJE);
+}
+
+function paresPorTipo(
+  contadores: Record<string, number> | undefined,
+  catalogo: readonly { id: string; label: string }[]
+): Array<readonly [string, number]> | null {
+  if (!contadores) return null;
+  const pares = catalogo
+    .map((c) => [c.id, contadores[c.id] ?? 0] as const)
+    .filter((p): p is readonly [string, number] => p[1] > 0);
+  return pares.length > 0 ? pares : null;
+}
+
+export interface HabitacionHospedajeCatalogo {
+  id: string;
+  label: string;
+}
+
+export interface GrupoHabitacionesHospedaje {
+  titulo: string;
+  items: readonly HabitacionHospedajeCatalogo[];
+}
+
+/**
+ * Habitaciones que puede declarar el establecimiento, agrupadas en privadas y
+ * compartidas. Mismo catálogo que Real Estate: los ids son las claves del
+ * mapa `habitaciones` del Json `detalleAlojamiento`.
+ */
+export const HABITACIONES_GRUPOS_HOSPEDAJE: readonly GrupoHabitacionesHospedaje[] = [
+  {
+    titulo: 'Privada',
+    items: [
+      { id: 'balcon', label: 'Balcón' },
+      { id: 'bano', label: 'Baño' },
+      { id: 'dormitorio', label: 'Dormitorio' },
+      { id: 'comedor', label: 'Comedor' },
+      { id: 'cocina', label: 'Cocina' },
+      { id: 'salon', label: 'Salón' },
+      { id: 'sala_juegos', label: 'Sala de Juegos' },
+      { id: 'terraza', label: 'Terraza' },
+      { id: 'wc', label: 'WC' },
+      { id: 'despacho', label: 'Despacho' },
+    ],
+  },
+  {
+    titulo: 'Compartida',
+    items: [
+      { id: 'bano_compartido', label: 'Baño compartido' },
+      { id: 'cocina_compartida', label: 'Cocina compartida' },
+      { id: 'salon_compartido', label: 'Salón compartido' },
+      { id: 'terraza_compartida', label: 'Terraza compartida' },
+      { id: 'lavadero_compartido', label: 'Lavadero compartido' },
+    ],
+  },
+];
+
+/** Tipos de cama para la distribución (`camas` del detalle). */
+export const CAMAS_CATALOGO_HOSPEDAJE: readonly HabitacionHospedajeCatalogo[] = [
+  { id: 'cuna', label: 'Cuna' },
+  { id: 'cama_nino', label: 'Cama para niño' },
+  { id: 'cama_doble', label: 'Cama doble' },
+  { id: 'cama_plegable', label: 'Cama plegable' },
+  { id: 'cama_extragrande', label: 'Cama de matrimonio extragrande' },
+  { id: 'cama_altillo', label: 'Cama en altillo' },
+  { id: 'cama_grande', label: 'Cama matrimonial grande' },
+  { id: 'sofa_cama', label: 'Sofá cama' },
+  { id: 'cama_individual', label: 'Cama individual' },
+];
+
+/** Servicio del catálogo con badge opcional de portal. */
+export interface ServicioHospedajeCatalogo {
+  id: string;
+  label: string;
+  /** Portal(es) que lo piden: badge en el selector. */
+  airbnb?: boolean;
+  booking?: boolean;
+}
+
+export interface GrupoServiciosHospedaje {
+  id: string;
+  titulo: string;
+  items: readonly ServicioHospedajeCatalogo[];
+}
+
+/**
+ * Servicios y equipamiento del alojamiento, con el badge de portales del
+ * diseño de referencia (⌂ Airbnb / ⚡ Booking). «Popular» va primero.
+ */
+export const SERVICIOS_GRUPOS_HOSPEDAJE: readonly GrupoServiciosHospedaje[] = [
+  {
+    id: 'popular',
+    titulo: 'Popular',
+    items: [
+      { id: 'wifi', label: 'Internet WiFi', airbnb: true, booking: true },
+      { id: 'tv', label: 'TV', airbnb: true },
+      { id: 'aire_acondicionado', label: 'Aire acondicionado', airbnb: true, booking: true },
+      { id: 'calefaccion', label: 'Calefacción', booking: true },
+      { id: 'cocina_equipada', label: 'Cocina', airbnb: true, booking: true },
+      { id: 'lavadora', label: 'Lavadora', airbnb: true },
+      { id: 'aparcamiento', label: 'Plaza de aparcamiento', airbnb: true, booking: true },
+      { id: 'piscina', label: 'Piscina', airbnb: true, booking: true },
+      { id: 'jacuzzi', label: 'Jacuzzi', booking: true },
+      { id: 'mascotas', label: 'Se permiten mascotas', airbnb: true },
+    ],
+  },
+  {
+    id: 'bano_lavanderia',
+    titulo: 'Baño y lavandería',
+    items: [
+      { id: 'secadora', label: 'Secadora' },
+      { id: 'plancha', label: 'Plancha' },
+      { id: 'toallas', label: 'Toallas', airbnb: true },
+      { id: 'jabon_manos', label: 'Jabón de manos' },
+      { id: 'secador_pelo', label: 'Secador de pelo', airbnb: true },
+    ],
+  },
+  {
+    id: 'entretenimiento',
+    titulo: 'Entretenimiento',
+    items: [
+      { id: 'tv_cable', label: 'TV por cable' },
+      { id: 'libros', label: 'Libros' },
+      { id: 'juegos_mesa', label: 'Juegos de mesa' },
+      { id: 'equipo_musica', label: 'Equipo de música' },
+    ],
+  },
+  {
+    id: 'clima',
+    titulo: 'Calefacción y refrigeración',
+    items: [
+      { id: 'ventilador', label: 'Ventilador' },
+      { id: 'chimenea', label: 'Chimenea', airbnb: true },
+    ],
+  },
+  {
+    id: 'seguridad',
+    titulo: 'Seguridad del hogar',
+    items: [
+      { id: 'detector_humo', label: 'Detector de humo', airbnb: true },
+      { id: 'botiquin', label: 'Botiquín', airbnb: true },
+      { id: 'extintor', label: 'Extintor', airbnb: true },
+    ],
+  },
+  {
+    id: 'oficina',
+    titulo: 'Oficina con Internet',
+    items: [
+      { id: 'zona_trabajo', label: 'Zona de trabajo', airbnb: true },
+      { id: 'monitor', label: 'Monitor' },
+      { id: 'escritorio', label: 'Escritorio' },
+    ],
+  },
+  {
+    id: 'cocina',
+    titulo: 'Cocina y comedor',
+    items: [
+      { id: 'nevera', label: 'Nevera' },
+      { id: 'microondas', label: 'Microondas' },
+      { id: 'lavavajillas', label: 'Lavavajillas' },
+      { id: 'cafetera', label: 'Cafetera' },
+      { id: 'utensilios', label: 'Utensilios de cocina' },
+    ],
+  },
+  {
+    id: 'ubicacion',
+    titulo: 'Características de la ubicación',
+    items: [
+      { id: 'entrada_privada', label: 'Entrada privada' },
+      { id: 'vista_mar', label: 'Vista al mar', booking: true },
+      { id: 'vista_montana', label: 'Vista a la montaña' },
+      { id: 'primera_linea', label: 'Primera línea' },
+    ],
+  },
+  {
+    id: 'instalaciones',
+    titulo: 'Aparcamiento e instalaciones',
+    items: [
+      { id: 'aparcamiento_gratuito', label: 'Aparcamiento gratuito', booking: true },
+      { id: 'garaje', label: 'Garaje' },
+      { id: 'ascensor', label: 'Ascensor', booking: true },
+      { id: 'jardin', label: 'Jardín', airbnb: true },
+      { id: 'terraza_prop', label: 'Terraza', airbnb: true },
+      { id: 'balcon_prop', label: 'Balcón' },
+    ],
+  },
+  {
+    id: 'politicas',
+    titulo: 'Políticas',
+    items: [
+      { id: 'no_fumadores', label: 'No fumadores', airbnb: true, booking: true },
+      { id: 'eventos', label: 'Apto para eventos' },
+      { id: 'ninos', label: 'Admite niños' },
+    ],
+  },
+  {
+    id: 'piscina_spa',
+    titulo: 'Piscina y spa',
+    items: [
+      { id: 'sauna', label: 'Sauna' },
+      { id: 'gimnasio', label: 'Gimnasio', booking: true },
+    ],
+  },
+  {
+    id: 'servicios_extra',
+    titulo: 'Servicios',
+    items: [
+      { id: 'limpieza', label: 'Limpieza incluida', booking: true },
+      { id: 'conserje', label: 'Conserje' },
+      { id: 'checkin_autonomo', label: 'Check-in autónomo', airbnb: true, booking: true },
+      { id: 'desayuno', label: 'Desayuno', booking: true },
+    ],
+  },
+];
+
+/** Todos los servicios en una lista plana (para buscadores y validaciones). */
+export const SERVICIOS_TODOS_HOSPEDAJE: readonly ServicioHospedajeCatalogo[] =
+  SERVICIOS_GRUPOS_HOSPEDAJE.flatMap((g) => g.items);
+
+/** Ficha de un servicio por id, o `undefined` si no existe en el catálogo. */
+export function infoServicioHospedaje(id: string): ServicioHospedajeCatalogo | undefined {
+  return SERVICIOS_TODOS_HOSPEDAJE.find((s) => s.id === id);
+}
+
+/** Ficha de una habitación por id en su grupo, o `undefined`. */
+export function infoHabitacionHospedaje(id: string): HabitacionHospedajeCatalogo | undefined {
+  return HABITACIONES_GRUPOS_HOSPEDAJE.flatMap((g) => g.items).find((h) => h.id === id);
+}
+
+/** Ficha de una cama por id, o `undefined`. */
+export function infoCamaHospedaje(id: string): HabitacionHospedajeCatalogo | undefined {
+  return CAMAS_CATALOGO_HOSPEDAJE.find((c) => c.id === id);
+}
+
+/** Etiqueta de un tipo de habitación o cama (ambos catálogos), o el id si no existe. */
+export function labelDeHabitacionHospedaje(id: string): string {
+  return infoHabitacionHospedaje(id)?.label ?? infoCamaHospedaje(id)?.label ?? id;
+}
