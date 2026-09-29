@@ -158,7 +158,7 @@ export function ModalUnidadesHospedaje({
 
   return (
     <Dialog open={abierto} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[85vh] flex-col gap-0 p-0 sm:max-w-lg">
+      <DialogContent className="flex max-h-[85vh] w-[calc(100vw-2rem)] flex-col gap-0 p-0 sm:max-w-lg">
         <DialogHeader className="px-5 pb-3 pt-5 text-left">
           <DialogTitle>Unidades</DialogTitle>
           <DialogDescription>
@@ -166,7 +166,7 @@ export function ModalUnidadesHospedaje({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto px-5 pb-2">
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-2">
           {unidades.length === 0 && !formularioActivo && (
             <div className="rounded-xl border bg-muted/30 p-6 text-center">
               <p className="text-sm font-medium">Sin unidades</p>

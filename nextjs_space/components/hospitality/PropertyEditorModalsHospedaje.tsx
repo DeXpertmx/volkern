@@ -216,13 +216,13 @@ export function ModalDetalleHospedaje({
 
   return (
     <Dialog open={abierto} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[85vh] flex-col gap-0 p-0 sm:max-w-md">
+      <DialogContent className="flex max-h-[85vh] w-[calc(100vw-2rem)] flex-col gap-0 p-0 sm:max-w-md">
         <DialogHeader className="px-5 pb-3 pt-5 text-center">
           <DialogTitle>{meta.titulo}</DialogTitle>
           <DialogDescription className="mx-auto max-w-xs">{meta.descripcion}</DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto px-5 pb-2">
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-2">
           {/* ─── Habitaciones ─── */}
           {tipo === 'habitaciones' && (
             <div className="rounded-xl border">
@@ -462,7 +462,7 @@ function TarjetaFotosGlobal({
       onClick={onClick}
       aria-label="Ir a la sección de fotos"
       data-testid="tarjeta-fotos-global"
-      className="relative flex h-28 w-full items-end overflow-hidden rounded-xl border text-left transition-[filter] hover:brightness-110"
+      className="relative flex h-24 w-full items-end overflow-hidden rounded-xl border text-left transition-[filter] hover:brightness-110 sm:h-28"
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
