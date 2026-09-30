@@ -99,6 +99,7 @@ export async function getConnectivityPublic() {
       partnerId: '',
       username: '',
       tieneCredenciales: false,
+      completo: false,
       ultimaSincronizacion: null,
       ultimoEvento: null,
       ultimaVerificacion: null,
@@ -132,7 +133,11 @@ export async function getConnectivityPublic() {
     // Solo marcadores de presencia, nunca el valor cifrado.
     partnerId: provider.partnerIdEnc ? '••••••' : '',
     username: provider.usernameEnc ? '••••••' : '',
-    tieneCredenciales: !!(provider.partnerIdEnc && provider.usernameEnc && provider.passwordEnc),
+    // «Tiene credenciales» = hay ALGO guardado: el guardado parcial permite
+    // introducir el par Basic sin el ID de socio y añadirlo después.
+    tieneCredenciales: !!(provider.partnerIdEnc || provider.usernameEnc || provider.passwordEnc),
+    // «Completo» = los TRES secretos: lo que necesita la capa para llamar.
+    completo: !!(provider.partnerIdEnc && provider.usernameEnc && provider.passwordEnc),
     ultimaSincronizacion: provider.ultimaSincronizacion,
     ultimoEvento: provider.ultimoEvento,
     /** Última verificación activa de la capa (health-check diario o «Probar»). */
@@ -376,7 +381,17 @@ export interface TestConnectionResult {
 export async function testConnectivityConnection(hotelCode?: string): Promise<TestConnectionResult> {
   const creds = await getConnectivityCredentials();
   if (!creds) {
-    return { ok: false, error: 'Conectividad no configurada: guarda primero las credenciales en esta pantalla.' };
+    // Diagnóstico útil: puede ser que no haya nada guardado o que falte solo
+    // el ID de socio (el par Basic se guarda de forma independiente).
+    const provider = await getConnectivityProvider();
+    if (!provider || (!provider.usernameEnc && !provider.passwordEnc)) {
+      return { ok: false, error: 'Conectividad no configurada: guarda primero las credenciales en esta pantalla.' };
+    }
+    return {
+      ok: false,
+      error:
+        'Falta el ID de socio: guárdalo en esta pantalla (junto al usuario y la contraseña) para poder llamar al servicio.',
+    };
   }
 
   // Preflight de la URL antes de llamar. Sin esto, una URL mal pegada o sin

@@ -71,6 +71,8 @@ interface EstadoConectividad {
   partnerId: string;
   username: string;
   tieneCredenciales: boolean;
+  /** Los TRES secretos guardados: lo que la capa necesita para llamar. */
+  completo?: boolean;
   ultimaSincronizacion: string | null;
   ultimoEvento: string | null;
   /** Última verificación activa (health-check diario o botón «Probar»). */
@@ -317,20 +319,22 @@ export default function AdminConectividad() {
         setPassword('');
         setAvisosGuardado(data.avisos || []);
         await loadEstado();
-        // Aviso claro de qué falta para poder conectar (los 3 campos son
-        // necesarios; sin ID de socio el proveedor rechaza la llamada).
+        // Aviso claro de qué falta para poder llamar al servicio. El par Basic
+        // (usuario y contraseña) basta para guardar; sin el ID de socio la capa
+        // no puede construir las URLs del contrato.
+        const faltan = [
+          !estado?.partnerId && !partnerId ? 'ID de socio' : null,
+          !username ? 'Usuario API' : null,
+          !password ? 'Contraseña API' : null,
+        ].filter(Boolean) as string[];
         if (data.configurado) {
-          toast.success('Credenciales guardadas. Ya puedes probar la conexión.');
-        } else {
-          toast.warning(
-            'Guardado, pero falta completar: ' +
-              [
-                !estado?.partnerId && !partnerId ? 'ID de socio' : null,
-                !username ? 'Usuario API' : null,
-                !password ? 'Contraseña API' : null,
-              ].filter(Boolean).join(', ') +
-              '. Los tres campos los emite el proveedor en el onboarding.'
+          toast.success('Credenciales completas guardadas. Ya puedes probar la conexión.');
+        } else if (faltan.length === 1 && faltan[0] === 'ID de socio') {
+          toast.success(
+            'Credenciales guardadas sin ID de socio. Guárdalo cuando el proveedor te lo asigne: sin él no se pueden hacer llamadas.'
           );
+        } else {
+          toast.warning('Guardado, pero falta completar: ' + faltan.join(', ') + '.');
         }
       } else {
         // La API rechaza antes de escribir: se muestran TODOS los avisos, con su
@@ -354,7 +358,7 @@ export default function AdminConectividad() {
   const handleReset = async () => {
     if (
       !window.confirm(
-        '¿Borrar las credenciales guardadas? Tendrás que introducir ID de socio, usuario y contraseña de nuevo. Los mapeos de propiedades y el historial de sincronizaciones NO se tocan.'
+        '¿Borrar las credenciales guardadas? Tendrás que introducirlas de nuevo. Los mapeos de propiedades y el historial de sincronizaciones NO se tocan.'
       )
     ) {
       return;
@@ -573,7 +577,11 @@ export default function AdminConectividad() {
                 size="sm"
                 disabled={!estado?.tieneCredenciales || testing}
                 onClick={() => setTestDialogOpen(true)}
-                title={estado?.tieneCredenciales ? 'Probar la conexión llamando al detalle de propiedad' : 'Guarda primero las credenciales'}
+                title={
+                  estado?.completo === false
+                    ? 'Falta el ID de socio (o algún secreto): la prueba necesita las credenciales completas'
+                    : 'Probar la conexión llamando al detalle de propiedad'
+                }
               >
                 {testing ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-1" />
@@ -651,7 +659,7 @@ export default function AdminConectividad() {
 
           <form onSubmit={handleSave} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="partnerId">ID de socio (partner id) — requerido</Label>
+              <Label htmlFor="partnerId">ID de socio (partner id)</Label>
               <Input
                 id="partnerId"
                 placeholder={estado?.partnerId ? '•••••• (dejar vacío para mantener)' : 'Identificador que asigna el proveedor al registrarte (no es tu email)'}
@@ -662,7 +670,8 @@ export default function AdminConectividad() {
               />
               {renderAvisos(erroresPorCampo('partnerId'))}
               <p className="text-xs text-muted-foreground">
-                Los TRES campos son obligatorios para conectar. Sin el ID de socio, el servicio rechaza las llamadas.
+                Opcional al guardar: puedes dejarlo vacío y añadirlo cuando el proveedor te lo asigne. Sin él no se
+                pueden hacer llamadas (las URLs del contrato lo llevan en la ruta).
               </p>
             </div>
             <div className="space-y-2">
@@ -911,7 +920,7 @@ export default function AdminConectividad() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Button onClick={handleReconciliar} disabled={reconciliando || !estado?.tieneCredenciales}>
+          <Button onClick={handleReconciliar} disabled={reconciliando || !estado?.completo}>
             {reconciliando ? (
               <Loader2 className="h-4 w-4 animate-spin mr-2" />
             ) : (

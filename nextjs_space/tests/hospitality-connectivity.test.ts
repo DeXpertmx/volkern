@@ -234,4 +234,53 @@ describe('Hospitality — capa de conectividad', () => {
     expect(updateData.usernameEnc).toBeUndefined();
     expect(updateData.passwordEnc).toBeUndefined();
   });
+
+  it('saveConnectivityConfig acepta guardar SOLO el par Basic (sin ID de socio)', async () => {
+    const filaParBasic = {
+      id: 'prov_1',
+      providerKey: CONNECTIVITY_PROVIDER_KEY,
+      nombreVisible: CONNECTIVITY_PROVIDER_NOMBRE,
+      baseUrl: 'https://live.example.internal',
+      partnerIdEnc: null,
+      usernameEnc: encrypt(SECRETO_USER),
+      passwordEnc: encrypt(SECRETO_PASS),
+      estado: 'sin_configurar',
+    };
+    hoisted.findUnique.mockResolvedValue(null);
+    hoisted.upsert.mockResolvedValue(filaParBasic);
+
+    const result = await saveConnectivityConfig({
+      partnerId: undefined,
+      username: SECRETO_USER,
+      password: SECRETO_PASS,
+    });
+
+    expect(result.ok).toBe(true);
+    // Guardado parcial: el par queda almacenado pero NO está «configurado»
+    // (falta el ID de socio para poder llamar al servicio).
+    expect(result.configurado).toBe(false);
+
+    const createData = hoisted.upsert.mock.calls[0][0].create;
+    expect(createData.partnerIdEnc).toBeUndefined();
+    expect(decrypt(createData.usernameEnc)).toBe(SECRETO_USER);
+    expect(decrypt(createData.passwordEnc)).toBe(SECRETO_PASS);
+  });
+
+  it('getConnectivityPublic: par Basic sin partner → tieneCredenciales true, completo false', async () => {
+    hoisted.findUnique.mockResolvedValue({
+      ...filaConfigurada(),
+      partnerIdEnc: null,
+    });
+
+    const pub = await getConnectivityPublic();
+
+    // Hay ALGO guardado: el panel debe mostrar el botón de reset y los
+    // placeholders de «dejar vacío para mantener».
+    expect(pub.tieneCredenciales).toBe(true);
+    // Pero no está completo: no se puede llamar aún al servicio.
+    expect(pub.completo).toBe(false);
+    // «configurado» solo refleja que hay fila de proveedor; el rigor de
+    // «los tres secretos» lo aporta «completo».
+    expect(pub.configurado).toBe(true);
+  });
 });
