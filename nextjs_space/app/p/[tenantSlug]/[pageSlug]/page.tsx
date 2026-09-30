@@ -51,12 +51,19 @@ async function getPageData(tenantSlug: string, pageSlug: string) {
   const { client: tenantClient } = await getTenantDb(tenant.id);
   
   return await dbContext.run({ tenantId: tenant.id, client: tenantClient }, async () => {
-    return await tenantClient.page.findFirst({
+    const page = await tenantClient.page.findFirst({
       where: {
         slug: pageSlug,
         estado: "published",
       },
     });
+    // BD compartida: verificar tenencia. Sin este check, el slug de una
+    // página de OTRO tenant se serviría bajo la URL de este (fuga).
+    if (page && !tenant.dbUrl) {
+      const esGlobal = page.tenantId === null;
+      if (page.tenantId !== tenant.id && !esGlobal) return null;
+    }
+    return page;
   });
 }
 

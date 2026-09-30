@@ -28,9 +28,14 @@ export async function GET(req: NextRequest) {
 
   const { client: tenantClient } = await getTenantDb(tenant.id)
   const page = await dbContext.run({ tenantId: tenant.id, client: tenantClient }, async () => {
-    return await tenantClient.page.findFirst({
+    const encontrada = await tenantClient.page.findFirst({
       where: { slug: pageSlug, estado: 'published' },
     })
+    // BD compartida: no servir el markdown de páginas de OTRO tenant.
+    if (encontrada && encontrada.tenantId !== null && encontrada.tenantId !== tenant.id && !tenant.dbUrl) {
+      return null
+    }
+    return encontrada
   })
 
   if (!page) {

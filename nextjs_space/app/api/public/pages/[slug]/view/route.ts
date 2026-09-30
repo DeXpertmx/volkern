@@ -36,6 +36,8 @@ export async function POST(
     if (!tenantId) {
       return NextResponse.json({ error: 'No encontrado' }, { status: 404 });
     }
+    // Estrecho el tipo para poder usarlo dentro del closure asíncrono.
+    const tenantIdResuelto: string = tenantId;
 
     const tenantClient = await getTenantDb(tenantId);
 
@@ -43,6 +45,18 @@ export async function POST(
       const page = await prisma.page.findFirst({
         where: { slug: params.slug, estado: 'published' },
       });
+
+      // BD compartida: no contar vistas de páginas de OTRO tenant servidas
+      // bajo este (misma fuga que el renderizador).
+      if (page && page.tenantId !== null && page.tenantId !== tenantIdResuelto) {
+        const tenantInfo = await globalPrisma.tenant.findUnique({
+          where: { id: tenantIdResuelto },
+          select: { dbUrl: true },
+        });
+        if (!tenantInfo?.dbUrl) {
+          return NextResponse.json({ error: 'No encontrado' }, { status: 404 });
+        }
+      }
 
       if (!page) {
         return NextResponse.json({ error: 'No encontrado' }, { status: 404 });

@@ -10,12 +10,32 @@ export const POST = withTenantAuth(async (req, auth, params: { id: string }) => 
   try {
     const tenantId = auth.tenant!.id;
 
-    // Verificar si la página ya está publicada antes de chequear el límite
+    // Verificar si la página ya está publicada antes de chequear el límite.
+    // Se trae también tenantId para verificar tenencia (BD compartida).
     const currentPage = await prisma.page.findUnique({
       where: { id: params.id },
-      select: { estado: true }
+      select: { estado: true, tenantId: true }
     })
-    if (currentPage && currentPage.estado !== 'published') {
+
+    // Tenencia (BD compartida): publicar una página ajena solo con conocer su
+    // id sería una fuga entre tenants. Con BD aislada la física ya separa.
+    if (!currentPage) {
+      return NextResponse.json({ error: "Página no encontrada" }, { status: 404 });
+    }
+    const tenantInfo = await globalPrisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { dbUrl: true },
+    });
+    const esGlobal = currentPage.tenantId === null;
+    if (
+      !tenantInfo?.dbUrl &&
+      currentPage.tenantId !== tenantId &&
+      !(auth.user?.role?.nombre === 'Superadmin' && esGlobal)
+    ) {
+      return NextResponse.json({ error: "Página no encontrada" }, { status: 404 });
+    }
+
+    if (currentPage.estado !== 'published') {
       const limitCheck = await checkFeatureLimit(tenantId, 'published_pages', 1)
       if (!limitCheck.allowed) {
         return NextResponse.json(
@@ -114,11 +134,11 @@ export const POST = withTenantAuth(async (req, auth, params: { id: string }) => 
     // Obtener slug del tenant para la URL pública
     // En BD aislada, pagina.tenantId puede ser null, usamos el tenantId del contexto auth
     const effectiveTenantId = pagina.tenantId || tenantId;
-    const tenantInfo = await globalPrisma.tenant.findUnique({
+    const tenantSlugInfo = await globalPrisma.tenant.findUnique({
       where: { id: effectiveTenantId },
       select: { slug: true },
     });
-    const tenantSlug = tenantInfo?.slug || effectiveTenantId;
+    const tenantSlug = tenantSlugInfo?.slug || effectiveTenantId;
 
     // Generar URL pública
     const baseUrl = process.env.NEXTAUTH_URL || 'https://volkern.app';

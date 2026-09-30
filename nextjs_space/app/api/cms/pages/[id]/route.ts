@@ -19,20 +19,35 @@ export const GET = withTenantAuth(async (req, auth, context) => {
     const isSuperadmin = auth.user?.role?.nombre === 'Superadmin';
     const tenantId = auth.tenant!.id;
 
+    // ¿BD física aislada? Si no, `prisma` resuelve a la BD compartida y la
+    // tenencia hay que verificarla explícitamente.
+    const tenantInfo = await globalPrisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { dbUrl: true },
+    });
+    const isIsolated = !!tenantInfo?.dbUrl;
+
     // 1. Intentar buscar en la DB del Tenant
     const page = await prisma.page.findUnique({
       where: { id }
     });
 
     if (page) {
+      // BD compartida: solo su dueño (o superadmin sobre páginas globales).
+      // Sin esta verificación, cualquier usuario con el id de una página
+      // ajena podía leerla (fuga entre tenants).
+      const esGlobal = page.tenantId === null;
+      if (!isIsolated && page.tenantId !== tenantId && !(isSuperadmin && esGlobal)) {
+        return NextResponse.json({ error: 'Página no encontrada' }, { status: 404 });
+      }
       // Obtener el slug del tenant para construir URLs públicas
-      const tenantInfo = await globalPrisma.tenant.findUnique({
+      const tenantSlugInfo = await globalPrisma.tenant.findUnique({
         where: { id: tenantId },
         select: { slug: true },
       });
       return NextResponse.json({ 
         page: { ...page, tenantId: page.tenantId || tenantId },
-        tenantSlug: tenantInfo?.slug || tenantId,
+        tenantSlug: tenantSlugInfo?.slug || tenantId,
       });
     }
 
@@ -87,13 +102,25 @@ export const PUT = withTenantAuth(async (req, auth, context) => {
       console.log('[CMS Page PUT] projectData keys:', Object.keys(contenido.projectData));
     }
 
+    // ¿BD física aislada? Si no, `prisma` resuelve a la BD compartida y la
+    // tenencia hay que verificarla antes de escribir.
+    const tenantInfo = await globalPrisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { dbUrl: true },
+    });
+    const isIsolated = !!tenantInfo?.dbUrl;
+
     // Determinar qué DB usar y verificar existencia
     let targetDb = prisma;
     let existingPage = await prisma.page.findUnique({ where: { id } });
 
     if (existingPage) {
-      // SI ESTÁ EN LA DB DEL TENANT: La autorización está garantizada por el aislamiento
-      // del pool de conexiones. No validamos tenantId porque puede ser null (AISLAMIENTO).
+      // BD compartida: solo el dueño (o superadmin sobre páginas globales)
+      // puede modificarla. Con BD aislada la física ya separa a cada tenant.
+      const esGlobal = existingPage.tenantId === null;
+      if (!isIsolated && existingPage.tenantId !== tenantId && !(isSuperadmin && esGlobal)) {
+        return NextResponse.json({ error: 'Página no encontrada o sin acceso' }, { status: 404 });
+      }
     } else if (isSuperadmin) {
       // SI NO ESTÁ EN EL TENANT Y ES SUPERADMIN: Buscamos en la Global
       existingPage = await globalPrisma.page.findUnique({ where: { id, tenantId: null } });
@@ -170,8 +197,21 @@ export const DELETE = withTenantAuth(async (req, auth, context) => {
       return NextResponse.json({ error: 'Página no encontrada' }, { status: 404 });
     }
 
-    // Nota: El aislamiento de prisma ya garantiza que si existe en ese pool, es de ese tenant.
-    
+    // BD compartida: solo el dueño (o superadmin sobre páginas globales) puede
+    // borrar. Con BD aislada la física ya separa a cada tenant.
+    const tenantInfo = await globalPrisma.tenant.findUnique({
+      where: { id: auth.tenant!.id },
+      select: { dbUrl: true },
+    });
+    const esGlobal = existingPage.tenantId === null;
+    if (
+      !tenantInfo?.dbUrl &&
+      existingPage.tenantId !== auth.tenant!.id &&
+      !(isSuperadmin && esGlobal)
+    ) {
+      return NextResponse.json({ error: 'Página no encontrada' }, { status: 404 });
+    }
+
     await targetDb.page.delete({
       where: { id },
     });

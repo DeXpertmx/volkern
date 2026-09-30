@@ -59,6 +59,8 @@ export async function GET(
         { status: 404 }
       );
     }
+    // Estrecho el tipo para poder usarlo dentro del closure asíncrono.
+    const tenantIdResuelto: string = tenantId;
 
     // 2. Ejecutar la consulta en la Base de Datos del Tenant
     const tenantClient = await getTenantDb(tenantId);
@@ -70,6 +72,21 @@ export async function GET(
           estado: "published",
         },
       });
+
+      // BD compartida: una página publicada de OTRO tenant no debe servirse
+      // bajo este (fuga entre tenants). Las globales (tenantId null) sí.
+      if (pagina && pagina.tenantId !== null && pagina.tenantId !== tenantIdResuelto) {
+        const tenantInfo = await globalPrisma.tenant.findUnique({
+          where: { id: tenantIdResuelto },
+          select: { dbUrl: true },
+        });
+        if (!tenantInfo?.dbUrl) {
+          return NextResponse.json(
+            { error: "Página no encontrada o no publicada" },
+            { status: 404 }
+          );
+        }
+      }
 
       if (!pagina) {
         return NextResponse.json(

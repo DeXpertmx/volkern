@@ -40,17 +40,17 @@ export const GET = withTenantAuth(async (req, auth) => {
     let where: any = {};
 
     if (isGlobalRequested && isSuperadmin) {
-      // Nota: Las páginas globales viven en la Global DB. 
+      // Nota: Las páginas globales viven en la Global DB.
       where = { tenantId: null };
-    } else if (isSuperadmin) {
-      // Superadmin en modo Dashboard: Ver todo (excepto la home para no mezclar)
-      where = {
-        slug: { not: 'home' }
-      };
     } else if (!isIsolated) {
-      // Si usan la DB compartida global, DEBEMOS filtrar estrictamente por tenantId.
+      // BD compartida: filtrado estricto por tenant SIEMPRE, incluido el
+      // Superadmin. Un superadmin pertenece a un tenant concreto y desde su
+      // dashboard gestiona ESE tenant; para ver otro usa la impersonación.
+      // Sin este filtro listaba las páginas de TODOS los tenants (fuga de
+      // datos reportada desde el tenant JUAN ANTONIO MORENO FERNANDEZ).
       where = { tenantId: tenantId };
     }
+    // Tenant con BD aislada: la BD física ya garantiza el aislamiento.
 
     if (tipo) where.tipo = tipo;
     if (estado) where.estado = estado;
