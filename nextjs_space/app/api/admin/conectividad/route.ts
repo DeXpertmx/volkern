@@ -8,6 +8,7 @@ import {
   getConnectivityPublic,
   saveConnectivityConfig,
   getConnectivityCredentials,
+  resetConnectivityCredentials,
   CONNECTIVITY_PROVIDER_NOMBRE,
   type ConnectivityEstado,
 } from '@/lib/hospitality/connectivity';
@@ -144,18 +145,43 @@ export async function PUT(request: NextRequest) {
         quien: auth.user.name || auth.user.email || auth.user.id,
         userId: auth.user.id,
       }).catch((err) => console.error('[Conectividad] Error al notificar:', err));
-    }
-
-    return NextResponse.json({
-      success: true,
-      ...result,
-      completo,
-      // Avisos no bloqueantes (caracteres poco habituales, http sin cifrado…):
-      // el guardado sigue adelante, pero el panel los muestra para revisarlos.
-      avisos: avisosPreflight,
-    });
+    }  return NextResponse.json({
+    success: true,
+    ...result,
+    completo,
+    // Avisos no bloqueantes (caracteres poco habituales, http sin cifrado…):
+    // el guardado sigue adelante, pero el panel los muestra para revisarlos.
+    avisos: avisosPreflight,
+  });
   } catch (error) {
     console.error('Error guardando conectividad:', error);
     return NextResponse.json({ error: 'Error al guardar configuración' }, { status: 500 });
+  }
+}
+
+// DELETE /api/admin/conectividad — reset de credenciales (borrar y reintroducir)
+// Para rotar el par o pasar de sandbox a producción: borra los tres secretos
+// cifrados y deja el proveedor `sin_configurar`. No toca mapeos ni historial.
+export async function DELETE() {
+  try {
+    const auth = await requireSuperadmin();
+    if ('error' in auth) return auth.error;
+
+    const habia = await getConnectivityCredentials();
+    await resetConnectivityCredentials();
+
+    // Acción sensible por antonomasia: quién vació las credenciales del canal.
+    await notifyDeveloperSensitiveAction({
+      title: '🔓 Conectividad de Canales — credenciales borradas',
+      accion: 'Reset de credenciales de conectividad',
+      detalle: `${CONNECTIVITY_PROVIDER_NOMBRE}: credenciales eliminadas (había${habia ? '' : ' NO'} partnerId/usuario/contraseña guardados). Quedan los mapeos y el historial.`,
+      quien: auth.user.name || auth.user.email || auth.user.id,
+      userId: auth.user.id,
+    }).catch((err) => console.error('[Conectividad] Error al notificar:', err));
+
+    return NextResponse.json({ success: true, reset: true });
+  } catch (error) {
+    console.error('Error reseteando conectividad:', error);
+    return NextResponse.json({ error: 'Error al resetear las credenciales' }, { status: 500 });
   }
 }

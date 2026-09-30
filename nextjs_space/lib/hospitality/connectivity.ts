@@ -234,6 +234,35 @@ export async function saveConnectivityConfig(input: {
 }
 
 /**
+ * Borra las credenciales guardadas y devuelve el proveedor a
+ * `sin_configurar`, para poder volver a introducirlas desde cero (rotación
+ * del par, paso de sandbox a producción…).
+ *
+ * NO toca nada más: los mapeos (`ConnectivityMapping`) y el historial de
+ * sincronizaciones quedan como están — reconfigurar credenciales no debe
+ * perder el trabajo de vínculos ni la auditoría. Los counters de error y la
+ * última sincronización sí se resetean: describen la credencial anterior.
+ */
+export async function resetConnectivityCredentials(): Promise<boolean> {
+  const provider = await getConnectivityProvider();
+  if (!provider) return true; // nada que limpiar: ya está sin configurar
+  await prisma.connectivityProvider.update({
+    where: { providerKey: CONNECTIVITY_PROVIDER_KEY },
+    data: {
+      partnerIdEnc: null,
+      usernameEnc: null,
+      passwordEnc: null,
+      estado: 'sin_configurar',
+      contadorErrores: 0,
+      ultimaSincronizacion: null,
+      ultimoEvento: null,
+      fechaEdicion: new Date(),
+    },
+  });
+  return true;
+}
+
+/**
  * Marca estado y contadores del proveedor (errores, última sincronización).
  */
 export async function updateConnectivityStatus(input: {

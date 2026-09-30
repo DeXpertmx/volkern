@@ -21,6 +21,7 @@ import {
   Scale,
   EyeOff,
   Info,
+  Trash2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -168,6 +169,7 @@ export default function AdminConectividad() {
   /** Recarga del estado sin apagar la pantalla entera (botón «Actualizar»). */
   const [recargandoEstado, setRecargandoEstado] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [reseteando, setReseteando] = useState(false);
   const [estado, setEstado] = useState<EstadoConectividad | null>(null);
   const [partnerId, setPartnerId] = useState('');
   const [username, setUsername] = useState('');
@@ -340,6 +342,41 @@ export default function AdminConectividad() {
       toast.error('Error al guardar credenciales');
     } finally {
       setSaving(false);
+    }
+  };
+
+  /**
+   * Reset de credenciales: borra los tres secretos y deja el proveedor
+   * `sin_configurar` para introducirlos de nuevo (rotación o sandbox → real).
+   * Con confirmación: es destructivo para las credenciales, no para los
+   * mapeos ni el historial. Limpia también los inputs del formulario.
+   */
+  const handleReset = async () => {
+    if (
+      !window.confirm(
+        '¿Borrar las credenciales guardadas? Tendrás que introducir ID de socio, usuario y contraseña de nuevo. Los mapeos de propiedades y el historial de sincronizaciones NO se tocan.'
+      )
+    ) {
+      return;
+    }
+    setReseteando(true);
+    try {
+      const res = await fetch('/api/admin/conectividad', { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || 'No se pudieron borrar las credenciales');
+        return;
+      }
+      setPartnerId('');
+      setUsername('');
+      setPassword('');
+      setAvisosGuardado([]);
+      await loadEstado();
+      toast.success('Credenciales borradas. Introdúcelas de nuevo y guarda.');
+    } catch {
+      toast.error('Error de red al borrar las credenciales');
+    } finally {
+      setReseteando(false);
     }
   };
 
@@ -672,6 +709,25 @@ export default function AdminConectividad() {
               )}
               {saving ? 'Guardando...' : 'Guardar credenciales'}
             </Button>
+            {/* Reset: solo tiene sentido si hay algo que borrar. Al lado del
+                guardado porque el flujo natural es «borrar → pegar las nuevas
+                → guardar», sin salir de la tarjeta. */}
+            {estado?.tieneCredenciales && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={reseteando || saving}
+                onClick={handleReset}
+                className="text-destructive hover:text-destructive"
+              >
+                {reseteando ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <Trash2 className="h-4 w-4 mr-2" />
+                )}
+                {reseteando ? 'Borrando...' : 'Resetear credenciales'}
+              </Button>
+            )}
             {!revisionCredenciales.ok && (
               <p className="text-xs text-destructive">
                 {resumenPreflight(revisionCredenciales)} — corrige los avisos marcados para poder guardar.
