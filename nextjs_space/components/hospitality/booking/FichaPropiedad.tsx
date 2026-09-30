@@ -14,12 +14,38 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, Home, ImageOff, MapPin, Star, Users, X } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Home,
+  ImageOff,
+  MapPin,
+  Map as MapIcon,
+  Plane,
+  Bus,
+  TrainFront,
+  Car,
+  Ship,
+  Star,
+  Users,
+  X,
+} from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { interpolar, TEXTOS, type Idioma } from '@/lib/hospitality/booking-i18n';
 
 /** Número de servicios que se listan antes de resumir el resto en «+N». */
 const SERVICIOS_VISIBLES = 8;
+
+/** Distancias declaradas por el hotel, tal como las manda la API pública. */
+export interface DistanciasPublicas {
+  aeropuertoKm?: number;
+  autobusKm?: number;
+  metroKm?: number;
+  trenKm?: number;
+  autopistaKm?: number;
+  puertoKm?: number;
+  unidad?: 'km' | 'millas';
+}
 
 /**
  * Galería de la propiedad: portada, hasta dos fotos de apoyo en mosaico y visor a
@@ -193,6 +219,9 @@ export function FichaPropiedad({
   amenidades,
   valoracion,
   enlaceMapa,
+  indicaciones,
+  distancias,
+  mapaPersonalizadoUrl,
   idioma,
 }: {
   descripcion: string | null;
@@ -204,11 +233,32 @@ export function FichaPropiedad({
   amenidades: string[];
   valoracion: { media: number; total: number } | null;
   enlaceMapa: string | null;
+  /** Cómo llegar, ya elegida por la API en el idioma de la página. */
+  indicaciones?: string | null;
+  /** Distancias a transporte declaradas por el hotel. */
+  distancias?: DistanciasPublicas | null;
+  /** Mapa o imagen propia del hotel (ruta dibujada a mano, plano…). */
+  mapaPersonalizadoUrl?: string | null;
   idioma: Idioma;
 }) {
   const t = TEXTOS[idioma];
   const visibles = amenidades.slice(0, SERVICIOS_VISIBLES);
   const restantes = amenidades.length - visibles.length;
+
+  const filasDistancias: Array<{ clave: string; icono: React.ReactNode; label: string; km: number }> = [];
+  if (distancias) {
+    const filas: Array<[string, React.ReactNode, string, number | undefined]> = [
+      ['aeropuerto', <Plane key="av" />, t.distanciaAeropuerto, distancias.aeropuertoKm],
+      ['autobus', <Bus key="bu" />, t.distanciaAutobus, distancias.autobusKm],
+      ['metro', <TrainFront key="me" />, t.distanciaMetro, distancias.metroKm],
+      ['tren', <TrainFront key="tr" />, t.distanciaTren, distancias.trenKm],
+      ['autopista', <Car key="au" />, t.distanciaAutopista, distancias.autopistaKm],
+      ['puerto', <Ship key="pu" />, t.distanciaPuerto, distancias.puertoKm],
+    ];
+    for (const [clave, icono, label, km] of filas) {
+      if (typeof km === 'number' && km > 0) filasDistancias.push({ clave, icono, label, km });
+    }
+  }
 
   const hechos: Array<{ clave: string; icono: React.ReactNode; texto: string }> = [];
   if (ubicacion) {
@@ -279,6 +329,44 @@ export function FichaPropiedad({
           <MapPin className="h-4 w-4" aria-hidden />
           {t.verMapa}
         </a>
+      )}
+
+      {mapaPersonalizadoUrl && (
+        <figure className="space-y-1.5">
+          <img
+            src={mapaPersonalizadoUrl}
+            alt={t.comoLlegar}
+            className="w-full rounded-xl border"
+          />
+          <figcaption className="text-xs text-muted-foreground">{t.comoLlegar}</figcaption>
+        </figure>
+      )}
+
+      {filasDistancias.length > 0 && (
+        <div className="space-y-2">
+          <h2 className="text-sm font-semibold">{t.distancias}</h2>
+          <ul className="divide-y rounded-xl border">
+            {filasDistancias.map(({ clave, icono, label, km }) => (
+              <li key={clave} className="flex items-center gap-3 px-3 py-2 text-sm">
+                <span className="text-muted-foreground">{icono}</span>
+                <span className="flex-1">{label}</span>
+                <span className="font-medium">
+                  {new Intl.NumberFormat(idioma === 'en' ? 'en-US' : 'es-ES', {
+                    maximumFractionDigits: 2,
+                  }).format(km)}{' '}
+                  {distancias?.unidad === 'millas' ? (idioma === 'en' ? 'mi' : 'mi') : idioma === 'en' ? 'km' : 'km'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {indicaciones && (
+        <div className="space-y-2">
+          <h2 className="text-sm font-semibold">{t.comoLlegar}</h2>
+          <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{indicaciones}</p>
+        </div>
       )}
     </section>
   );

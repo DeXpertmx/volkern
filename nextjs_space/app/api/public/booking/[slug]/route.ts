@@ -42,6 +42,9 @@ import { monedaEfectiva } from '@/lib/moneda';
 const ESTADO_UNIDAD_NO_VENDIBLE = ['maintenance', 'out_of_service'];
 
 async function propiedadPublicada(slug: string) {
+  // El include devuelve la fila completa: los campos de ubicación enriquecida
+  // (distancias/indicaciones/mapa propio) viajan hasta datosPublicosDePropiedad,
+  // que es quien decide qué sale a la página pública.
   const propiedad = await prisma.hospitalityProperty.findFirst({
     where: { id: slug, estado: 'conectada' },
     include: {
@@ -85,6 +88,36 @@ function fotosPublicas(valor: unknown): string[] {
  * desaparecería justo cuando el huésped ya está decidiendo. Aquí no hay nada
  * interno: ni importes de otras reservas, ni huéspedes, ni códigos de canal.
  */
+
+/** Distancias declaradas por el hotel, con solo claves y valores saneados. */
+function distanciasPublicas(valor: unknown): Record<string, number | string> | null {
+  if (!valor || typeof valor !== 'object' || Array.isArray(valor)) return null;
+  const entrada = valor as Record<string, unknown>;
+  const salida: Record<string, number | string> = {};
+  for (const [clave, v] of Object.entries(entrada)) {
+    if (clave === 'unidad') {
+      if (v === 'km' || v === 'millas') salida.unidad = v;
+      continue;
+    }
+    const n = Number(v);
+    if (clave.length > 0 && Number.isFinite(n) && n > 0) salida[clave] = n;
+  }
+  return Object.keys(salida).length > 0 ? salida : null;
+}
+
+/**
+ * La indicación de llegada en el idioma del huésped, con caída al español
+ * (el hotel escribe es/en; un huésped EN sin traducción todavía recibe algo).
+ * Devuelve null si el hotel no escribió ninguna.
+ */
+function indicacionEnIdioma(valor: unknown, idioma: 'es' | 'en'): string | null {
+  if (!valor || typeof valor !== 'object' || Array.isArray(valor)) return null;
+  const mapa = valor as Record<string, unknown>;
+  const texto = (v: unknown): string | null =>
+    typeof v === 'string' && v.trim() ? v.trim() : null;
+  return texto(mapa[idioma]) ?? texto(mapa.es);
+}
+
 function datosPublicosDePropiedad(
   propiedad: {
     id: string;
@@ -97,7 +130,12 @@ function datosPublicosDePropiedad(
     latitud: number | null;
     longitud: number | null;
     fotos: unknown;
+    distancias?: unknown;
+    indicaciones?: unknown;
+    mapaPersonalizadoUrl?: string | null;
   },
+  /** Idioma de la página: decide qué indicación de llegada se envía. */
+  idioma: 'es' | 'en',
   /**
    * Divisa de la ficha. Nula cuando las unidades publicadas no comparten una
    * (el motor de precios no inventa una divisa para un catálogo mixto): la
@@ -116,6 +154,14 @@ function datosPublicosDePropiedad(
     latitud: propiedad.latitud,
     longitud: propiedad.longitud,
     fotos: fotosPublicas(propiedad.fotos),
+    // Ubicación enriquecida (editor estilo Airbnb): distancias a transporte,
+    // indicaciones en el idioma pedido (canales es/en) y mapa propio del hotel.
+    distancias: distanciasPublicas(propiedad.distancias),
+    indicaciones: indicacionEnIdioma(propiedad.indicaciones, idioma),
+    mapaPersonalizadoUrl:
+      typeof propiedad.mapaPersonalizadoUrl === 'string' && propiedad.mapaPersonalizadoUrl
+        ? propiedad.mapaPersonalizadoUrl
+        : null,
     moneda,
   };
 }
@@ -205,6 +251,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
         // predominante) y, si aún no hay ninguna, la de reporte del hotel.
         propiedad: datosPublicosDePropiedad(
           propiedad,
+          idiomaCatalogo,
           monedaEfectiva(
             unidades.map((u) => u.moneda),
             propiedad.tenant?.moneda
@@ -283,7 +330,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
     return NextResponse.json({
       // La misma ficha que sin fechas: la galería y la ubicación no se caen
       // porque el huésped haya pedido disponibilidad.
-      propiedad: datosPublicosDePropiedad(propiedad, cotizacion.moneda),
+      propiedad: datosPublicosDePropiedad(propiedad, idiomaCatalogo, cotizacion.moneda),
       cotizacion: {
         ...cotizacion,
         unidades: cotizacion.unidades.map((c) => {

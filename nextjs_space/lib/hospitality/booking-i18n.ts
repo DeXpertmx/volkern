@@ -68,6 +68,16 @@ export interface BookingTextos {
   ubicacion: string;
   verMapa: string;
   servicios: string;
+  /** Cómo llegar: bloque de indicaciones escritas por el hotel (idioma del huésped). */
+  comoLlegar: string;
+  /** Distancias a transporte: «Distancias» y etiquetas de cada tipo. */
+  distancias: string;
+  distanciaAeropuerto: string;
+  distanciaAutobus: string;
+  distanciaMetro: string;
+  distanciaTren: string;
+  distanciaAutopista: string;
+  distanciaPuerto: string;
   /** Listado de unidades publicadas, antes de elegir fechas. */
   disponiblesTitulo: string;
   /** «{n} unidades publicadas»: el singular y el plural viven en el idioma. */
@@ -142,6 +152,14 @@ export const TEXTOS: Record<Idioma, BookingTextos> = {
     ubicacion: 'Ubicación',
     verMapa: 'Ver en el mapa',
     servicios: 'Servicios del alojamiento',
+    comoLlegar: 'Cómo llegar',
+    distancias: 'Distancias',
+    distanciaAeropuerto: 'Aeropuerto',
+    distanciaAutobus: 'Autobús',
+    distanciaMetro: 'Metro',
+    distanciaTren: 'Tren',
+    distanciaAutopista: 'Autopista',
+    distanciaPuerto: 'Puerto',
     disponiblesTitulo: 'Alojamientos disponibles',
     unidad: 'unidad',
     unidades: 'unidades',
@@ -212,6 +230,14 @@ export const TEXTOS: Record<Idioma, BookingTextos> = {
     fotoSiguiente: 'Next photo',
     ubicacion: 'Location',
     verMapa: 'View on map',
+    comoLlegar: 'How to get there',
+    distancias: 'Distances',
+    distanciaAeropuerto: 'Airport',
+    distanciaAutobus: 'Bus',
+    distanciaMetro: 'Metro',
+    distanciaTren: 'Train',
+    distanciaAutopista: 'Highway',
+    distanciaPuerto: 'Port',
     servicios: 'Amenities',
     disponiblesTitulo: 'Available accommodations',
     unidad: 'unit',

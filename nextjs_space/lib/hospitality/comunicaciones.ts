@@ -113,6 +113,11 @@ export function buildContextoPlantilla(params: {
    * variable desaparece del mensaje en vez de dejar la lista vacía.
    */
   preguntasPendientes?: string[]
+  /**
+   * Cómo llegar, en el idioma del mensaje (`{{indicaciones}}`), ya elegida
+   * del Json multi-idioma de la propiedad. Ausente → la variable desaparece.
+   */
+  indicaciones?: string | null
 }): Record<string, string> {
   const { reserva, unidad, propiedad } = params
   const idioma = idiomaDeValor(params.idioma)
@@ -147,6 +152,10 @@ export function buildContextoPlantilla(params: {
     // el mismo delimitador que el saneado del módulo corta dentro de cada
     // texto, para que ningún texto del hotel fabrique líneas nuevas.
     preguntas_pendientes: (params.preguntasPendientes || []).join('; '),
+    // «Cómo llegar» del hotel en el idioma del mensaje (editor de la
+    // propiedad). Sin texto —o solo espacios—, la variable desaparece en vez
+    // de quedar vacía.
+    indicaciones: params.indicaciones?.trim() || '',
   }
 }
 
@@ -234,7 +243,14 @@ export async function dispararComunicacionReserva(params: {
       where: { id: reservationId, tenantId },
       include: {
         unit: { select: { nombre: true } },
-        property: { select: { nombre: true } },
+        property: {
+          select: {
+            nombre: true,
+            // Ubicación enriquecida para {{indicaciones}}: el texto del hotel
+            // en el idioma del huésped (caída al español).
+            indicaciones: true,
+          },
+        },
       },
     })
     if (!reserva) return []
@@ -261,7 +277,7 @@ export async function dispararComunicacionPorEvento(params: {
   evento: ComunicacionEvento | string
   reserva: any
   unidad?: { nombre?: string | null } | null
-  propiedad?: { nombre?: string | null } | null
+  propiedad?: { nombre?: string | null; indicaciones?: unknown } | null
 }): Promise<Array<{ templateId: string; evento: string; canal: string; ok: boolean; error?: string }>> {
   const { tenantId, evento, reserva } = params
 
@@ -342,6 +358,19 @@ export async function dispararComunicacionPorEvento(params: {
       console.error('[Hospitality Comunicaciones] No se pudieron leer las preguntas del check-in:', err?.message || err)
     }
 
+    // {{indicaciones}}: el texto «cómo llegar» que el hotel escribió en el
+    // editor (indicaciones multi-idioma de la propiedad). Sale en el idioma
+    // del mensaje; si el hotel no tradujo, cae al español; si no escribió
+    // ninguna, la variable desaparece del mensaje.
+    const indicacionesDePropiedad = (() => {
+      const crudo = (params.propiedad as { indicaciones?: unknown } | null | undefined)?.indicaciones
+      if (!crudo || typeof crudo !== 'object' || Array.isArray(crudo)) return null
+      const mapa = crudo as Record<string, unknown>
+      const texto = (v: unknown): string | null =>
+        typeof v === 'string' && v.trim() ? v.trim() : null
+      return texto(mapa[idioma]) ?? texto(mapa.es)
+    })()
+
     const contexto = buildContextoPlantilla({
       reserva,
       unidad: params.unidad || null,
@@ -350,6 +379,7 @@ export async function dispararComunicacionPorEvento(params: {
       enlaceCheckin: enlace,
       enlaceResena: enlaceReview,
       preguntasPendientes: pendientes,
+      indicaciones: indicacionesDePropiedad,
     })
 
     const resultados: Array<{ templateId: string; evento: string; canal: string; ok: boolean; error?: string }> = []

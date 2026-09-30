@@ -93,6 +93,10 @@ interface PropiedadUI {
   longitud: number | null;
   fotos: string[];
   moneda: string;
+  /** Ubicación enriquecida (editor Airbnb): ya elegida por la API. */
+  indicaciones?: string | null;
+  distancias?: Record<string, unknown> | null;
+  mapaPersonalizadoUrl?: string | null;
 }
 
 interface UnidadCatalogo {
@@ -536,6 +540,9 @@ function BookingCliente() {
             amenidades={amenidades}
             valoracion={resenas && resenas.media ? { media: resenas.media, total: resenas.total } : null}
             enlaceMapa={enlaceMapaDe(propiedad)}
+            indicaciones={propiedad.indicaciones}
+            distancias={propiedad.distancias}
+            mapaPersonalizadoUrl={propiedad.mapaPersonalizadoUrl}
             idioma={idioma}
           />
         )}
