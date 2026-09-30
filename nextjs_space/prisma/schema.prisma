@@ -58,6 +58,7 @@ model User {
   tenantId                String?
   timezone                String                     @default("America/Mexico_City")
   tokenInvitacion         String?                    @unique
+  tokenInvitacionExpiry   DateTime?
   metadata                Json?                      @default("{}")
   resetToken              String?                    @unique
   resetTokenExpiry        DateTime?

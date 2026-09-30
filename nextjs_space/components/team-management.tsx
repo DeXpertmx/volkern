@@ -35,7 +35,7 @@ import {
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { UserPlus, Mail, Phone, Clock, Shield, Pencil, Trash2, FileText, ChevronLeft } from 'lucide-react'
+import { UserPlus, Mail, Phone, Clock, Shield, Pencil, Trash2, FileText, ChevronLeft, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { EmployeeExpedient } from '@/components/hr/EmployeeExpedient'
 
@@ -99,6 +99,7 @@ export function TeamManagement() {
   const [editPhone, setEditPhone] = useState('')
   const [editTimezone, setEditTimezone] = useState('')
   const [editActive, setEditActive] = useState(true)
+  const [reenviandoId, setReenviandoId] = useState<string | null>(null)
 
   useEffect(() => {
     fetchUsers()
@@ -153,7 +154,15 @@ export function TeamManagement() {
       const data = await response.json()
 
       if (response.ok) {
-        toast.success('Usuario invitado exitosamente con auto-perfilado')
+        if (data.emailEnviado) {
+          toast.success('Invitación enviada', {
+            description: `${data.user?.email} recibirá un email con el enlace de aceptación.`,
+          })
+        } else {
+          toast.warning('Usuario creado, pero el email no pudo enviarse', {
+            description: (data.emailError || 'Error de envío') + ' Usa el botón de reenviar invitación en la lista.',
+          })
+        }
         setInviteOpen(false)
         setInviteEmail('')
         setInviteName('')
@@ -216,6 +225,23 @@ export function TeamManagement() {
       toast.error('Error al actualizar usuario')
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const handleReenviar = async (userId: string) => {
+    setReenviandoId(userId)
+    try {
+      const response = await fetch(`/api/users/${userId}/reenviar-invitacion`, { method: 'POST' })
+      const data = await response.json().catch(() => ({}))
+      if (response.ok) {
+        toast.success('Invitación reenviada. El invitado recibirá un email con el enlace de aceptación.')
+      } else {
+        toast.error(data.error || 'Error al reenviar la invitación')
+      }
+    } catch {
+      toast.error('Error de red al reenviar la invitación')
+    } finally {
+      setReenviandoId(null)
     }
   }
 
@@ -492,6 +518,22 @@ export function TeamManagement() {
                         <FileText className="mr-2 h-4 w-4 text-primary" />
                         Expediente
                       </Button>
+                      {user.estado === 'invitado' && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="rounded-xl h-9 w-9 p-0 hover:bg-slate-100"
+                          title="Reenviar invitación por email"
+                          onClick={() => handleReenviar(user.id)}
+                          disabled={reenviandoId === user.id}
+                        >
+                          {reenviandoId === user.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Mail className="h-4 w-4" />
+                          )}
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="sm"

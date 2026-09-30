@@ -17,7 +17,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   contact: { findFirst: vi.fn() },
-  role: { findFirst: vi.fn(), create: vi.fn() },
+  role: { findFirst: vi.fn(), findUnique: vi.fn(), create: vi.fn() },
   user: { findUnique: vi.fn(), create: vi.fn(), role: { id: 'role_test', nombre: 'Superadmin', permisos: { all: true } } },
   validateLimit: vi.fn(),
   incrementUsage: vi.fn(),
@@ -54,7 +54,7 @@ vi.mock('@/lib/skills/notification-layer', () => ({
 
 const { POST } = await import('@/app/api/users/route');
 
-const ROL_HUESPED = { id: 'r-huesped', nombre: 'Huésped' };
+const ROL_HUESPED = { id: 'r-huesped', nombre: 'Huésped', tenantId: 't1' };
 
 /**
  * El Anfitrión: administra el alojamiento y quién entra al módulo, pero no
@@ -91,6 +91,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.validateLimit.mockResolvedValue({ allowed: true });
   mocks.role.findFirst.mockResolvedValue(ROL_HUESPED);
+  // El guard de tenencia del rol (POST /api/users) consulta con findUnique.
+  mocks.role.findUnique.mockResolvedValue(ROL_HUESPED);
   mocks.contact.findFirst.mockResolvedValue({ id: 'c-maria' });
   mocks.user.findUnique.mockResolvedValue(null);
   mocks.logAuditAction.mockResolvedValue(undefined);

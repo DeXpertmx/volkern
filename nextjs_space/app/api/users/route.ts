@@ -8,6 +8,7 @@ import { hasPermission, logAuditAction } from '@/lib/permissions';
 import { validateLimit } from '@/lib/limits';
 import { incrementUsage } from '@/lib/subscription';
 import { ROL_HOSPITALITY_POR_NOMBRE } from '@/lib/hospitality/roles';
+import { enviarEmailInvitacion } from '@/lib/emails/invitacion';
 import bcrypt from 'bcryptjs';
 
 // GET /api/users - Listar usuarios del tenant (Identidad Global - Control Plane)
@@ -223,6 +224,19 @@ export const POST = withTenantAuth(async (req, auth) => {
       return NextResponse.json({ error: 'Debes seleccionar un Rol o un Departamento' }, { status: 400 });
     }
 
+    // El rol asignado DEBE ser del tenant activo. Sin esta verificación, una
+    // sesión con contexto de plataforma (HQ) dejaba asignar su rol
+    // «Superadmin» a un miembro del equipo del tenant (cross-tenant).
+    // Un rol con tenantId null solo existe dentro de una BD física aislada
+    // (donde la tenencia la garantiza la propia BD), así que se acepta.
+    const rolAsignar = await prisma.role.findUnique({ where: { id: effectiveRoleId } });
+    if (!rolAsignar || (rolAsignar.tenantId !== null && rolAsignar.tenantId !== tenantId)) {
+      return NextResponse.json(
+        { error: 'El rol seleccionado no pertenece a esta cuenta' },
+        { status: 400 }
+      );
+    }
+
     // El proxy redirige 'user' y 'role' a la base de datos global.
     const existingUser = await prisma.user.findUnique({
       where: { email },
@@ -267,13 +281,34 @@ export const POST = withTenantAuth(async (req, auth) => {
         role: true,
         employee: true
       },
-    });
-
-    // Track usage after successful user creation
+    });    // Track usage after successful user creation
     try {
       await incrementUsage(tenantId, 'users', 1);
     } catch (usageError) {
       console.error('[POST /users] Error tracking usage:', usageError);
+    }
+
+    // Enviar el email de invitación. El token solo tiene valor si llega al
+    // invitado: sin este envío el alta moría en la BD y el invitado nunca
+    // recibía nada (defecto reportado desde el tenant JUAN ANTONIO).
+    // El alta no falla si el correo no puede enviarse: queda el token para
+    // reenviar desde el panel de Equipo.
+    let emailEnviado = false;
+    let emailError: string | undefined;
+    try {
+      const resultado = await enviarEmailInvitacion({
+        email: newUser.email,
+        nombre: newUser.name || '',
+        token: inviteToken,
+        tempPassword,
+        tenantNombre: auth.tenant?.nombre || 'tu cuenta',
+        invitadorNombre: currentUser.name || currentUser.email || 'El administrador',
+      });
+      emailEnviado = !!resultado?.success;
+      if (!emailEnviado) emailError = 'No se pudo enviar el email';
+    } catch (emailErr: any) {
+      console.error('[POST /users] Error enviando invitación:', emailErr);
+      emailError = emailErr?.message || 'Error al enviar el email';
     }
 
     // Registrar en audit log
@@ -299,6 +334,8 @@ export const POST = withTenantAuth(async (req, auth) => {
       user: userWithoutPassword,
       inviteToken,
       tempPassword,
+      emailEnviado,
+      emailError,
     }, { status: 201 });
   } catch (error: any) {
     console.error('Error al crear usuario:', error);
