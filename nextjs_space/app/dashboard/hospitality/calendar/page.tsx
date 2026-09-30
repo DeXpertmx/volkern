@@ -21,6 +21,7 @@ import {
   Loader2,
   CalendarDays,
   User,
+  Users,
   Phone,
   Mail,
   BedDouble,
@@ -54,10 +55,39 @@ import {
   type CalendarDay,
 } from '@/lib/hospitality/calendar';
 import { finEstanciaReal } from '@/lib/hospitality/checkout';
+import { tarifaPorNoche } from '@/lib/hospitality/estacionalidad';
+import { formatearImporte } from '@/lib/moneda';
 
 interface Property {
   id: string;
   nombre: string;
+}
+
+/** Foto de propiedad tal como vive en el Json `fotos` (string u objeto). */
+interface PropertyFoto {
+  url?: unknown;
+}
+
+/** Plan de tarifa tal como lo devuelve `/api/hospitality/rateplans`. */
+interface RatePlan {
+  id: string;
+  unitId: string;
+  propertyId: string;
+  tarifa: number;
+  moneda: string;
+  activo: boolean;
+  temporadas?: unknown;
+  finDeSemana?: unknown;
+}
+
+/** Primera URL válida del Json `fotos` (portada de la fila del planning). */
+function fotoPortada(fotos: unknown): string | null {
+  if (!Array.isArray(fotos)) return null;
+  for (const f of fotos as PropertyFoto[]) {
+    if (typeof f === 'string' && f) return f;
+    if (f && typeof f === 'object' && typeof f.url === 'string' && f.url) return f.url;
+  }
+  return null;
 }
 
 interface ManualBlock {
@@ -98,6 +128,8 @@ function fmtDay(d: Date): string {
 export default function HospitalityCalendar() {
   const [loading, setLoading] = useState(true);
   const [properties, setProperties] = useState<Property[]>([]);
+  const [propertyFotos, setPropertyFotos] = useState<Record<string, string | null>>({});
+  const [ratePlans, setRatePlans] = useState<RatePlan[]>([]);
   const [units, setUnits] = useState<CalendarUnit[]>([]);
   const [reservations, setReservations] = useState<CalendarReservation[]>([]);
   const [blocks, setBlocks] = useState<ManualBlock[]>([]);
@@ -138,7 +170,11 @@ export default function HospitalityCalendar() {
       ]);
       if (propRes.ok) {
         const d = await propRes.json();
-        setProperties(d.properties || []);
+        const lista: any[] = d.properties || [];
+        setProperties(lista.map((p) => ({ id: p.id, nombre: p.nombre })));
+        setPropertyFotos(
+          Object.fromEntries(lista.map((p) => [p.id, fotoPortada(p.fotos)]))
+        );
       }
       if (unitRes.ok) {
         const d = await unitRes.json();
@@ -147,7 +183,17 @@ export default function HospitalityCalendar() {
           nombre: u.nombre,
           codigo: u.codigo,
           propertyId: u.propertyId,
+          capacidad: u.capacidad,
+          tarifaBase: u.tarifaBase,
+          moneda: u.moneda,
         })));
+      }
+      // Planes de tarifa activos: el precio por día del planning usa el MISMO
+      // plan que el booking engine (el más barato activo de la unidad).
+      const rateRes = await fetch('/api/hospitality/rateplans?activo=true');
+      if (rateRes.ok) {
+        const d = await rateRes.json();
+        setRatePlans(d.ratePlans || []);
       }
     } catch {
       toast.error('Error al cargar propiedades y unidades');
@@ -240,6 +286,32 @@ export default function HospitalityCalendar() {
     const list = selectedProperty === 'all' ? units : units.filter((u) => u.propertyId === selectedProperty);
     return list.sort((a, b) => a.nombre.localeCompare(b.nombre));
   }, [units, selectedProperty]);
+
+  // Precio por día por unidad: plan activo más barato (misma convención que
+  // el booking engine) + tarifaPorNoche para estacionalidad/fin de semana.
+  const preciosPorDia = useMemo(() => {
+    const mapa = new Map<string, Map<string, { precio: number; moneda: string }>>();
+    for (const u of visibleUnits) {
+      const planes = ratePlans.filter((p) => p.unitId === u.id);
+      const plan =
+        planes.slice().sort((a, b) => a.tarifa - b.tarifa)[0] ?? null;
+      const porDia = new Map<string, { precio: number; moneda: string }>();
+      if (plan || (u.tarifaBase ?? 0) > 0) {
+        for (const d of days) {
+          const precio = tarifaPorNoche({
+            fecha: d.date,
+            tarifaBase: u.tarifaBase,
+            plan: plan ? { tarifa: plan.tarifa, estacionalidad: plan.temporadas ?? plan.finDeSemana } : null,
+          });
+          if (precio != null) {
+            porDia.set(d.key, { precio, moneda: plan?.moneda || u.moneda || '' });
+          }
+        }
+      }
+      mapa.set(u.id, porDia);
+    }
+    return mapa;
+  }, [visibleUnits, ratePlans, days]);
 
   const todayKey = useMemo(() => toIsoDate(new Date()), []);
 
@@ -412,6 +484,31 @@ export default function HospitalityCalendar() {
       setTaskSaving(false);
     }
   };
+
+  // ─── Cobro de la reserva seleccionada (Pagado / Pendiente / Total) ──────────
+  // La API de pagos exige `finanzas.ver`: si el rol del operador no la tiene
+  // (403) o falla, el bloque simplemente no se pinta y queda el importe simple.
+  const [cobro, setCobro] = useState<{ cobrado: number; totalLineas: number | null } | null>(null);
+  useEffect(() => {
+    setCobro(null);
+    if (!selected) return;
+    let cancelada = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/hospitality/reservations/${selected.id}/payments`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelada) {
+          setCobro({ cobrado: Number(data.cobrado) || 0, totalLineas: data.totalLineas ?? null });
+        }
+      } catch {
+        // Sin bloque financiero: el panel sigue siendo útil sin él.
+      }
+    })();
+    return () => {
+      cancelada = true;
+    };
+  }, [selected?.id]);
 
   const runCheck = async (r: CalendarReservation, tipo: 'checkin' | 'checkout') => {
     setChecking({ id: r.id, tipo });
@@ -593,7 +690,7 @@ export default function HospitalityCalendar() {
                 <div
                   key={d.key}
                   className={`p-2 text-center border-r last:border-r-0 ${
-                    d.isToday ? 'bg-primary/10' : d.isWeekend ? 'bg-muted/40' : ''
+                    d.isToday ? 'bg-primary/10' : d.isPast ? 'bg-muted/60' : d.isWeekend ? 'bg-muted/40' : ''
                   }`}
                 >
                   <p className={`text-xs font-bold ${d.isToday ? 'text-primary' : ''}`}>{d.label}</p>
@@ -628,11 +725,22 @@ export default function HospitalityCalendar() {
                       style={{ gridTemplateColumns: `200px repeat(${days.length}, minmax(110px, 1fr))` }}
                     >
                       <div className="sticky left-0 z-30 bg-card p-2 border-r flex items-center justify-between gap-1 min-w-0">
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold truncate">{unit.nombre}</p>
-                          {unit.codigo && (
-                            <p className="text-[11px] text-muted-foreground truncate">{unit.codigo}</p>
+                        <div className="flex min-w-0 items-center gap-2">
+                          {propertyFotos[unit.propertyId] && (
+                            <img
+                              src={propertyFotos[unit.propertyId]!}
+                              alt=""
+                              className="h-9 w-9 shrink-0 rounded-lg object-cover"
+                            />
                           )}
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold truncate">{unit.nombre}</p>
+                            <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                              {unit.codigo && <span className="truncate">{unit.codigo}</span>}
+                              {unit.codigo && ' · '}
+                              <Users className="h-3 w-3 shrink-0" /> {unit.capacidad ?? '—'}
+                            </p>
+                          </div>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
                           <span className="text-xs text-muted-foreground">{layoutBlocks.length} res.</span>
@@ -650,7 +758,7 @@ export default function HospitalityCalendar() {
                         <div
                           key={d.key}
                           className={`border-r last:border-r-0 ${
-                            d.isToday ? 'bg-primary/5' : d.isWeekend ? 'bg-muted/30' : ''
+                            d.isToday ? 'bg-primary/5' : d.isPast ? 'bg-muted/60' : d.isWeekend ? 'bg-muted/30' : ''
                           }`}
                         />
                       ))}
@@ -692,6 +800,25 @@ export default function HospitalityCalendar() {
                               {block.continuesRight && <span className="text-[10px]">›</span>}
                             </div>
                           </button>
+                        );
+                      })}
+                      {/* Precios por día en celdas libres (día futuro): la fila
+                          ocupa la franja inferior de la celda, como el benchmark. */}
+                      {days.map((d) => {
+                        if (d.isPast) return null;
+                        const precioDia = preciosPorDia.get(unit.id)?.get(d.key);
+                        if (!precioDia) return null;
+                        return (
+                          <span
+                            key={`precio-${d.key}`}
+                            className="pointer-events-none absolute bottom-0.5 left-1 text-[10px] font-semibold text-muted-foreground"
+                            style={{
+                              gridColumn: `${days.findIndex((x) => x.key === d.key) + 1} / span 1`,
+                              gridRow: 1,
+                            }}
+                          >
+                            {formatearImporte(precioDia.precio, precioDia.moneda, 0)}
+                          </span>
                         );
                       })}
                       {blocks.filter((b) => b.unitId === unit.id && b.estado === 'activo').map((block) => {
@@ -900,8 +1027,39 @@ export default function HospitalityCalendar() {
                 )}
               </div>
 
-              {/* Importe */}
-              {selected.amountAfterTax != null && (
+              {/* Cobro: Pagado / Pendiente / Total (como el benchmark); el
+                  Total usa las líneas de la reserva (tarifa + extras) y cae al
+                  importe del canal si aún no tiene líneas. */}
+              {cobro && (() => {
+                const total = cobro.totalLineas ?? selected.amountAfterTax ?? null;
+                if (total == null) return null;
+                const moneda = selected.currency || '';
+                return (
+                  <div className="rounded-lg border p-3">
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Pagado</p>
+                        <p className="text-sm font-bold text-emerald-600">
+                          {formatearImporte(cobro.cobrado, moneda, 0)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Pendiente</p>
+                        <p className={`text-sm font-bold ${total - cobro.cobrado > 0.005 ? 'text-amber-600' : 'text-muted-foreground'}`}>
+                          {formatearImporte(total - cobro.cobrado, moneda, 0)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Total</p>
+                        <p className="text-sm font-bold">{formatearImporte(total, moneda, 0)}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Importe simple (fallback sin permiso de finanzas) */}
+              {!cobro && selected.amountAfterTax != null && (
                 <div className="rounded-lg border p-3 flex items-center justify-between">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
                     <DollarSign className="h-4 w-4 text-primary" /> Importe

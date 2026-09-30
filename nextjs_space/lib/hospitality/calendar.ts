@@ -46,6 +46,11 @@ export interface CalendarUnit {
   nombre: string;
   codigo: string | null;
   propertyId: string;
+  /** Publicada en la columna del planning (aforo junto al código). */
+  capacidad?: number | null;
+  /** Respaldo del precio por día cuando la unidad no tiene plan de tarifa. */
+  tarifaBase?: number | null;
+  moneda?: string | null;
 }
 
 export interface CalendarDay {
@@ -55,6 +60,8 @@ export interface CalendarDay {
   label: string; // "Lun 10"
   isToday: boolean;
   isWeekend: boolean;
+  /** Día anterior a hoy: celdas sombreadas y sin precio en el planning. */
+  isPast: boolean;
 }
 
 export interface CalendarReservationBlock {
@@ -118,6 +125,7 @@ export function buildDays(start: Date, end: Date, today?: Date): CalendarDay[] {
       label: `${shortDay(dow)} ${cursor.getDate()}`,
       isToday: cursor.getTime() === refToday.getTime(),
       isWeekend: dow === 0 || dow === 6,
+      isPast: cursor.getTime() < refToday.getTime(),
     });
     cursor.setDate(cursor.getDate() + 1);
   }

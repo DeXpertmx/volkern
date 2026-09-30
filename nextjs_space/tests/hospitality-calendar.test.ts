@@ -59,6 +59,18 @@ describe('Hospitality — lógica del planning calendar', () => {
       const days = buildDays(new Date('2026-10-12'), new Date('2026-10-12'), new Date('2026-10-12'));
       expect(days[0].isToday).toBe(true);
     });
+
+    it('marca los días anteriores a hoy como pasados (sombras del planning)', () => {
+      const days = buildDays(
+        new Date('2026-10-11'),
+        new Date('2026-10-13'),
+        new Date('2026-10-12')
+      );
+      expect(days[0].isPast).toBe(true);
+      expect(days[1].isPast).toBe(false); // hoy
+      expect(days[1].isToday).toBe(true);
+      expect(days[2].isPast).toBe(false);
+    });
   });
 
   describe('layoutReservations', () => {
