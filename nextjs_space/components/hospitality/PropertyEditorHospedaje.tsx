@@ -44,6 +44,10 @@ import {
   POLITICAS_NO_SHOW,
   POLITICAS_SALIDA,
   type DraftHospedaje,
+  type DistanciasHospedaje,
+  DISTANCIAS_CATALOGO,
+  DISTANCIAS_VACIAS,
+  type IndicacionesHospedaje,
   type FotoHospedaje,
   type PropertyWire,
   type SeccionHospedaje,
@@ -63,10 +67,19 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import dynamic from 'next/dynamic';
+import type { ResultadoGeocode } from '@/lib/hospitality/geocoding';
 import { toast } from 'sonner';
 import {
   Home,
   MapPin,
+  Map,
+  Languages,
+  Plane,
+  Bus,
+  TrainFront,
+  Car,
+  Ship,
   BedDouble,
   Settings2,
   ShieldCheck,
@@ -84,10 +97,57 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+// Leaflet necesita window: el mapa se carga solo en cliente (convención del repo).
+const MapaUbicacion = dynamic(() => import('./MapaUbicacion'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-72 w-full items-center justify-center bg-muted/40">
+      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+    </div>
+  ),
+});
+
 const MAX_FOTOS = 30;
 const MIN_BYTES = 50 * 1024;
 const MAX_BYTES = 20 * 1024 * 1024;
 const MAX_TITULO_FOTO = 100;
+
+/** Idiomas del selector de indicaciones: los mismos que el booking engine. */
+const IDIOMAS_INDICACIONES: readonly { value: string; label: string }[] = [
+  { value: 'es', label: 'Español' },
+  { value: 'en', label: 'English' },
+];
+
+/** Resumen de la tarjeta de distancias: «3 de 6 distancias». */
+function resumenDistancias(d: DistanciasHospedaje): string {
+  const n = DISTANCIAS_CATALOGO.filter(({ key }) => d[key].trim() !== '').length;
+  return n === 0 ? 'Sin configurar' : `${n} de ${DISTANCIAS_CATALOGO.length} distancias`;
+}
+
+/** Resumen de la tarjeta de indicaciones: «2 idiomas». */
+function resumenIndicaciones(i: IndicacionesHospedaje): string {
+  const n = Object.keys(i).length;
+  return n === 0 ? 'Sin configurar' : `${n} ${n === 1 ? 'idioma' : 'idiomas'}`;
+}  /** Resumen de la tarjeta del mapa personalizado. */
+function resumenMapaPersonalizado(url: string): string {
+  return url ? 'Imagen configurada' : 'Sin configurar';
+}
+
+/** Icono por tipo de transporte para el panel de distancias. */
+const ICONO_DISTANCIA: Record<keyof Omit<DistanciasHospedaje, 'unidad'>, typeof Plane> = {
+  aeropuertoKm: Plane,
+  autobusKm: Bus,
+  metroKm: TrainFront,
+  trenKm: TrainFront,
+  autopistaKm: Car,
+  puertoKm: Ship,
+};
+
+/** Lat/lng del borrador (texto) a número, o null si no son válidos. */
+function numeroONulo(valor: string): number | null {
+  const n = Number(valor);
+  return valor.trim() !== '' && Number.isFinite(n) ? n : null;
+}
 
 export interface PropertyEditorHospedajeProps {
   propertyId: string;
@@ -322,6 +382,138 @@ export function PropertyEditorHospedaje({ propertyId, onBack }: PropertyEditorHo
       timerRef.current = setTimeout(guardar, 1200);
     },
     [guardar]
+  );
+
+  // ─── Ubicación: geocoding y mapa ─────────────────────────────────────────────
+  const [buscandoDir, setBuscandoDir] = useState(false);
+  const [sugerencias, setSugerencias] = useState<ResultadoGeocode[]>([]);
+
+  const buscarUbicacion = useCallback(async () => {
+    const d = draftRef.current;
+    if (!d) return;
+    const consulta = [d.direccion, d.cp, d.ciudad, d.estadoProvincia, d.pais]
+      .map((v) => (v || '').trim())
+      .filter(Boolean)
+      .join(', ');
+    if (consulta.length < 4) {
+      toast.error('Rellena primero la dirección o la ciudad');
+      return;
+    }
+    setBuscandoDir(true);
+    setSugerencias([]);
+    try {
+      const res = await apiFetch(`/api/hospitality/geocode?q=${encodeURIComponent(consulta)}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || 'No se pudo buscar la dirección');
+        return;
+      }
+      const lista: ResultadoGeocode[] = data.resultados || [];
+      if (lista.length === 0) {
+        toast.error('Sin resultados: escribe la dirección a mano y fíjala en el mapa');
+        return;
+      }
+      setSugerencias(lista);
+    } catch {
+      toast.error('Error de conexión con el geocoder');
+    } finally {
+      setBuscandoDir(false);
+    }
+  }, []);
+
+  const aplicarSugerencia = useCallback(
+    (r: ResultadoGeocode) => {
+      setSugerencias([]);
+      actualizar({
+        lat: String(r.latitud),
+        lng: String(r.longitud),
+        ...(r.direccion ? { direccion: r.direccion } : {}),
+        ...(r.ciudad ? { ciudad: r.ciudad } : {}),
+        ...(r.estadoProvincia ? { estadoProvincia: r.estadoProvincia } : {}),
+        ...(r.pais ? { pais: r.pais } : {}),
+        ...(r.cp ? { cp: r.cp } : {}),
+      });
+      toast.success('Ubicación aplicada · se guarda solo');
+    },
+    [actualizar]
+  );
+
+  const fijarCoordenadas = useCallback(
+    (lat: number, lng: number) => {
+      actualizar({ lat: String(lat), lng: String(lng) });
+    },
+    [actualizar]
+  );
+
+  // ─── Ubicación enriquecida: tarjetas + panel lateral ────────────────────────
+  const [panelAbierto, setPanelAbierto] = useState<
+    'distancias' | 'indicaciones' | 'mapa-personalizado' | null
+  >(null);
+  const [subiendoMapa, setSubiendoMapa] = useState(false);
+  const inputMapaRef = useRef<HTMLInputElement>(null);
+
+  const abrirPanel = useCallback(
+    (panel: 'distancias' | 'indicaciones' | 'mapa-personalizado') => {
+      setPanelAbierto(panel);
+    },
+    []
+  );
+
+  const actualizarDistancia = useCallback(
+    (key: keyof Omit<DistanciasHospedaje, 'unidad'>, valor: string) => {
+      const d = draftRef.current;
+      if (!d) return;
+      actualizar({ distancias: { ...d.distancias, [key]: valor } });
+    },
+    [actualizar]
+  );
+
+  const actualizarIndicacion = useCallback(
+    (idioma: string, texto: string) => {
+      const d = draftRef.current;
+      if (!d) return;
+      const indicaciones: IndicacionesHospedaje = { ...d.indicaciones };
+      if (texto.trim()) {
+        indicaciones[idioma] = texto;
+      } else {
+        delete indicaciones[idioma];
+      }
+      actualizar({ indicaciones });
+    },
+    [actualizar]
+  );
+
+  const subirMapaPersonalizado = useCallback(
+    async (files: FileList | null) => {
+      const file = files?.[0];
+      if (!file) return;
+      if (file.type && !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+        toast.error('El mapa debe ser una imagen JPEG, PNG o WebP');
+        return;
+      }
+      if (file.size > MAX_BYTES) {
+        toast.error('La imagen no puede superar 20 MB');
+        return;
+      }
+      setSubiendoMapa(true);
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await apiFetch('/api/upload/catalogo', { method: 'POST', body: formData });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          toast.error(data.error || 'No se pudo subir el mapa');
+          return;
+        }
+        actualizar({ mapaPersonalizadoUrl: data.url });
+        toast.success('Mapa personalizado guardado');
+      } catch {
+        toast.error('Error de conexión al subir el mapa');
+      } finally {
+        setSubiendoMapa(false);
+      }
+    },
+    [actualizar]
   );
 
   useEffect(() => () => {
@@ -744,30 +936,105 @@ export function PropertyEditorHospedaje({ propertyId, onBack }: PropertyEditorHo
 
             {/* ─── Ubicación ─── */}
             {seccion === 'ubicacion' && (
-              <div className="grid gap-4 sm:grid-cols-2">
-                {(
-                  [
-                    ['hp-direccion', 'Dirección', 'direccion'],
-                    ['hp-ciudad', 'Ciudad', 'ciudad'],
-                    ['hp-estado', 'Estado / Provincia', 'estadoProvincia'],
-                    ['hp-pais', 'País', 'pais'],
-                    ['hp-cp', 'Código postal', 'cp'],
-                    ['hp-zona', 'Zona', 'zona'],
-                    ['hp-lat', 'Latitud', 'lat'],
-                    ['hp-lng', 'Longitud', 'lng'],
-                  ] as const
-                ).map(([id, label, campo]) => (
-                  <div key={id} className="space-y-2">
-                    <Label htmlFor={id}>{label}</Label>
-                    <Input
-                      id={id}
-                      value={draft[campo]}
-                      onChange={(e) => actualizar({ [campo]: e.target.value } as Partial<DraftHospedaje>)}
-                    />
+              <div className="space-y-4">
+                {/* Geocoding: busca con la dirección de los campos y aplica un resultado */}
+                <div className="rounded-xl border bg-card p-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                    <div className="flex-1 space-y-2">
+                      <Label htmlFor="hp-buscar-dir">Buscar dirección</Label>
+                      <Input
+                        id="hp-buscar-dir"
+                        readOnly
+                        value={[draft.direccion, draft.cp, draft.ciudad, draft.estadoProvincia, draft.pais]
+                          .map((v) => (v || '').trim())
+                          .filter(Boolean)
+                          .join(', ')}
+                        placeholder="Rellena dirección o ciudad y pulsa Buscar"
+                      />
+                    </div>
+                    <Button type="button" variant="outline" onClick={buscarUbicacion} disabled={buscandoDir}>
+                      {buscandoDir ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                      Buscar
+                    </Button>
                   </div>
-                ))}
+                  {sugerencias.length > 0 && (
+                    <div className="mt-3 divide-y rounded-lg border">
+                      {sugerencias.map((s, i) => (
+                        <button
+                          key={`${s.latitud},${s.longitud},${i}`}
+                          type="button"
+                          onClick={() => aplicarSugerencia(s)}
+                          className="block w-full px-3 py-2 text-left text-sm hover:bg-muted"
+                        >
+                          <span className="line-clamp-2">{s.etiqueta}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Aplica un resultado para rellenar dirección, ciudad y coordenadas, o fija el punto pulsando en el mapa.
+                  </p>
+                </div>
+
+                <div className="overflow-hidden rounded-xl border">
+                  <MapaUbicacion
+                    latitud={numeroONulo(draft.lat)}
+                    longitud={numeroONulo(draft.lng)}
+                    onMover={fijarCoordenadas}
+                  />
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {(
+                    [
+                      ['hp-direccion', 'Dirección', 'direccion', ''],
+                      ['hp-ciudad', 'Ciudad', 'ciudad', ''],
+                      ['hp-estado', 'Estado / Provincia', 'estadoProvincia', ''],
+                      ['hp-pais', 'País', 'pais', ''],
+                      ['hp-cp', 'Código postal', 'cp', ''],
+                      ['hp-zona', 'Zona', 'zona', ''],
+                      ['hp-lat', 'Latitud', 'lat', 'Fíjala en el mapa'],
+                      ['hp-lng', 'Longitud', 'lng', 'Fíjala en el mapa'],
+                    ] as const
+                  ).map(([id, label, campo, placeholder]) => (
+                    <div key={id} className="space-y-2">
+                      <Label htmlFor={id}>{label}</Label>
+                      <Input
+                        id={id}
+                        value={draft[campo]}
+                        placeholder={placeholder}
+                        onChange={(e) => actualizar({ [campo]: e.target.value } as Partial<DraftHospedaje>)}
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
+
+                {/* Tarjetas de ubicación enriquecida (estilo resumen del benchmark). */}
+                <div className="space-y-3">
+                  {(
+                    [
+                      ['distancias', Plane, 'Distancias', 'Editar distancias a transporte cercanas.', resumenDistancias(draft.distancias)],
+                      ['indicaciones', Languages, 'Indicaciones', 'Explica a los huéspedes cómo llegar a tu alojamiento.', resumenIndicaciones(draft.indicaciones)],
+                      ['mapa-personalizado', Map, 'Mapa personalizado', 'Usa una imagen o un mapa propios para mostrar a tus huéspedes dónde se encuentra tu alojamiento.', resumenMapaPersonalizado(draft.mapaPersonalizadoUrl)],
+                    ] as const
+                  ).map(([id, Icono, titulo, descripcion, resumen]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => abrirPanel(id)}
+                      className="flex w-full items-start justify-between gap-4 rounded-xl border bg-card px-4 py-3 text-left transition-colors hover:border-primary/40"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold">{titulo}</p>
+                        <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{descripcion}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">{resumen}</p>
+                      </div>
+                      <Icono className="h-4 w-4 shrink-0 text-primary" />
+                    </button>
+                  ))}
+                </div>
 
             {/* ─── Unidades ─── */}
             {seccion === 'unidades' && (
@@ -920,6 +1187,157 @@ export function PropertyEditorHospedaje({ propertyId, onBack }: PropertyEditorHo
           </div>
         </main>
       </div>
+
+      {/* Panel lateral de ubicación enriquecida (distancias, indicaciones, mapa). */}
+      {panelAbierto && (
+        <div className="fixed inset-0 z-50 bg-black/40" onClick={() => setPanelAbierto(null)}>
+          <aside
+            className="absolute right-0 top-0 flex h-full w-full max-w-md flex-col bg-white shadow-2xl dark:bg-slate-950"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 border-b p-5">
+              <div>
+                <h2 className="text-lg font-semibold">
+                  {panelAbierto === 'distancias'
+                    ? 'Distancias'
+                    : panelAbierto === 'indicaciones'
+                      ? 'Indicaciones'
+                      : 'Mapa personalizado'}
+                </h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {panelAbierto === 'distancias'
+                    ? 'Editar distancias a opciones de transporte cercanas.'
+                    : panelAbierto === 'indicaciones'
+                      ? 'Explica a los huéspedes cómo llegar a tu alojamiento.'
+                      : 'Imagen o mapa propios para mostrar a tus huéspedes.'}
+                </p>
+              </div>
+              <button type="button" onClick={() => setPanelAbierto(null)} className="rounded-lg p-1.5 hover:bg-muted" aria-label="Cerrar">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 space-y-4 overflow-y-auto p-5">
+              {panelAbierto === 'distancias' && (
+                <>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(['km', 'millas'] as const).map((u) => (
+                      <button
+                        key={u}
+                        type="button"
+                        onClick={() => actualizar({ distancias: { ...draft.distancias, unidad: u } })}
+                        className={cn(
+                          'rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors',
+                          draft.distancias.unidad === u
+                            ? 'border-primary bg-primary/10 text-primary'
+                            : 'text-muted-foreground hover:bg-muted'
+                        )}
+                      >
+                        {u === 'km' ? 'Kilómetros' : 'Millas'}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="space-y-2">
+                    {DISTANCIAS_CATALOGO.map(({ key, label }) => {
+                      const Icono = ICONO_DISTANCIA[key];
+                      return (
+                        <div key={key} className="flex items-center gap-3 rounded-lg border px-3 py-2">
+                          <Icono className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          <span className="flex-1 text-sm">{label}</span>
+                          <Input
+                            inputMode="decimal"
+                            value={draft.distancias[key]}
+                            onChange={(e) => actualizarDistancia(key, e.target.value)}
+                            className="h-8 w-24 text-right"
+                            placeholder="0.00"
+                          />
+                          <span className="w-7 text-xs text-muted-foreground">{draft.distancias.unidad === 'millas' ? 'mi' : 'km'}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Si la distancia es menor de 1 km, introdúcela en decimales (0,2 = 200 m).
+                  </p>
+                </>
+              )}
+
+              {panelAbierto === 'indicaciones' && (
+                <div className="space-y-3">
+                  {IDIOMAS_INDICACIONES.map(({ value, label }) => (
+                    <div key={value} className="space-y-1.5">
+                      <Label htmlFor={`indicacion-${value}`}>{label}</Label>
+                      <Textarea
+                        id={`indicacion-${value}`}
+                        rows={5}
+                        value={draft.indicaciones[value] || ''}
+                        onChange={(e) => actualizarIndicacion(value, e.target.value)}
+                        placeholder="Indica cómo llegar (transporte, referencias, parking…)"
+                      />
+                    </div>
+                  ))}
+                  <p className="text-xs text-muted-foreground">
+                    Se envía al huésped en su idioma (email de llegada y ficha pública).
+                  </p>
+                </div>
+              )}
+
+              {panelAbierto === 'mapa-personalizado' && (
+                <div className="space-y-3">
+                  {draft.mapaPersonalizadoUrl ? (
+                    <div className="space-y-2">
+                      <img src={draft.mapaPersonalizadoUrl} alt="Mapa personalizado" className="w-full rounded-lg border" />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => actualizar({ mapaPersonalizadoUrl: '' })}
+                      >
+                        <X className="mr-1 h-3.5 w-3.5" />
+                        Quitar imagen
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => inputMapaRef.current?.click()}
+                        className="flex h-40 w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+                      >
+                        {subiendoMapa ? (
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                        ) : (
+                          <Upload className="h-5 w-5" />
+                        )}
+                        <span className="text-sm">Subir una imagen o arrastra y suelta</span>
+                      </button>
+                      <input
+                        ref={inputMapaRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={(e) => {
+                          subirMapaPersonalizado(e.target.files);
+                          e.target.value = '';
+                        }}
+                      />
+                    </>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    JPEG, PNG o WebP hasta 20 MB. Se muestra en la ficha del huésped.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 border-t p-4">
+              <Button type="button" variant="outline" onClick={() => setPanelAbierto(null)}>
+                Cerrar
+              </Button>
+            </div>
+          </aside>
+        </div>
+      )}
 
       {/* Modales de detalle de la Vista global. */}
       <ModalDetalleHospedaje

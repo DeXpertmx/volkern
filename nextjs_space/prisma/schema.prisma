@@ -8167,6 +8167,19 @@ model HospitalityProperty {
    * HospitalityUnit con sus amenidades).
    */
   detalleAlojamiento Json?
+  /**
+   * Ubicación enriquecida para el huésped (editor estilo Airbnb):
+   * - `distancias`: { aeropuertoKm, autobusKm, metroKm, trenKm, autopistaKm,
+   *   puertoKm, unidad } — distancias a transporte (unidad: 'km'|'millas').
+   * - `indicaciones`: Record<idioma, texto> — cómo llegar, multi-idioma
+   *   ('es', 'en'…). Texto plano: se renderiza con saltos de línea.
+   * - `mapaPersonalizadoUrl`: imagen o mapa propio subido por el operador.
+   * Los tres son opcionales (null = sin configurar) y se publican en las
+   * comunicaciones de llegada y la ficha del booking engine.
+   */
+  distancias           Json?
+  indicaciones         Json?
+  mapaPersonalizadoUrl String?
   timezone       String    @default("America/Mexico_City")
   estado         String    @default("activa")
   // Penalización por no-show de esta propiedad: ninguna|primera_noche|estancia_completa.

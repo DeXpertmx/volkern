@@ -127,6 +127,9 @@ export interface PropertyWire {
   fotos?: unknown;
   sesHospedajes?: unknown;
   detalleAlojamiento?: unknown;
+  distancias?: unknown;
+  indicaciones?: unknown;
+  mapaPersonalizadoUrl?: string | null;
   timezone?: string | null;
   estado?: string | null;
   politicaNoShow?: string | null;
@@ -163,6 +166,11 @@ export interface DraftHospedaje {
 
   /** Detalle declarado: habitaciones, camas y servicios (editor Airbnb). */
   detalle: DetalleAlojamiento;
+
+  /** Ubicación enriquecida (distancias, indicaciones, mapa propio). */
+  distancias: DistanciasHospedaje;
+  indicaciones: IndicacionesHospedaje;
+  mapaPersonalizadoUrl: string;
 
   units: UnidadWire[];
 }
@@ -227,6 +235,10 @@ export function borradorDesdeProperty(p: PropertyWire): DraftHospedaje {
 
     detalle,
 
+    distancias: distanciasDe(p.distancias),
+    indicaciones: indicacionesDe(p.indicaciones),
+    mapaPersonalizadoUrl: p.mapaPersonalizadoUrl || '',
+
     units: p.units || [],
   };
 }
@@ -242,6 +254,80 @@ function numero(valor: string): number | undefined {
 function enteroNoNegativo(valor: string): number | undefined {
   const n = numero(valor);
   return n !== undefined && Number.isInteger(n) && n >= 0 ? n : undefined;
+}
+
+/**
+ * Distancias a transporte de la propiedad, tal como viven en el Json
+ * `distancias` y en el borrador del editor. `unidad` decide cómo se muestran
+ * ('km' | 'millas'); los valores son kilómetros en decimal (0,2 = 200 m).
+ */
+export interface DistanciasHospedaje {
+  aeropuertoKm: string;
+  autobusKm: string;
+  metroKm: string;
+  trenKm: string;
+  autopistaKm: string;
+  puertoKm: string;
+  unidad: string;
+}
+
+export const DISTANCIAS_VACIAS: DistanciasHospedaje = {
+  aeropuertoKm: '',
+  autobusKm: '',
+  metroKm: '',
+  trenKm: '',
+  autopistaKm: '',
+  puertoKm: '',
+  unidad: 'km',
+};
+
+/** Claves de distancia y su etiqueta (con icono aparte en el editor). */
+export const DISTANCIAS_CATALOGO: readonly { key: keyof Omit<DistanciasHospedaje, 'unidad'>; label: string }[] = [
+  { key: 'aeropuertoKm', label: 'Aeropuerto' },
+  { key: 'autobusKm', label: 'Autobús' },
+  { key: 'metroKm', label: 'Metro' },
+  { key: 'trenKm', label: 'Tren' },
+  { key: 'autopistaKm', label: 'Autopista' },
+  { key: 'puertoKm', label: 'Puerto' },
+];
+
+/** Normaliza el Json `distancias` al borrador editable. */
+export function distanciasDe(raw: unknown): DistanciasHospedaje {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ...DISTANCIAS_VACIAS };
+  const o = raw as Record<string, unknown>;
+  const num = (v: unknown): string => {
+    const n = Number(v);
+    return typeof v !== 'undefined' && v !== null && v !== '' && Number.isFinite(n) && n >= 0 ? String(n) : '';
+  };
+  return {
+    aeropuertoKm: num(o.aeropuertoKm),
+    autobusKm: num(o.autobusKm),
+    metroKm: num(o.metroKm),
+    trenKm: num(o.trenKm),
+    autopistaKm: num(o.autopistaKm),
+    puertoKm: num(o.puertoKm),
+    unidad: o.unidad === 'millas' ? 'millas' : 'km',
+  };
+}
+
+/** Indicaciones de llegada multi-idioma: Record<idioma, texto>. */
+export type IndicacionesHospedaje = Record<string, string>;
+
+/** Normaliza el Json `indicaciones` al borrador: solo textos no vacíos. */
+export function indicacionesDe(raw: unknown): IndicacionesHospedaje {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const salida: IndicacionesHospedaje = {};
+  for (const [idioma, texto] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof idioma === 'string' && idioma.trim() && typeof texto === 'string' && texto.trim()) {
+      salida[idioma.trim().slice(0, 8)] = texto;
+    }
+  }
+  return salida;
+}
+
+/** ¿Hay alguna distancia declarada? (para no escribir JSON vacío). */
+export function hayDistancias(d: DistanciasHospedaje): boolean {
+  return DISTANCIAS_CATALOGO.some(({ key }) => d[key].trim() !== '');
 }
 
 /**
@@ -297,6 +383,26 @@ export function payloadDesdeBorradorHospedaje(d: DraftHospedaje): Record<string,
           },
         }
       : { detalleAlojamiento: null }),
+
+    ...(hayDistancias(d.distancias)
+      ? {
+          distancias: {
+            ...Object.fromEntries(
+              DISTANCIAS_CATALOGO.filter(({ key }) => d.distancias[key].trim() !== '').map(({ key }) => [
+                key,
+                Number(d.distancias[key]),
+              ])
+            ),
+            unidad: d.distancias.unidad,
+          },
+        }
+      : { distancias: null }),
+
+    ...(Object.keys(d.indicaciones).length > 0
+      ? { indicaciones: d.indicaciones }
+      : { indicaciones: null }),
+
+    mapaPersonalizadoUrl: d.mapaPersonalizadoUrl || null,
   };
 }
 

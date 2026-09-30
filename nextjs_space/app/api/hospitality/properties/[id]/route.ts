@@ -63,6 +63,7 @@ export async function PATCH(req: NextRequest, ctx: Params) {
       nombre, descripcion, codigo, zona, direccion, ciudad, estadoProvincia,
       pais, cp, latitud, longitud, fotos, timezone, estado, politicaNoShow,
       politicaSalidaAnticipada, holdHoras, detalleAlojamiento,
+      distancias, indicaciones, mapaPersonalizadoUrl,
     } = data || {};
 
     // La política de no-show decide cuánto se cobra: si llega, tiene que ser
@@ -125,6 +126,55 @@ export async function PATCH(req: NextRequest, ctx: Params) {
       }
     }
 
+    // Ubicación enriquecida (benchmark Airbnb): distancias a transporte,
+    // indicaciones multi-idioma y mapa personalizado. Se sanea igual que el
+    // detalle: el JSONB acepta cualquier forma y un mapa corrupto rompería la
+    // ficha. `null` limpia; forma inválida no toca nada.
+    const decimalesSanos = (valor: unknown): Record<string, number> => {
+      if (!valor || typeof valor !== 'object' || Array.isArray(valor)) return {};
+      const salida: Record<string, number> = {};
+      for (const [clave, n] of Object.entries(valor as Record<string, unknown>)) {
+        const num = Number(n);
+        if (clave.length > 0 && Number.isFinite(num) && num > 0) salida[clave] = Math.round(num * 100) / 100;
+      }
+      return salida;
+    };
+    let distanciasFinal: Prisma.InputJsonValue | null | undefined;
+    if (distancias !== undefined) {
+      if (distancias === null) {
+        distanciasFinal = null;
+      } else if (distancias && typeof distancias === 'object' && !Array.isArray(distancias)) {
+        const d = distancias as Record<string, unknown>;
+        const valores = decimalesSanos(d);
+        const unidad = d.unidad === 'millas' ? 'millas' : 'km';
+        distanciasFinal =
+          Object.keys(valores).length > 0
+            ? ({ ...valores, unidad } as Prisma.InputJsonValue)
+            : null;
+      }
+    }
+    let indicacionesFinal: Prisma.InputJsonValue | null | undefined;
+    if (indicaciones !== undefined) {
+      if (indicaciones === null) {
+        indicacionesFinal = null;
+      } else if (indicaciones && typeof indicaciones === 'object' && !Array.isArray(indicaciones)) {
+        const limpias: Record<string, string> = {};
+        for (const [idioma, texto] of Object.entries(indicaciones as Record<string, unknown>)) {
+          if (typeof idioma === 'string' && idioma.trim() && typeof texto === 'string' && texto.trim()) {
+            limpias[idioma.trim().slice(0, 8)] = texto;
+          }
+        }
+        indicacionesFinal =
+          Object.keys(limpias).length > 0 ? (limpias as Prisma.InputJsonValue) : null;
+      }
+    }
+    const mapaFinal =
+      mapaPersonalizadoUrl !== undefined
+        ? typeof mapaPersonalizadoUrl === 'string' && mapaPersonalizadoUrl.trim()
+          ? mapaPersonalizadoUrl.trim()
+          : null
+        : undefined;
+
     const sesEntrante = (data as { sesHospedajes?: unknown }).sesHospedajes;
     const sesHospedajesFinal =
       sesEntrante !== undefined && sesEntrante !== null && typeof sesEntrante === 'object'
@@ -183,6 +233,13 @@ export async function PATCH(req: NextRequest, ctx: Params) {
         ...(detalleFinal !== undefined
           ? { detalleAlojamiento: detalleFinal === null ? Prisma.DbNull : detalleFinal }
           : {}),
+        ...(distanciasFinal !== undefined
+          ? { distancias: distanciasFinal === null ? Prisma.DbNull : distanciasFinal }
+          : {}),
+        ...(indicacionesFinal !== undefined
+          ? { indicaciones: indicacionesFinal === null ? Prisma.DbNull : indicacionesFinal }
+          : {}),
+        ...(mapaFinal !== undefined ? { mapaPersonalizadoUrl: mapaFinal } : {}),
         ...(timezone !== undefined ? { timezone } : {}),
         ...(estado !== undefined ? { estado } : {}),
         ...(politicaNoShow !== undefined ? { politicaNoShow } : {}),
