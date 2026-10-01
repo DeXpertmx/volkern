@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { AccountingSlotCreateSchema } from '@/lib/validation/schemas/misc';
 import { AccountingInitializer } from '@/lib/accounting/initializer';
+import { provisionarAccesoDeSlot } from '@/lib/slots/provisionar-acceso';
 
 /**
  * GET /api/accounting/slots
@@ -60,7 +61,7 @@ export const POST = withTenantAuth(async (req, auth) => {
       }, { status: 400 });
     }
 
-    const { client_name, admin_email, modules_enabled, accounting_plan_type, sector } = validation.data;
+    const { client_name, admin_email, admin_name, modules_enabled, accounting_plan_type, sector } = validation.data;
 
     // Normalizar nombres de módulos a uppercase
     const normalizedModules = modules_enabled?.map(m => m.toUpperCase()) || ['CRM'];
@@ -109,9 +110,18 @@ export const POST = withTenantAuth(async (req, auth) => {
 
     await AccountingInitializer.initializeTenant(newSlot.id, accounting_plan_type, sector as any);
 
-    console.log(`[Accounting] Slot '${client_name}' creado por despacho ${auth.tenant!.nombre} (plan: ${accounting_plan_type}, sector: ${sector})`);
+    // Acceso del administrador del cliente: catálogo + owner invitado con
+    // email de aceptación (mismo circuito que la invitación de equipo).
+    const acceso = await provisionarAccesoDeSlot(
+      newSlot.id,
+      admin_email,
+      admin_name || client_name,
+      auth.user!.id
+    );
 
-    return NextResponse.json(newSlot, { status: 201 });
+    console.log(`[Accounting] Slot '${client_name}' creado por despacho ${auth.tenant!.nombre} (plan: ${accounting_plan_type}, sector: ${sector}, email ${acceso.emailEnviado ? 'enviado' : 'NO enviado: ' + (acceso.emailError || '?')})`);
+
+    return NextResponse.json({ ...newSlot, acceso }, { status: 201 });
 
   } catch (error: any) {
     console.error('[Accounting Slots] Error al crear slot:', error);

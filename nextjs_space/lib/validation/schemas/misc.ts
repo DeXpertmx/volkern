@@ -14,6 +14,7 @@ export const AgencyBrandingUpdateSchema = z.object({
 export const AgencySlotCreateSchema = z.object({
   client_name: z.string().min(1, 'Nombre de cliente requerido'),
   admin_email: z.string().email('Email de admin inválido'),
+  admin_name: z.string().optional(),
   modules_enabled: z.array(z.string()).optional(),
 });
 
@@ -22,6 +23,7 @@ export const AgencySlotCreateSchema = z.object({
 export const AccountingSlotCreateSchema = z.object({
   client_name: z.string().min(1, 'Nombre de cliente requerido'),
   admin_email: z.string().email('Email de admin inválido'),
+  admin_name: z.string().optional(),
   modules_enabled: z.array(z.string()).optional(),
   accounting_plan_type: z.enum(['NORMAL', 'PYMES', 'MICRO']).optional().default('NORMAL'),
   sector: z.string().optional().default('NINGUNO'),

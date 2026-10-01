@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { AgencySlotCreateSchema } from '@/lib/validation/schemas/misc';
+import { provisionarAccesoDeSlot } from '@/lib/slots/provisionar-acceso';
 
 /**
  * GET /api/agency/slots
@@ -58,7 +59,7 @@ export const POST = withTenantAuth(async (req, auth) => {
       }, { status: 400 });
     }
 
-    const { client_name, admin_email, modules_enabled } = validation.data;
+    const { client_name, admin_email, admin_name, modules_enabled } = validation.data;
 
     // Normalizar nombres de módulos a uppercase
     const normalizedModules = modules_enabled?.map(m => m.toUpperCase()) || ['CRM'];
@@ -99,11 +100,19 @@ export const POST = withTenantAuth(async (req, auth) => {
       }
     });
 
-    // 3. Crear el usuario administrador del Slot
-    // Aquí podrías enviar un email de invitación
-    console.log(`[Agency] Slot '${client_name}' creado por agencia ${auth.tenant!.nombre}`);
+    // 3. Provisionar el acceso del administrador del cliente: catálogo de
+    // roles + owner invitado con email de aceptación. Antes el slot quedaba
+    // sin usuario y sin forma de entrar (TODO histórico).
+    const acceso = await provisionarAccesoDeSlot(
+      newSlot.id,
+      admin_email,
+      admin_name || client_name,
+      auth.user!.id
+    );
 
-    return NextResponse.json(newSlot, { status: 201 });
+    console.log(`[Agency] Slot '${client_name}' creado por agencia ${auth.tenant!.nombre} (email ${acceso.emailEnviado ? 'enviado' : 'NO enviado: ' + (acceso.emailError || '?')})`);
+
+    return NextResponse.json({ ...newSlot, acceso }, { status: 201 });
 
   } catch (error: any) {
     console.error('[Agency Slots] Error al crear slot:', error);
