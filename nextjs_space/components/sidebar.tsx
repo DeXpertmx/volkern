@@ -21,7 +21,12 @@ import { useState, useEffect } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { useWhitelabel } from '@/hooks/use-whitelabel'
-import { HUBS, type NavigationItem } from '@/lib/navigation-config'
+import { HUBS } from '@/lib/navigation-config'
+import {
+  hubEsVisible,
+  itemEsVisible,
+  type VisibilityContext,
+} from '@/lib/navigation-visibility'
 import { PunchClock } from '@/components/attendance/PunchClock'
 import { ComplianceBadge } from '@/components/compliance/ComplianceBadge'
 import { Badge } from '@/components/ui/badge'
@@ -44,8 +49,10 @@ export function Sidebar() {
   const [userPermissions, setUserPermissions] = useState<any>(null)
   const [userAccountType, setUserAccountType] = useState<string | null>(null)
   const [tenantCountry, setTenantCountry] = useState<string>('ES')
+  const [tenantPlan, setTenantPlan] = useState<string | null>(null)
   const [activeModules, setActiveModules] = useState<string[]>([])
   const [isLoadingModules, setIsLoadingModules] = useState(true)
+  const [isImpersonating, setIsImpersonating] = useState(false)
   const { config: whitelabelConfig } = useWhitelabel()
 
   // Conteo de entregas no entregables + avisos (sonido y notificación del sistema)
@@ -98,6 +105,9 @@ export function Sidebar() {
               setUserPermissions(userData.role.permisos);
             }
             if (userData.tenant?.accountType) setUserAccountType(userData.tenant.accountType);
+            // Con suplantación activa el menú debe ser el del tenant suplantado,
+            // no el del Superadmin que entra (ver lib/navigation-visibility.ts).
+            setIsImpersonating(Boolean(userData.isImpersonating));
           }
           
           if (modulesData?.modules && modulesData.modules.length > 0) {
@@ -115,6 +125,7 @@ export function Sidebar() {
           
           if (modulesData?.accountType) setUserAccountType(modulesData.accountType);
           if (modulesData?.country) setTenantCountry(modulesData.country);
+          if (modulesData?.plan) setTenantPlan(modulesData.plan);
         } catch (error) {
           console.error('Error loading permissions:', error);
           // Fallback en caso de excepción total
@@ -134,41 +145,19 @@ export function Sidebar() {
     }
   }, [session])
 
-  const isModuleVisible = (item: NavigationItem): boolean => {
-    // 1. Filtro por Región (Tenant Country - obtenido de la API)
-    if (item.requiredRegion && item.requiredRegion !== tenantCountry) return false
-
-    // 2. Filtro por tipo de cuenta (AGENCY / BUSINESS)
-    if (item.requiredAccountType) {
-      const sessionAccountType = (session?.user as any)?.accountType;
-      const effectiveAccountType = sessionAccountType || userAccountType;
-      const roleName = (session?.user as any)?.roleName;
-      if (item.requiredAccountType === 'SUPERADMIN') {
-        // Misma regla que el backend: el control plane es de Superadmin. Un
-        // rol llamado "Admin" ve el resto de hubs por su cuenta de tipo, no
-        // por el nombre.
-        if (roleName !== 'Superadmin') return false
-      } else if (item.requiredAccountType === 'AGENCY') {
-        // AGENCY items only visible if the tenant IS an agency (not just because the user is Admin)
-        if (effectiveAccountType !== 'AGENCY' && roleName !== 'Superadmin') return false
-      } else if (effectiveAccountType !== item.requiredAccountType) {
-        if (roleName !== 'Superadmin' && roleName !== 'Admin') return false
-      }
-    }
-
-    // 3. Filtro por Plan/Módulos Activos
-    // Si estamos cargando y el item tiene planModule, mostrarlo (fallback a mostrar todo)
-    // Si ya cargamos y no está en activeModules, ocultar
-    if (item.planModule) {
-      if (!isLoadingModules && !activeModules.includes(item.planModule)) return false
-    }
-    
-    // 4. Filtro por Permisos de Rol
-    if (item.module && userPermissions) {
-      const modulePerms = userPermissions[item.module]
-      if (modulePerms && modulePerms.ver === false) return false
-    }
-    return true
+  // Contexto único de visibilidad del menú. El tipo de cuenta que manda es el
+  // del tenant ACTIVO (el suplantado, si hay suplantación) —el de la sesión es
+  // el del usuario que entra y solo sirve de relleno mientras llega la API— y
+  // los escapes de Superadmin se desactivan mientras se suplanta.
+  const visibilidad: VisibilityContext = {
+    accountType: userAccountType || (session?.user as any)?.accountType || null,
+    roleName: (session?.user as any)?.roleName || null,
+    activeModules,
+    isLoadingModules,
+    isImpersonating,
+    country: tenantCountry,
+    plan: tenantPlan,
+    permissions: userPermissions,
   }
 
   // Detect current active hub based on path
@@ -361,7 +350,7 @@ export function Sidebar() {
                 )}
 
                 {/* Hub Specific Items */}
-                {activeHub.items.filter(isModuleVisible).map((item) => {
+                {activeHub.items.filter((item) => itemEsVisible(item, visibilidad)).map((item) => {
                   const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
                   const Icon = item.icon
                   return (
@@ -410,54 +399,7 @@ export function Sidebar() {
 
                 <div className="h-px bg-border/50 my-6 mx-4" />
 
-                {HUBS.filter(hub => {
-                  if (!hub.requiredAccountType) return true;
-                  
-                  const sessionAccountType = (session?.user as any)?.accountType;
-                  const effectiveAccountType = sessionAccountType || userAccountType;
-                  const roleName = (session?.user as any)?.roleName;
-
-                  const reqAccountType = hub.requiredAccountType as string;
-                  if (reqAccountType === 'SUPERADMIN') {
-                    // El backend (lib/auth-helpers.ts) solo deja pasar Superadmin
-                    // al control plane: el menú no anuncia un enlace que va a
-                    // terminar en 403. Un rol que se llame "Admin" no es el
-                    // propietario de la plataforma.
-                    return roleName === 'Superadmin';
-                  }
-
-                  // Mientras carga, permitir ver hubs si no hay accountType aún
-                  if (isLoadingModules && !effectiveAccountType) {
-                    return reqAccountType !== 'SUPERADMIN' || roleName === 'Superadmin';
-                  }
-
-                  if (reqAccountType === 'AGENCY') {
-                    const isAgencyAccount = effectiveAccountType === 'AGENCY';
-                    const hasAgencyModule = activeModules.includes('agency');
-                    return (isAgencyAccount && hasAgencyModule) || roleName === 'Superadmin';
-                  }
-
-                  if (reqAccountType === 'BUSINESS') {
-                    // Lo que decide es el tipo de cuenta, no el nombre del rol:
-                    // un BUSINESS la ve, un rol que se llame "Admin" en otro
-                    // tipo de cuenta no tiene por qué verla.
-                    const isBusiness = effectiveAccountType === 'BUSINESS' || effectiveAccountType === 'AGENCY' || roleName === 'Superadmin';
-                    if (!isBusiness) return false;
-                    
-                    // Si requiere un módulo específico, verificarlo
-                    if (hub.requiredModule && !isLoadingModules && !activeModules.includes(hub.requiredModule)) {
-                      return false;
-                    }
-                    return true;
-                  }
-
-                  // Si no requiere cuenta específica pero sí módulo
-                  if (hub.requiredModule && !isLoadingModules && !activeModules.includes(hub.requiredModule)) {
-                    return false;
-                  }
-
-                  return true;
-                }).map((hub) => {
+                {HUBS.filter((hub) => hubEsVisible(hub, visibilidad)).map((hub) => {
                   const HubIcon = hub.icon
                   return (
                     <Link

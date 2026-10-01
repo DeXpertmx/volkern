@@ -81,7 +81,7 @@ export interface ApiKeyAuthResult {
  * LÓGICA DE LA REGLA DE ORO (Aislamiento Hierárquico)
  * Determina si el solicitante puede actuar sobre el tenant de destino.
  */
-async function resolveHierarchicalContext(
+export async function resolveHierarchicalContext(
   requesterUser: {
     id: string
     email: string

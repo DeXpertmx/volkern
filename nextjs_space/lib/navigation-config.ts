@@ -84,7 +84,7 @@ export interface NavigationItem {
   planModule?: string
   description?: string
   requiredRegion?: 'MX' | 'ES' | 'CO' | 'US' // Regiones soportadas
-  requiredAccountType?: 'AGENCY' | 'BUSINESS' | 'SUPERADMIN'
+  requiredAccountType?: 'AGENCY' | 'BUSINESS' | 'SUPERADMIN' | 'ACCOUNTING'
   external?: boolean // Abrir el enlace en una pestaña nueva
 }
 
@@ -96,7 +96,7 @@ export interface HubConfig {
   items: NavigationItem[]
   description: string
   basePaths?: string[]
-  requiredAccountType?: 'AGENCY' | 'BUSINESS' | 'SUPERADMIN'
+  requiredAccountType?: 'AGENCY' | 'BUSINESS' | 'SUPERADMIN' | 'ACCOUNTING'
   requiredModule?: string
 }
 
@@ -125,7 +125,7 @@ export const HUBS: HubConfig[] = [
     icon: Calculator,
     href: '/dashboard/contabilidad',
     description: 'Gestión de clientes de asesoría, conciliación bancaria y marca de despacho.',
-    requiredAccountType: 'AGENCY',
+    requiredAccountType: 'ACCOUNTING',
     basePaths: [
       '/dashboard/contabilidad/slots',
       '/dashboard/contabilidad/branding'
@@ -588,16 +588,16 @@ export const HUBS: HubConfig[] = [
       { name: 'Correo SMTP', href: '/dashboard/configuracion?section=email', icon: Mail, description: 'Servidor de correo saliente' },
       { name: 'Notificaciones', href: '/dashboard/configuracion?section=notificaciones', icon: Bell, description: 'Alertas y correos' },
       { name: 'Config. Fiscal', href: '/dashboard/configuracion?section=fiscal', icon: Calculator, description: 'Facturación e impuestos' },
-      { name: 'Telefonía', href: '/dashboard/configuracion?section=telefonia', icon: PhoneCall, description: 'Líneas y desvíos' },
-      { name: 'WhatsApp del Negocio', href: '/dashboard/configuracion/whatsapp-negocio', icon: Building2, description: 'Número dedicado del negocio para el chatbot' },
-      { name: 'Reparto Leads', href: '/dashboard/configuracion?section=reparto', icon: RotateCw, description: 'Asignación de ejecutivos' },
-      { name: 'Campos de Leads', href: '/dashboard/configuracion?section=leads', icon: ListTodo, description: 'Personalización de campos' },
-      { name: 'Documentos', href: '/dashboard/configuracion?section=documentos', icon: FileText, description: 'Ajustes de contratos' },
-      { name: 'Firma Digital', href: '/dashboard/configuracion/firma-digital', icon: FileSignature, description: 'Instancia LibreSign para firma de contratos' },
-      { name: 'Canal de Igualdad', href: '/dashboard/configuracion?section=igualdad', icon: ShieldCheck, description: 'Configuración de denuncias e inmutabilidad' },
+      { name: 'Telefonía', href: '/dashboard/configuracion?section=telefonia', icon: PhoneCall, planModule: 'telefonia', description: 'Líneas y desvíos' },
+      { name: 'WhatsApp del Negocio', href: '/dashboard/configuracion/whatsapp-negocio', icon: Building2, planModule: 'chatbot_whatsapp', description: 'Número dedicado del negocio para el chatbot' },
+      { name: 'Reparto Leads', href: '/dashboard/configuracion?section=reparto', icon: RotateCw, planModule: 'leads', description: 'Asignación de ejecutivos' },
+      { name: 'Campos de Leads', href: '/dashboard/configuracion?section=leads', icon: ListTodo, planModule: 'leads', description: 'Personalización de campos' },
+      { name: 'Documentos', href: '/dashboard/configuracion?section=documentos', icon: FileText, planModule: 'contratos', description: 'Ajustes de contratos' },
+      { name: 'Firma Digital', href: '/dashboard/configuracion/firma-digital', icon: FileSignature, planModule: 'contratos', description: 'Instancia LibreSign para firma de contratos' },
+      { name: 'Canal de Igualdad', href: '/dashboard/configuracion?section=igualdad', icon: ShieldCheck, planModule: 'compliance_pro', description: 'Configuración de denuncias e inmutabilidad' },
       { name: 'Marca Blanca', href: '/dashboard/configuracion?section=whitelabel', icon: Palette, planModule: 'white_label', description: 'Personalización gráfica' },
-      { name: 'Agencia', href: '/dashboard/agencia', icon: Building, description: 'Gestión de clientes (slots)', requiredAccountType: 'AGENCY' },
-      { name: 'Contabilidad', href: '/dashboard/contabilidad', icon: Calculator, description: 'Gestión de empresas clientes (despacho)', requiredAccountType: 'AGENCY' },
+      { name: 'Agencia', href: '/dashboard/agencia', icon: Building, planModule: 'agency', description: 'Gestión de clientes (slots)', requiredAccountType: 'AGENCY' },
+      { name: 'Contabilidad', href: '/dashboard/contabilidad', icon: Calculator, description: 'Gestión de empresas clientes (despacho)', requiredAccountType: 'ACCOUNTING' },
       { name: 'Inmobiliaria', href: '/dashboard/configuracion/real-estate', icon: Home, description: 'Configuración del portal de propiedades y comisiones' },
       { name: 'Equipo', href: '/dashboard/equipo', icon: UserCog, planModule: 'equipo', description: 'Gestión de usuarios' },
       { name: 'Integraciones', href: '/dashboard/integraciones', icon: Plug, planModule: 'integraciones', description: 'Conexión con apps externas' },
@@ -607,7 +607,7 @@ export const HUBS: HubConfig[] = [
       { name: 'Módulos', href: '/dashboard/configuracion?section=modulos', icon: LayoutGrid, description: 'Activar/desactivar funciones' },
       { name: 'Historial de Configuración', href: '/dashboard/configuracion?section=historial', icon: History, description: 'Quién cambió cada ajuste y cuándo' },
       { name: 'Auditoría', href: '/dashboard/auditoria', icon: Activity, description: 'Historial completo de acciones en el sistema' },
-      { name: 'Compliance ⚡', href: '/dashboard/configuracion?section=compliance', icon: ShieldCheck, description: 'Control de compliance y procesos obligatorios' },
+      { name: 'Compliance ⚡', href: '/dashboard/configuracion?section=compliance', icon: ShieldCheck, planModule: 'compliance_pro', description: 'Control de compliance y procesos obligatorios' },
       { name: 'Privacidad GDPR', href: '/dashboard/compliance/gdpr', icon: Lock, description: 'Exportar y anonimizar tus datos personales' },
       { name: 'Mi Suscripción', href: '/dashboard/configuracion/billing', icon: CreditCard, description: 'Suscripción y pagos' },
       { name: 'Uso y Límites', href: '/dashboard/configuracion/usage', icon: BarChart3, description: 'Consumo y límites del plan' },

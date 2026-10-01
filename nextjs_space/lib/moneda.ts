@@ -238,6 +238,16 @@ export function monedaDePais(pais: string | null | undefined): MonedaInfo | unde
   return codigo ? infoMoneda(codigo) : undefined;
 }
 
+/** Primer país (código) cuya divisa es la indicada, o `null` si no está. */
+export function paisDeMoneda(
+  moneda: string | null | undefined
+): string | null {
+  if (!moneda) return null;
+  const codigo = moneda.trim().toUpperCase();
+  const pais = Object.entries(MONEDA_POR_PAIS).find(([, m]) => m === codigo);
+  return pais ? pais[0] : null;
+}
+
 /**
  * Divisa del esquema de transferencias SEPA.
  *

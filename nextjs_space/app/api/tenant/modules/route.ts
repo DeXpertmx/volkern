@@ -3,7 +3,8 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
-import { getActiveModules, ALL_MODULES, type CrmModule } from '@/lib/plans';
+import { ALL_MODULES } from '@/lib/plans';
+import { resolverModulosTenant } from '@/lib/tenant-modules';
 
 const CORE_MODULES = ['leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics', 'equipo', 'configuracion', 'conocimiento'];
 
@@ -30,40 +31,11 @@ export const GET = withTenantAuth(async (request, auth) => {
       select: { feature: true, habilitado: true }
     });
 
-    // 1. Obtener módulos según plan y overrides de TenantFeature
-    const planModules = await getActiveModules(tenant.plan, tenantFeatures);
-    
-    // 2. Obtener módulos habilitados manualmente (normalizados)
-    const manualModules = (tenant.enabledModules || []).map(m => m.toLowerCase());
-    
-    // 3. Unificar (Merge)
-    const mergedModules = new Set([...planModules, ...manualModules]);
-
-    // BYPASS: Módulos ilimitados para Admin y Demo
-    if (tenant.subdomain === 'admin' || tenant.subdomain?.startsWith('demo')) {
-      const { ALL_MODULES } = await import('@/lib/plans');
-      ALL_MODULES.forEach(m => mergedModules.add(m.id));
-    }
-
-    // 4. Mapeo Legacy: Si tiene 'crm', asegurar módulos core
-    if (mergedModules.has('crm') || mergedModules.has('CRM')) {
-       ['leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics', 'mensajes', 'citas', 'catalogo'].forEach(m => mergedModules.add(m));
-    }
-    
-    // 5. Mapeo Legacy: Si tiene 'ia_agencia', asegurar 'agency'
-    if (mergedModules.has('ia_agencia')) {
-       mergedModules.add('agency');
-    }
-
-    const finalModules = Array.from(mergedModules);
-
-    // SEGURIDAD: Asegurar que módulos core de perfil siempre estén presentes
-    if (!finalModules.includes('mi_tarjeta')) {
-       finalModules.push('mi_tarjeta');
-    }
-    if (!finalModules.includes('configuracion')) {
-       finalModules.push('configuracion');
-    }
+    // Plan + overrides → `enabledModules` → bypass de admin/demo → mapeos
+    // legacy → apagados explícitos del admin → core de perfil. La misma
+    // función la usa la guardia de servidor (lib/module-guard.ts) para que el
+    // menú y las pantallas no puedan discrepar.
+    const finalModules = await resolverModulosTenant(tenant, tenantFeatures);
 
     const config = tenant.configuracion as Record<string, any> | null;
     const complianceMode = (config?.complianceMode as string) || 'normal';
