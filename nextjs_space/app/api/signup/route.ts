@@ -10,6 +10,7 @@ import { AccountingInitializer } from '@/lib/accounting/initializer'
 import { stripe, createSubscriptionCheckout } from '@/lib/stripe'
 import { calcularPrecio } from '@/lib/pricing-engine'
 import { sendEmail } from '@/lib/ses-email'
+import { aplicarCatalogoRolesBasicos } from '@/lib/roles-basicos'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://volkern.app'
 
@@ -308,6 +309,11 @@ export async function POST(request: NextRequest) {
           tenantId: tenant.id
         }
       })
+
+      // 2b. Catálogo básico de roles: Miembro y Solo lectura, y Admin
+      // completado con las llaves modernas que le falten (equipo, roles,
+      // analytics…). Idempotente y aditivo: nunca retira lo definido arriba.
+      await aplicarCatalogoRolesBasicos(tx, tenant.id)
 
       // 3. Crear el usuario owner
       const user = await tx.user.create({

@@ -9,6 +9,7 @@ import {
   permisosTocanHospitality,
   puedeGestionarRolesDeHospitality,
 } from '@/lib/hospitality/roles';
+import { esNombreDeRolBasico } from '@/lib/roles-basicos';
 
 export async function PATCH(
   req: NextRequest,
@@ -40,6 +41,18 @@ export async function PATCH(
     const targetRole = await prisma.role.findUnique({ where: { id: params.id } });
     if (targetRole?.nombre === 'Superadmin') {
       return NextResponse.json({ error: 'No se puede editar el rol Superadmin' }, { status: 403 });
+    }
+
+    // El catálogo básico forma parte del vocabulario de la cuenta: sus roles
+    // no se renombran (rompería la idempotencia del alta), pero sí se ajustan
+    // — para eso está la matriz de permisos.
+    if (esNombreDeRolBasico(targetRole?.nombre) && nombre && nombre !== targetRole?.nombre) {
+      return NextResponse.json(
+        {
+          error: `«${targetRole?.nombre}» es parte del catálogo básico de la cuenta: no se renombra, pero se le ajustan las capacidades`,
+        },
+        { status: 409 }
+      );
     }
 
     // Un rol de Hospitality —el que toca hoy o el que va a tocar con este
@@ -108,7 +121,7 @@ export async function DELETE(
     }
 
     const targetRole = await prisma.role.findUnique({ where: { id: params.id } });
-    if (targetRole?.nombre === 'Superadmin' || targetRole?.nombre === 'Admin') {
+    if (targetRole?.nombre === 'Superadmin' || esNombreDeRolBasico(targetRole?.nombre)) {
       return NextResponse.json({ error: 'No se pueden eliminar roles protegidos' }, { status: 403 });
     }
 
