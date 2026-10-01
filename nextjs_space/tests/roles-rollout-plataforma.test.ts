@@ -125,6 +125,40 @@ describe('conPermisosHeredados', () => {
   });
 });
 
+describe('la clave legada «usuarios» hereda sus llaves en «equipo»', () => {
+  it('el admin de las primeras cuentas recupera su panel de Equipo', () => {
+    // Forma legada real (tenant JUAN ANTONIO): usuarios.* sin equipo.*.
+    const hereda = permisosQueHereda(
+      { usuarios: { ver: true, crear: true, editar: true, eliminar: true } },
+      'Admin'
+    );
+
+    expect(hereda).toEqual(
+      expect.arrayContaining([
+        { modulo: 'equipo', accion: 'ver' },
+        { modulo: 'equipo', accion: 'invitar' },
+        { modulo: 'equipo', accion: 'editar' },
+        { modulo: 'equipo', accion: 'eliminar' },
+      ])
+    );
+  });
+
+  it('concede en «equipo» SOLO lo que ya había en «usuarios»', () => {
+    const despues = conPermisosHeredados({ usuarios: { ver: true } }, 'Admin');
+
+    expect(despues.equipo).toEqual({ ver: true });
+    expect(tiene(despues, 'equipo', 'invitar')).toBe(false);
+    expect(tiene(despues, 'equipo', 'eliminar')).toBe(false);
+  });
+
+  it('quien ya tenía equipo no recibe nada duplicado, y el wildcard tampoco', () => {
+    expect(permisosQueHereda({ equipo: { ver: true }, usuarios: { ver: true } }, 'Admin')).not.toContain(
+      { modulo: 'equipo', accion: 'ver' }
+    );
+    expect(permisosQueHereda({ all: true }, 'Admin')).toEqual([]);
+  });
+});
+
 describe('la llave que reparte la herencia es la que lee la regla', () => {
   it('al heredar, el rol deja de ver solo lo suyo', () => {
     const conLoHeredado = conPermisosHeredados({ leads: { ver: true } }, 'Comercial');

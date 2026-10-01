@@ -125,6 +125,24 @@ export function permisosQueHereda(
     claves.push(LLAVE_DEL_PIPELINE_COMPLETO);
   }
 
+  // 3. El equipo: quien administraba usuarios con la clave legada `usuarios`
+  //    recibe en `equipo` exactamente las acciones que ya tenía. La equivalencia
+  //    más cercana: usuarios.crear→equipo.invitar, usuarios.editar→equipo.editar,
+  //    usuarios.eliminar→equipo.eliminar, usuarios.ver→equipo.ver. «crear» de
+  //    roles va con usuarios.crear (mismo acto: dar de alta).
+  if (tiene(permisos, 'usuarios', 'ver') && !tiene(permisos, 'equipo', 'ver')) {
+    claves.push({ modulo: 'equipo', accion: 'ver' });
+  }
+  if (tiene(permisos, 'usuarios', 'crear') && !tiene(permisos, 'equipo', 'invitar')) {
+    claves.push({ modulo: 'equipo', accion: 'invitar' });
+  }
+  if (tiene(permisos, 'usuarios', 'editar') && !tiene(permisos, 'equipo', 'editar')) {
+    claves.push({ modulo: 'equipo', accion: 'editar' });
+  }
+  if (tiene(permisos, 'usuarios', 'eliminar') && !tiene(permisos, 'equipo', 'eliminar')) {
+    claves.push({ modulo: 'equipo', accion: 'eliminar' });
+  }
+
   return claves;
 }
 
