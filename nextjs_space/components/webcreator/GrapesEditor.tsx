@@ -1038,22 +1038,15 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>((props, ref)
      };
    }, [editorRef, onSave]);
 
-  // Keep the ref in sync with the prop so the 'load' event handler always has fresh data
+  // Keep the ref in sync with the prop so the 'load' event handler always has fresh data.
+  // NOTE: we deliberately do NOT reload the project when `initialData` changes after the
+  // editor has mounted. Every save (manual or autosave) updates pageData.contenido, which
+  // changes this prop; re-running loadProjectData on a live editor re-parses every
+  // custom-code block and resets undo history, and it is the window where an embed
+  // pasted mid-save can end up duplicated. After mount, the editor instance is the
+  // single source of truth; initialData is only consumed once on the 'load' event.
   useEffect(() => {
     initialDataRef.current = initialData;
-    // If the editor is already initialized (e.g. hot-reload or prop change after mount),
-    // load the data directly — no race condition possible here since we know it's ready.
-    if (editorRef.current && initialData) {
-      const data = initialData as any;
-      const hasData = (data.pages && data.pages.length > 0) || (data.components && data.components.length > 0);
-      if (hasData) {
-        try {
-          editorRef.current.loadProjectData(data);
-        } catch (e) {
-          console.warn('[GrapesEditor] initialData load failed on prop update:', e);
-        }
-      }
-    }
   }, [initialData]);
 
   return <div id="gjs" style={{ height: "100%", width: "100%" }} />
