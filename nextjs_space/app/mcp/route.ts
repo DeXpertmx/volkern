@@ -32,16 +32,8 @@ import { VOLKERN_TOOLS } from '../../mcp-server/src/tools-catalog'
 const SUPPORTED_PROTOCOL_VERSIONS = ['2026-07-28', '2025-11-25', '2025-06-18', '2025-03-26'] as const
 const DEFAULT_PROTOCOL_VERSION = '2025-03-26'
 
-// Mapeo tool MCP → skill ejecutable (lib/mcp/mcp-handler.ts).
-// Por defecto se elimina el prefijo volkern_; los aliases cubren renombres.
-const TOOL_EXEC_ALIASES: Record<string, string> = {
-  volkern_get_catalogo_item: 'get_catalog_item',
-  volkern_search_catalogo: 'search_catalog',
-}
-
-function resolveSkillName(toolName: string): string {
-  return TOOL_EXEC_ALIASES[toolName] ?? toolName.replace(/^volkern_/, '')
-}
+// El mapeo tool MCP → skill (resolveSkillName) vive en lib/mcp/mcp-handler.ts,
+// compartido con handleCallTool (única fuente de verdad de aliases).
 
 // ============== RATE LIMITING (igual que /api/mcp) ==============
 
@@ -149,28 +141,11 @@ export async function POST(req: Request) {
       return jsonRpcError(id, -32000, 'Rate limit exceeded. Máximo 100 requests por minuto.', 429)
     }
 
-    // Mapear al skill equivalente y ejecutar de verdad vía Skills
-    const { handleCallTool, MCP_TOOLS } = await import('@/lib/mcp/mcp-handler')
+    // Mapear al skill equivalente y ejecutar de verdad vía Skills.
+    // Todas las tools del catálogo son ejecutables: handleCallTool valida
+    // contra el inputSchema del catálogo y captura errores como isError.
+    const { handleCallTool, resolveSkillName } = await import('@/lib/mcp/mcp-handler')
     const skillName = resolveSkillName(toolName)
-
-    if (!MCP_TOOLS.some((t) => t.name === skillName)) {
-      return NextResponse.json({
-        jsonrpc: '2.0',
-        id,
-        result: {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                error: `Tool "${toolName}" no disponible para ejecución remota vía /mcp: no tiene skill equivalente en el servidor. Usa el MCP server standalone (paquete npm volkern-mcp-server) con una API key.`,
-                tool: toolName,
-              }),
-            },
-          ],
-          isError: true,
-        },
-      })
-    }
 
     // Inyección de contexto de seguridad: el tenant autenticado manda
     // (evita cross-tenant aunque el cliente envíe otro tenantId).

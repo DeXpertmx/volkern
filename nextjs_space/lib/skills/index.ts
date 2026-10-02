@@ -769,50 +769,79 @@ const listDealsWrapper = async (input: {
   return dealSkills.listDeals(tenantId, filters);
 };
 
+import * as mcpOps from './mcp-ops-skills';
+
 /**
- * Wrapper create_deal: el skill core exige titulo+valor y leadId/contactId,
- * pero el orquestador pasa email/nombre/monto desde el chatbot. Resuelve el
- * lead o contacto, mapea monto→valor y sintetiza el título si no vino.
+ * Wrapper create_deal — contrato UNIÓN de dos superficies:
+ *  · Catálogo standalone (/mcp): {titulo, valor, leadId, moneda, ...}
+ *  · Orquestador/chatbot: {email|nombre, monto, etapa, prioridad}
+ * Con leadId se valida y usa directamente; sin él se resuelve por email
+ * o nombre (comportamiento legacy). monto es alias de valor.
  */
 const createDealWrapper = async (input: {
   tenantId: string;
   email?: string;
   nombre?: string;
   monto?: number | string;
+  valor?: number | string;
   titulo?: string;
+  moneda?: string;
+  leadId?: string;
+  contactId?: string;
+  descripcion?: string;
   etapa?: string;
+  probabilidad?: number | string;
   prioridad?: string;
+  fechaEstimadaCierre?: string;
+  fechaCierre?: string;
+  origen?: string;
+  tags?: string[] | string;
+  usuarioAsignadoId?: string;
 }) => {
   const { tenantId, email, nombre, monto, titulo, etapa, prioridad } = input;
-  if (!email && !nombre) throw new Error('Se requiere un email o nombre para crear el negocio.');
+  if (!email && !nombre && !input.leadId && !titulo) {
+    throw new Error('Se requiere un email o nombre para crear el negocio.');
+  }
 
   const { prisma } = await import('@/lib/db');
-  let leadId: string | undefined;
-  let contactId: string | undefined;
+  let leadId: string | undefined = input.leadId || undefined;
+  let contactId: string | undefined = input.contactId || undefined;
 
-  const findLead = async (e?: string, n?: string) => {
-    if (e) {
-      const lead = await prisma.lead.findFirst({ where: { tenantId, email: e } });
-      if (lead) return lead.id;
-      const contact = await prisma.contact.findFirst({ where: { tenantId, email: e } });
-      if (contact) return { contactId: contact.id };
-    }
-    if (n) {
-      const lead = await prisma.lead.findFirst({ where: { tenantId, nombre: { contains: n, mode: 'insensitive' } } });
-      if (lead) return lead.id;
-      const contact = await prisma.contact.findFirst({ where: { tenantId, nombre: { contains: n, mode: 'insensitive' } } });
-      if (contact) return { contactId: contact.id };
-    }
-    return null;
-  };
+  if (leadId) {
+    // Contrato del catálogo: el lead viene referenciado y se valida en tenant
+    const lead = await prisma.lead.findFirst({ where: { id: leadId, tenantId }, select: { id: true } });
+    if (!lead) throw new Error(`Lead no encontrado: ${leadId}`);
+  } else if (email || nombre) {
+    // Contrato legacy: resolver el lead o contacto por email/nombre
+    const findLead = async (e?: string, n?: string) => {
+      if (e) {
+        const lead = await prisma.lead.findFirst({ where: { tenantId, email: e } });
+        if (lead) return lead.id;
+        const contact = await prisma.contact.findFirst({ where: { tenantId, email: e } });
+        if (contact) return { contactId: contact.id };
+      }
+      if (n) {
+        const lead = await prisma.lead.findFirst({ where: { tenantId, nombre: { contains: n, mode: 'insensitive' } } });
+        if (lead) return lead.id;
+        const contact = await prisma.contact.findFirst({ where: { tenantId, nombre: { contains: n, mode: 'insensitive' } } });
+        if (contact) return { contactId: contact.id };
+      }
+      return null;
+    };
 
-  const resolved = await findLead(email, nombre);
-  if (typeof resolved === 'string') leadId = resolved;
-  else if (resolved) contactId = resolved.contactId;
+    const resolved = await findLead(email, nombre);
+    if (typeof resolved === 'string') leadId = resolved;
+    else if (resolved) contactId = resolved.contactId;
+  }
 
-  const valor = monto !== undefined && monto !== null && monto !== '' ? Number(monto) : NaN;
+  const valor = Number(input.valor ?? monto);
   if (!Number.isFinite(valor)) {
     throw new Error('Se requiere un monto para crear el negocio (ej: por 5000€).');
+  }
+
+  const tituloFinal = titulo || (nombre || email ? `Negocio - ${nombre || email}` : undefined);
+  if (!tituloFinal) {
+    throw new Error('Se requiere un título (titulo) o un nombre/email para el negocio.');
   }
 
   // Etapa canónica del pipeline del tenant: "propuesta" → "Propuesta"
@@ -821,13 +850,19 @@ const createDealWrapper = async (input: {
 
   return dealSkills.createDeal({
     tenantId,
-    titulo: titulo || `Negocio - ${nombre || email}`,
+    titulo: tituloFinal,
     valor,
+    moneda: input.moneda,
     leadId,
     contactId,
+    descripcion: input.descripcion,
     etapa: etapaCanonica,
-    probabilidad,
+    probabilidad: input.probabilidad !== undefined ? Number(input.probabilidad) : probabilidad,
     prioridad,
+    fechaEstimadaCierre: input.fechaEstimadaCierre || input.fechaCierre,
+    origen: input.origen,
+    tags: Array.isArray(input.tags) ? input.tags : input.tags ? [input.tags] : undefined,
+    usuarioAsignadoId: input.usuarioAsignadoId,
     source: 'webhook',
   });
 };
@@ -4170,7 +4205,42 @@ export const skills = {
   
   // Catálogo
   export_catalog: catalogSkills.exportCatalog,
-  create_cotizacion: createQuoteWrapper,
+  create_cotizacion: async (input: any) => {
+    // Contrato del catálogo standalone (catalogItems[]) → lógica compartida
+    // con POST /api/cotizaciones/from-catalog (lib/cotizaciones/from-catalog.ts)
+    if (Array.isArray(input?.catalogItems) && input.catalogItems.length > 0) {
+      return mcpOps.crearCotizacionMcp(input);
+    }
+    // Contrato legacy del orquestador (producto/catalogoItemId + meses)
+    return createQuoteWrapper(input);
+  },
+
+  // ─── Tools del catálogo MCP (executors en mcp-ops-skills.ts) ───
+  delete_contact: mcpOps.eliminarContactoMcp,
+  check_disponibilidad: mcpOps.checkDisponibilidadMcp,
+  list_citas: mcpOps.listarCitasMcp,
+  create_cita: mcpOps.crearCitaMcp,
+  update_cita: mcpOps.actualizarCitaMcp,
+  cita_accion: mcpOps.accionCitaMcp,
+  list_catalogo: mcpOps.listarCatalogoMcp,
+  create_catalogo_item: mcpOps.crearCatalogoItemMcp,
+  update_catalogo_item: mcpOps.actualizarCatalogoItemMcp,
+  list_servicios: mcpOps.listarServiciosMcp,
+  get_servicio: mcpOps.obtenerServicioMcp,
+  list_tasks: mcpOps.listarTasksMcp,
+  send_whatsapp: mcpOps.enviarWhatsappMcp,
+  list_conversaciones: mcpOps.listarConversacionesMcp,
+  list_interactions: mcpOps.listarInteraccionesMcp,
+  create_interaction: mcpOps.crearInteraccionMcp,
+  list_notes: mcpOps.listarNotasMcp,
+  list_ordenes_venta: mcpOps.listarOrdenesVentaMcp,
+  get_orden_venta: mcpOps.obtenerOrdenVentaMcp,
+  create_orden_from_cotizacion: mcpOps.crearOrdenDesdeCotizacionMcp,
+  create_contrato_from_cotizacion: mcpOps.crearContratoDesdeCotizacionMcp,
+  get_financial_dashboard: mcpOps.dashboardFinancieroMcp,
+  verify_vault_integrity: mcpOps.verificarIntegridadVaultMcp,
+  calculate_tax_provisions: mcpOps.calcularProvisionesFiscalesMcp,
+  report_production_scrap: mcpOps.reportarMermaMcp,
   get_catalog_field_definitions: catalogSkills.getFieldDefinitions,
   get_catalog_item: catalogSkills.getCatalogItem,
   search_catalog: catalogSkills.searchCatalog,
@@ -4463,6 +4533,28 @@ export function listSkills(): Array<{ name: SkillName; description: string; cate
     { name: 'verify_waste_integrity', description: 'Auditoría visual de mermas e integridad de planta vía Gemma Vision', category: 'production' },
     // ERP Calidad (QC)
     { name: 'detect_quality_anomalies', description: 'Analizar anomalías de calidad cruzando materiales y proveedores', category: 'quality' },
+    // ─── Tools del catálogo MCP (volkern_* → skills) ───
+    { name: 'delete_contact', description: 'Eliminar un contacto (requiere compliance)', category: 'contacts' },
+    { name: 'check_disponibilidad', description: 'Consultar horarios disponibles para una fecha', category: 'appointments' },
+    { name: 'list_citas', description: 'Listar citas con filtros', category: 'appointments' },
+    { name: 'create_cita', description: 'Crear una cita con todas las integraciones', category: 'appointments' },
+    { name: 'update_cita', description: 'Actualizar una cita existente', category: 'appointments' },
+    { name: 'cita_accion', description: 'Confirmar, cancelar o reprogramar una cita', category: 'appointments' },
+    { name: 'list_catalogo', description: 'Listar items del catálogo con filtros', category: 'catalog' },
+    { name: 'create_catalogo_item', description: 'Crear un item de catálogo con pricing y media', category: 'catalog' },
+    { name: 'update_catalogo_item', description: 'Actualizar un item de catálogo (parcial)', category: 'catalog' },
+    { name: 'list_servicios', description: 'Listar servicios del catálogo (legacy)', category: 'catalog' },
+    { name: 'get_servicio', description: 'Obtener un servicio (legacy)', category: 'catalog' },
+    { name: 'list_tasks', description: 'Listar tareas de un lead', category: 'tasks' },
+    { name: 'send_whatsapp', description: 'Enviar WhatsApp a un lead', category: 'messaging' },
+    { name: 'list_conversaciones', description: 'Listar conversaciones de WhatsApp', category: 'messaging' },
+    { name: 'list_interactions', description: 'Listar interacciones de un lead', category: 'interactions' },
+    { name: 'create_interaction', description: 'Registrar interacción con un lead', category: 'interactions' },
+    { name: 'list_notes', description: 'Listar notas de un lead', category: 'notes' },
+    { name: 'list_ordenes_venta', description: 'Listar órdenes de venta con filtros', category: 'sales' },
+    { name: 'get_orden_venta', description: 'Obtener detalle de una orden de venta', category: 'sales' },
+    { name: 'create_orden_from_cotizacion', description: 'Convertir cotización en orden de venta', category: 'sales' },
+    { name: 'create_contrato_from_cotizacion', description: 'Convertir cotización en contrato', category: 'contracts' },
     { name: 'register_qc_inspection', description: 'Registrar inspección con firma criptográfica SHA-256', category: 'quality' },
     // ERP RRHH (HRM)
     { name: 'talent_retention_risk', description: 'Analizar riesgo de rotación cruzando carga de proyectos y compromiso', category: 'hr' },

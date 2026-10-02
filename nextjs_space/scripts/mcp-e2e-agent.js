@@ -15,17 +15,14 @@
  *         ultimoUso/totalUsos.
  *
  *  · --flujo: flujo comercial COMPLETO con datos temporales (se limpian al
- *      final, incluso si falla):
+ *      final, incluso si falla). TODO por /mcp tools/call con los contratos
+ *      del catálogo (tools-catalog.ts), igual que un agente externo:
  *      1. Fixture: CatalogoItem temporal (el tenant puede tener catálogo vacío).
- *      2. lead y deal vía /mcp tools/call (skills reales).
- *      3. volkern_create_cotizacion vía /mcp: hoy devuelve el isError
- *         documentado (sin skill equivalente); si algún día ejecuta, se usa
- *         su resultado. La cotización REAL se crea por REST
- *         (/api/cotizaciones/from-catalog), el mismo camino que usa el
- *         standalone con un agente externo.
- *      4. orden de venta por REST (/api/ordenes-venta/from-cotizacion) y
- *         verificación por GET /api/ordenes-venta/:id.
- *      5. Limpieza total: orden → cotización → dealActivities → deal →
+ *      2. lead → create_deal (titulo/valor/leadId) → create_cotizacion
+ *         (catalogItems[]) → create_orden_from_cotizacion (cotizacionId),
+ *         todos ejecutados de verdad por sus skills.
+ *      3. Verificación de la orden por GET /api/ordenes-venta/:id (REST).
+ *      4. Limpieza total: orden → cotización → dealActivities → deal →
  *         lead → catalogoItem → API key temporal. Los audit logs SE
  *         CONSERVAN (son la evidencia de las llamadas reales).
  *
@@ -278,19 +275,14 @@ async function runFlujo() {
     creados.leadId = leadId
     ok(`lead creado vía /mcp (${leadId.slice(-8)})`)
 
-    // ── 3. deal vía /mcp ─────────────────────────────────────────
-    // ⚠️ Gap detectado (documentado a propósito): el contrato REAL del skill
-    // create_deal (wrapper en lib/skills/index.ts) difiere del catálogo
-    // standalone: exige 'nombre' (schema del handler) y 'monto' (no 'valor'),
-    // y NO acepta leadId: resuelve el lead por email. Se envía el contrato
-    // real; el deal queda vinculado al lead vía email.
+    // ── 3. deal vía /mcp (contrato del catálogo: titulo/valor/leadId) ──
     const dealCall = await mcpCall(KEY_A, 'tools/call', {
       name: 'volkern_create_deal',
       arguments: {
         titulo: `E2E MCP Deal ${MARCA}`,
-        nombre: `E2E MCP Deal ${MARCA}`,
-        monto: 246.9,
-        email: `${MARCA.toLowerCase()}@e2e.volkern.app`,
+        valor: 246.9,
+        moneda: 'EUR',
+        leadId,
         descripcion: 'Deal temporal del E2E de flujo comercial (se elimina al final)',
       },
     }, 21)
@@ -309,7 +301,7 @@ async function runFlujo() {
     }
     ok(`deal creado vía /mcp y vinculado al lead (deal ${dealId.slice(-8)} → lead ${leadId.slice(-8)})`)
 
-    // ── 4. cotización: /mcp (limitación documentada) + REST real ──
+    // ── 4. cotización vía /mcp (contrato del catálogo: catalogItems[]) ──
     const cotMcp = await mcpCall(KEY_A, 'tools/call', {
       name: 'volkern_create_cotizacion',
       arguments: {
@@ -320,49 +312,38 @@ async function runFlujo() {
       },
     }, 22)
     const cotMcpRes = cotMcp.body?.result
-    let cotizacionId = null
-    if (cotMcp.status === 200 && cotMcpRes && !cotMcpRes.isError) {
-      cotizacionId = extractId(JSON.parse(cotMcpRes.content?.[0]?.text || '{}'))
-      ok('create_cotizacion vía /mcp ejecutó de verdad (la superficie evolucionó)')
-    } else {
-      const texto = String(cotMcpRes?.content?.[0]?.text || '')
-      if (!/no disponible para ejecución remota/.test(texto)) {
-        fail(`volkern_create_cotizacion vía /mcp falló con un error NO documentado: HTTP ${cotMcp.status} ${texto.slice(0, 300)}`)
-        return
-      }
-      ok('volkern_create_cotizacion vía /mcp → isError documentado (sin skill equivalente; el standalone usa REST)')
-    }
-
-    if (!cotizacionId) {
-      const cotRest = await rest(KEY_A, 'POST', '/cotizaciones/from-catalog', {
-        titulo: `E2E MCP Cotización ${MARCA}`,
-        catalogItems: [{ catalogoItemId: creados.catalogoItemId, cantidad: 2 }],
-        leadId,
-        dealId,
-        descripcion: 'Cotización temporal del E2E de flujo comercial (se elimina al final)',
-        clienteEmail: `${MARCA.toLowerCase()}@e2e.volkern.app`,
-      })
-      if (cotRest.status !== 201 || !cotRest.body?.cotizacion?.id) {
-        fail(`POST /api/cotizaciones/from-catalog falló: HTTP ${cotRest.status} ${JSON.stringify(cotRest.body).slice(0, 300)}`)
-        return
-      }
-      cotizacionId = cotRest.body.cotizacion.id
-      ok(`cotización creada por REST (${cotRest.body.cotizacion.numero}, total ${cotRest.body.cotizacion.total} ${cotRest.body.cotizacion.moneda})`)
-    }
-    creados.cotizacionId = cotizacionId
-
-    // ── 5. orden de venta por REST (camino del standalone) ───────
-    const ordenRest = await rest(KEY_A, 'POST', '/ordenes-venta/from-cotizacion', {
-      cotizacionId,
-      notasInternas: `Orden temporal del E2E ${MARCA} (se elimina al final)`,
-    })
-    if ((ordenRest.status !== 201 && ordenRest.status !== 200) || !ordenRest.body?.orden?.id) {
-      fail(`POST /api/ordenes-venta/from-cotizacion falló: HTTP ${ordenRest.status} ${JSON.stringify(ordenRest.body).slice(0, 300)}`)
+    if (cotMcp.status !== 200 || !cotMcpRes || cotMcpRes.isError) {
+      fail(`create_cotizacion vía /mcp falló: HTTP ${cotMcp.status} ${String(cotMcpRes?.content?.[0]?.text).slice(0, 300)}`)
       return
     }
-    const ordenId = ordenRest.body.orden.id
+    const cotJson = JSON.parse(cotMcpRes.content?.[0]?.text || '{}')
+    const cotizacionId = cotJson.cotizacion?.id
+    if (!cotizacionId) { fail('create_cotizacion no devolvió {cotizacion:{id}}'); return }
+    if (cotJson.cotizacion.dealId !== dealId) {
+      fail(`la cotización no quedó vinculada al deal (dealId=${cotJson.cotizacion.dealId ?? 'null'})`)
+      return
+    }
+    creados.cotizacionId = cotizacionId
+    ok(`cotización creada vía /mcp (${cotJson.cotizacion.numero}, total ${cotJson.cotizacion.total} ${cotJson.cotizacion.moneda})`)
+
+    // ── 5. orden de venta vía /mcp (contrato del catálogo: cotizacionId) ──
+    const ordenMcp = await mcpCall(KEY_A, 'tools/call', {
+      name: 'volkern_create_orden_from_cotizacion',
+      arguments: {
+        cotizacionId,
+        notasInternas: `Orden temporal del E2E ${MARCA} (se elimina al final)`,
+      },
+    }, 23)
+    const ordenMcpRes = ordenMcp.body?.result
+    if (ordenMcp.status !== 200 || !ordenMcpRes || ordenMcpRes.isError) {
+      fail(`create_orden_from_cotizacion vía /mcp falló: HTTP ${ordenMcp.status} ${String(ordenMcpRes?.content?.[0]?.text).slice(0, 300)}`)
+      return
+    }
+    const ordenJson = JSON.parse(ordenMcpRes.content?.[0]?.text || '{}')
+    const ordenId = ordenJson.orden?.id
+    if (!ordenId) { fail('create_orden_from_cotizacion no devolvió {orden:{id}}'); return }
     creados.ordenId = ordenId
-    ok(`orden de venta creada desde la cotización (${ordenRest.body.orden.numero}) yaExistia=${ordenRest.body.yaExistia}`)
+    ok(`orden de venta creada vía /mcp desde la cotización (${ordenJson.orden.numero}) yaExistia=${ordenJson.yaExistia}`)
 
     // ── 6. verificación de la orden por GET ──────────────────────
     const ordenGet = await rest(KEY_A, 'GET', `/ordenes-venta/${ordenId}`)

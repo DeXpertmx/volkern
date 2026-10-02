@@ -17,6 +17,8 @@ import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import { MCP_SERVER_INFO, MCP_TOOLS, buildMcpServerCard } from '@/lib/seo/mcp-server-card'
 import { VOLKERN_TOOLS } from '../mcp-server/src/tools-catalog'
+import { skills } from '@/lib/skills'
+import { resolveSkillName, resolveCatalogToolSchema } from '@/lib/mcp/mcp-handler'
 
 const DIST = fileURLToPath(new URL('../mcp-server/dist/index.js', import.meta.url))
 const CARD = buildMcpServerCard('https://volkern.app')
@@ -117,6 +119,35 @@ describe('Conformidad endpoint /mcp ↔ card', () => {
       params: { name: 'volkern_no_existe', arguments: {} },
     })
     expect(unknown.body.error.code).toBe(-32602)
+  })
+})
+
+describe('Ejecutabilidad de las 43 tools vía /mcp', () => {
+  it('cada tool del catálogo resuelve a un skill existente en el registro', () => {
+    const registro = skills as unknown as Record<string, unknown>
+    for (const tool of VOLKERN_TOOLS) {
+      const skillName = resolveSkillName(tool.name)
+      expect(registro[skillName], `skill "${skillName}" (de ${tool.name}) debe existir en el registro`).toBeDefined()
+    }
+  })
+
+  it('cada tool del catálogo tiene inputSchema resoluble para handleCallTool', () => {
+    for (const tool of VOLKERN_TOOLS) {
+      expect(resolveCatalogToolSchema(resolveSkillName(tool.name)), `schema de ${tool.name}`).toBeDefined()
+    }
+  })
+
+  it('el contrato create_deal acepta el del catálogo (titulo/valor/leadId), no solo el legacy (nombre/monto)', () => {
+    const schema = resolveCatalogToolSchema('create_deal')
+    expect(schema?.required).toEqual(expect.arrayContaining(['titulo', 'valor']))
+    expect(Object.keys(schema?.properties ?? {})).toContain('leadId')
+  })
+
+  it('el contrato create_cotizacion usa catalogItems[] del catálogo', () => {
+    const schema = resolveCatalogToolSchema('create_cotizacion')
+    expect(schema?.required).toEqual(expect.arrayContaining(['titulo', 'catalogItems']))
+    const items = schema?.properties?.catalogItems as any
+    expect(items?.type).toBe('array')
   })
 })
 

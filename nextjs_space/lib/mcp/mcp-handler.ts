@@ -11,6 +11,9 @@
 
 import { prisma } from '@/lib/db';
 import { skills, executeSkill, listSkills, SkillName } from '@/lib/skills';
+// Catálogo compartido con el standalone: única fuente de verdad de los
+// contratos volkern_* (nombres, descripciones e inputSchemas reales).
+import { VOLKERN_TOOLS } from '../../mcp-server/src/tools-catalog';
 
 // ============== TIPOS MCP ==============
 
@@ -30,6 +33,30 @@ interface MCPPropertySchema {
   enum?: string[];
   items?: MCPPropertySchema;
   properties?: Record<string, MCPPropertySchema>;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RESOLUCIÓN CATÁLOGO STANDALONE → SKILL
+// El catálogo (mcp-server/src/tools-catalog.ts) es la única fuente de
+// verdad de los contratos volkern_* que ven los agentes externos.
+// MCP_TOOLS mantiene además los contratos legacy del orquestador
+// (create_booking, get_tasks_by_lead, ...) que usa /api/mcp.
+// ═══════════════════════════════════════════════════════════════
+
+// Aliases: la tool del catálogo y el skill difieren en nombre
+const CATALOG_EXEC_ALIASES: Record<string, string> = {
+  volkern_get_catalogo_item: 'get_catalog_item',
+  volkern_search_catalogo: 'search_catalog',
+}
+
+/** volkern_X → nombre de skill ejecutable en el mapa `skills` */
+export function resolveSkillName(toolName: string): string {
+  return CATALOG_EXEC_ALIASES[toolName] ?? toolName.replace(/^volkern_/, '')
+}
+
+/** inputSchema del catálogo para un nombre de skill (undefined si no es del catálogo) */
+export function resolveCatalogToolSchema(skillName: string) {
+  return VOLKERN_TOOLS.find(t => resolveSkillName(t.name) === skillName)?.inputSchema
 }
 
 export interface MCPListToolsResponse {
@@ -1127,8 +1154,12 @@ export function handleListTools(): MCPListToolsResponse {
 export async function handleCallTool(request: MCPCallToolRequest): Promise<MCPCallToolResponse> {
   const { name, arguments: args } = request;
 
-  // Verificar que el tool existe
-  const tool = MCP_TOOLS.find(t => t.name === name);
+  // Verificar que el tool existe: primero el catálogo standalone (contrato
+  // volkern_* que ven los agentes), luego el registro legacy del orquestador.
+  const catalogSchema = resolveCatalogToolSchema(name);
+  const tool = catalogSchema
+    ? { name, description: '', inputSchema: catalogSchema }
+    : MCP_TOOLS.find(t => t.name === name);
   if (!tool) {
     return {
       content: [{
