@@ -14,6 +14,14 @@
 #      desplegado la Server Card, initialize, tools/list (catálogo sincronizado
 #      con la card) y que tools/call sin credenciales responda 401. Falla el
 #      despliegue si la superficie MCP está rota o abierta.
+#   5c. (Opcional, --e2e-mcp) E2E autenticado MCP (scripts/mcp-e2e.sh):
+#      circuito completo auth→skill→audit con API keys temporales creadas en
+#      BD y borradas al final. Recomendado tras despliegues que tocan /mcp,
+#      la auth de API keys o los skills.
+#
+#      Además, el centinela vigilar-mcp.sh se sincroniza al VPS junto con
+#      los otros (con verificación SHA-256) y su cron cada 15 minutos
+#      (/etc/cron.d/vigilar-mcp) se asegura aquí de forma idempotente.
 #
 # Uso (desde el repo, puede pedir sudo para docker):
 #   bash deploy-vps/deploy-local.sh
@@ -21,6 +29,7 @@
 #   bash deploy-vps/deploy-local.sh --skip-migrator  # no construye/subé migrator (sin cambios de BD)
 #   bash deploy-vps/deploy-local.sh --skip-smoke     # no ejecuta el smoke del clasificador
 #   bash deploy-vps/deploy-local.sh --skip-smoke-mcp # no ejecuta el smoke MCP (/mcp + Server Card)
+#   bash deploy-vps/deploy-local.sh --e2e-mcp        # ejecuta también el E2E autenticado MCP (paso 5c)
 #   bash deploy-vps/deploy-local.sh --keep-tarballs  # no borra tarballs en /tmp local
 #   bash deploy-vps/deploy-local.sh --keep           # pasa --keep a deploy-app.sh (no limpia en VPS)
 #
@@ -51,6 +60,7 @@ SKIP_BUILD=0
 SKIP_MIGRATOR=0
 SKIP_SMOKE=0
 SKIP_SMOKE_MCP=0
+E2E_MCP=0
 
 for a in "$@"; do
   case "$a" in
@@ -58,6 +68,7 @@ for a in "$@"; do
     --skip-migrator) SKIP_MIGRATOR=1 ;;
     --skip-smoke) SKIP_SMOKE=1 ;;
     --skip-smoke-mcp) SKIP_SMOKE_MCP=1 ;;
+    --e2e-mcp) E2E_MCP=1 ;;
     --keep-tarballs) KEEP_LOCAL=1 ;;
     --keep) KEEP_REMOTE="--keep" ;;
   esac
@@ -132,7 +143,7 @@ $SCP $TARBALLS "$VPS:/tmp/"
 $SCP deploy-vps/deploy-app.sh deploy-vps/run-migrations.sh "$VPS:/root/deploy-vps/"
 # Los centinelas de seguridad del VPS se sincronizan (el repo manda sobre
 # la copia del VPS) y su identidad se verifica abajo, antes de tocar nada.
-for s in auditar-superficie.sh vigilar-crons-heredados.sh; do
+for s in auditar-superficie.sh vigilar-crons-heredados.sh vigilar-mcp.sh; do
   $SCP "deploy-vps/$s" "$VPS:/root/$s"
   $SSH "$VPS" "chmod 700 /root/$s"
 done
@@ -141,7 +152,7 @@ done
 # baseline derivan entre copias, los crons del VPS compararían contra un
 # runbook viejo y la deriva real pasaría como conforme
 # (docs/VPS-SEGURIDAD-PUERTOS.md §10–§11).
-for s in auditar-superficie.sh vigilar-crons-heredados.sh; do
+for s in auditar-superficie.sh vigilar-crons-heredados.sh vigilar-mcp.sh; do
   LOCAL_SHA=$(sha256sum "deploy-vps/$s" | cut -d' ' -f1)
   REMOTE_SHA=$($SSH "$VPS" "sha256sum /root/$s | cut -d' ' -f1")
   if [ "$LOCAL_SHA" != "$REMOTE_SHA" ]; then
@@ -152,6 +163,15 @@ for s in auditar-superficie.sh vigilar-crons-heredados.sh; do
   fi
   echo "   · $s repo↔VPS idéntico (${LOCAL_SHA:0:12}…)"
 done
+
+# Cron del centinela MCP: cada 15 minutos, idempotente (si el fichero ya
+# existe NO se toca: el horario local del VPS manda sobre el del repo).
+$SSH "$VPS" "if [ ! -f /etc/cron.d/vigilar-mcp ]; then printf '%s\n' \
+  'SHELL=/bin/bash' \
+  'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' \
+  '# Vigilante MCP cada 15 min: superficie /mcp + Server Card del entorno desplegado' \
+  '*/15 * * * * root /root/vigilar-mcp.sh >> /var/log/vigilar-mcp.log 2>&1 || true' \
+  > /etc/cron.d/vigilar-mcp && chmod 644 /etc/cron.d/vigilar-mcp; fi"
 
 # ═══════════════════════════════════════════════════════════════
 # 4. DEPLOY REMOTO (load → migraciones → update → verificar → limpiar)
@@ -196,6 +216,21 @@ else
 fi
 
 # ═══════════════════════════════════════════════════════════════
+# 5c. (Opcional) E2E AUTENTICADO MCP
+# ═══════════════════════════════════════════════════════════════
+# Corre SOLO con --e2e-mcp: crea API keys temporales en BD (se borran al
+# final, incluso si falla) y valida el circuito auth→skill→audit contra
+# el entorno desplegado.
+E2E_MCP_RC=0
+echo ""
+if [ "$E2E_MCP" = "1" ]; then
+  echo "→ [5c/5] E2E autenticado MCP (circuito auth→skill→audit) ..."
+  bash scripts/mcp-e2e.sh || E2E_MCP_RC=$?
+else
+  echo "→ [5c/5] E2E autenticado MCP: omitido (usa --e2e-mcp para ejecutarlo)."
+fi
+
+# ═══════════════════════════════════════════════════════════════
 # Limpieza local opcional (los del VPS los limpia deploy-app.sh)
 # ═══════════════════════════════════════════════════════════════
 if [ "$KEEP_LOCAL" = "0" ]; then
@@ -207,16 +242,21 @@ fi
 # Los smokes se evalúan AL FINAL para que la limpieza de tarballs ocurra
 # siempre, pero un fallo no se silencia: la app ya corre la imagen nueva y
 # hay que decirlo.
-if [ "$SMOKE_RC" -ne 0 ] || [ "$SMOKE_MCP_RC" -ne 0 ]; then
+if [ "$SMOKE_RC" -ne 0 ] || [ "$SMOKE_MCP_RC" -ne 0 ] || [ "$E2E_MCP_RC" -ne 0 ]; then
   echo ""
-  echo "=== Deploy aplicado, pero un SMOKE TEST FALLÓ ==="
+  echo "=== Deploy aplicado, pero un SMOKE/E2E FALLÓ ==="
   if [ "$SMOKE_RC" -ne 0 ]; then
     echo "· Clasificador: la app no resolvió las frases sin LLM."
   fi
   if [ "$SMOKE_MCP_RC" -ne 0 ]; then
     echo "· MCP: la superficie /mcp (card, initialize, tools/list, auth) está rota o abierta en el entorno desplegado."
   fi
-  if [ "$SMOKE_RC" -ne 0 ]; then exit "$SMOKE_RC"; else exit "$SMOKE_MCP_RC"; fi
+  if [ "$E2E_MCP_RC" -ne 0 ]; then
+    echo "· E2E MCP: el circuito autenticado (auth→skill→audit) falló en el entorno desplegado."
+  fi
+  for rc in "$SMOKE_RC" "$SMOKE_MCP_RC" "$E2E_MCP_RC"; do
+    if [ "$rc" -ne 0 ]; then exit "$rc"; fi
+  done
 fi
 
 echo ""

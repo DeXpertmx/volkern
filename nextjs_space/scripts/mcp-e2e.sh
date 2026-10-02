@@ -30,8 +30,15 @@
 #   VOLKERN_APP_URL   URL pública a probar     (https://volkern.app)
 #   VOLKERN_SERVICE   servicio de Swarm        (volkern-erp_app)
 #
-# Salida: 0 si el circuito completo pasa; 1 si algo falla (las keys
-# temporales se eliminan siempre).
+# Modo flujo comercial completo (opcional):
+#   bash scripts/mcp-e2e.sh --flujo-completo
+#   Además del circuito, crea lead → deal → cotización → orden de venta
+#   con datos temporales (lead/deal vía /mcp; cotización y orden vía REST,
+#   el camino real del standalone) y los elimina al terminar. Crea UN
+#   mensaje de Telegram en el tenant (notificación de nueva orden).
+#
+# Salida: 0 si todo pasa; 1 si algo falla (las keys y datos temporales
+# se eliminan siempre).
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
@@ -49,6 +56,14 @@ fi
 APP_URL="${VOLKERN_APP_URL:-https://volkern.app}"
 SERVICE="${VOLKERN_SERVICE:-volkern-erp_app}"
 
+# Modo flujo comercial completo (--flujo-completo)
+FLUJO=0
+for a in "$@"; do
+  case "$a" in
+    --flujo-completo) FLUJO=1 ;;
+  esac
+done
+
 SSH="ssh -i $SSH_KEY -o StrictHostKeyChecking=no -o ConnectTimeout=30"
 SCP="scp -i $SSH_KEY -o StrictHostKeyChecking=no"
 
@@ -65,7 +80,11 @@ if [ ! -f "$SSH_KEY" ]; then
   exit 1
 fi
 
-echo "→ [mcp-e2e] Circuito autenticado MCP (auth → skill → audit log) contra $APP_URL"
+if [ "$FLUJO" = "1" ]; then
+  echo "→ [mcp-e2e] Flujo comercial completo MCP (lead→deal→cotización→orden, datos temporales) contra $APP_URL"
+else
+  echo "→ [mcp-e2e] Circuito autenticado MCP (auth → skill → audit log) contra $APP_URL"
+fi
 $SCP -q "$AGENT_LOCAL" "$VPS:$AGENT_REMOTO"
 
 APP=$($SSH "$VPS" "docker ps --filter name=$SERVICE --format '{{.Names}}' | head -1")
@@ -78,14 +97,16 @@ echo "   · contenedor: $APP"
 $SSH "$VPS" "docker cp $AGENT_REMOTO $APP:/tmp/ >/dev/null"
 
 RC=0
-$SSH "$VPS" "docker exec -w /app -e NODE_PATH=/app/node_modules -e VOLKERN_APP_URL=$APP_URL $APP \
-  node /tmp/$AGENT_NOMBRE --url $APP_URL" || RC=$?
+AGENT_FLAGS="--url $APP_URL"
+if [ "$FLUJO" = "1" ]; then AGENT_FLAGS="$AGENT_FLAGS --flujo"; fi
+$SSH "$VPS" "docker exec -w /app -e NODE_PATH=/app/node_modules -e IN_CONTAINER=1 -e VOLKERN_APP_URL=$APP_URL $APP \
+  node /tmp/$AGENT_NOMBRE $AGENT_FLAGS" || RC=$?
 
 # Limpieza de los temporales (contenedor y VPS), siempre y sin enmascarar
 # el resultado del E2E.
 $SSH "$VPS" "docker exec $APP rm -f /tmp/$AGENT_NOMBRE 2>/dev/null; rm -f $AGENT_REMOTO" >/dev/null 2>&1 || true
 
 if [ "$RC" -ne 0 ]; then
-  echo "✗ [mcp-e2e] FALLIDO: el circuito auth→skill→audit no pasó en el entorno desplegado." >&2
+  echo "✗ [mcp-e2e] FALLIDO en el entorno desplegado (revisa los ✗ de arriba; los datos temporales se limpian igualmente)." >&2
 fi
 exit "$RC"
