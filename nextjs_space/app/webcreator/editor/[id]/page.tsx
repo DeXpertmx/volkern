@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import EditorWorkspace from "@/components/webcreator/EditorWorkspace";
+import { dedupeProjectData } from "@/components/webcreator/dedupe";
 import { Loader2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -120,11 +121,18 @@ export default function WebcreatorEditorPage({ params }: EditorPageProps) {
         cssLength: data.css?.length,
       });
 
+      // Última defensa: fusionar componentes idénticos añadidos en la misma acción
+      // antes del PUT (cubre también duplicados históricos ya persistidos).
+      const { projectData: cleanProjectData, removed: dupRemoved } = dedupeProjectData(data.projectData);
+      if (dupRemoved > 0) {
+        console.log(`[WebcreatorEditor] Guardado: ${dupRemoved} componente(s) duplicado(s) fusionado(s)`);
+      }
+
       const payload = {
         contenido: {
           format: 'grapesjs',
           html: data.html,
-          projectData: data.projectData,
+          projectData: cleanProjectData,
         },
         cssPersonalizado: data.css,
         estado: data.estado || pageData?.estado,
@@ -155,7 +163,7 @@ export default function WebcreatorEditorPage({ params }: EditorPageProps) {
       if (data.projectData) {
         setPageData(prev => prev ? {
           ...prev,
-          contenido: data.projectData,
+          contenido: cleanProjectData,
           estado: data.estado || prev.estado,
           metaTitulo: data.seo?.metaTitulo || prev.metaTitulo,
           metaDescripcion: data.seo?.metaDescripcion || prev.metaDescripcion,

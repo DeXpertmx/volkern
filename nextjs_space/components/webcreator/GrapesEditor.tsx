@@ -20,6 +20,7 @@ import gjsStyleEasing from "grapesjs-style-easing"
 import { setupVolkernBlocksAsync } from "./blocks/dynamicBlocks"
 import { setupDocumentBlocks } from "./blocks/DocumentBlocks"
 import { getTemplateData } from "./templates"
+import { dedupeEditorComponents } from "./dedupe"
 
 export interface GrapesEditorRef {
   exportProject: () => Record<string, unknown> | undefined;
@@ -1003,6 +1004,15 @@ const GrapesEditor = forwardRef<GrapesEditorRef, GrapesEditorProps>((props, ref)
        autoSaveTimeout.current = setTimeout(async () => {
          setAutoSaveStatus('saving');
          try {
+           // Protección: fusionar componentes idénticos añadidos en la misma acción
+           // (doble drop / doble pegado) antes de exportar
+           try {
+             const removed = dedupeEditorComponents(editorRef.current as any);
+             if (removed > 0) {
+               console.log(`[GrapesEditor] Autosave: ${removed} componente(s) duplicado(s) fusionado(s)`);
+             }
+           } catch {}
+
            const projectData = editorRef.current?.getProjectData();
            const html = editorRef.current?.getHtml({ cleanId: false }) || "";
            const css = editorRef.current?.getCss() || '';

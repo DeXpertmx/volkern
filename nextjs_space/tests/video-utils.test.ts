@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseVideoUrl, isValidVideoUrl } from '@/lib/video-utils';
+import { parseVideoUrl, isValidVideoUrl, normalizeVideoEmbedUrl } from '@/lib/video-utils';
 
 // ─── parseVideoUrl ────────────────────────────────────────────────────────
 
@@ -64,6 +64,20 @@ describe('parseVideoUrl', () => {
     const result = parseVideoUrl('https://dai.ly/x7tg9ad');
     expect(result.provider).toBe('dailymotion');
     expect(result.id).toBe('x7tg9ad');
+  });
+
+  // ── HeyGen ──
+  it('heygen app.heygen.com/videos/<id> → embeds/<id>', () => {
+    const result = parseVideoUrl('https://app.heygen.com/videos/899960a5e0004227bbcc93e7e6e22657');
+    expect(result.provider).toBe('heygen');
+    expect(result.id).toBe('899960a5e0004227bbcc93e7e6e22657');
+    expect(result.embedUrl).toBe('https://app.heygen.com/embeds/899960a5e0004227bbcc93e7e6e22657');
+  });
+
+  it('heygen share URL → provider heygen, embeds', () => {
+    const result = parseVideoUrl('https://share.heygen.com/videos/abc123def456');
+    expect(result.provider).toBe('heygen');
+    expect(result.embedUrl).toBe('https://app.heygen.com/embeds/abc123def456');
   });
 
   // ── Direct upload / other ──
@@ -136,5 +150,132 @@ describe('isValidVideoUrl', () => {
 
   it('texto aleatorio → false', () => {
     expect(isValidVideoUrl('hola mundo')).toBe(false);
+  });
+});
+
+// ─── normalizeVideoEmbedUrl ────────────────────────────────────────────
+
+describe('normalizeVideoEmbedUrl', () => {
+  // ── YouTube ──
+  it('youtube watch?v= → embed', () => {
+    expect(normalizeVideoEmbedUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ'))
+      .toBe('https://www.youtube.com/embed/dQw4w9WgXcQ');
+  });
+
+  it('youtu.be → embed', () => {
+    expect(normalizeVideoEmbedUrl('https://youtu.be/dQw4w9WgXcQ'))
+      .toBe('https://www.youtube.com/embed/dQw4w9WgXcQ');
+  });
+
+  it('youtube shorts → embed', () => {
+    expect(normalizeVideoEmbedUrl('https://www.youtube.com/shorts/dQw4w9WgXcQ'))
+      .toBe('https://www.youtube.com/embed/dQw4w9WgXcQ');
+  });
+
+  it('youtube live → embed', () => {
+    expect(normalizeVideoEmbedUrl('https://www.youtube.com/live/dQw4w9WgXcQ'))
+      .toBe('https://www.youtube.com/embed/dQw4w9WgXcQ');
+  });
+
+  it('youtube watch con params junk → embed limpio conservando list y t', () => {
+    expect(normalizeVideoEmbedUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ&si=junk&list=PLxyz&t=90'))
+      .toBe('https://www.youtube.com/embed/dQw4w9WgXcQ?list=PLxyz&start=90');
+  });
+
+  it('youtube t con formato 1m30s → start=90', () => {
+    expect(normalizeVideoEmbedUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=1m30s'))
+      .toBe('https://www.youtube.com/embed/dQw4w9WgXcQ?start=90');
+  });
+
+  it('youtube embed ya normalizado → sin cambios', () => {
+    expect(normalizeVideoEmbedUrl('https://www.youtube.com/embed/dQw4w9WgXcQ'))
+      .toBe('https://www.youtube.com/embed/dQw4w9WgXcQ');
+  });
+
+  it('youtube sin protocolo (www.youtube.com/...) → embed', () => {
+    expect(normalizeVideoEmbedUrl('www.youtube.com/watch?v=dQw4w9WgXcQ'))
+      .toBe('https://www.youtube.com/embed/dQw4w9WgXcQ');
+  });
+
+  it('m.youtube.com y music.youtube.com → embed', () => {
+    expect(normalizeVideoEmbedUrl('https://m.youtube.com/watch?v=dQw4w9WgXcQ'))
+      .toBe('https://www.youtube.com/embed/dQw4w9WgXcQ');
+    expect(normalizeVideoEmbedUrl('https://music.youtube.com/watch?v=dQw4w9WgXcQ'))
+      .toBe('https://www.youtube.com/embed/dQw4w9WgXcQ');
+  });
+
+  it('youtube-nocookie → embed', () => {
+    expect(normalizeVideoEmbedUrl('https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ'))
+      .toBe('https://www.youtube.com/embed/dQw4w9WgXcQ');
+  });
+
+  // ── Vimeo ──
+  it('vimeo.com/<id> → player.vimeo.com/video/<id>', () => {
+    expect(normalizeVideoEmbedUrl('https://vimeo.com/123456789'))
+      .toBe('https://player.vimeo.com/video/123456789');
+  });
+
+  it('vimeo channels → id del último segmento numérico', () => {
+    expect(normalizeVideoEmbedUrl('https://vimeo.com/channels/staffpicks/123456789'))
+      .toBe('https://player.vimeo.com/video/123456789');
+  });
+
+  it('player.vimeo.com ya es embed → sin cambios', () => {
+    expect(normalizeVideoEmbedUrl('https://player.vimeo.com/video/123456789'))
+      .toBe('https://player.vimeo.com/video/123456789');
+  });
+
+  // ── HeyGen ──
+  it('heygen videos/<id> → app.heygen.com/embeds/<id>', () => {
+    expect(normalizeVideoEmbedUrl('https://app.heygen.com/videos/899960a5e0004227bbcc93e7e6e22657'))
+      .toBe('https://app.heygen.com/embeds/899960a5e0004227bbcc93e7e6e22657');
+  });
+
+  it('heygen embed ya normalizado → sin cambios', () => {
+    expect(normalizeVideoEmbedUrl('https://app.heygen.com/embeds/899960a5e0004227bbcc93e7e6e22657'))
+      .toBe('https://app.heygen.com/embeds/899960a5e0004227bbcc93e7e6e22657');
+  });
+
+  it('heygen sin protocolo → embed', () => {
+    expect(normalizeVideoEmbedUrl('app.heygen.com/videos/abc123def456'))
+      .toBe('https://app.heygen.com/embeds/abc123def456');
+  });
+
+  // ── Dailymotion ──
+  it('dailymotion video → embed', () => {
+    expect(normalizeVideoEmbedUrl('https://www.dailymotion.com/video/x7tg9ad'))
+      .toBe('https://www.dailymotion.com/embed/video/x7tg9ad');
+  });
+
+  it('dai.ly → embed', () => {
+    expect(normalizeVideoEmbedUrl('https://dai.ly/x7tg9ad'))
+      .toBe('https://www.dailymotion.com/embed/video/x7tg9ad');
+  });
+
+  // ── Otros / edge cases ──
+  it('URL cualquiera http(s) → tal cual', () => {
+    expect(normalizeVideoEmbedUrl('https://cdn.example.com/video.mp4'))
+      .toBe('https://cdn.example.com/video.mp4');
+  });
+
+  it('protocol-relative //youtube.com → embed', () => {
+    expect(normalizeVideoEmbedUrl('//www.youtube.com/watch?v=dQw4w9WgXcQ'))
+      .toBe('https://www.youtube.com/embed/dQw4w9WgXcQ');
+  });
+
+  it('espacios alrededor → trim', () => {
+    expect(normalizeVideoEmbedUrl('  https://youtu.be/dQw4w9WgXcQ  '))
+      .toBe('https://www.youtube.com/embed/dQw4w9WgXcQ');
+  });
+
+  it('vacío/null → null', () => {
+    expect(normalizeVideoEmbedUrl('')).toBeNull();
+    expect(normalizeVideoEmbedUrl('   ')).toBeNull();
+    expect(normalizeVideoEmbedUrl(null)).toBeNull();
+    expect(normalizeVideoEmbedUrl(undefined)).toBeNull();
+  });
+
+  it('texto no URL → null', () => {
+    expect(normalizeVideoEmbedUrl('hola mundo')).toBeNull();
   });
 });

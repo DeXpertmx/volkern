@@ -40,6 +40,7 @@ const GrapesEditor = forwardRef<GrapesEditorRef, any>((props, ref) => (
 ));
 GrapesEditor.displayName = "GrapesEditor";
 import { saveTemplate, loadAllTemplates, loadTemplates, deleteTemplate, TemplateRecord, PaginatedTemplates } from "../../lib/webcreator/templateStorage";
+import { dedupeEditorComponents } from "./dedupe";
 import { TemplateGallery, getTemplateData } from "./templates";
 import EditorToolbar from "./EditorToolbar";
 import EditorControls from "./EditorControls";
@@ -621,6 +622,16 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
 
     setIsSaving(true);
     try {
+      // Protección: fusionar componentes idénticos añadidos en la misma acción
+      // (doble drop / doble pegado) antes de exportar
+      try {
+        const ed = editorRef.current.getEditor();
+        const removed = ed ? dedupeEditorComponents(ed) : 0;
+        if (removed > 0) {
+          toast.info(`Se fusionaron ${removed} componente(s) duplicado(s)`);
+        }
+      } catch {}
+
       const projectData = editorRef.current.exportProject();
       const html = editorRef.current.getHtml() || "";
       let css = editorRef.current.getCss() || "";
@@ -699,6 +710,16 @@ document.addEventListener('click', function(e) {
 
     setIsPublishing(true);
     try {
+      // Protección: fusionar componentes idénticos añadidos en la misma acción
+      // (doble drop / doble pegado) antes de exportar
+      try {
+        const ed = editorRef.current.getEditor();
+        const removed = ed ? dedupeEditorComponents(ed) : 0;
+        if (removed > 0) {
+          toast.info(`Se fusionaron ${removed} componente(s) duplicado(s)`);
+        }
+      } catch {}
+
       const projectData = editorRef.current.exportProject();
       const html = editorRef.current.getHtml() || "";
       let css = editorRef.current.getCss() || "";
