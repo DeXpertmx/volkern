@@ -18,6 +18,11 @@
 #      circuito completo auth→skill→audit con API keys temporales creadas en
 #      BD y borradas al final. Recomendado tras despliegues que tocan /mcp,
 #      la auth de API keys o los skills.
+#   5d. (Opcional, --e2e-flujo) E2E de flujo comercial completo además del
+#      circuito (5c): lead→deal→cotización→orden vía /mcp con los contratos
+#      del catálogo; crea datos temporales en BD y los borra al final
+#      (dispara 1 aviso Telegram puntual). Recomendado tras despliegues que
+#      toquen leads, deals, cotizaciones u órdenes.
 #
 #      Además, el centinela vigilar-mcp.sh se sincroniza al VPS junto con
 #      los otros (con verificación SHA-256) y su cron cada 15 minutos
@@ -30,6 +35,7 @@
 #   bash deploy-vps/deploy-local.sh --skip-smoke     # no ejecuta el smoke del clasificador
 #   bash deploy-vps/deploy-local.sh --skip-smoke-mcp # no ejecuta el smoke MCP (/mcp + Server Card)
 #   bash deploy-vps/deploy-local.sh --e2e-mcp        # ejecuta también el E2E autenticado MCP (paso 5c)
+#   bash deploy-vps/deploy-local.sh --e2e-flujo      # 5c + 5d: circuito + flujo comercial completo (leads/deals/cotizaciones/órdenes)
 #   bash deploy-vps/deploy-local.sh --keep-tarballs  # no borra tarballs en /tmp local
 #   bash deploy-vps/deploy-local.sh --keep           # pasa --keep a deploy-app.sh (no limpia en VPS)
 #
@@ -61,6 +67,7 @@ SKIP_MIGRATOR=0
 SKIP_SMOKE=0
 SKIP_SMOKE_MCP=0
 E2E_MCP=0
+E2E_FLUJO=0
 
 for a in "$@"; do
   case "$a" in
@@ -69,6 +76,7 @@ for a in "$@"; do
     --skip-smoke) SKIP_SMOKE=1 ;;
     --skip-smoke-mcp) SKIP_SMOKE_MCP=1 ;;
     --e2e-mcp) E2E_MCP=1 ;;
+    --e2e-flujo) E2E_FLUJO=1; E2E_MCP=1 ;;   # el flujo corre además del circuito (5c)
     --keep-tarballs) KEEP_LOCAL=1 ;;
     --keep) KEEP_REMOTE="--keep" ;;
   esac
@@ -227,7 +235,23 @@ if [ "$E2E_MCP" = "1" ]; then
   echo "→ [5c/5] E2E autenticado MCP (circuito auth→skill→audit) ..."
   bash scripts/mcp-e2e.sh || E2E_MCP_RC=$?
 else
-  echo "→ [5c/5] E2E autenticado MCP: omitido (usa --e2e-mcp para ejecutarlo)."
+  echo "→ [5c/5] E2E autenticado MCP: omitido (usa --e2e-mcp o --e2e-flujo para ejecutarlo)."
+fi
+
+# ═══════════════════════════════════════════════════════════════
+# 5d. (Opcional) E2E DE FLUJO COMERCIAL COMPLETO
+# ═══════════════════════════════════════════════════════════════
+# Corre con --e2e-flujo (implica --e2e-mcp): además del circuito del paso
+# anterior, ejecuta el flujo completo lead→deal→cotización→orden vía /mcp
+# con los contratos del catálogo. Crea datos temporales en BD y los borra al
+# final (incluso si falla); dispara 1 notificación Telegram puntual.
+E2E_FLUJO_RC=0
+echo ""
+if [ "$E2E_FLUJO" = "1" ]; then
+  echo "→ [5d/5] E2E MCP flujo comercial completo (lead→deal→cotización→orden) ..."
+  bash scripts/mcp-e2e.sh --flujo-completo || E2E_FLUJO_RC=$?
+else
+  echo "→ [5d/5] E2E flujo comercial: omitido (usa --e2e-flujo para ejecutarlo)."
 fi
 
 # ═══════════════════════════════════════════════════════════════
@@ -242,7 +266,7 @@ fi
 # Los smokes se evalúan AL FINAL para que la limpieza de tarballs ocurra
 # siempre, pero un fallo no se silencia: la app ya corre la imagen nueva y
 # hay que decirlo.
-if [ "$SMOKE_RC" -ne 0 ] || [ "$SMOKE_MCP_RC" -ne 0 ] || [ "$E2E_MCP_RC" -ne 0 ]; then
+if [ "$SMOKE_RC" -ne 0 ] || [ "$SMOKE_MCP_RC" -ne 0 ] || [ "$E2E_MCP_RC" -ne 0 ] || [ "$E2E_FLUJO_RC" -ne 0 ]; then
   echo ""
   echo "=== Deploy aplicado, pero un SMOKE/E2E FALLÓ ==="
   if [ "$SMOKE_RC" -ne 0 ]; then
@@ -254,7 +278,10 @@ if [ "$SMOKE_RC" -ne 0 ] || [ "$SMOKE_MCP_RC" -ne 0 ] || [ "$E2E_MCP_RC" -ne 0 ]
   if [ "$E2E_MCP_RC" -ne 0 ]; then
     echo "· E2E MCP: el circuito autenticado (auth→skill→audit) falló en el entorno desplegado."
   fi
-  for rc in "$SMOKE_RC" "$SMOKE_MCP_RC" "$E2E_MCP_RC"; do
+  if [ "$E2E_FLUJO_RC" -ne 0 ]; then
+    echo "· E2E flujo: el flujo comercial completo (lead→deal→cotización→orden) falló en el entorno desplegado."
+  fi
+  for rc in "$SMOKE_RC" "$SMOKE_MCP_RC" "$E2E_MCP_RC" "$E2E_FLUJO_RC"; do
     if [ "$rc" -ne 0 ]; then exit "$rc"; fi
   done
 fi
