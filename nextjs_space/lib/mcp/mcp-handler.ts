@@ -1225,7 +1225,7 @@ export async function handleCallTool(request: MCPCallToolRequest): Promise<MCPCa
 
 export const MCP_SERVER_INFO = {
   name: 'volkern-crm',
-  version: '1.0.0',
+  version: '2.0.0',
   description: 'Volkern CRM MCP Server - Expone skills del CRM como herramientas para LLMs',
   capabilities: {
     tools: {

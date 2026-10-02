@@ -6,12 +6,12 @@ export const dynamic = 'force-dynamic';
  * GET /api/mcp/docs
  * 
  * Documentación de integración del MCP Server de Volkern
- * Endpoint público que任何人 puede acceder para ver cómo usar el API
+ * Endpoint público que cualquier persona puede acceder para ver cómo usar el API
  */
 export async function GET() {
   const docs = {
     name: 'Volkern MCP Server',
-    version: '1.0.0',
+    version: '2.0.0',
     baseUrl: 'https://volkern.app/api/mcp',
     description: 'API para conectar agentes IA y automatización con Volkern CRM',
     
@@ -44,7 +44,7 @@ export async function GET() {
           request: 'curl -H "X-API-Key: vk_prod_..." https://volkern.app/api/mcp',
           response: {
             success: true,
-            server: { name: 'volkern-crm', version: '1.0.0' },
+            server: { name: 'volkern-crm', version: '2.0.0' },
             tools: [{ name: 'create_contact', description: 'Crear un nuevo contacto', inputSchema: { type: 'object' } }]
           }
         }

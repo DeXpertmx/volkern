@@ -1,20 +1,71 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { resolvePublicBaseUrl } from '@/lib/seo/public-base-url'
-import { MCP_SERVER_INFO, MCP_TOOLS } from '@/lib/seo/mcp-server-card'
+import { MCP_SERVER_INFO } from '@/lib/seo/mcp-server-card'
+// Catálogo compartido con el MCP server standalone: única fuente de verdad
+// de las 43 tools (nombres, descripciones e inputSchemas reales).
+import { VOLKERN_TOOLS } from '../../mcp-server/src/tools-catalog'
 
 /**
  * Endpoint MCP Streamable HTTP en /mcp.
  *
- * Implementa el handshake mínimo del Model Context Protocol para que el
- * Server Card apunte a un endpoint real y verificable:
- *   - initialize        → serverInfo + protocolVersion + capabilities
- *   - tools/list        → lista las tools reales del MCP server de Volkern
+ * Implementa el handshake del Model Context Protocol para que el Server Card
+ * apunte a un endpoint real y verificable:
+ *   - initialize        → serverInfo + protocolVersion (negociada) + capabilities
+ *   - tools/list        → catálogo real compartido con mcp-server/src/tools-catalog.ts
  *   - resources/list, prompts/list → vacíos (no se exponen)
- *   - tools/call        → 501 (la ejecución se delega al MCP server real)
+ *   - tools/call        → ejecución REAL vía Skills (lib/mcp/mcp-handler.ts),
+ *                         con autenticación obligatoria (Bearer API key vk_*
+ *                         con scope mcp:execute), rate limit y audit log.
  *
- * Autenticación: Bearer API key de tenant (vk_*), igual que la Skills API.
+ * Negociación de protocolVersion: se acepta cualquier versión anunciada en la
+ * Server Card (transports[0].protocolVersions); si el cliente pide una no
+ * soportada se responde con el DEFAULT_NEGOTIATED del SDK v2
+ * (@modelcontextprotocol/server), 2025-03-26.
+ *
+ * Autenticación: solo tools/call exige credenciales (ejecuta operaciones de
+ * negocio); initialize/tools/list son metadatos públicos, como exige el
+ * descubrimiento MCP.
  */
+
+// Espejo de transports[0].protocolVersions de la Server Card (SEP-2127).
+const SUPPORTED_PROTOCOL_VERSIONS = ['2026-07-28', '2025-11-25', '2025-06-18', '2025-03-26'] as const
+const DEFAULT_PROTOCOL_VERSION = '2025-03-26'
+
+// Mapeo tool MCP → skill ejecutable (lib/mcp/mcp-handler.ts).
+// Por defecto se elimina el prefijo volkern_; los aliases cubren renombres.
+const TOOL_EXEC_ALIASES: Record<string, string> = {
+  volkern_get_catalogo_item: 'get_catalog_item',
+  volkern_search_catalogo: 'search_catalog',
+}
+
+function resolveSkillName(toolName: string): string {
+  return TOOL_EXEC_ALIASES[toolName] ?? toolName.replace(/^volkern_/, '')
+}
+
+// ============== RATE LIMITING (igual que /api/mcp) ==============
+
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>()
+const RATE_LIMIT = 100 // requests por minuto
+const RATE_WINDOW = 60 * 1000
+
+function checkRateLimit(identifier: string): boolean {
+  const now = Date.now()
+  const entry = rateLimitMap.get(identifier)
+  if (!entry || now > entry.resetTime) {
+    rateLimitMap.set(identifier, { count: 1, resetTime: now + RATE_WINDOW })
+    return true
+  }
+  if (entry.count >= RATE_LIMIT) return false
+  entry.count++
+  return true
+}
+
+/** JSON-RPC error con status HTTP */
+function jsonRpcError(id: unknown, code: number, message: string, status: number) {
+  return NextResponse.json({ jsonrpc: '2.0', id, error: { code, message } }, { status })
+}
+
 export async function POST(req: Request) {
   let body: any
   try {
@@ -28,11 +79,15 @@ export async function POST(req: Request) {
 
   // initialize — handshake obligatorio
   if (method === 'initialize') {
+    const requested: string | undefined = body?.params?.protocolVersion
+    const negotiated = (SUPPORTED_PROTOCOL_VERSIONS as readonly string[]).includes(requested ?? '')
+      ? requested
+      : DEFAULT_PROTOCOL_VERSION
     return NextResponse.json({
       jsonrpc: '2.0',
       id,
       result: {
-        protocolVersion: '2025-06-18',
+        protocolVersion: negotiated,
         capabilities: {
           tools: { listChanged: false },
           resources: { subscribe: false, listChanged: false },
@@ -56,10 +111,10 @@ export async function POST(req: Request) {
       jsonrpc: '2.0',
       id,
       result: {
-        tools: MCP_TOOLS.map(name => ({
+        tools: VOLKERN_TOOLS.map(({ name, description, inputSchema }) => ({
           name,
-          description: `Herramienta MCP de Volkern: ${name}`,
-          inputSchema: { type: 'object', properties: {} },
+          description,
+          inputSchema,
         })),
       },
     })
@@ -74,28 +129,100 @@ export async function POST(req: Request) {
   }
 
   if (method === 'tools/call') {
-    return NextResponse.json(
-      {
+    const toolName: string | undefined = body?.params?.name
+    const toolArgs: Record<string, unknown> = body?.params?.arguments ?? {}
+
+    // Tool desconocida para este servidor — error de protocolo, no de ejecución
+    if (!toolName || !VOLKERN_TOOLS.some((t) => t.name === toolName)) {
+      return jsonRpcError(id, -32602, `Tool desconocida: ${toolName ?? '(vacía)'}`, 400)
+    }
+
+    // Autenticación obligatoria: tools/call ejecuta operaciones reales del CRM
+    const { authenticateRequest } = await import('@/lib/api-key-auth')
+    const auth = await authenticateRequest(req, ['mcp:execute'])
+    if (!auth.valid) {
+      return jsonRpcError(id, -32000, `No autorizado: ${auth.error ?? 'credenciales inválidas'}`, 401)
+    }
+
+    const identifier = auth.apiKey?.id ? `apikey:${auth.apiKey.id}` : auth.user?.id ? `user:${auth.user.id}` : 'unknown'
+    if (!checkRateLimit(identifier)) {
+      return jsonRpcError(id, -32000, 'Rate limit exceeded. Máximo 100 requests por minuto.', 429)
+    }
+
+    // Mapear al skill equivalente y ejecutar de verdad vía Skills
+    const { handleCallTool, MCP_TOOLS } = await import('@/lib/mcp/mcp-handler')
+    const skillName = resolveSkillName(toolName)
+
+    if (!MCP_TOOLS.some((t) => t.name === skillName)) {
+      return NextResponse.json({
         jsonrpc: '2.0',
         id,
-        error: {
-          code: -32601,
-          message: 'La ejecución de tools se delega al MCP server de Volkern (volkern-mcp-server). Usa POST /api/skills/user/{userId}/execute o el paquete npm.',
+        result: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                error: `Tool "${toolName}" no disponible para ejecución remota vía /mcp: no tiene skill equivalente en el servidor. Usa el MCP server standalone (paquete npm volkern-mcp-server) con una API key.`,
+                tool: toolName,
+              }),
+            },
+          ],
+          isError: true,
         },
+      })
+    }
+
+    // Inyección de contexto de seguridad: el tenant autenticado manda
+    // (evita cross-tenant aunque el cliente envíe otro tenantId).
+    const result = await handleCallTool({
+      name: skillName,
+      arguments: {
+        ...toolArgs,
+        tenantId: auth.tenant?.id || toolArgs.tenantId,
+        userId: toolArgs.userId || auth.user?.id,
+        source: 'mcp',
       },
-      { status: 501 }
-    )
+    })
+
+    // Audit log (best-effort, igual que /api/mcp)
+    try {
+      const { prisma } = await import('@/lib/db')
+      await prisma.auditLog.create({
+        data: {
+          tenantId: auth.tenant?.id || 'unknown',
+          userId: auth.user?.id,
+          accion: 'MCP_tool_execution',
+          entidad: 'MCP',
+          entidadId: toolName,
+          descripcion: `MCP /mcp tools/call: ${toolName}`,
+          metadata: {
+            tool: toolName,
+            skill: skillName,
+            status: result.isError ? 'error' : 'success',
+          },
+        },
+      })
+    } catch (e) {
+      console.error('[MCP /mcp] Audit log falló:', e)
+    }
+
+    return NextResponse.json({ jsonrpc: '2.0', id, result })
   }
 
   // Método desconocido — JSON-RPC error estándar
-  return NextResponse.json(
-    {
-      jsonrpc: '2.0',
-      id,
-      error: { code: -32601, message: `Método no soportado: ${method}` },
+  return jsonRpcError(id, -32601, `Método no soportado: ${method}`, 405)
+}
+
+/** CORS preflight para clientes MCP cross-origin */
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key',
     },
-    { status: 405 }
-  )
+  })
 }
 
 /** GET /mcp — útil para navegadores; redirige a la documentación */
@@ -108,7 +235,7 @@ export async function GET(req: Request) {
       description: MCP_SERVER_INFO.description,
       docs: `${baseUrl}/docs/developers`,
       card: `${baseUrl}/.well-known/mcp/server-card.json`,
-      usage: 'Envía una solicitud JSON-RPC MCP por POST (initialize, tools/list, tools/call).',
+      usage: 'Envía una solicitud JSON-RPC MCP por POST (initialize, tools/list, tools/call con Bearer API key).',
     },
     { status: 200, headers: { 'Content-Type': 'application/json' } }
   )

@@ -4,6 +4,10 @@
  * Documento estático de descubrimiento para el servidor MCP de Volkern
  * (mcp-server/). Los datos reflejan el server.json real del proyecto
  * (nombre, versión, repo) y las tools expuestas por el MCP server.
+ *
+ * $schema apunta al schema del registro MCP con fecha (el mismo namespace
+ * que usa mcp-server/server.json); la URL antigua de SEP-1649
+ * (schemas/v1/server-card.schema.json) devuelve 404.
  */
 export const MCP_SERVER_INFO = {
   name: 'io.github.DeXpertmx/mcp-volkern',
@@ -54,6 +58,9 @@ export const MCP_TOOLS = [
   'volkern_get_financial_dashboard',
   'volkern_verify_vault_integrity',
   'volkern_calculate_tax_provisions',
+  'volkern_process_inventory_consumption',
+  'volkern_get_inventory_health',
+  'volkern_report_production_scrap',
 ]
 
 /**
@@ -62,7 +69,7 @@ export const MCP_TOOLS = [
  */
 export function buildMcpServerCard(baseUrl: string) {
   return {
-    $schema: 'https://static.modelcontextprotocol.io/schemas/v1/server-card.schema.json',
+    $schema: 'https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json',
     name: MCP_SERVER_INFO.name,
     version: MCP_SERVER_INFO.version,
     description: MCP_SERVER_INFO.description,
@@ -79,7 +86,9 @@ export function buildMcpServerCard(baseUrl: string) {
       {
         type: 'streamable-http',
         endpoint: `${baseUrl}/mcp`,
-        protocolVersions: ['2025-06-18', '2025-03-26', '2024-11-05'],
+        // 2026-07-28: spec actual (núcleo stateless). 2025-11-25/06-18/03-26:
+        // versiones del handshake 2025 que el SDK v2 sigue negociando.
+        protocolVersions: ['2026-07-28', '2025-11-25', '2025-06-18', '2025-03-26'],
       },
     ],
     capabilities: {
