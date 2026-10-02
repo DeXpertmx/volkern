@@ -4243,7 +4243,10 @@ export const skills = {
   report_production_scrap: mcpOps.reportarMermaMcp,
   get_catalog_field_definitions: catalogSkills.getFieldDefinitions,
   get_catalog_item: catalogSkills.getCatalogItem,
-  search_catalog: catalogSkills.searchCatalog,
+  // Contrato del catálogo standalone (volkern_search_catalogo): 'query' es
+  // canónico; 'search' se mantiene para llamadas internas del orquestador.
+  search_catalog: (input: Parameters<typeof catalogSkills.searchCatalog>[0] & { query?: string }) =>
+    catalogSkills.searchCatalog({ ...input, search: input.search ?? input.query }),
   buscar_catalogo: (input: Parameters<typeof catalogSkills.buscarCatalogo>[0]) => catalogSkills.buscarCatalogo({ ...input, source: input.source || 'telegram' }),
   
   // WebCreator AI

@@ -166,7 +166,8 @@ async function runCircuito() {
 
     const a = await mcpCall(KEY_A, 'tools/call', {
       name: 'volkern_search_catalogo',
-      arguments: { search: 'e2e', limit: 1 },
+      // Contrato del catálogo: 'query' (no el 'search' legacy del orquestador)
+      arguments: { query: 'e2e', limit: 1 },
     }, 11)
     if (a.status !== 200) {
       fail(`key con mcp:execute obtuvo HTTP ${a.status} (esperaba 200): ${JSON.stringify(a.body).slice(0, 300)}`)
