@@ -10,12 +10,17 @@
 #   5. Smoke test del clasificador determinista contra el entorno desplegado
 #      (scripts/smoke-clasificador.sh). Falla el despliegue si el servicio
 #      desplegado no resuelve las frases sin LLM.
+#   5b. Smoke test MCP (scripts/smoke-mcp.sh): valida contra el entorno
+#      desplegado la Server Card, initialize, tools/list (catálogo sincronizado
+#      con la card) y que tools/call sin credenciales responda 401. Falla el
+#      despliegue si la superficie MCP está rota o abierta.
 #
 # Uso (desde el repo, puede pedir sudo para docker):
 #   bash deploy-vps/deploy-local.sh
 #   bash deploy-vps/deploy-local.sh --skip-build     # solo re-exporta y despliega
 #   bash deploy-vps/deploy-local.sh --skip-migrator  # no construye/subé migrator (sin cambios de BD)
-#   bash deploy-vps/deploy-local.sh --skip-smoke     # no ejecuta el smoke post-despliegue
+#   bash deploy-vps/deploy-local.sh --skip-smoke     # no ejecuta el smoke del clasificador
+#   bash deploy-vps/deploy-local.sh --skip-smoke-mcp # no ejecuta el smoke MCP (/mcp + Server Card)
 #   bash deploy-vps/deploy-local.sh --keep-tarballs  # no borra tarballs en /tmp local
 #   bash deploy-vps/deploy-local.sh --keep           # pasa --keep a deploy-app.sh (no limpia en VPS)
 #
@@ -45,12 +50,14 @@ KEEP_REMOTE=""
 SKIP_BUILD=0
 SKIP_MIGRATOR=0
 SKIP_SMOKE=0
+SKIP_SMOKE_MCP=0
 
 for a in "$@"; do
   case "$a" in
     --skip-build) SKIP_BUILD=1 ;;
     --skip-migrator) SKIP_MIGRATOR=1 ;;
     --skip-smoke) SKIP_SMOKE=1 ;;
+    --skip-smoke-mcp) SKIP_SMOKE_MCP=1 ;;
     --keep-tarballs) KEEP_LOCAL=1 ;;
     --keep) KEEP_REMOTE="--keep" ;;
   esac
@@ -174,6 +181,21 @@ else
 fi
 
 # ═══════════════════════════════════════════════════════════════
+# 5b. SMOKE TEST MCP (/mcp + Server Card)
+# ═══════════════════════════════════════════════════════════════
+# Misma razón que el paso 5: un despliegue que no incorpore los cambios del
+# MCP (catálogo desincronizado de la card, /mcp sin auth, initialize roto)
+# pasa en verde si solo se mira el código local. Esto mira el servicio real.
+SMOKE_MCP_RC=0
+echo ""
+if [ "$SKIP_SMOKE_MCP" = "1" ]; then
+  echo "→ [5b/5] Smoke test MCP: omitido (--skip-smoke-mcp)."
+else
+  echo "→ [5b/5] Smoke test MCP (/mcp + Server Card) ..."
+  bash scripts/smoke-mcp.sh || SMOKE_MCP_RC=$?
+fi
+
+# ═══════════════════════════════════════════════════════════════
 # Limpieza local opcional (los del VPS los limpia deploy-app.sh)
 # ═══════════════════════════════════════════════════════════════
 if [ "$KEEP_LOCAL" = "0" ]; then
@@ -182,13 +204,19 @@ if [ "$KEEP_LOCAL" = "0" ]; then
   rm -f "$LATEST_TAR" "$MIGRATOR_TAR"
 fi
 
-# El smoke se evalúa AL FINAL para que la limpieza de tarballs ocurra siempre,
-# pero un fallo no se silencia: la app ya corre la imagen nueva y hay que decirlo.
-if [ "$SMOKE_RC" -ne 0 ]; then
+# Los smokes se evalúan AL FINAL para que la limpieza de tarballs ocurra
+# siempre, pero un fallo no se silencia: la app ya corre la imagen nueva y
+# hay que decirlo.
+if [ "$SMOKE_RC" -ne 0 ] || [ "$SMOKE_MCP_RC" -ne 0 ]; then
   echo ""
-  echo "=== Deploy aplicado, pero el SMOKE TEST FALLÓ ==="
-  echo "La app ya corre la imagen nueva, pero no resolvió las frases del clasificador sin LLM."
-  exit "$SMOKE_RC"
+  echo "=== Deploy aplicado, pero un SMOKE TEST FALLÓ ==="
+  if [ "$SMOKE_RC" -ne 0 ]; then
+    echo "· Clasificador: la app no resolvió las frases sin LLM."
+  fi
+  if [ "$SMOKE_MCP_RC" -ne 0 ]; then
+    echo "· MCP: la superficie /mcp (card, initialize, tools/list, auth) está rota o abierta en el entorno desplegado."
+  fi
+  if [ "$SMOKE_RC" -ne 0 ]; then exit "$SMOKE_RC"; else exit "$SMOKE_MCP_RC"; fi
 fi
 
 echo ""
