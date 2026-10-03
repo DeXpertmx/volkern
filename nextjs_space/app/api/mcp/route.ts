@@ -2,9 +2,19 @@
  * Volkern MCP API Endpoint
  * Model Context Protocol Server via HTTP
  * 
- * Endpoints:
- * GET  /api/mcp - Server info y lista de tools
- * POST /api/mcp - Ejecutar un tool
+ * Endpoints (acceso programático alternativo al endpoint MCP /mcp):
+ * GET  /api/mcp - Server info y lista de tools (¡ahora del catálogo!)
+ * POST /api/mcp - Ejecutar una tool del catálogo (JSON-RPC o formato simple)
+ *
+ * NOTA de unificación: las tools publicadas por esta ruta son exactamente
+ * las 43 del catálogo compartido (mcp-server/src/tools-catalog.ts), las
+ * mismas que /mcp y la Server Card — una sola fuente de verdad. Los
+ * antiguos nombres legacy de skill del orquestador (sin prefijo volkern_)
+ * siguen siendo llamables: resuelven a su tool del catálogo por alias/prefijo
+ * y ejecutan el mismo skill. Los skills SOLO del orquestador (hospitality,
+ * create_booking...) dejan de publicarse aquí: nadie los consumía. Para
+ * tools nuevas: añadirlas al catálogo y su executor a lib/skills — nunca a
+ * listas paralelas.
  * 
  * Autenticación:
  * - API Key via header: X-API-Key

@@ -6,7 +6,10 @@
  */
 
 export {
-  MCP_TOOLS,
+  // MCP_TOOLS (lista legacy de ~69 tools del orquestador) fue eliminada:
+  // los contratos viven SOLO en el catálogo compartido
+  // (mcp-server/src/tools-catalog.ts), que es lo que publican /mcp, /api/mcp
+  // y la Server Card.
   MCP_SERVER_INFO,
   handleListTools,
   handleCallTool,

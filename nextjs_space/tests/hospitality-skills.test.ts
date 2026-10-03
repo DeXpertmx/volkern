@@ -453,14 +453,18 @@ describe('hospitality-skills · registro en el motor y en MCP', () => {
     }
   });
 
-  it('los 5 skills están expuestos como tools MCP con schema válido', () => {
-    for (const nombre of HOSPITALITY_SKILLS) {
-      const tool = MCP_TOOLS.find((t) => t.name === nombre);
-      expect(tool, `Falta el tool MCP ${nombre}`).toBeTruthy();
-      expect(tool!.inputSchema.required).toContain('tenantId');
-    }
+  it('los skills hospitality NO se publican como tools MCP del catálogo', () => {
+    // Unificación de contratos: el catálogo de 43 tools
+    // (mcp-server/src/tools-catalog.ts) es la única fuente de verdad de lo
+    // que se publica por MCP. Los skills hospitality son internos del
+    // orquestador (chat/agente) y nunca estuvieron en el catálogo: ahora ni
+    // se publican por /api/mcp ni se anuncian en tools/list.
     const nombres = handleListTools().tools.map((t) => t.name);
-    expect(nombres).toEqual(expect.arrayContaining([...HOSPITALITY_SKILLS]));
+    for (const nombre of HOSPITALITY_SKILLS) {
+      expect(nombres).not.toContain(nombre);
+    }
+    // y el catálogo sigue siendo exactamente el conjunto volkern_* (43)
+    expect(nombres.filter((n) => n.startsWith('volkern_'))).toHaveLength(nombres.length);
   });
 
   it('los intents en español del orquestador apuntan a los skills reales', () => {

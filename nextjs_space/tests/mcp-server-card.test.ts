@@ -1,5 +1,21 @@
 import { describe, expect, it } from 'vitest'
 import { MCP_SERVER_INFO, MCP_TOOLS, buildMcpServerCard } from '@/lib/seo/mcp-server-card'
+import { VOLKERN_TOOLS } from '../mcp-server/src/tools-catalog'
+
+// NO-DERIVACIÓN: la card ya no lleva una lista a mano de nombres. Se deriva
+// del catálogo compartido, pero el test pinza que sea exactamente el
+// conjunto de tools del catálogo (ni una menos ni una de más).
+describe('Server Card derivada del catálogo (sin listas paralelas)', () => {
+  it('MCP_TOOLS es exactamente el conjunto de tools del catálogo compartido', () => {
+    expect(MCP_TOOLS).toEqual(VOLKERN_TOOLS.map((t) => t.name))
+  })
+
+  it('la card anuncia las 43 tools reales en capabilities.tools', () => {
+    const card = buildMcpServerCard('https://volkern.app')
+    expect(card.capabilities.tools.tools).toEqual(VOLKERN_TOOLS.map((t) => t.name))
+    expect(card.capabilities.tools.tools).toHaveLength(43)
+  })
+})
 
 function withoutEnv(cb: () => Promise<void>) {
   const prev = process.env.NEXTAUTH_URL

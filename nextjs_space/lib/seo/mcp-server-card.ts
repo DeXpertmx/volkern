@@ -16,52 +16,16 @@ export const MCP_SERVER_INFO = {
     'MCP Server for Volkern CRM - Lead management, appointments, tasks, and WhatsApp messaging integration',
 }
 
-/** Tools expuestas por el MCP server (de mcp-server/src/index.ts) */
-export const MCP_TOOLS = [
-  'volkern_list_contacts',
-  'volkern_get_contact',
-  'volkern_create_contact',
-  'volkern_update_contact',
-  'volkern_delete_contact',
-  'volkern_list_leads',
-  'volkern_get_lead',
-  'volkern_create_lead',
-  'volkern_update_lead',
-  'volkern_check_disponibilidad',
-  'volkern_list_citas',
-  'volkern_create_cita',
-  'volkern_update_cita',
-  'volkern_cita_accion',
-  'volkern_list_catalogo',
-  'volkern_get_catalogo_item',
-  'volkern_create_catalogo_item',
-  'volkern_update_catalogo_item',
-  'volkern_search_catalogo',
-  'volkern_list_servicios',
-  'volkern_get_servicio',
-  'volkern_create_task',
-  'volkern_list_tasks',
-  'volkern_complete_task',
-  'volkern_send_whatsapp',
-  'volkern_list_conversaciones',
-  'volkern_list_interactions',
-  'volkern_create_interaction',
-  'volkern_list_notes',
-  'volkern_create_note',
-  'volkern_list_deals',
-  'volkern_create_deal',
-  'volkern_create_cotizacion',
-  'volkern_list_ordenes_venta',
-  'volkern_get_orden_venta',
-  'volkern_create_orden_from_cotizacion',
-  'volkern_create_contrato_from_cotizacion',
-  'volkern_get_financial_dashboard',
-  'volkern_verify_vault_integrity',
-  'volkern_calculate_tax_provisions',
-  'volkern_process_inventory_consumption',
-  'volkern_get_inventory_health',
-  'volkern_report_production_scrap',
-]
+/**
+ * Tools expuestas por el MCP server — DERIVADAS del catálogo compartido
+ * (mcp-server/src/tools-catalog.ts), única fuente de verdad. Antes era una
+ * lista de 43 nombres mantenida a mano y podía derivar en silencio del
+ * catálogo real; un test de no-derivación (mcp-server-card.test.ts) lo
+ * impide a partir de ahora.
+ */
+import { VOLKERN_TOOLS } from '../../mcp-server/src/tools-catalog'
+
+export const MCP_TOOLS: string[] = VOLKERN_TOOLS.map((t) => t.name)
 
 /**
  * Card en el formato esperado por /.well-known/mcp/server-card.json:
