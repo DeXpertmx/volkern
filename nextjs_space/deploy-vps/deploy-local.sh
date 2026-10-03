@@ -68,17 +68,23 @@ SCP="scp -i $SSH_KEY -o StrictHostKeyChecking=no"
 # afecta al resultado del deploy, y el HTTP de apprise queda en el log.
 avisar_telegram() {
   local SALIDA
-  SALIDA=$($SSH "$VPS" 'bash -s' -- "$1" "$2" "${3:-warning}" <<'EOF_APRISE'
+  # ssh concatena sus argumentos en una sola línea y el shell remoto los parte
+  # por espacios: pasar título/cuerpo como args posicionales los fragmentaba
+  # (y "${3:-warning}" recibía una palabra del cuerpo → apprise HTTP 400).
+  # Se viajan como asignaciones TITLE/MSG/TYPE escapadas con printf %q, que
+  # sobreviven al particionado del shell remoto y llegan íntegras al entorno
+  # de bash -s.
+  SALIDA=$($SSH "$VPS" "$(printf 'TITLE=%q MSG=%q TYPE=%q bash -s' "$1" "$2" "${3:-warning}")" <<'EOF_APRISE'
 docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^apprise_apprise-api' || exit 0
 A=$(docker ps --filter name=apprise_apprise-api --format '{{.Names}}' | head -1)
 URLS=$(sed -n 's#^tgram://\([^?]*\)$#tgram://\1/646107192#p' /var/lib/docker/volumes/apprise_apprise-data/_data/apprise.cfg 2>/dev/null) || exit 0
 [ -z "$URLS" ] && exit 0
-BODY=$(python3 - "$URLS" "$1" "$2" "${3:-warning}" <<'PYAP'
+JSON=$(python3 - "$URLS" "$TITLE" "$MSG" "$TYPE" <<'PYAP'
 import json, sys
 print(json.dumps({"urls": sys.argv[1], "title": sys.argv[2], "body": sys.argv[3], "type": sys.argv[4]}))
 PYAP
 ) || exit 0
-HTTP=$(docker exec "$A" curl -s -m 20 -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8000/notify -H 'Content-Type: application/json' -d "$BODY") || exit 0
+HTTP=$(docker exec "$A" curl -s -m 20 -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8000/notify -H 'Content-Type: application/json' -d "$JSON") || exit 0
 echo "Telegram: apprise respondió HTTP $HTTP"
 EOF_APRISE
 ) || true
