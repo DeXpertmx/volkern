@@ -6,20 +6,21 @@
 # valida el CIRCUITO COMPLETO con credenciales reales, contra el
 # entorno DESPLEGADO:
 #
-#   1. Crea DOS API keys temporales en la BD (con y sin scope
-#      mcp:execute). Se borran SIEMPRE al final, incluso si la
-#      prueba falla o se interrumpe.
+#   1. Crea un TENANT DEDICADO (tenant + rol OWNER + usuario admin) y DOS
+#      API keys temporales (con y sin scope mcp:execute). Todo se borra
+#      SIEMPRE al final, incluso si la prueba falla o se interrumpe.
 #   2. tools/call con la key SIN scope → 401 / -32000 (gating).
 #   3. tools/call con la key CON scope → ejecución REAL del skill
-#      search_catalog contra el catálogo del tenant autenticado.
+#      search_catalog con el contrato del catálogo (query) sobre el
+#      catálogo vacío del tenant dedicado (prueba también el aislamiento).
 #   4. Verifica en BD: audit log MCP_tool_execution y contadores
 #      de la key (ultimoUso/totalUsos).
 #
 # Igual que el smoke del clasificador, el agente corre DENTRO del
 # contenedor de la app: es el único sitio con el cliente Prisma de la
-# imagen desplegada. El tenant usado solo recibe lecturas y las keys
-# son temporales; el smoke-mcp.sh (paso 5b del deploy) no necesita
-# tenant porque solo consulta metadatos y una llamada rechazada.
+# imagen desplegada. El tenant es creado y borrado por el propio agente:
+# nada toca datos de tenants reales. El smoke-mcp.sh (paso 5b del deploy)
+# no necesita tenant porque solo consulta metadatos y una llamada rechazada.
 #
 # Uso manual:
 #   bash scripts/mcp-e2e.sh
@@ -32,10 +33,12 @@
 #
 # Modo flujo comercial completo (opcional):
 #   bash scripts/mcp-e2e.sh --flujo-completo
-#   Además del circuito, crea lead → deal → cotización → orden de venta
-#   con datos temporales (lead/deal vía /mcp; cotización y orden vía REST,
-#   el camino real del standalone) y los elimina al terminar. Crea UN
-#   mensaje de Telegram en el tenant (notificación de nueva orden).
+#   Además del circuito, crea lead → deal → cotización → orden de venta en
+#   el tenant dedicado, TODO vía /mcp tools/call con los contratos del
+#   catálogo, verifica la orden por GET, comprueba la IDEMPOTENCIA de la
+#   conversión (segunda llamada → yaExistia=true, sin duplicado) y elimina
+#   el tenant completo al terminar. Sin avisos externos (el tenant E2E no
+#   tiene Telegram/push configurados).
 #
 # Salida: 0 si todo pasa; 1 si algo falla (las keys y datos temporales
 # se eliminan siempre).

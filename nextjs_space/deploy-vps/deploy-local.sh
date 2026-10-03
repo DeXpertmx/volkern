@@ -24,6 +24,10 @@
 #      (dispara 1 aviso Telegram puntual). Recomendado tras despliegues que
 #      toquen leads, deals, cotizaciones u órdenes.
 #
+#      El RESULTADO de smokes y E2E se notifica por Telegram vía apprise del
+#      VPS (best-effort): aviso de fallo con el componente roto, y de cierre
+#      correcto al terminar.
+#
 #      Además, el centinela vigilar-mcp.sh se sincroniza al VPS junto con
 #      los otros (con verificación SHA-256) y su cron cada 15 minutos
 #      (/etc/cron.d/vigilar-mcp) se asegura aquí de forma idempotente.
@@ -57,6 +61,30 @@ if [ ! -f "$SSH_KEY" ]; then
 fi
 SSH="ssh -i $SSH_KEY -o StrictHostKeyChecking=no -o ConnectTimeout=30"
 SCP="scp -i $SSH_KEY -o StrictHostKeyChecking=no"
+
+# ── Aviso por Telegram vía apprise del VPS ────────────────────────
+# Misma mecánica que vigilar-mcp.sh (que corre EN el VPS): aquí va por SSH
+# porque el pipeline corre en local. Best-effort: un fallo del aviso nunca
+# afecta al resultado del deploy, y el HTTP de apprise queda en el log.
+avisar_telegram() {
+  local SALIDA
+  SALIDA=$($SSH "$VPS" 'bash -s' -- "$1" "$2" "${3:-warning}" <<'EOF_APRISE'
+docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^apprise_apprise-api' || exit 0
+A=$(docker ps --filter name=apprise_apprise-api --format '{{.Names}}' | head -1)
+URLS=$(sed -n 's#^tgram://\([^?]*\)$#tgram://\1/646107192#p' /var/lib/docker/volumes/apprise_apprise-data/_data/apprise.cfg 2>/dev/null) || exit 0
+[ -z "$URLS" ] && exit 0
+BODY=$(python3 - "$URLS" "$1" "$2" "${3:-warning}" <<'PYAP'
+import json, sys
+print(json.dumps({"urls": sys.argv[1], "title": sys.argv[2], "body": sys.argv[3], "type": sys.argv[4]}))
+PYAP
+) || exit 0
+HTTP=$(docker exec "$A" curl -s -m 20 -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8000/notify -H 'Content-Type: application/json' -d "$BODY") || exit 0
+echo "Telegram: apprise respondió HTTP $HTTP"
+EOF_APRISE
+) || true
+  if [ -n "$SALIDA" ]; then echo "   · $SALIDA"; fi
+  return 0
+}
 
 LATEST_TAR=/tmp/volkern-erp-latest.tar
 MIGRATOR_TAR=/tmp/volkern-erp-migrator.tar
@@ -281,6 +309,12 @@ if [ "$SMOKE_RC" -ne 0 ] || [ "$SMOKE_MCP_RC" -ne 0 ] || [ "$E2E_MCP_RC" -ne 0 ]
   if [ "$E2E_FLUJO_RC" -ne 0 ]; then
     echo "· E2E flujo: el flujo comercial completo (lead→deal→cotización→orden) falló en el entorno desplegado."
   fi
+  FALLIDOS=""
+  if [ "$SMOKE_RC" -ne 0 ]; then FALLIDOS="$FALLIDOS clasificador"; fi
+  if [ "$SMOKE_MCP_RC" -ne 0 ]; then FALLIDOS="$FALLIDOS smoke-mcp"; fi
+  if [ "$E2E_MCP_RC" -ne 0 ]; then FALLIDOS="$FALLIDOS e2e-circuito"; fi
+  if [ "$E2E_FLUJO_RC" -ne 0 ]; then FALLIDOS="$FALLIDOS e2e-flujo"; fi
+  avisar_telegram "Deploy Volkern: verificación FALLIDA" "Deploy aplicado en https://volkern.app pero falló:$FALLIDOS · hora: $(date -Is)"
   for rc in "$SMOKE_RC" "$SMOKE_MCP_RC" "$E2E_MCP_RC" "$E2E_FLUJO_RC"; do
     if [ "$rc" -ne 0 ]; then exit "$rc"; fi
   done
@@ -288,3 +322,4 @@ fi
 
 echo ""
 echo "=== Deploy completado (local → VPS) ==="
+avisar_telegram "Deploy Volkern completado" "volkern-erp desplegado en https://volkern.app · smokes/E2E sin fallos · $(date -Is)" info

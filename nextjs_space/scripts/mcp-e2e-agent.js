@@ -4,31 +4,38 @@
  * (como scripts/smoke-clasificador-agent.js): es el único sitio con el
  * cliente Prisma que usa la imagen en producción y con node.
  *
+ * AISLAMIENTO: todo corre en un TENANT DEDICADO que el propio agente crea
+ * (tenant + rol OWNER + usuario admin) y borra al terminar, pase lo que pase
+ * (`finally`). Nada toca datos de tenants reales; si una ejecución muere a
+ * medias, la siguiente barre los restos con slug `e2e-mcp-*` de más de 24h.
+ *
  * DOS modos (selección por flag):
  *
  *  · (por defecto) Circuito auth → skill → audit log:
- *      1. Tenant activo con usuario admin (Superadmin > OWNER > Admin).
- *      2. DOS API keys temporales (se borran al final, incluso si falla):
+ *      1. Tenant dedicado + DOS API keys temporales:
  *         · A: mcp:execute → tools/call ejecuta el skill REAL.
  *         · B: solo leads:read → tools/call RECHAZADA por scopes (401).
+ *      2. tools/call con contrato del catálogo (query, no el search legacy).
  *      3. Verifica en BD: audit log MCP_tool_execution y contadores
  *         ultimoUso/totalUsos.
  *
- *  · --flujo: flujo comercial COMPLETO con datos temporales (se limpian al
- *      final, incluso si falla). TODO por /mcp tools/call con los contratos
- *      del catálogo (tools-catalog.ts), igual que un agente externo:
- *      1. Fixture: CatalogoItem temporal (el tenant puede tener catálogo vacío).
+ *  · --flujo: flujo comercial COMPLETO en el tenant dedicado. TODO por /mcp
+ *      tools/call con los contratos del catálogo (tools-catalog.ts), igual
+ *      que un agente externo:
+ *      1. Fixture: CatalogoItem temporal.
  *      2. lead → create_deal (titulo/valor/leadId) → create_cotizacion
  *         (catalogItems[]) → create_orden_from_cotizacion (cotizacionId),
  *         todos ejecutados de verdad por sus skills.
  *      3. Verificación de la orden por GET /api/ordenes-venta/:id (REST).
- *      4. Limpieza total: orden → cotización → dealActivities → deal →
- *         lead → catalogoItem → API key temporal. Los audit logs SE
- *         CONSERVAN (son la evidencia de las llamadas reales).
+ *      4. IDEMPOTENCIA: repetir create_orden_from_cotizacion devuelve
+ *         yaExistia=true con la MISMA orden y no duplica filas en BD.
+ *      5. Evidencia en audit log.
+ *      6. Limpieza total: el tenant dedicado completo (órdenes → cotizaciones
+ *         → deals → leads → catálogo → keys → audit → usuario → rol → tenant).
  *
- *  ⚠️ Nota: crear la orden de venta dispara la notificación Telegram del
- *  tenant («Nueva Orden de Venta», no bloqueante). Es un mensaje puntual
- *  del E2E; los datos se eliminan al terminar.
+ *  Nota: el tenant dedicado no tiene Telegram ni push configurados, así que
+ *  el flujo no genera avisos externos (a diferencia de cuando corría sobre
+ *  un tenant real).
  */
 
 const crypto = require('crypto')
@@ -41,6 +48,7 @@ const getArg = (flag) => {
 const APP_URL = (getArg('--url') || process.env.VOLKERN_APP_URL || 'https://volkern.app').replace(/\/$/, '')
 const MODO_FLUJO = args.includes('--flujo')
 const MARCA = `E2E-MCP-${Date.now().toString(36)}`
+const SLUG = MARCA.toLowerCase()
 
 if (!process.env.IN_CONTAINER) {
   console.error('✗ Este agente debe correr DENTRO del contenedor desplegado (scripts/mcp-e2e.sh).')
@@ -101,32 +109,68 @@ function extractId(obj) {
   return undefined
 }
 
-// ── Selección de tenant + usuario admin (compartida) ─────────────
-async function seleccionarTenant() {
-  const candidates = await prisma.tenant.findMany({
-    where: { estado: 'activo' },
-    select: { id: true, nombre: true, users: { select: { id: true, email: true, role: { select: { nombre: true } } } } },
-    take: 50,
-    orderBy: { fechaCreacion: 'asc' },
+// ── Tenant dedicado (creado y borrado por el propio agente) ───────
+async function prepararTenant() {
+  // Restos de ejecuciones interrumpidas (mismo patrón de slug, >24h): se
+  // barren para no acumular basura si algún run murió sin llegar al finally.
+  const huerfanos = await prisma.tenant.findMany({
+    where: { slug: { startsWith: 'e2e-mcp-' }, fechaCreacion: { lt: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
+    select: { id: true, slug: true },
   })
-  const prioridad = ['Superadmin', 'OWNER', 'Admin', 'Administrador']
-  for (const rol of prioridad) {
-    for (const t of candidates) {
-      const u = t.users.find((u) => u.role?.nombre === rol)
-      if (u) return { tenant: t, admin: u }
+  for (const h of huerfanos) {
+    console.log(`   · resto huérfano ${h.slug}: limpiando ...`)
+    await limpiarTenant(h.id, { silencioso: true })
+  }
+
+  const tenant = await prisma.tenant.create({
+    data: { nombre: `E2E MCP ${MARCA}`, slug: SLUG },
+  })
+  const rol = await prisma.role.create({
+    data: { tenantId: tenant.id, nombre: 'OWNER', permisos: {}, descripcion: 'Rol temporal del E2E MCP' },
+  })
+  const admin = await prisma.user.create({
+    data: { email: `${SLUG}@e2e.volkern.app`, name: 'E2E MCP Admin', tenantId: tenant.id, roleId: rol.id },
+  })
+  return { tenant, admin }
+}
+
+/** Borra el tenant dedicado completo, en orden de dependencia de FKs. */
+async function limpiarTenant(tenantId, { silencioso = false } = {}) {
+  const pasos = [
+    ['órdenes de venta', () => prisma.ordenVenta.deleteMany({ where: { tenantId } })],
+    ['cotizaciones', () => prisma.cotizacion.deleteMany({ where: { tenantId } })],
+    ['dealActivities', () => prisma.dealActivity.deleteMany({ where: { tenantId } })],
+    ['deals', () => prisma.deal.deleteMany({ where: { tenantId } })],
+    ['leads', () => prisma.lead.deleteMany({ where: { tenantId } })],
+    ['catalogoItems', () => prisma.catalogoItem.deleteMany({ where: { tenantId } })],
+    ['apiKeys', () => prisma.apiKey.deleteMany({ where: { tenantId } })],
+    ['auditLogs', () => prisma.auditLog.deleteMany({ where: { tenantId } })],
+    ['usuarios', () => prisma.user.deleteMany({ where: { tenantId } })],
+    ['roles', () => prisma.role.deleteMany({ where: { tenantId } })],
+  ]
+  for (const [nombre, fn] of pasos) {
+    try {
+      const r = await fn()
+      if (!silencioso && r && r.count) console.log(`     ✓ ${nombre}: ${r.count} eliminado(s)`)
+    } catch (e) {
+      console.error(`     ✗ no se pudo limpiar ${nombre}: ${String(e.message).split('\n')[0]}`)
+      process.exitCode = 1
     }
   }
-  for (const t of candidates) {
-    const u = t.users.find((u) => u.role)
-    if (u) return { tenant: t, admin: u }
+  await prisma.tenant.delete({ where: { id: tenantId } }).catch((e) => {
+    console.error(`     ✗ NO se pudo eliminar el tenant E2E — revisar residuo: ${String(e.message).split('\n')[0]}`)
+    process.exitCode = 1
+  })
+  if (!silencioso) {
+    const queda = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { id: true } })
+    if (queda) { console.error('     ✗ el tenant E2E sigue existiendo'); process.exitCode = 1 }
   }
-  throw new Error('No hay ningún tenant activo con usuario con rol para este E2E')
 }
 
 async function runCircuito() {
   console.log(`→ [mcp-e2e] Circuito autenticado contra ${APP_URL}`)
-  const { tenant, admin } = await seleccionarTenant()
-  console.log(`   · tenant: ${tenant.nombre} · usuario: ${admin.email} (${admin.role?.nombre})`)
+  const { tenant, admin } = await prepararTenant()
+  console.log(`   · tenant dedicado: ${tenant.nombre} (slug ${tenant.slug}) · usuario: ${admin.email} (OWNER)`)
 
   const [keyA, keyB] = await Promise.all([
     prisma.apiKey.create({
@@ -184,7 +228,12 @@ async function runCircuito() {
       fail(`la respuesta no tiene la forma del skill search_catalog: ${String(result.content?.[0]?.text).slice(0, 300)}`)
       return
     }
-    ok(`skill search_catalog ejecutado de verdad: ${parsed.total ?? parsed.items.length} items en el catálogo del tenant`)
+    ok(`skill search_catalog ejecutado de verdad: ${parsed.total ?? parsed.items.length} items en el catálogo (tenant dedicado, vacío)`)
+    if (parsed.items.length !== 0) {
+      fail(`el catálogo del tenant dedicado debería estar vacío y devolvió ${parsed.items.length} items`)
+      return
+    }
+    ok('aislamiento confirmado: la búsqueda no ve datos de otros tenants')
 
     const audit = await prisma.auditLog.findFirst({
       where: { tenantId: tenant.id, accion: 'MCP_tool_execution', entidadId: 'volkern_search_catalogo' },
@@ -208,19 +257,17 @@ async function runCircuito() {
     }
     ok(`contadores de la key actualizados: totalUsos=${keyAfter.totalUsos}`)
   } finally {
-    await Promise.all([
-      prisma.apiKey.delete({ where: { id: keyA.id } }).catch(() => {}),
-      prisma.apiKey.delete({ where: { id: keyB.id } }).catch(() => {}),
-    ])
-    console.log('   · API keys temporales eliminadas')
+    console.log('   · limpieza del tenant dedicado ...')
+    await limpiarTenant(tenant.id)
+    console.log('   ✓ tenant E2E eliminado')
   }
 }
 
 async function runFlujo() {
-  console.log(`→ [mcp-e2e] Flujo comercial completo contra ${APP_URL} (datos temporales ${MARCA})`)
-  const { tenant, admin } = await seleccionarTenant()
-  console.log(`   · tenant: ${tenant.nombre} · usuario: ${admin.email} (${admin.role?.nombre})`)
-  console.log('   ⚠️  crear la orden dispara la notificación Telegram del tenant (1 mensaje puntual del E2E)')
+  console.log(`→ [mcp-e2e] Flujo comercial completo contra ${APP_URL} (tenant dedicado ${SLUG})`)
+  const { tenant, admin } = await prepararTenant()
+  console.log(`   · tenant dedicado: ${tenant.nombre} (slug ${tenant.slug}) · usuario: ${admin.email} (OWNER)`)
+  console.log('   · sin avisos externos: el tenant dedicado no tiene Telegram/push configurados')
 
   const SCOPES_FLUJO = ['mcp:execute', 'leads:write', 'deals:read', 'deals:write', 'quotes:write', 'orders:read', 'orders:write']
   const keyA = await prisma.apiKey.create({
@@ -237,9 +284,6 @@ async function runFlujo() {
   })
   ok(`API key temporal creada con scopes: ${SCOPES_FLUJO.join(', ')}`)
 
-  // Entidades creadas durante el flujo; la limpieza SIEMPRE en finally.
-  const creados = { leadId: null, dealId: null, cotizacionId: null, ordenId: null, catalogoItemId: null }
-
   try {
     // ── 1. Fixture: item de catálogo temporal ────────────────────
     const item = await prisma.catalogoItem.create({
@@ -253,7 +297,6 @@ async function runFlujo() {
         activo: true,
       },
     })
-    creados.catalogoItemId = item.id
     ok(`fixture: CatalogoItem temporal creado (${item.id.slice(-8)})`)
 
     // ── 2. lead vía /mcp ─────────────────────────────────────────
@@ -273,7 +316,6 @@ async function runFlujo() {
     }
     const leadId = extractId(JSON.parse(leadRes.content?.[0]?.text || '{}'))
     if (!leadId) { fail('create_lead no devolvió id'); return }
-    creados.leadId = leadId
     ok(`lead creado vía /mcp (${leadId.slice(-8)})`)
 
     // ── 3. deal vía /mcp (contrato del catálogo: titulo/valor/leadId) ──
@@ -295,7 +337,6 @@ async function runFlujo() {
     const dealJson = JSON.parse(dealRes.content?.[0]?.text || '{}')
     const dealId = extractId(dealJson)
     if (!dealId) { fail('create_deal no devolvió id'); return }
-    creados.dealId = dealId
     if (dealJson.leadId !== leadId) {
       fail(`el deal no quedó vinculado al lead (leadId=${dealJson.leadId ?? 'null'})`)
       return
@@ -307,7 +348,7 @@ async function runFlujo() {
       name: 'volkern_create_cotizacion',
       arguments: {
         titulo: `E2E MCP Cotización ${MARCA}`,
-        catalogItems: [{ catalogoItemId: creados.catalogoItemId, cantidad: 2 }],
+        catalogItems: [{ catalogoItemId: item.id, cantidad: 2 }],
         leadId,
         dealId,
       },
@@ -324,7 +365,6 @@ async function runFlujo() {
       fail(`la cotización no quedó vinculada al deal (dealId=${cotJson.cotizacion.dealId ?? 'null'})`)
       return
     }
-    creados.cotizacionId = cotizacionId
     ok(`cotización creada vía /mcp (${cotJson.cotizacion.numero}, total ${cotJson.cotizacion.total} ${cotJson.cotizacion.moneda})`)
 
     // ── 5. orden de venta vía /mcp (contrato del catálogo: cotizacionId) ──
@@ -343,8 +383,11 @@ async function runFlujo() {
     const ordenJson = JSON.parse(ordenMcpRes.content?.[0]?.text || '{}')
     const ordenId = ordenJson.orden?.id
     if (!ordenId) { fail('create_orden_from_cotizacion no devolvió {orden:{id}}'); return }
-    creados.ordenId = ordenId
-    ok(`orden de venta creada vía /mcp desde la cotización (${ordenJson.orden.numero}) yaExistia=${ordenJson.yaExistia}`)
+    if (ordenJson.yaExistia !== false) {
+      fail(`la primera conversión debería crear la orden (yaExistia=${ordenJson.yaExistia})`)
+      return
+    }
+    ok(`orden de venta creada vía /mcp desde la cotización (${ordenJson.orden.numero})`)
 
     // ── 6. verificación de la orden por GET ──────────────────────
     const ordenGet = await rest(KEY_A, 'GET', `/ordenes-venta/${ordenId}`)
@@ -363,7 +406,36 @@ async function runFlujo() {
     }
     ok(`GET verifica la orden: ${orden.items.length} item(s) heredados del catálogo, total ${orden.total} ${orden.moneda}`)
 
-    // ── 7. evidencia en audit log ────────────────────────────────
+    // ── 7. idempotencia: repetir la conversión no duplica la orden ──
+    const ordenMcp2 = await mcpCall(KEY_A, 'tools/call', {
+      name: 'volkern_create_orden_from_cotizacion',
+      arguments: {
+        cotizacionId,
+        notasInternas: `Segunda llamada (idempotencia) del E2E ${MARCA}`,
+      },
+    }, 24)
+    const ordenMcp2Res = ordenMcp2.body?.result
+    if (ordenMcp2.status !== 200 || !ordenMcp2Res || ordenMcp2Res.isError) {
+      fail(`segunda create_orden_from_cotización vía /mcp falló: HTTP ${ordenMcp2.status} ${String(ordenMcp2Res?.content?.[0]?.text).slice(0, 300)}`)
+      return
+    }
+    const ordenJson2 = JSON.parse(ordenMcp2Res.content?.[0]?.text || '{}')
+    if (ordenJson2.yaExistia !== true) {
+      fail(`la segunda conversión debería ser idempotente (yaExistia=${ordenJson2.yaExistia}): ${JSON.stringify(ordenJson2).slice(0, 200)}`)
+      return
+    }
+    if (ordenJson2.orden?.id !== ordenId) {
+      fail(`la segunda conversión devolvió otra orden (${ordenJson2.orden?.id} ≠ ${ordenId})`)
+      return
+    }
+    const cuantasOrdenes = await prisma.ordenVenta.count({ where: { cotizacionId } })
+    if (cuantasOrdenes !== 1) {
+      fail(`la cotización acabó con ${cuantasOrdenes} órdenes de venta; la conversión duplicó datos`)
+      return
+    }
+    ok('idempotencia: segunda conversión → yaExistia=true, misma orden y 1 sola fila en BD')
+
+    // ── 8. evidencia en audit log ────────────────────────────────
     const auditOrden = await prisma.auditLog.findFirst({
       where: { tenantId: tenant.id, entidad: 'orden_venta', entidadId: ordenId },
       orderBy: { fechaCreacion: 'desc' },
@@ -371,22 +443,9 @@ async function runFlujo() {
     if (!auditOrden) { fail('sin audit log de la orden de venta en BD'); return }
     ok(`audit log de la orden verificado: ${auditOrden.accion} · ${auditOrden.descripcion?.slice(0, 80)}`)
   } finally {
-    // ── Limpieza SIEMPRE, en orden de dependencia ────────────────
-    console.log('   · limpieza de datos temporales ...')
-    const pasos = []
-    if (creados.ordenId) pasos.push(['orden de venta', () => prisma.ordenVenta.delete({ where: { id: creados.ordenId } })])
-    if (creados.cotizacionId) pasos.push(['cotización', () => prisma.cotizacion.delete({ where: { id: creados.cotizacionId } })])
-    if (creados.dealId) pasos.push(['dealActivities', () => prisma.dealActivity.deleteMany({ where: { dealId: creados.dealId } })])
-    if (creados.dealId) pasos.push(['deal', () => prisma.deal.delete({ where: { id: creados.dealId } })])
-    if (creados.leadId) pasos.push(['lead', () => prisma.lead.delete({ where: { id: creados.leadId } })])
-    if (creados.catalogoItemId) pasos.push(['catalogoItem', () => prisma.catalogoItem.delete({ where: { id: creados.catalogoItemId } })])
-    pasos.push(['api key temporal', () => prisma.apiKey.delete({ where: { id: keyA.id } })])
-    for (const [nombre, fn] of pasos) {
-      try { await fn(); console.log(`     ✓ ${nombre} eliminado`) } catch (e) {
-        console.error(`     ✗ NO se pudo eliminar ${nombre} — revisar residuo: ${e.message}`)
-        process.exitCode = 1
-      }
-    }
+    console.log('   · limpieza del tenant dedicado ...')
+    await limpiarTenant(tenant.id)
+    console.log('   ✓ tenant E2E eliminado (con todos sus datos)')
   }
 }
 
