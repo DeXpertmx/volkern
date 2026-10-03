@@ -33,12 +33,14 @@
 #
 # Modo flujo comercial completo (opcional):
 #   bash scripts/mcp-e2e.sh --flujo-completo
-#   Además del circuito, crea lead → deal → cotización → orden de venta en
-#   el tenant dedicado, TODO vía /mcp tools/call con los contratos del
-#   catálogo, verifica la orden por GET, comprueba la IDEMPOTENCIA de la
-#   conversión (segunda llamada → yaExistia=true, sin duplicado) y elimina
-#   el tenant completo al terminar. Sin avisos externos (el tenant E2E no
-#   tiene Telegram/push configurados).
+#   Además del circuito, recorre en el tenant dedicado y TODO vía /mcp
+#   tools/call con los contratos del catálogo: catálogo (create + search +
+#   update/get + idempotencia por SKU) → lead → deal → cotización → orden de
+#   venta (verificada por GET) → citas (create + list + confirmar, con
+#   idempotencia por lead+fechaHora+tipo). Las repeticiones devuelven
+#   yaExistia=true sin duplicar filas en BD, y el tenant completo se elimina
+#   al terminar. Sin avisos externos (el tenant E2E no tiene Telegram/push
+#   configurados).
 #
 # Salida: 0 si todo pasa; 1 si algo falla (las keys y datos temporales
 # se eliminan siempre).
@@ -84,7 +86,7 @@ if [ ! -f "$SSH_KEY" ]; then
 fi
 
 if [ "$FLUJO" = "1" ]; then
-  echo "→ [mcp-e2e] Flujo comercial completo MCP (lead→deal→cotización→orden, datos temporales) contra $APP_URL"
+  echo "→ [mcp-e2e] Flujo comercial completo MCP (catálogo→lead→deal→cotización→orden→citas, datos temporales) contra $APP_URL"
 else
   echo "→ [mcp-e2e] Circuito autenticado MCP (auth → skill → audit log) contra $APP_URL"
 fi

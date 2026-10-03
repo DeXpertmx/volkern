@@ -19,10 +19,11 @@
 #      BD y borradas al final. Recomendado tras despliegues que tocan /mcp,
 #      la auth de API keys o los skills.
 #   5d. (Opcional, --e2e-flujo) E2E de flujo comercial completo además del
-#      circuito (5c): lead→deal→cotización→orden vía /mcp con los contratos
-#      del catálogo; crea datos temporales en BD y los borra al final
-#      (dispara 1 aviso Telegram puntual). Recomendado tras despliegues que
-#      toquen leads, deals, cotizaciones u órdenes.
+#      circuito (5c): catálogo→lead→deal→cotización→orden→citas vía /mcp con
+#      los contratos del catálogo, con comprobaciones de idempotencia; crea
+#      datos temporales en BD y los borra al final (tenant dedicado, sin
+#      avisos externos). Recomendado tras despliegues que toquen catálogo,
+#      leads, deals, cotizaciones, órdenes o citas.
 #
 #      El RESULTADO de smokes y E2E se notifica por Telegram vía apprise del
 #      VPS (best-effort): aviso de fallo con el componente roto, y de cierre
@@ -39,7 +40,7 @@
 #   bash deploy-vps/deploy-local.sh --skip-smoke     # no ejecuta el smoke del clasificador
 #   bash deploy-vps/deploy-local.sh --skip-smoke-mcp # no ejecuta el smoke MCP (/mcp + Server Card)
 #   bash deploy-vps/deploy-local.sh --e2e-mcp        # ejecuta también el E2E autenticado MCP (paso 5c)
-#   bash deploy-vps/deploy-local.sh --e2e-flujo      # 5c + 5d: circuito + flujo comercial completo (leads/deals/cotizaciones/órdenes)
+#   bash deploy-vps/deploy-local.sh --e2e-flujo      # 5c + 5d: circuito + flujo comercial completo (catálogo/leads/deals/cotizaciones/órdenes/citas)
 #   bash deploy-vps/deploy-local.sh --keep-tarballs  # no borra tarballs en /tmp local
 #   bash deploy-vps/deploy-local.sh --keep           # pasa --keep a deploy-app.sh (no limpia en VPS)
 #
@@ -276,13 +277,15 @@ fi
 # 5d. (Opcional) E2E DE FLUJO COMERCIAL COMPLETO
 # ═══════════════════════════════════════════════════════════════
 # Corre con --e2e-flujo (implica --e2e-mcp): además del circuito del paso
-# anterior, ejecuta el flujo completo lead→deal→cotización→orden vía /mcp
-# con los contratos del catálogo. Crea datos temporales en BD y los borra al
-# final (incluso si falla); dispara 1 notificación Telegram puntual.
+# anterior, ejecuta el flujo completo catálogo→lead→deal→cotización→orden→
+# citas vía /mcp con los contratos del catálogo, con comprobaciones de
+# idempotencia en catálogo, orden y citas. Crea datos temporales en un
+# tenant dedicado y los borra al final (incluso si falla), sin avisos
+# externos.
 E2E_FLUJO_RC=0
 echo ""
 if [ "$E2E_FLUJO" = "1" ]; then
-  echo "→ [5d/5] E2E MCP flujo comercial completo (lead→deal→cotización→orden) ..."
+  echo "→ [5d/5] E2E MCP flujo comercial completo (catálogo→lead→deal→cotización→orden→citas) ..."
   bash scripts/mcp-e2e.sh --flujo-completo || E2E_FLUJO_RC=$?
 else
   echo "→ [5d/5] E2E flujo comercial: omitido (usa --e2e-flujo para ejecutarlo)."
@@ -313,7 +316,7 @@ if [ "$SMOKE_RC" -ne 0 ] || [ "$SMOKE_MCP_RC" -ne 0 ] || [ "$E2E_MCP_RC" -ne 0 ]
     echo "· E2E MCP: el circuito autenticado (auth→skill→audit) falló en el entorno desplegado."
   fi
   if [ "$E2E_FLUJO_RC" -ne 0 ]; then
-    echo "· E2E flujo: el flujo comercial completo (lead→deal→cotización→orden) falló en el entorno desplegado."
+    echo "· E2E flujo: el flujo comercial completo (catálogo→lead→deal→cotización→orden→citas) falló en el entorno desplegado."
   fi
   FALLIDOS=""
   if [ "$SMOKE_RC" -ne 0 ]; then FALLIDOS="$FALLIDOS clasificador"; fi

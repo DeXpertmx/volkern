@@ -81,6 +81,24 @@ export async function crearCitaMcp(input: any) {
   const { tenantId, userId, leadId, fechaHora, tipo, titulo, descripcion, duracion, servicioId } = input
   if (!leadId) throw new Error('leadId es requerido')
   if (!fechaHora) throw new Error('fechaHora es requerida (ISO 8601)')
+  const fechaHoraDate = new Date(fechaHora)
+  if (Number.isNaN(fechaHoraDate.getTime())) throw new Error('fechaHora inválida (ISO 8601)')
+
+  // IDEMPOTENCIA: si ya existe la misma cita (mismo tenant + lead + fechaHora
+  // + tipo), devolver la existente en vez de duplicarla. El chequeo va ANTES
+  // de createCitaConEfectos porque su validación de conflicto de horario
+  // respondería 409 para la repetición en lugar de una respuesta idempotente.
+  const duplicada = await prisma.cita.findFirst({
+    where: { tenantId, leadId, fechaHora: fechaHoraDate, tipo: tipo || 'reunion' },
+    orderBy: { fechaCreacion: 'desc' },
+  })
+  if (duplicada) {
+    return {
+      cita: duplicada,
+      yaExistia: true,
+      mensaje: 'La cita ya existía (mismo lead, fecha/hora y tipo); no se duplicó.',
+    }
+  }
 
   const [actorUser, tenant] = await Promise.all([
     userId ? prisma.user.findUnique({ where: { id: userId }, select: { id: true, name: true, email: true } }) : Promise.resolve(null),
@@ -93,7 +111,7 @@ export async function crearCitaMcp(input: any) {
     tenantNombre: tenant?.nombre || 'Volkern',
     data: { leadId, fechaHora, tipo, titulo, descripcion, duracion, servicioId },
   })
-  return cita
+  return { cita, yaExistia: false, mensaje: 'Cita creada.' }
 }
 
 /** volkern_update_cita — {citaId, fechaHora?, estado?, descripcion?, duracion?} */
@@ -248,6 +266,23 @@ export async function crearCatalogoItemMcp(input: any) {
   const fiscalConfig = await getFiscalConfig(tenantId).catch(() => null)
   const sku = input.sku || null
 
+  // IDEMPOTENCIA: mismo SKU en el tenant → devolver el item existente en vez
+  // de chocar con la constraint @@unique([tenantId, sku]) (que respondería
+  // P2002/500). La clave es el SKU, no el payload: si el create repetido
+  // trae otros nombre/precio, el item devuelto conserva los originales.
+  if (sku) {
+    const existente = await prisma.catalogoItem.findUnique({
+      where: { tenantId_sku: { tenantId, sku } },
+    })
+    if (existente) {
+      return {
+        item: existente,
+        yaExistia: true,
+        mensaje: `Ya existía un item con SKU "${sku}"; no se duplicó.`,
+      }
+    }
+  }
+
   const item = await prisma.catalogoItem.create({
     data: {
       tenantId,
@@ -292,7 +327,7 @@ export async function crearCatalogoItemMcp(input: any) {
     },
   }).catch(() => {})
 
-  return item
+  return { item, yaExistia: false, mensaje: `Item "${nombre}" creado.` }
 }
 
 /** volkern_update_catalogo_item — {itemId, ...campos parciales} */
