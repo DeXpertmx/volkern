@@ -93,9 +93,17 @@ export async function POST(req: Request) {
     })
   }
 
-  // notifications/initialized — sin respuesta (notification JSON-RPC)
-  if (method === 'notifications/initialized') {
+  // Toda notificación JSON-RPC (sin id) → 202 Accepted sin cuerpo, como
+  // exige Streamable HTTP. Cubre notifications/initialized y cualquier otra
+  // (cancelled, progress…) que mande un cliente como Lovable.
+  if (method.startsWith('notifications/')) {
     return new Response(null, { status: 202 })
+  }
+
+  // ping — obligatorio en el protocolo base MCP: el receptor DEBE responder.
+  // Usado como health check por hosts al dar de alta el servidor.
+  if (method === 'ping') {
+    return NextResponse.json({ jsonrpc: '2.0', id, result: {} })
   }
 
   if (method === 'tools/list') {

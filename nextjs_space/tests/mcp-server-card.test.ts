@@ -120,4 +120,35 @@ describe('POST /mcp (handshake MCP Streamable HTTP)', () => {
       expect(body.error.code).toBe(-32601)
     })
   })
+
+  it('ping responde result vacío (obligatorio por el protocolo base MCP)', async () => {
+    await withoutEnv(async () => {
+      const { POST } = await import('@/app/mcp/route')
+      const res = await POST(
+        new Request('https://volkern.app/mcp', {
+          method: 'POST',
+          body: JSON.stringify({ jsonrpc: '2.0', id: 7, method: 'ping' }),
+        })
+      )
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(body).toEqual({ jsonrpc: '2.0', id: 7, result: {} })
+    })
+  })
+
+  it('toda notificación notifications/* responde 202 sin cuerpo', async () => {
+    await withoutEnv(async () => {
+      const { POST } = await import('@/app/mcp/route')
+      for (const method of ['notifications/initialized', 'notifications/cancelled']) {
+        const res = await POST(
+          new Request('https://volkern.app/mcp', {
+            method: 'POST',
+            body: JSON.stringify({ jsonrpc: '2.0', method, params: {} }),
+          })
+        )
+        expect(res.status).toBe(202)
+        expect(await res.text()).toBe('')
+      }
+    })
+  })
 })
