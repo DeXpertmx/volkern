@@ -951,10 +951,30 @@ const prequalifyLeadWrapper = async (input: { tenantId: string; email?: string; 
   return dealSkills.prequalifyLead({ tenantId, leadId: lead.id, noteText: nota || '', userId, source: 'webhook' });
 };
 
-const updateLeadWrapper = async (input: { tenantId: string; email?: string; nombre?: string; telefono?: string; empresa?: string; contexto?: string; notas?: string }) => {
-  const { tenantId, email, nombre, contexto, notas, ...dataToUpdate } = input;
+const updateLeadWrapper = async (input: { tenantId: string; email?: string; nombre?: string; telefono?: string; empresa?: string; contexto?: string; notas?: string; leadId?: string }) => {
+  const { tenantId, email, nombre, contexto, notas, leadId, ...dataToUpdate } = input;
   const { prisma } = await import('@/lib/db');
-  
+
+  // 0. Identificación directa por id (contrato del catálogo MCP:
+  // volkern_update_lead exige leadId). El fallback por email/nombre se
+  // mantiene para los skills de chatbot, que no manejan ids.
+  if (leadId) {
+    const porId = await prisma.lead.findFirst({ where: { id: leadId, tenantId } });
+    if (porId) {
+      return await prisma.lead.update({
+        where: { id: porId.id },
+        data: {
+          nombre: nombre !== undefined ? nombre : undefined,
+          email: email !== undefined ? email : undefined,
+          telefono: dataToUpdate.telefono !== undefined ? dataToUpdate.telefono : undefined,
+          empresa: dataToUpdate.empresa !== undefined ? dataToUpdate.empresa : undefined,
+          notas: (contexto || notas) !== undefined ? (contexto || notas) : undefined,
+        }
+      });
+    }
+    throw new Error(`No se encontró ningún lead con id ${leadId} en el tenant.`);
+  }
+
   let targetEmail = email;
   let targetNombre = nombre;
 
@@ -1006,17 +1026,21 @@ const updateLeadWrapper = async (input: { tenantId: string; email?: string; nomb
   throw new Error(`No se encontró ningún contacto ni lead para actualizar.`);
 };
 
-const createLeadWrapper = async (input: { tenantId: string; nombre: string; email: string; telefono?: string; notas?: string; contexto?: string; empresa?: string; origen?: string; fuente?: string; cargo?: string; userId?: string }) => {
-  const { contexto, notas, origen, cargo, userId, ...rest } = input;
+const createLeadWrapper = async (input: { tenantId: string; nombre: string; email?: string; telefono?: string; notas?: string; contexto?: string; empresa?: string; origen?: string; fuente?: string; cargo?: string; userId?: string; etiquetas?: string[] }) => {
+  const { contexto, notas, origen, cargo, userId, etiquetas, ...rest } = input;
   const realUserId = await resolveRealUserId(input.tenantId, userId);
   return contactSkills.createLead({
     ...rest,
+    // Contrato del catálogo MCP (volkern_create_lead): email opcional.
+    // El modelo Lead exige email NOT NULL → se genera uno de respaldo
+    // colisionable, como ya hace la conversión de leads.
+    email: rest.email || `sin-email-${input.tenantId}-${Date.now().toString(36)}@volkern.sin-email`,
     fuente: origen || rest.fuente,
     cargo: cargo,
     notas: contexto || notas,
     userId: realUserId,
     asignadoA: realUserId,
-  });
+  } as any);
 };
 
 /**
@@ -1095,11 +1119,38 @@ const updateContactWrapper = async (input: {
   ciudad?: string;
   tags?: string;
   userId?: string;
+  contactId?: string;
 }) => {
-  const { tenantId, email, contexto, notas, userId, ...campos } = input;
+  const { tenantId, email, contexto, notas, userId, contactId, ...campos } = input;
   const realUserId = (await resolveRealUserId(tenantId, userId)) || userId;
   const { prisma } = await import('@/lib/db');
   const nombre = campos.nombre;
+
+  // 0. Identificación directa por id (contrato del catálogo MCP:
+  // volkern_update_contact exige contactId). El fallback por email/nombre
+  // se mantiene para los skills de chatbot, que no manejan ids.
+  if (contactId) {
+    const porId = await prisma.contact.findFirst({ where: { id: contactId, tenantId } });
+    if (porId) {
+      return contactSkills.updateContact({
+        contactId,
+        tenantId,
+        data: {
+          nombre: campos.nombre,
+          email: email,
+          telefono: campos.telefono,
+          cargo: campos.cargo,
+          linkedin: campos.linkedin,
+          ubicacion: campos.ubicacion ?? campos.ciudad,
+          tags: campos.tags,
+          notas: contexto || notas,
+        } as never,
+        userId: realUserId,
+        source: 'webhook',
+      });
+    }
+    throw new Error(`No encontré ningún contacto con id ${contactId} en el tenant.`);
+  }
 
   // 1. Localizar el contacto por email o por nombre (parcial, case-insensitive)
   let contacto: { id: string } | null = null;
