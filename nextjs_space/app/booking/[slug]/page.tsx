@@ -42,6 +42,7 @@ import {
   Star,
   User,
 } from 'lucide-react';
+import { labelDeHabitacionHospedaje } from '@/lib/hospitality/property-editor-config';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -107,6 +108,8 @@ interface UnidadCatalogo {
   descripcion: string | null;
   fotos: string[];
   amenidades: string[];
+  /** Distribución de ESTA unidad (habitaciones/camas por id del catálogo). */
+  detalle: { habitaciones: Record<string, number>; camas: Record<string, number> } | null;
   tarifaNoche: number | null;
   moneda: string;
 }
@@ -608,6 +611,20 @@ function BookingCliente() {
                       </div>
                       {unidad.descripcion && (
                         <p className="text-xs text-muted-foreground">{unidad.descripcion}</p>
+                      )}
+                      {unidad.detalle && (
+                        <p className="text-xs text-muted-foreground">
+                          {[
+                            Object.entries(unidad.detalle.habitaciones).length > 0
+                              ? Object.entries(unidad.detalle.habitaciones).map(([id, n]) => `${n}× ${labelDeHabitacionHospedaje(id)}`).join(', ')
+                              : null,
+                            Object.entries(unidad.detalle.camas).length > 0
+                              ? Object.entries(unidad.detalle.camas).map(([id, n]) => `${n}× ${labelDeHabitacionHospedaje(id)}`).join(', ')
+                              : null,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </p>
                       )}
                       {unidad.amenidades.length > 0 && (
                         <div className="flex flex-wrap gap-1">

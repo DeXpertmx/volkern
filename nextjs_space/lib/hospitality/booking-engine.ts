@@ -41,6 +41,7 @@ import {
   type NocheCotizada,
 } from './pricing';
 import { tieneEstacionalidad } from './estacionalidad';
+import { normalizarDetalleUnidad } from './unit-detalle';
 import { upsertGuest, type WebhookReservationPayload } from './reservations';
 import { emitReservationCreated } from './events';
 import { dispararComunicacionReserva } from './comunicaciones';
@@ -67,6 +68,12 @@ export interface UnidadPublica {
   /** Fotos de la unidad o, si no tiene, de la propiedad. */
   fotos: string[];
   amenidades: string[];
+  /**
+   * Distribución declarada de ESTA unidad (habitaciones y camas por id del
+   * catálogo del editor). Cada unidad del complejo tiene la suya; `null` si
+   * el operador no la declaró.
+   */
+  detalle: { habitaciones: Record<string, number>; camas: Record<string, number> } | null;
 }
 
 export interface PropiedadPublica {
@@ -137,6 +144,9 @@ export async function listarPropiedadesPublicables(
         tarifaDesde: plan && tieneEstacionalidad(plan.temporadas ?? plan.finDeSemana) ? tarifa : null,
         fotos: aLista(unidad.fotos).length ? aLista(unidad.fotos) : fotosPropiedad,
         amenidades: aLista(unidad.amenidades),
+        // Distribución de ESTA unidad (habitaciones/camas), normalizada por el
+        // módulo puro: la ficha pública nunca expone un JSONB corrupto.
+        detalle: normalizarDetalleUnidad(unidad.detalleAlojamiento),
       }));
 
     return {

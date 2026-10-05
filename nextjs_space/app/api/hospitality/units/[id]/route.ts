@@ -5,6 +5,8 @@ import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
 import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
 import { logAuditAction } from '@/lib/permissions';
+import { normalizarDetalleUnidad } from '@/lib/hospitality/unit-detalle';
+import { Prisma } from '@prisma/client';
 
 interface Params {
   params: Promise<{ id: string }> | { id: string };
@@ -54,7 +56,28 @@ export async function PATCH(req: NextRequest, ctx: Params) {
     if (!existing) return NextResponse.json({ error: 'Unidad no encontrada' }, { status: 404 });
 
     const data = await req.json();
-    const { propertyId, nombre, codigo, tipo, capacidad, estado, tarifaBase, moneda } = data || {};
+    const { propertyId, nombre, codigo, tipo, capacidad, estado, tarifaBase, moneda, descripcion, fotos, amenidades, detalleAlojamiento } = data || {};
+
+    // Mismo saneo que el POST: fotos como URLs sueltas, amenidades strings,
+    // detalle de la unidad normalizado por el módulo puro (vacío = null).
+    const urlsFotos = Array.isArray(fotos)
+      ? fotos
+          .map((f: unknown) =>
+            typeof f === 'string' && f.trim()
+              ? f.trim()
+              : f && typeof f === 'object' && typeof (f as { url?: unknown }).url === 'string'
+                ? (f as { url: string }).url.trim()
+                : null
+          )
+          .filter((u: unknown): u is string => typeof u === 'string' && u.length > 0)
+      : undefined;
+    const amenidadesSanas = Array.isArray(amenidades)
+      ? amenidades.filter((a: unknown): a is string => typeof a === 'string' && a.trim().length > 0)
+      : undefined;
+    const detalleUnidad =
+      detalleAlojamiento && typeof detalleAlojamiento === 'object' && !Array.isArray(detalleAlojamiento)
+        ? normalizarDetalleUnidad(detalleAlojamiento)
+        : null;
 
     // Si se cambia de propiedad, verificar aislamiento
     if (propertyId !== undefined && propertyId !== existing.propertyId) {
@@ -87,6 +110,14 @@ export async function PATCH(req: NextRequest, ctx: Params) {
         ...(tarifaBase !== undefined ? { tarifaBase: parseFloat(tarifaBase) || null } : {}),
         ...(moneda !== undefined ? { moneda: String(moneda).toUpperCase().trim() } : {}),
         ...(estado !== undefined ? { estado } : {}),
+        ...(descripcion !== undefined
+          ? { descripcion: typeof descripcion === 'string' && descripcion.trim() ? descripcion.trim() : null }
+          : {}),
+        ...(urlsFotos !== undefined ? { fotos: urlsFotos } : {}),
+        ...(amenidadesSanas !== undefined ? { amenidades: amenidadesSanas } : {}),
+        ...(detalleAlojamiento !== undefined
+          ? { detalleAlojamiento: detalleUnidad ? (detalleUnidad as unknown as Prisma.InputJsonValue) : Prisma.DbNull }
+          : {}),
       },
       include: { property: { select: { id: true, nombre: true } } },
     });

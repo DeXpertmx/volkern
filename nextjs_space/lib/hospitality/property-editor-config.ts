@@ -8,12 +8,22 @@
  *
  * Diferencia con real-estate: aquí la ficha es la PROPERTY (el establecimiento)
  * con sus políticas de operación; las fotos ya viven en el Json `fotos`, el
- * registro SES.HOSPEDAJES en `sesHospedajes` y el detalle declarado
- * (habitaciones, camas, servicios) en el Json `detalleAlojamiento`. El borrador
- * usa la forma de la API tal cual ({ property, units }), porque el editor edita
- * la propiedad y las unidades se listan/enlazan (su edición granular ya existe
- * en el módulo).
+ * registro SES.HOSPEDAJES en `sesHospedajes` y el detalle declarado en el Json
+ * `detalleAlojamiento` — que desde el reencuadre propiedades ↔ unidades
+ * (migración 20261006120000) contiene SOLO los `servicios`: las áreas comunes
+ * e instalaciones del complejo (piscina, oficina de visitantes,
+ * estacionamiento…) compartidas por todos los huéspedes. La distribución de
+ * habitaciones y camas es de cada UNIDAD (HospitalityUnit.detalleAlojamiento,
+ * módulo `unit-detalle.ts`): aquí llega como AGREGADO de solo lectura para
+ * mostrarlo en la ficha. El borrador usa la forma de la API tal cual
+ * ({ property, units }), porque el editor edita la propiedad y las unidades
+ * se listan/enlazan (su edición granular ya existe en el módulo).
  */
+
+import {
+  agregarDetallesUnidades,
+  type DetalleUnidad,
+} from './unit-detalle';
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -70,42 +80,30 @@ export interface UnidadWire {
   tarifaBase?: number | null;
   moneda?: string | null;
   estado?: string | null;
+  /** Detalle declarado de la unidad (habitaciones/camas); base del agregado. */
+  detalleAlojamiento?: unknown;
 }
 
 /**
- * Detalle declarado del alojamiento, tal como vive en el Json
- * `detalleAlojamiento` de la propiedad y en el borrador del editor.
+ * Detalle del COMPLEJO editable en la ficha: solo los `servicios` (áreas
+ * comunes e instalaciones compartidas). Habitaciones y camas ya no se editan
+ * aquí: son de cada unidad y llegan como agregado (`agregadoUnidades`).
  */
 export interface DetalleAlojamiento {
-  habitaciones: Record<string, number>;
-  camas: Record<string, number>;
   servicios: string[];
 }
 
 export const DETALLE_VACIO: DetalleAlojamiento = {
-  habitaciones: {},
-  camas: {},
   servicios: [],
 };
 
-/** Normaliza el Json `detalleAlojamiento` al borrador editable. */
+/** Normaliza el Json `detalleAlojamiento` de la propiedad a solo servicios. */
 export function detalleAlojamientoDe(raw: unknown): DetalleAlojamiento {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ...DETALLE_VACIO };
   const o = raw as Record<string, unknown>;
-  const contadores = (v: unknown): Record<string, number> => {
-    if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
-    const salida: Record<string, number> = {};
-    for (const [clave, n] of Object.entries(v as Record<string, unknown>)) {
-      const num = Number(n);
-      if (clave && Number.isInteger(num) && num >= 0) salida[clave] = num;
-    }
-    return salida;
-  };
   return {
-    habitaciones: contadores(o.habitaciones),
-    camas: contadores(o.camas),
     servicios: Array.isArray(o.servicios)
-      ? o.servicios.filter((s): s is string => typeof s === 'string')
+      ? o.servicios.filter((s): s is string => typeof s === 'string' && s.length > 0)
       : [],
   };
 }
@@ -164,8 +162,14 @@ export interface DraftHospedaje {
   sesCodigo: string;
   sesMunicipio: string;
 
-  /** Detalle declarado: habitaciones, camas y servicios (editor Airbnb). */
+  /** Detalle del COMPLEJO: solo servicios (áreas comunes e instalaciones). */
   detalle: DetalleAlojamiento;
+
+  /**
+   * Habitaciones y camas AGREGADAS de las unidades (solo lectura): suma de los
+   * detalles declarados en cada unidad. `null` si ninguna declara nada.
+   */
+  agregadoUnidades: DetalleUnidad | null;
 
   /** Ubicación enriquecida (distancias, indicaciones, mapa propio). */
   distancias: DistanciasHospedaje;
@@ -208,6 +212,7 @@ export function sesDeProperty(raw: unknown): { codigo: string; municipio: string
 export function borradorDesdeProperty(p: PropertyWire): DraftHospedaje {
   const ses = sesDeProperty(p.sesHospedajes);
   const detalle = detalleAlojamientoDe(p.detalleAlojamiento);
+  const agregadoUnidades = agregarDetallesUnidades(p.units ?? []);
   return {
     nombre: p.nombre || '',
     descripcion: p.descripcion || '',
@@ -234,6 +239,7 @@ export function borradorDesdeProperty(p: PropertyWire): DraftHospedaje {
     sesMunicipio: ses.municipio,
 
     detalle,
+    agregadoUnidades,
 
     distancias: distanciasDe(p.distancias),
     indicaciones: indicacionesDe(p.indicaciones),
@@ -370,18 +376,8 @@ export function payloadDesdeBorradorHospedaje(d: DraftHospedaje): Record<string,
         }
       : {}),
 
-    ...(hayDetalle(d.detalle)
-      ? {
-          detalleAlojamiento: {
-            ...(Object.keys(d.detalle.habitaciones).length > 0
-              ? { habitaciones: d.detalle.habitaciones }
-              : {}),
-            ...(Object.keys(d.detalle.camas).length > 0
-              ? { camas: d.detalle.camas }
-              : {}),
-            ...(d.detalle.servicios.length > 0 ? { servicios: d.detalle.servicios } : {}),
-          },
-        }
+    ...(d.detalle.servicios.length > 0
+      ? { detalleAlojamiento: { servicios: d.detalle.servicios } }
       : { detalleAlojamiento: null }),
 
     ...(hayDistancias(d.distancias)
@@ -406,13 +402,9 @@ export function payloadDesdeBorradorHospedaje(d: DraftHospedaje): Record<string,
   };
 }
 
-/** ¿Hay algo declarado en el detalle? (para no escribir JSON vacío). */
+/** ¿Hay algo declarado en el detalle del complejo? (para no escribir JSON vacío). */
 export function hayDetalle(d: DetalleAlojamiento): boolean {
-  return (
-    Object.keys(d.habitaciones).length > 0 ||
-    Object.keys(d.camas).length > 0 ||
-    d.servicios.length > 0
-  );
+  return d.servicios.length > 0;
 }
 
 // ─── Fotos de la tarjeta de la Vista global ─────────────────────────────
@@ -526,8 +518,6 @@ export interface EstadoHospedajeIn {
   politicaSalidaAnticipada?: string | null;
   holdHoras?: number | string | null;
   sesCodigo?: string | null;
-  habitaciones?: Record<string, number> | null;
-  camas?: Record<string, number> | null;
   servicios?: string[] | null;
 }
 
@@ -558,7 +548,7 @@ export function estadoSeccionesHospedaje(
     global: Boolean(
       texto(p.nombre) &&
         texto(p.descripcion) &&
-        ((p.units?.length ?? 0) > 0 || sumarContadores(p.habitaciones) > 0)
+        (p.units?.length ?? 0) > 0
     ),
     descripcion: Boolean(texto(p.nombre) && texto(p.descripcion)),
     fotos: contarFotosHospedaje(p.fotos) > 0,
@@ -573,7 +563,9 @@ export function estadoSeccionesHospedaje(
   };
 }
 
-/** Suma de los contadores de un detalle (habitaciones o camas). */
+/**
+ * Suma de los contadores de un mapa de habitaciones/camas (proyección de
+ * tarjeta o agregado). Útil para la tarjeta de la Vista global («3 camas»). */
 export function sumarContadores(detalle: Record<string, number> | null | undefined): number {
   if (!detalle || typeof detalle !== 'object') return 0;
   return Object.values(detalle).reduce((acc, n) => acc + (Number(n) || 0), 0);
@@ -715,18 +707,20 @@ export function payloadUnidadHospedaje(
 // ─── Catálogos de la Vista global (modales de detalle) ───────────────────────
 
 /**
- * Detalle por tipo para las tarjetas de la Vista global (estilo resumen de
- * camas de real-estate): pares ordenados `[id, n]` con n > 0, en el orden del
- * catálogo. Devuelve `null` si no hay nada configurado.
+ * Proyección por tipo de los pares `[id, n]` de un agregado/detalle de
+ * unidades, en el orden del catálogo. Los sufijos `-Hospedaje` se mantienen
+ * por compatibilidad con quienes ya los consumían; ahora la entrada es el
+ * AGREGADO de unidades (o el detalle de una unidad), no la distribución de la
+ * propiedad.
  */
 export function detalleHabitacionesHospedaje(
-  detalle: DetalleAlojamiento | null | undefined
+  detalle: DetalleUnidad | null | undefined
 ): Array<readonly [string, number]> | null {
   return paresPorTipo(detalle?.habitaciones, HABITACIONES_GRUPOS_HOSPEDAJE.flatMap((g) => g.items));
 }
 
 export function detalleCamasHospedaje(
-  detalle: DetalleAlojamiento | null | undefined
+  detalle: DetalleUnidad | null | undefined
 ): Array<readonly [string, number]> | null {
   return paresPorTipo(detalle?.camas, CAMAS_CATALOGO_HOSPEDAJE);
 }

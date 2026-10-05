@@ -56,6 +56,16 @@ import {
   HOLD_HORAS_MAXIMO,
   holdHorasEfectivas,
 } from '@/lib/hospitality/holds';
+import {
+  normalizarDetalleUnidad,
+} from '@/lib/hospitality/unit-detalle';
+import {
+  HABITACIONES_GRUPOS_HOSPEDAJE,
+  CAMAS_CATALOGO_HOSPEDAJE,
+  labelDeHabitacionHospedaje,
+  detalleHabitacionesHospedaje,
+  detalleCamasHospedaje,
+} from '@/lib/hospitality/property-editor-config';
 
 interface Property {
   id: string;
@@ -79,6 +89,8 @@ interface Property {
   politicaSalidaAnticipada?: string | null;
   /** Horas que un hold `pending` retiene la unidad (0 = sin caducidad). */
   holdHoras?: number | null;
+  /** Detalle del COMPLEJO: solo servicios (áreas comunes e instalaciones). */
+  detalleAlojamiento?: { servicios?: string[] } | null;
   _count?: { units: number; reservations: number };
 }
 
@@ -95,6 +107,8 @@ interface Unit {
   /** Las unidades solo guardan URLs: el editor por secciones no las toca. */
   fotos: string[] | null;
   amenidades: string[] | null;
+  /** Detalle declarado de ESTA unidad: habitaciones y distribución de camas. */
+  detalleAlojamiento?: { habitaciones?: Record<string, number>; camas?: Record<string, number> } | null;
   estado: string;
   property?: { id: string; nombre: string };
 }
@@ -114,6 +128,34 @@ const ESTADO_UNIDAD_LABEL: Record<string, string> = {
   maintenance: 'Mantenimiento',
   out_of_service: 'Fuera de servicio',
 };
+
+/**
+ * Áreas comunes e instalaciones del COMPLEJO (detalle de la propiedad): lo
+ * que comparten todos los huéspedes, use la unidad que use. Ids del catálogo
+ * de servicios del editor; en la unidad el equivalente son sus `amenidades`.
+ */
+const SERVICIOS_COMUNES_CATALOGO = [
+  { id: 'piscina', label: 'Alberca' },
+  { id: 'piscina_spa', label: 'Spa' },
+  { id: 'sauna', label: 'Sauna' },
+  { id: 'gimnasio', label: 'Gimnasio' },
+  { id: 'zona_trabajo', label: 'Oficina de visitantes' },
+  { id: 'escritorio', label: 'Escritorio compartido' },
+  { id: 'aparcamiento', label: 'Estacionamiento' },
+  { id: 'aparcamiento_gratuito', label: 'Estacionamiento gratuito' },
+  { id: 'garaje', label: 'Garaje' },
+  { id: 'ascensor', label: 'Ascensor' },
+  { id: 'jardin', label: 'Jardín' },
+  { id: 'terraza_prop', label: 'Terraza común' },
+  { id: 'terraza_compartida', label: 'Terraza compartida' },
+  { id: 'parrilla', label: 'Parrilla / Asador' },
+  { id: 'sala_juegos', label: 'Sala de juegos' },
+  { id: 'lavadero_compartido', label: 'Lavadero común' },
+  { id: 'conserje', label: 'Conserje' },
+  { id: 'checkin_autonomo', label: 'Check-in autónomo' },
+  { id: 'vista_mar', label: 'Vista al mar' },
+  { id: 'primera_linea', label: 'Primera línea' },
+] as const;
 
 const ESTADO_PROPIEDAD_LABEL: Record<string, string> = {
   activa: 'Activa',
@@ -135,6 +177,9 @@ const EMPTY_PROPERTY_FORM = {
   politicaNoShow: POLITICA_NO_SHOW_POR_DEFECTO,
   politicaSalidaAnticipada: POLITICA_SALIDA_ANTICIPADA_POR_DEFECTO,
   holdHoras: String(HOLD_HORAS_POR_DEFECTO),
+  // Áreas comunes e instalaciones del COMPLEJO (ids del catálogo de servicios):
+  // lo comparten todos los huéspedes. Habitaciones/camas ya no van aquí.
+  servicios: [] as string[],
 };
 
 const EMPTY_UNIT_FORM = {
@@ -143,6 +188,12 @@ const EMPTY_UNIT_FORM = {
   // formulario no nace en una divisa que nadie eligió.
   tarifaBase: '', moneda: '', descripcion: '', fotos: [] as string[],
   amenidades: [] as string[], estado: 'available',
+  // Distribución de ESTA unidad: contadores por id del catálogo (módulo
+  // unit-detalle). Habitaciones y camas son de la unidad, no de la propiedad.
+  detalle: {
+    habitaciones: {} as Record<string, number>,
+    camas: {} as Record<string, number>,
+  },
 };
 
 /**
@@ -217,6 +268,11 @@ export default function PortadaHospitality() {
         ? `/api/hospitality/properties/${propertyDialog.editing.id}`
         : '/api/hospitality/properties';
       const body: any = { ...propertyForm };
+      // Áreas comunes del complejo: solo el detalle de la propiedad lleva
+      // servicios; vacío limpia (la API normaliza y pisa el resto).
+      body.detalleAlojamiento =
+        propertyForm.servicios.length > 0 ? { servicios: propertyForm.servicios } : null;
+      delete body.servicios;
       if (!propertyDialog.editing && unidadesIniciales.length > 0) {
         body.unidades = unidadesIniciales
           .filter((u) => u.nombre.trim())
@@ -261,6 +317,12 @@ export default function PortadaHospitality() {
           ...unitForm,
           capacidad: Number(unitForm.capacidad) || 2,
           tarifaBase: unitForm.tarifaBase || null,
+          // Distribución de ESTA unidad (habitaciones/camas); vacío = null.
+          detalleAlojamiento:
+            Object.keys(unitForm.detalle.habitaciones).length > 0 ||
+            Object.keys(unitForm.detalle.camas).length > 0
+              ? unitForm.detalle
+              : null,
         }),
       });
       const data = await res.json();
@@ -330,6 +392,11 @@ export default function PortadaHospitality() {
         ? p.politicaSalidaAnticipada
         : POLITICA_SALIDA_ANTICIPADA_POR_DEFECTO,
       holdHoras: String(holdHorasEfectivas(p.holdHoras)),
+      // Servicios del complejo declarados en su detalle; los ids que ya no
+      // existan en el catálogo se mantienen (no se pierde lo declarado).
+      servicios: (p.detalleAlojamiento?.servicios || []).filter(
+        (s): s is string => typeof s === 'string' && s.length > 0
+      ),
     });
     setUnidadesIniciales([]);
     setPropertyDialog({ open: true, editing: p });
@@ -364,6 +431,10 @@ export default function PortadaHospitality() {
       fotos: u.fotos || [],
       amenidades: u.amenidades || [],
       estado: u.estado,
+      detalle: {
+        habitaciones: normalizarDetalleUnidad(u.detalleAlojamiento)?.habitaciones ?? {},
+        camas: normalizarDetalleUnidad(u.detalleAlojamiento)?.camas ?? {},
+      },
     });
     setUnitDialog({ open: true, editing: u });
   };
@@ -396,6 +467,28 @@ export default function PortadaHospitality() {
     setUnitForm((f) => ({
       ...f,
       amenidades: f.amenidades.includes(a) ? f.amenidades.filter((x) => x !== a) : [...f.amenidades, a],
+    }));
+  };
+
+  // Contadores de la distribución de la unidad: +1 por clic, − para quitar.
+  const detalleAdd = (grupo: 'habitaciones' | 'camas', id: string) =>
+    setUnitForm((f) => ({
+      ...f,
+      detalle: { ...f.detalle, [grupo]: { ...f.detalle[grupo], [id]: (f.detalle[grupo][id] ?? 0) + 1 } },
+    }));
+  const detalleSub = (grupo: 'habitaciones' | 'camas', id: string) =>
+    setUnitForm((f) => {
+      const mapa = { ...f.detalle[grupo] };
+      const n = (mapa[id] ?? 0) - 1;
+      if (n <= 0) delete mapa[id];
+      else mapa[id] = n;
+      return { ...f, detalle: { ...f.detalle, [grupo]: mapa } };
+    });
+
+  const toggleServicioComun = (s: string) => {
+    setPropertyForm((f) => ({
+      ...f,
+      servicios: f.servicios.includes(s) ? f.servicios.filter((x) => x !== s) : [...f.servicios, s],
     }));
   };
 
@@ -624,6 +717,19 @@ export default function PortadaHospitality() {
                     {u.descripcion && (
                       <p className="text-xs text-muted-foreground line-clamp-2">{u.descripcion}</p>
                     )}
+                    {(u.detalleAlojamiento?.camas || u.detalleAlojamiento?.habitaciones) && (
+                      <p className="text-xs text-muted-foreground">
+                        {(() => {
+                          const detalleUnidad = normalizarDetalleUnidad(u.detalleAlojamiento);
+                          const partes: string[] = [];
+                          const hab = detalleHabitacionesHospedaje(detalleUnidad);
+                          if (hab) partes.push(hab.map(([id, n]) => `${n}× ${labelDeHabitacionHospedaje(id)}`).join(', '));
+                          const camas = detalleCamasHospedaje(detalleUnidad);
+                          if (camas) partes.push(camas.map(([id, n]) => `${n}× ${labelDeHabitacionHospedaje(id)}`).join(', '));
+                          return partes.join(' · ');
+                        })()}
+                      </p>
+                    )}
                     {(u.amenidades?.length || 0) > 0 && (
                       <div className="flex flex-wrap gap-1">
                         {u.amenidades!.slice(0, 4).map((a) => (
@@ -690,6 +796,28 @@ export default function PortadaHospitality() {
                 placeholder="Describe la propiedad: estilo, ambiente, puntos destacados para el huésped..."
                 rows={3}
               />
+            </div>
+            {/* Áreas comunes e instalaciones del COMPLEJO: compartidas por todos
+                los huéspedes. La distribución de habitaciones/camas es de cada
+                unidad y se edita en su propio formulario. */}
+            <div className="space-y-2">
+              <Label>Áreas comunes e instalaciones</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {SERVICIOS_COMUNES_CATALOGO.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => toggleServicioComun(s.id)}
+                    className={`text-xs rounded-full px-2.5 py-1 border transition-colors ${
+                      propertyForm.servicios.includes(s.id)
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'bg-background text-muted-foreground hover:bg-muted'
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="space-y-2 md:col-span-2">
@@ -986,9 +1114,54 @@ export default function PortadaHospitality() {
                 id="u-descripcion"
                 value={unitForm.descripcion}
                 onChange={(e) => setUnitForm({ ...unitForm, descripcion: e.target.value })}
-                placeholder="Describe la unidad: distribución, camas, vista, detalles..."
+                placeholder="Describe la unidad: vista, ambiente, detalles..."
                 rows={3}
               />
+            </div>
+            {/* Distribución de ESTA unidad: habitaciones por tipo (catálogo del editor). */}
+            <div className="space-y-2">
+              <Label>Habitaciones</Label>
+              {HABITACIONES_GRUPOS_HOSPEDAJE.map((grupo) => (
+                <div key={grupo.titulo} className="space-y-1.5">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{grupo.titulo}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {grupo.items.map((h) => {
+                      const n = unitForm.detalle.habitaciones[h.id] ?? 0;
+                      return (
+                        <span key={h.id} className={`inline-flex items-center gap-1 rounded-full border text-xs px-2 py-1 ${n > 0 ? 'border-primary bg-primary/10' : 'bg-background text-muted-foreground'}`}>
+                          <button type="button" onClick={() => detalleAdd('habitaciones', h.id)} className="hover:text-primary">{h.label}</button>
+                          {n > 0 && (
+                            <>
+                              <span className="font-semibold">×{n}</span>
+                              <button type="button" onClick={() => detalleSub('habitaciones', h.id)} className="text-muted-foreground hover:text-destructive" aria-label={`Quitar ${h.label}`}>−</button>
+                            </>
+                          )}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Distribución de camas de ESTA unidad. */}
+            <div className="space-y-2">
+              <Label>Distribución de camas</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {CAMAS_CATALOGO_HOSPEDAJE.map((c) => {
+                  const n = unitForm.detalle.camas[c.id] ?? 0;
+                  return (
+                    <span key={c.id} className={`inline-flex items-center gap-1 rounded-full border text-xs px-2 py-1 ${n > 0 ? 'border-primary bg-primary/10' : 'bg-background text-muted-foreground'}`}>
+                      <button type="button" onClick={() => detalleAdd('camas', c.id)} className="hover:text-primary">{c.label}</button>
+                      {n > 0 && (
+                        <>
+                          <span className="font-semibold">×{n}</span>
+                          <button type="button" onClick={() => detalleSub('camas', c.id)} className="text-muted-foreground hover:text-destructive" aria-label={`Quitar ${c.label}`}>−</button>
+                        </>
+                      )}
+                    </span>
+                  );
+                })}
+              </div>
             </div>
             {/* Amenidades */}
             <div className="space-y-2">

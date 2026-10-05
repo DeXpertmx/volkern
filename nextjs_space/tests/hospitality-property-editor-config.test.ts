@@ -180,20 +180,19 @@ describe('estado de completado', () => {
 });
 
 describe('detalle de alojamiento (Vista global)', () => {
-  it('detalleAlojamientoDe normaliza contadores y servicios', () => {
+  it('detalleAlojamientoDe lee SOLO servicios (habitaciones/camas son de la unidad)', () => {
+    // Un detalle antiguo con habitaciones/camas las descarta: desde el
+    // reencuadre son un agregado de las unidades, no valor de la propiedad.
     expect(
       detalleAlojamientoDe({
         habitaciones: { dormitorio: 2, basura: 'x', wc: -1 },
         camas: { cama_doble: 1 },
         servicios: ['wifi', 42, 'piscina'],
       })
-    ).toEqual({
-      habitaciones: { dormitorio: 2 },
-      camas: { cama_doble: 1 },
-      servicios: ['wifi', 'piscina'],
-    });
-    expect(detalleAlojamientoDe(null)).toEqual({ habitaciones: {}, camas: {}, servicios: [] });
-    expect(detalleAlojamientoDe('no')).toEqual({ habitaciones: {}, camas: {}, servicios: [] });
+    ).toEqual({ servicios: ['wifi', 'piscina'] });
+    expect(detalleAlojamientoDe(null)).toEqual({ servicios: [] });
+    expect(detalleAlojamientoDe('no')).toEqual({ servicios: [] });
+    expect(detalleAlojamientoDe({ servicios: ['', 'wifi'] })).toEqual({ servicios: ['wifi'] });
   });
 
   it('sumarContadores suma los valores de un mapa', () => {
@@ -202,38 +201,41 @@ describe('detalle de alojamiento (Vista global)', () => {
     expect(sumarContadores(null)).toBe(0);
   });
 
-  it('hayDetalle solo es verdad con algo declarado', () => {
-    expect(hayDetalle({ habitaciones: {}, camas: {}, servicios: [] })).toBe(false);
-    expect(hayDetalle({ habitaciones: { wc: 1 }, camas: {}, servicios: [] })).toBe(true);
-    expect(hayDetalle({ habitaciones: {}, camas: {}, servicios: ['wifi'] })).toBe(true);
+  it('hayDetalle solo es verdad con servicios declarados', () => {
+    expect(hayDetalle({ servicios: [] })).toBe(false);
+    expect(hayDetalle({ servicios: ['wifi'] })).toBe(true);
   });
 
-  it('el borrador redondea el detalle desde la property', () => {
+  it('el borrador redondea servicios desde la property y agrega las unidades', () => {
     const d = borradorDesdeProperty(
-      property({ detalleAlojamiento: { habitaciones: { dormitorio: 2 }, servicios: ['wifi'] } })
+      property({
+        detalleAlojamiento: { habitaciones: { dormitorio: 2 }, servicios: ['wifi'] },
+        units: [
+          { id: 'u1', nombre: 'Suite', detalleAlojamiento: { habitaciones: { dormitorio: 1 }, camas: { cama_doble: 1 } } },
+          { id: 'u2', nombre: 'Loft', detalleAlojamiento: { habitaciones: { dormitorio: 1, salon: 1 }, camas: { sofa_cama: 1 } } },
+        ],
+      })
     );
-    expect(d.detalle.habitaciones).toEqual({ dormitorio: 2 });
-    expect(d.detalle.servicios).toEqual(['wifi']);
+    expect(d.detalle).toEqual({ servicios: ['wifi'] });
+    // El agregado SOLO LECTURA suma habitaciones y camas de las unidades.
+    expect(d.agregadoUnidades).toEqual({
+      habitaciones: { dormitorio: 2, salon: 1 },
+      camas: { cama_doble: 1, sofa_cama: 1 },
+    });
   });
 
-  it('el payload incluye detalleAlojamiento solo si hay algo', () => {
+  it('el payload envía solo servicios (habitaciones/camas nunca salen de la propiedad)', () => {
     const vacio = borradorDesdeProperty(property());
     expect(payloadDesdeBorradorHospedaje(vacio).detalleAlojamiento).toBeNull();
 
     const lleno = borradorDesdeProperty(property());
-    lleno.detalle = {
-      habitaciones: { dormitorio: 1 },
-      camas: { cama_doble: 1 },
-      servicios: ['wifi', 'piscina'],
-    };
+    lleno.detalle = { servicios: ['wifi', 'piscina'] };
     expect(payloadDesdeBorradorHospedaje(lleno).detalleAlojamiento).toEqual({
-      habitaciones: { dormitorio: 1 },
-      camas: { cama_doble: 1 },
       servicios: ['wifi', 'piscina'],
     });
   });
 
-  it('la Vista global queda completa con nombre, descripción y unidades o habitaciones', () => {
+  it('la Vista global queda completa con nombre, descripción y UNIDADES (no habitaciones)', () => {
     expect(estadoSeccionesHospedaje({ nombre: 'Casa', descripcion: 'D' }).global).toBe(false);
     expect(
       estadoSeccionesHospedaje({
@@ -242,13 +244,26 @@ describe('detalle de alojamiento (Vista global)', () => {
         units: [{ id: 'u1', nombre: 'Suite' }],
       }).global
     ).toBe(true);
+    // Sin unidades, declarar habitaciones ya NO completa la sección: la
+    // distribución es de la unidad.
     expect(
       estadoSeccionesHospedaje({
         nombre: 'Casa',
         descripcion: 'D',
         habitaciones: { dormitorio: 1 },
       }).global
-    ).toBe(true);
+    ).toBe(false);
+  });
+
+  it('las proyecciones de tarjeta leen el AGREGADO/unidad, no la propiedad', () => {
+    const agregado = { habitaciones: { dormitorio: 2, salon: 1 }, camas: { cama_doble: 1 } };
+    expect(detalleHabitacionesHospedaje(agregado)).toEqual([
+      ['dormitorio', 2],
+      ['salon', 1],
+    ]);
+    expect(detalleCamasHospedaje(agregado)).toEqual([['cama_doble', 1]]);
+    expect(sumarContadores(agregado.camas)).toBe(1);
+    expect(detalleHabitacionesHospedaje(null)).toBeNull();
   });
 });
 

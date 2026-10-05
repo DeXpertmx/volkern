@@ -6,6 +6,8 @@ import { authenticateRequest } from '@/lib/api-key-auth';
 import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
 import { logAuditAction } from '@/lib/permissions';
 import { monedaEfectiva, monedaEscritura } from '@/lib/moneda';
+import { normalizarDetalleUnidad } from '@/lib/hospitality/unit-detalle';
+import { Prisma } from '@prisma/client';
 
 // GET /api/hospitality/units — listar unidades del tenant (filtrable por propiedad)
 export async function GET(req: NextRequest) {
@@ -57,7 +59,7 @@ export async function POST(req: NextRequest) {
     if (sinPermiso) return sinPermiso;
 
     const data = await req.json();
-    const { propertyId, nombre, codigo, tipo, capacidad, estado, tarifaBase, moneda } = data || {};
+    const { propertyId, nombre, codigo, tipo, capacidad, estado, tarifaBase, moneda, descripcion, fotos, amenidades, detalleAlojamiento } = data || {};
 
     if (!propertyId || !nombre?.trim()) {
       return NextResponse.json(
@@ -65,6 +67,32 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Fotos y amenidades de la unidad: listas saneadas o nada. Las fotos se
+    // guardan como URLs sueltas (forma que ya consumen Portada y Booking
+    // Engine); un objeto { url } de clientes ricos aporta la URL y nada más.
+    const urlsFotos = Array.isArray(fotos)
+      ? fotos
+          .map((f: unknown) =>
+            typeof f === 'string' && f.trim()
+              ? f.trim()
+              : f && typeof f === 'object' && typeof (f as { url?: unknown }).url === 'string'
+                ? (f as { url: string }).url.trim()
+                : null
+          )
+          .filter((u: unknown): u is string => typeof u === 'string' && u.length > 0)
+      : undefined;
+    const amenidadesSanas = Array.isArray(amenidades)
+      ? amenidades.filter((a: unknown): a is string => typeof a === 'string' && a.trim().length > 0)
+      : undefined;
+
+    // Detalle declarado de ESTA unidad (habitaciones/camas): se normaliza con
+    // el módulo puro — un mapa corrupto no entra en el JSONB. Vacío = sin
+    // configurar (columna a null). Forma inválida no toca nada.
+    const detalleUnidad =
+      detalleAlojamiento && typeof detalleAlojamiento === 'object' && !Array.isArray(detalleAlojamiento)
+        ? normalizarDetalleUnidad(detalleAlojamiento)
+        : null;
 
     // Verificar que la propiedad pertenezca al tenant (aislamiento)
     const property = await prisma.hospitalityProperty.findFirst({
@@ -111,6 +139,12 @@ export async function POST(req: NextRequest) {
         tarifaBase: tarifaBase !== undefined ? parseFloat(tarifaBase) || null : null,
         moneda: monedaEscritura(monedaDeLaUnidad),
         estado: estado || 'available',
+        ...(descripcion !== undefined
+          ? { descripcion: typeof descripcion === 'string' && descripcion.trim() ? descripcion.trim() : null }
+          : {}),
+        ...(urlsFotos !== undefined ? { fotos: urlsFotos } : {}),
+        ...(amenidadesSanas !== undefined ? { amenidades: amenidadesSanas } : {}),
+        ...(detalleUnidad ? { detalleAlojamiento: detalleUnidad as unknown as Prisma.InputJsonValue } : {}),
       },
       include: { property: { select: { id: true, nombre: true } } },
     });

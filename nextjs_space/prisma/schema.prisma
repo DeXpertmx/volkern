@@ -8161,11 +8161,16 @@ model HospitalityProperty {
    */
   sesHospedajes  Json?
   /**
-   * Detalle declarado del alojamiento para el editor estilo Airbnb:
+   * Detalle declarado del COMPLEJO para el editor estilo Airbnb:
    * `{ habitaciones: Record<id, n>, camas: Record<id, n>, servicios: string[] }`.
-   * Los ids son del catálogo de lib/hospitality/property-editor-config.ts;
-   * es descripción de ficha (no inventario de unidades, que viven en
-   * HospitalityUnit con sus amenidades).
+   * Los ids son del catálogo de lib/hospitality/property-editor-config.ts.
+   * Desde el reencuadre propiedades↔unidades (migración 20261006120000),
+   * `habitaciones`/`camas` son el AGREGADO de las unidades de la propiedad
+   * (solo lectura; la API lo pisa al guardar, ver `encogerDetalleAServicios`)
+   * y lo editable aquí son los `servicios`: las áreas comunes e instalaciones
+   * del complejo (piscina, oficina de visitantes, estacionamiento…) que
+   * comparten todos los huéspedes. La distribución de cada unidad vive en
+   * `HospitalityUnit.detalleAlojamiento`.
    */
   detalleAlojamiento Json?
   /**
@@ -8234,6 +8239,16 @@ model HospitalityUnit {
   descripcion   String?
   fotos         Json?
   amenidades    Json?
+  /**
+   * Detalle declarado de ESTA unidad (editor estilo Airbnb):
+   * `{ habitaciones: Record<id, n>, camas: Record<id, n> }` — misma forma que
+   * el de la propiedad, sin `servicios` (en la unidad el catálogo vivo es
+   * `amenidades`). Cada unidad de un complejo tiene su propia distribución:
+   * habitaciones y camas viven aquí, no en la propiedad (sus valores vienen
+   * del backfill de la migración 20261006120000 para las que nunca declararon
+   * los suyos). Se normaliza con los helpers de `lib/hospitality/unit-detalle.ts`.
+   */
+  detalleAlojamiento Json?
   estado        String    @default("available") // available|occupied|cleaning|dirty|maintenance|out_of_service
   fechaCreacion DateTime  @default(now())
   fechaEdicion  DateTime  @updatedAt

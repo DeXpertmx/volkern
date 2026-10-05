@@ -59,18 +59,23 @@ interface ModalDetalleHospedajeProps {
 }
 
 const TITULOS: Record<TipoModalHospedaje, { titulo: string; descripcion: string }> = {
+  // Habitaciones y camas del COMPLEJO son de cada unidad: en la ficha de la
+  // propiedad solo se muestran como AGREGADO (solo lectura) de lo declarado
+  // en sus unidades. El modal no permite editarlas.
   habitaciones: {
-    titulo: 'Habitaciones',
+    titulo: 'Habitaciones (todas las unidades)',
     descripcion:
-      '¿Qué habitaciones tiene tu establecimiento? Las habitaciones que selecciones aquí se mostrarán en tu sitio web.',
+      'Suma de la distribución declarada en cada unidad. Para cambiarla, edita la distribución de cada unidad desde «Unidades».',
   },
   camas: {
-    titulo: 'Distribución de camas',
-    descripcion: 'Informa a tus huéspedes sobre la distribución de las camas.',
+    titulo: 'Distribución de camas (todas las unidades)',
+    descripcion:
+      'Suma de las camas declaradas en cada unidad. Para cambiarla, edita la distribución de cada unidad desde «Unidades».',
   },
   servicios: {
-    titulo: 'Servicios y equipamiento del alojamiento',
-    descripcion: 'Marca lo que tu establecimiento ofrece.',
+    titulo: 'Áreas comunes e instalaciones del complejo',
+    descripcion:
+      'Marca lo que comparten todos los huéspedes del establecimiento (alberca, oficina, estacionamiento…).',
   },
 };
 
@@ -163,36 +168,29 @@ export function ModalDetalleHospedaje({
 
   // Estado local del modal: se sincroniza con el borrador al abrir y solo se
   // aplica al borrador al guardar, para que «Cancelar» no deje cambios a medias.
-  const [habitaciones, setHabitaciones] = useState<Record<string, number>>({});
-  const [camas, setCamas] = useState<Record<string, number>>({});
+  // Habitaciones y camas ya no se editan aquí (agregado de unidades): solo los
+  // servicios del complejo mantienen estado local.
   const [servicios, setServicios] = useState<string[]>([]);
   const [busqueda, setBusqueda] = useState('');
 
   // Solo se sincroniza al ABRIR: si dependiera de `draft`, cada autosave que
-  // aterrice con el modal abierto machacaría los contadores que el usuario está
+  // aterrice con el modal abierto machacaría la selección que el usuario está
   // tocando. Se lee el borrador por referencia en ese instante.
   const draftRef = useRef(draft);
   useEffect(() => {
     if (!abierto) return;
     const actual = draftRef.current.detalle;
-    if (tipo === 'habitaciones') setHabitaciones({ ...actual.habitaciones });
-    else if (tipo === 'camas') setCamas({ ...actual.camas });
-    else setServicios([...actual.servicios]);
+    // Habitaciones y camas son de cada unidad: aquí solo se editan los
+    // servicios del complejo (los otros dos modales son ahora solo lectura).
+    if (tipo === 'servicios') setServicios([...actual.servicios]);
     setBusqueda('');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [abierto, tipo]);
 
   const guardar = () => {
-    if (tipo === 'habitaciones') {
-      const detalle: DetalleAlojamiento = { ...draftRef.current.detalle, habitaciones };
-      actualizar({ detalle });
-    } else if (tipo === 'camas') {
-      const detalle: DetalleAlojamiento = { ...draftRef.current.detalle, camas };
-      actualizar({ detalle });
-    } else {
-      const detalle: DetalleAlojamiento = { ...draftRef.current.detalle, servicios };
-      actualizar({ detalle });
-    }
+    if (tipo !== 'servicios') return; // solo lectura (agregado de unidades)
+    const detalle: DetalleAlojamiento = { servicios };
+    actualizar({ detalle });
     onOpenChange(false);
   };
 
@@ -223,7 +221,7 @@ export function ModalDetalleHospedaje({
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-2">
-          {/* ─── Habitaciones ─── */}
+          {/* ─── Habitaciones (SOLO LECTURA: agregado de las unidades) ─── */}
           {tipo === 'habitaciones' && (
             <div className="rounded-xl border">
               {HABITACIONES_GRUPOS_HOSPEDAJE.map((grupo, gi) => (
@@ -241,47 +239,39 @@ export function ModalDetalleHospedaje({
                   >
                     <div className="divide-y">
                       {grupo.items.map((h) => (
-                        <FilaContador
-                          key={h.id}
-                          label={h.label}
-                          valor={habitaciones[h.id] ?? 0}
-                          onDelta={(delta) =>
-                            setHabitaciones((prev) => ({
-                              ...prev,
-                              [h.id]: Math.max(0, (prev[h.id] ?? 0) + delta),
-                            }))
-                          }
-                        />
+                        <div key={h.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                          <span>{h.label}</span>
+                          <span className="tabular-nums text-muted-foreground">
+                            ×{(draft.agregadoUnidades?.habitaciones ?? {})[h.id] ?? 0}
+                          </span>
+                        </div>
                       ))}
                     </div>
                   </GrupoAcordeon>
                 </div>
               ))}
+              <p className="px-3 py-2 text-xs text-muted-foreground">
+                Editable desde cada unidad (sección «Unidades» / portada de Propiedades).
+              </p>
             </div>
           )}
 
-          {/* ─── Camas ─── */}
+          {/* ─── Camas (SOLO LECTURA: agregado de las unidades) ─── */}
           {tipo === 'camas' && (
             <div className="rounded-xl border p-1">
               <div className="divide-y">
                 {CAMAS_CATALOGO_HOSPEDAJE.map((cama) => (
-                  <div key={cama.id} className="flex items-center gap-3 px-2 py-1.5">
-                    <span className="flex-1 text-sm">{cama.label}</span>
-                    <div className="w-40 shrink-0">
-                      <FilaContador
-                        label=""
-                        valor={camas[cama.id] ?? 0}
-                        onDelta={(delta) =>
-                          setCamas((prev) => ({
-                            ...prev,
-                            [cama.id]: Math.max(0, (prev[cama.id] ?? 0) + delta),
-                          }))
-                        }
-                      />
-                    </div>
+                  <div key={cama.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                    <span>{cama.label}</span>
+                    <span className="tabular-nums text-muted-foreground">
+                      ×{(draft.agregadoUnidades?.camas ?? {})[cama.id] ?? 0}
+                    </span>
                   </div>
                 ))}
               </div>
+              <p className="px-3 py-2 text-xs text-muted-foreground">
+                Editable desde cada unidad (sección «Unidades» / portada de Propiedades).
+              </p>
             </div>
           )}
 
@@ -503,16 +493,18 @@ function chipsPorTipo(pares: Array<readonly [string, number]> | null): string[] 
 }
 
 function resumenHabitacionesHospedaje(d: DraftHospedaje): string {
-  const total = sumarContadores(d.detalle.habitaciones);
-  if (total === 0) return 'Sin configurar';
-  return `${total} habitación(es) configurada(s)`;
+  // Agregado de las unidades: la propiedad ya no declara las suyas.
+  const total = sumarContadores(d.agregadoUnidades?.habitaciones ?? null);
+  if (total === 0) return 'Sin configurar en las unidades';
+  return `${total} habitación(es) entre las unidades`;
 }
 
 function resumenCamasHospedaje(d: DraftHospedaje): string {
-  const total = sumarContadores(d.detalle.camas);
-  if (total === 0) return 'Sin configurar';
-  const partes = CAMAS_CATALOGO_HOSPEDAJE.filter((c) => (d.detalle.camas[c.id] ?? 0) > 0).map(
-    (c) => `${d.detalle.camas[c.id]} ${c.label.toLowerCase()}`
+  const camas = d.agregadoUnidades?.camas ?? {};
+  const total = sumarContadores(camas);
+  if (total === 0) return 'Sin configurar en las unidades';
+  const partes = CAMAS_CATALOGO_HOSPEDAJE.filter((c) => (camas[c.id] ?? 0) > 0).map(
+    (c) => `${camas[c.id]} ${c.label.toLowerCase()}`
   );
   return partes.length > 0 ? partes.join(', ') : `${total} cama(s)`;
 }
@@ -570,19 +562,19 @@ export function VistaGlobalHospedaje({
           icono={<User className="h-5 w-5 text-muted-foreground" />}
           titulo="Habitaciones"
           resumen={resumenHabitacionesHospedaje(draft)}
-          detalle={chipsPorTipo(detalleHabitacionesHospedaje(draft.detalle))}
+          detalle={chipsPorTipo(detalleHabitacionesHospedaje(draft.agregadoUnidades))}
           onClick={() => abrirModal('habitaciones')}
         />
         <TarjetaResumen
           icono={<ChevronRight className="h-5 w-5 text-muted-foreground" />}
           titulo="Distribución de las camas"
           resumen={resumenCamasHospedaje(draft)}
-          detalle={chipsPorTipo(detalleCamasHospedaje(draft.detalle))}
+          detalle={chipsPorTipo(detalleCamasHospedaje(draft.agregadoUnidades))}
           onClick={() => abrirModal('camas')}
         />
         <TarjetaResumen
           icono={<Search className="h-5 w-5 text-muted-foreground" />}
-          titulo="Servicios y equipamiento"
+          titulo="Áreas comunes e instalaciones"
           resumen={resumenServiciosHospedaje(draft)}
           onClick={() => abrirModal('servicios')}
         />

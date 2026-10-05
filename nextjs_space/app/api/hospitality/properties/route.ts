@@ -10,6 +10,7 @@ import { logAuditAction } from '@/lib/permissions';
 import { politicaEfectiva } from '@/lib/hospitality/no-show';
 import { politicaSalidaAnticipadaEfectiva } from '@/lib/hospitality/checkout';
 import { holdHorasEfectivas } from '@/lib/hospitality/holds';
+import { encogerDetalleAServicios } from '@/lib/hospitality/unit-detalle';
 
 // GET /api/hospitality/properties — listar propiedades del tenant
 export async function GET(req: NextRequest) {
@@ -61,12 +62,18 @@ export async function POST(req: NextRequest) {
     const {
       nombre, descripcion, codigo, zona, direccion, ciudad, estadoProvincia,
       pais, cp, latitud, longitud, fotos, timezone, estado, unidades, politicaNoShow,
-      politicaSalidaAnticipada, holdHoras,
+      politicaSalidaAnticipada, holdHoras, detalleAlojamiento,
     } = data || {};
 
     if (!nombre || !nombre.trim()) {
       return NextResponse.json({ error: 'El nombre es requerido' }, { status: 400 });
     }
+
+    // Detalle del COMPLEJO: solo servicios (áreas comunes); el módulo puro
+    // descarta habitaciones/camas que llegaran por error. Vacío = DbNull
+    // (el centinela de JSONB que exige Prisma para escribir null).
+    const detalleSoloServicios =
+      detalleAlojamiento !== undefined ? encogerDetalleAServicios(detalleAlojamiento) : undefined;
 
     const property = await prisma.hospitalityProperty.create({
       data: {
@@ -94,6 +101,13 @@ export async function POST(req: NextRequest) {
         // Ventana de caducidad de los holds `pending` (0 = sin caducidad).
         // Un valor inválido cae en el defecto (24 h).
         holdHoras: holdHorasEfectivas(holdHoras),
+        // Detalle del COMPLEJO: solo servicios (áreas comunes) o DbNull.
+        detalleAlojamiento:
+          detalleSoloServicios !== undefined
+            ? detalleSoloServicios
+              ? (detalleSoloServicios as Prisma.InputJsonValue)
+              : Prisma.DbNull
+            : undefined,
       },
     });
 

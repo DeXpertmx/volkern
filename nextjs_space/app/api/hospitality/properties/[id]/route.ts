@@ -13,6 +13,7 @@ import {
 } from '@/lib/hospitality/checkout';
 import { notificarCambioSalidaAnticipada } from '@/lib/hospitality/checkout-avisos';
 import { esHoldHorasValidas } from '@/lib/hospitality/holds';
+import { encogerDetalleAServicios, agregarDetallesUnidades } from '@/lib/hospitality/unit-detalle';
 
 interface Params {
   params: Promise<{ id: string }> | { id: string };
@@ -38,7 +39,12 @@ export async function GET(_req: NextRequest, ctx: Params) {
     const property = await getProperty(auth.tenant!.id, id);
     if (!property) return NextResponse.json({ error: 'Propiedad no encontrada' }, { status: 404 });
 
-    return NextResponse.json({ property });
+    // Habitaciones y camas como AGREGADO de las unidades (solo lectura): la
+    // distribución vive en cada unidad (`HospitalityUnit.detalleAlojamiento`),
+    // la ficha del complejo la muestra sumada. `null` si ninguna declara nada.
+    const detalleAgregado = agregarDetallesUnidades(property.units ?? []);
+
+    return NextResponse.json({ property, detalleAgregado });
   } catch (error) {
     console.error('Error obteniendo propiedad:', error);
     return NextResponse.json({ error: 'Error al obtener propiedad' }, { status: 500 });
@@ -181,37 +187,17 @@ export async function PATCH(req: NextRequest, ctx: Params) {
         ? { ...((existing.sesHospedajes as Record<string, unknown>) || {}), ...(sesEntrante as Record<string, unknown>) }
         : undefined;
 
-    // Detalle declarado del alojamiento (Vista global del editor): habitaciones,
-    // camas y servicios según los catálogos del editor. Se sanea antes de
-    // persistir: el JSONB acepta cualquier forma y un mapa corrupto rompería
-    // los contadores. `null` limpia el detalle; forma inválida no toca nada.
-    const contadoresSanos = (valor: unknown): Record<string, number> => {
-      if (!valor || typeof valor !== 'object' || Array.isArray(valor)) return {};
-      const salida: Record<string, number> = {};
-      for (const [clave, n] of Object.entries(valor as Record<string, unknown>)) {
-        const num = Number(n);
-        if (clave.length > 0 && Number.isInteger(num) && num >= 0) salida[clave] = num;
-      }
-      return salida;
-    };
+    // Detalle declarado del complejo (Vista global del editor): SOLO servicios
+    // (áreas comunes e instalaciones); la normalización vive en el módulo puro
+    // `unit-detalle.ts`. `null` limpia; forma inválida no toca nada.
+    // El detalle de la propiedad SOLO lleva servicios (áreas comunes e
+    // instalaciones del complejo). Habitaciones y camas son de cada unidad:
+    // lo que llegue de ellas aquí se descarta — la ficha de la propiedad las
+    // muestra como AGREGADO de sus unidades, nunca como valor propio.
     let detalleFinal: Prisma.InputJsonValue | null | undefined;
     if (detalleAlojamiento !== undefined) {
-      if (detalleAlojamiento === null) {
-        detalleFinal = null;
-      } else if (detalleAlojamiento && typeof detalleAlojamiento === 'object' && !Array.isArray(detalleAlojamiento)) {
-        const d = detalleAlojamiento as Record<string, unknown>;
-        const habitaciones = contadoresSanos(d.habitaciones);
-        const camas = contadoresSanos(d.camas);
-        const servicios = Array.isArray(d.servicios)
-          ? d.servicios.filter((s): s is string => typeof s === 'string')
-          : [];
-        detalleFinal =
-          Object.keys(habitaciones).length > 0 ||
-          Object.keys(camas).length > 0 ||
-          servicios.length > 0
-            ? ({ habitaciones, camas, servicios } as Prisma.InputJsonValue)
-            : null;
-      }
+      const soloServicios = encogerDetalleAServicios(detalleAlojamiento);
+      detalleFinal = soloServicios ? (soloServicios as Prisma.InputJsonValue) : null;
     }
 
     const property = await prisma.hospitalityProperty.update({
