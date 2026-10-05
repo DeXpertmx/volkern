@@ -2,8 +2,10 @@
 
 > Contexto interno: el proveedor pidió «can you please share the API endpoint in use along with the
 > payload and we will diagnose it for you». Este borrador cubre las dos direcciones. Datos tomados de
-> `HospitalitySyncLog` en producción (último error 2026-09-30 13:46, HTTP 500 «Channel not live
-> (res_out)») y del código (`lib/hospitality/connectivity.ts`, `reconciliation.ts`).
+> `HospitalitySyncLog` + `AuditLog` en producción (último error de `/data` 2026-09-30 13:46, HTTP 500
+> «Channel not live (res_out)»; y health-check diario `property_details` en **HTTP 400 desde el
+> 2026-10-01** — según su contrato, «Partner is disabled!» responde 400) y del código
+> (`lib/hospitality/connectivity.ts`, `reconciliation.ts`).
 > Sustituir `{partner-id}` por el ID de socio que emitieron en el onboarding. No incluir credenciales.
 
 ---
@@ -44,9 +46,10 @@ Notes that may help your diagnosis:
 
 - **The same endpoint with the same `hotelCode` succeeded earlier the same day** (07:00) and returned a reservation list; it failed at 13:46.
 - **Pushes to the same `hotelCode` work**: `POST /api/v2/cm/update/{partner-id}` and `POST /api/v2/cm/update-rates/{partner-id}` returned `200 {"success": true, "message": "Request Received Successfully"}` as recently as 2026-09-28.
-- We have received no successful `/data` response since 2026-09-30 13:46; our scheduler has produced no further calls since then (we are reviewing that on our side as well).
+- Our daily catalog probe — `GET /api/v2/cm/property_details/sandbox-pms?partnerId={partner-id}` with the same Basic pair — returned **HTTP 400** every day since 2026-10-01 (it was 200 OK through 2026-09-30). Per your documentation, a disabled partner answers `400 {"success": false, "message": "Partner is disabled!"}` — that is our main suspicion for both symptoms.
+- The failing call above is the only traffic we send beyond the probe; with the probe failing, our scheduler has stopped calling `/data` as well.
 
-Could you check what makes the **res_out** reservation feed report «Channel not live» for `sandbox-pms`, and whether anything changed on that hotel/channel around 2026-09-30?
+Could you check whether anything changed on our **partner/hotel status around 2026-09-30** (disabled partner, expired trial, channel turned off for `sandbox-pms`), and what makes the **res_out** reservation feed report «Channel not live»?
 
 ## 2. Complete list of endpoints we currently call
 
