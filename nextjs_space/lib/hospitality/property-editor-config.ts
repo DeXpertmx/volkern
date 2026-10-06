@@ -22,6 +22,7 @@
 
 import {
   agregarDetallesUnidades,
+  normalizarDetalleUnidad,
   type DetalleUnidad,
 } from './unit-detalle';
 
@@ -960,3 +961,254 @@ export function infoCamaHospedaje(id: string): HabitacionHospedajeCatalogo | und
 export function labelDeHabitacionHospedaje(id: string): string {
   return infoHabitacionHospedaje(id)?.label ?? infoCamaHospedaje(id)?.label ?? id;
 }
+
+// ─── Editor de unidad por secciones ──────────────────────────────────────────
+
+/**
+ * El reencuadre (migración 20261006120000) puso la distribución del
+ * alojamiento en cada unidad: estas piezas portan a la UNIDAD la misma
+ * experiencia guiada que tiene la propiedad (secciones con estado, progreso y
+ * vista global con tarjetas resumen). Puro y sin Prisma, como el resto del
+ * módulo, para que lo use el navegador y los tests sin arrastrar la BD.
+ */
+
+/** Secciones del editor de unidad. */
+export type SeccionUnidadHospedaje =
+  | 'general'
+  | 'basico'
+  | 'espacio'
+  | 'amenidades'
+  | 'fotos'
+  | 'tarifas';
+
+export interface SeccionUnidadHospedajeInfo {
+  id: SeccionUnidadHospedaje;
+  grupo: string;
+  label: string;
+}
+
+/** Secciones del editor de unidad, en orden de presentación. */
+export const SECCIONES_UNIDAD_HOSPEDAJE: readonly SeccionUnidadHospedajeInfo[] = [
+  { id: 'general', grupo: 'Vista global', label: 'Vista global' },
+  { id: 'basico', grupo: 'Detalles de la unidad', label: 'Nombre y descripción' },
+  { id: 'espacio', grupo: 'Detalles de la unidad', label: 'Habitaciones y camas' },
+  { id: 'amenidades', grupo: 'Detalles de la unidad', label: 'Amenidades' },
+  { id: 'fotos', grupo: 'Detalles de la unidad', label: 'Fotos' },
+  { id: 'tarifas', grupo: 'Configuración de reserva', label: 'Tarifa y estado' },
+];
+
+/** Primera sección del editor de unidad: la Vista global. */
+export const PRIMERA_SECCION_UNIDAD: SeccionUnidadHospedaje = 'general';
+
+/** Unidad tal como la devuelven `/api/hospitality/units` y `/units/[id]`. */
+export interface UnitWireFull {
+  id: string;
+  propertyId: string;
+  nombre: string;
+  codigo?: string | null;
+  tipo?: string | null;
+  capacidad?: number | null;
+  tarifaBase?: number | null;
+  moneda?: string | null;
+  descripcion?: string | null;
+  /** La API guarda URLs sueltas (string[]); un objeto { url } de clientes ricos aporta la URL. */
+  fotos?: unknown;
+  amenidades?: unknown;
+  /** Detalle declarado de ESTA unidad: habitaciones y camas (módulo unit-detalle). */
+  detalleAlojamiento?: unknown;
+  estado?: string | null;
+  property?: { id?: string; nombre?: string } | null;
+}
+
+/** URLs de fotos de una unidad, saneadas desde strings u objetos `{ url }`. */
+export function fotosUnidadDe(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const salida: string[] = [];
+  for (const f of raw) {
+    if (typeof f === 'string') {
+      if (f.length > 0) salida.push(f);
+    } else if (f && typeof f === 'object' && 'url' in f) {
+      const url = (f as { url?: unknown }).url;
+      if (typeof url === 'string' && url.length > 0) salida.push(url);
+    }
+  }
+  return salida;
+}
+
+/** Amenidades de una unidad saneadas: strings no vacíos, sin duplicados. */
+export function amenidadesUnidadDe(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const salida: string[] = [];
+  for (const a of raw) {
+    if (typeof a === 'string' && a.trim().length > 0 && !salida.includes(a)) salida.push(a);
+  }
+  return salida;
+}
+
+/** Borrador editable de una unidad (inputs como strings, como el de propiedad). */
+export interface DraftUnidadHospedaje {
+  nombre: string;
+  codigo: string;
+  tipo: string;
+  descripcion: string;
+  capacidad: string;
+  estado: string;
+  tarifaBase: string;
+  moneda: string;
+  amenidades: string[];
+  fotos: string[];
+  /** Distribución de ESTA unidad: contadores por id de catálogo. */
+  habitaciones: Record<string, number>;
+  camas: Record<string, number>;
+}
+
+/** Convierte la unidad de la API en borrador editable. */
+export function borradorDesdeUnidad(u: UnitWireFull): DraftUnidadHospedaje {
+  const detalle = normalizarDetalleUnidad(u.detalleAlojamiento);
+  return {
+    nombre: u.nombre || '',
+    codigo: u.codigo || '',
+    tipo: u.tipo || 'apartamento',
+    descripcion: u.descripcion || '',
+    capacidad: u.capacidad != null ? String(u.capacidad) : '2',
+    estado: u.estado || 'available',
+    tarifaBase: u.tarifaBase != null ? String(u.tarifaBase) : '',
+    moneda: u.moneda || 'EUR',
+    amenidades: amenidadesUnidadDe(u.amenidades),
+    fotos: fotosUnidadDe(u.fotos),
+    habitaciones: detalle?.habitaciones ?? {},
+    camas: detalle?.camas ?? {},
+  };
+}
+
+/** ¿Hay algo declarado en la distribución de la unidad? (vacío → JSONB null). */
+export function hayEspacioUnidad(
+  d: Pick<DraftUnidadHospedaje, 'habitaciones' | 'camas'>
+): boolean {
+  return sumarContadores(d.habitaciones) > 0 || sumarContadores(d.camas) > 0;
+}
+
+/**
+ * Payload del PATCH de la unidad desde el borrador: mismas decisiones que la
+ * portada (vacío limpia: descripción → null, tarifa inválida → null, detalle
+ * vacío → null; la API normaliza y audita). Sin `propertyId`: no se mueve
+ * la unidad de propiedad desde el editor guiado.
+ */
+export function payloadDesdeBorradorUnidad(d: DraftUnidadHospedaje): Record<string, unknown> {
+  const capacidad = Number(d.capacidad);
+  const tarifa = d.tarifaBase.trim() === '' ? NaN : Number(d.tarifaBase);
+  return {
+    nombre: d.nombre.trim(),
+    codigo: d.codigo.trim() || null,
+    tipo: d.tipo,
+    descripcion: d.descripcion.trim() ? d.descripcion.trim() : null,
+    capacidad: Number.isFinite(capacidad) && capacidad > 0 ? Math.floor(capacidad) : 2,
+    estado: d.estado,
+    tarifaBase: Number.isFinite(tarifa) && tarifa >= 0 ? tarifa : null,
+    moneda: d.moneda,
+    amenidades: d.amenidades,
+    fotos: d.fotos,
+    detalleAlojamiento: hayEspacioUnidad(d)
+      ? { habitaciones: d.habitaciones, camas: d.camas }
+      : null,
+  };
+}
+
+/** ¿Está completa cada sección? Criterio «publicable», como en la propiedad. */
+export function estadoSeccionesUnidadHospedaje(
+  d: Pick<
+    DraftUnidadHospedaje,
+    'nombre' | 'descripcion' | 'habitaciones' | 'camas' | 'amenidades' | 'fotos' | 'tarifaBase'
+  >
+): Record<SeccionUnidadHospedaje, boolean> {
+  const texto = (v: unknown) => (typeof v === 'string' && v.trim().length > 0 ? v.trim() : null);
+  const tarifa = Number(d.tarifaBase);
+  return {
+    // La vista global exige lo mínimo vendible: identidad y algo de espacio.
+    general: Boolean(texto(d.nombre) && texto(d.descripcion) && hayEspacioUnidad(d)),
+    basico: Boolean(texto(d.nombre) && texto(d.descripcion)),
+    espacio: hayEspacioUnidad(d),
+    amenidades: (d.amenidades?.length ?? 0) > 0,
+    fotos: (d.fotos?.length ?? 0) > 0,
+    tarifas: Number.isFinite(tarifa) && tarifa > 0,
+  };
+}
+
+/** Progreso de la unidad en porcentaje entero 0–100. */
+export function progresoUnidadHospedaje(
+  d: Parameters<typeof estadoSeccionesUnidadHospedaje>[0]
+): number {
+  const estado = estadoSeccionesUnidadHospedaje(d);
+  const claves = Object.keys(estado) as SeccionUnidadHospedaje[];
+  const completas = claves.filter((k) => estado[k]).length;
+  return Math.round((completas / claves.length) * 100);
+}
+
+/** Resumen de la tarjeta de habitaciones: «Sin configurar» / «2 habitaciones». */
+export function resumenHabitacionesUnidad(
+  d: Pick<DraftUnidadHospedaje, 'habitaciones'>
+): string {
+  const n = sumarContadores(d.habitaciones);
+  if (n === 0) return 'Sin configurar';
+  return `${n} ${n === 1 ? 'habitación' : 'habitaciones'}`;
+}
+
+/** Resumen de la tarjeta de camas: «1 Cama doble, 2 Camas individuales». */
+export function resumenCamasUnidad(d: Pick<DraftUnidadHospedaje, 'camas'>): string {
+  const camas = d.camas ?? {};
+  const total = sumarContadores(camas);
+  if (total === 0) return 'Sin configurar';
+  const partes = CAMAS_CATALOGO_HOSPEDAJE.filter((c) => (camas[c.id] ?? 0) > 0).map(
+    (c) => `${camas[c.id]} ${c.label.toLowerCase()}`
+  );
+  return partes.length > 0 ? partes.join(', ') : `${total} cama(s)`;
+}
+
+/** Resumen de la tarjeta de amenidades: «Sin configurar» / «5 amenidades». */
+export function resumenAmenidadesUnidad(
+  d: Pick<DraftUnidadHospedaje, 'amenidades'>
+): string {
+  const n = d.amenidades?.length ?? 0;
+  if (n === 0) return 'Sin configurar';
+  return `${n} ${n === 1 ? 'amenidad' : 'amenidades'}`;
+}
+
+/** Resumen de la tarjeta de tarifa: «200 EUR / noche · Disponible». */
+export function resumenTarifaUnidad(
+  d: Pick<DraftUnidadHospedaje, 'tarifaBase' | 'moneda' | 'estado'>
+): string {
+  const tarifa = Number(d.tarifaBase);
+  const estadoLabel =
+    ESTADOS_UNIDAD_HOSPEDAJE.find((e) => e.value === d.estado)?.label ?? d.estado ?? '';
+  const parteTarifa =
+    d.tarifaBase.trim() !== '' && Number.isFinite(tarifa) && tarifa > 0
+      ? `${tarifa} ${d.moneda} / noche`
+      : 'Sin tarifa';
+  return estadoLabel ? `${parteTarifa} · ${estadoLabel}` : parteTarifa;
+}
+
+/**
+ * Amenidades seleccionables de una unidad (las de la portada, elevadas aquí
+ * para que el editor guiado y la portada no deriven en catálogos distintos).
+ */
+export const AMENIDADES_UNIDAD_CATALOGO: readonly string[] = [
+  'Wifi',
+  'Aire acondicionado',
+  'Alberca',
+  'Jacuzzi',
+  'Cocina completa',
+  'Lavadora',
+  'Estacionamiento',
+  'TV cable',
+  'Vista al mar',
+  'Terraza',
+  'Parrilla',
+  'Gym',
+  'Pet friendly',
+  'Cuna',
+  'Caja fuerte',
+  'Escritorio',
+];
+
+/** Divisas del selector de tarifa de la unidad: las mismas que permite `lib/moneda`. */
+export const MONEDAS_UNIDAD_CATALOGO: readonly string[] = ['MXN', 'USD', 'EUR', 'COP'];

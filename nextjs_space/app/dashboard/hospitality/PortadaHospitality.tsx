@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   Building2,
@@ -34,8 +35,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AccionHospitality } from '@/components/hospitality/AccionHospitality';
-import { MONEDAS_SELECCIONABLES, monedaEfectiva } from '@/lib/moneda';
-import { useMonedaTenant } from '@/lib/use-moneda-tenant';
 import AvisoIncidenciasConectividad from '@/components/hospitality/aviso-incidencias-conectividad';
 import {
   POLITICAS_NO_SHOW,
@@ -56,12 +55,8 @@ import {
   HOLD_HORAS_MAXIMO,
   holdHorasEfectivas,
 } from '@/lib/hospitality/holds';
+import { normalizarDetalleUnidad } from '@/lib/hospitality/unit-detalle';
 import {
-  normalizarDetalleUnidad,
-} from '@/lib/hospitality/unit-detalle';
-import {
-  HABITACIONES_GRUPOS_HOSPEDAJE,
-  CAMAS_CATALOGO_HOSPEDAJE,
   labelDeHabitacionHospedaje,
   detalleHabitacionesHospedaje,
   detalleCamasHospedaje,
@@ -114,11 +109,6 @@ interface Unit {
 }
 
 const TIPOS_UNIDAD = ['apartamento', 'habitacion', 'casa', 'villa', 'estudio', 'loft', 'bungalow', 'otro'];
-const AMENIDADES_DISPONIBLES = [
-  'Wifi', 'Aire acondicionado', 'Alberca', 'Jacuzzi', 'Cocina completa', 'Lavadora',
-  'Estacionamiento', 'TV cable', 'Vista al mar', 'Terraza', 'Parrilla', 'Gym',
-  'Pet friendly', 'Cuna', 'Caja fuerte', 'Escritorio',
-];
 
 const ESTADO_UNIDAD_LABEL: Record<string, string> = {
   available: 'Disponible',
@@ -182,18 +172,15 @@ const EMPTY_PROPERTY_FORM = {
   servicios: [] as string[],
 };
 
+/**
+ * Alta MÍNIMA de unidad: identidad básica solamente. La edición completa
+ * (descripción, distribución de habitaciones y camas, amenidades, fotos y
+ * tarifa) vive en el editor guiado (?unit=<id>), con el mismo UX por
+ * secciones que la propiedad — el modal denso que mezclaba todo era
+ * inmanejable junto al de propiedad.
+ */
 const EMPTY_UNIT_FORM = {
   propertyId: '', nombre: '', codigo: '', tipo: 'apartamento', capacidad: '2',
-  // La divisa la pone `openNewUnit` con la moneda de reporte del tenant: el
-  // formulario no nace en una divisa que nadie eligió.
-  tarifaBase: '', moneda: '', descripcion: '', fotos: [] as string[],
-  amenidades: [] as string[], estado: 'available',
-  // Distribución de ESTA unidad: contadores por id del catálogo (módulo
-  // unit-detalle). Habitaciones y camas son de la unidad, no de la propiedad.
-  detalle: {
-    habitaciones: {} as Record<string, number>,
-    camas: {} as Record<string, number>,
-  },
 };
 
 /**
@@ -203,8 +190,7 @@ const EMPTY_UNIT_FORM = {
  * alternar entre esta vista y el editor por secciones según `?edit=<id>`.
  */
 export default function PortadaHospitality() {
-  /** Moneda de reporte del tenant: la divisa con la que nace una unidad nueva. */
-  const monedaTenant = useMonedaTenant();
+  const router = useRouter();
   const [tab, setTab] = useState('propiedades');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -225,10 +211,9 @@ export default function PortadaHospitality() {
   const [fotoUrl, setFotoUrl] = useState('');
   const [unidadesIniciales, setUnidadesIniciales] = useState<Array<{ nombre: string; codigo: string; tipo: string; capacidad: string; tarifaBase: string }>>([]);
 
-  // Dialog unidad
+  // Dialog unidad: SOLO alta mínima; la edición completa es el editor guiado.
   const [unitDialog, setUnitDialog] = useState<{ open: boolean; editing: Unit | null }>({ open: false, editing: null });
   const [unitForm, setUnitForm] = useState<typeof EMPTY_UNIT_FORM>({ ...EMPTY_UNIT_FORM });
-  const [unitFotoUrl, setUnitFotoUrl] = useState('');
 
   // Confirmación de borrado
   const [deleteTarget, setDeleteTarget] = useState<{ kind: 'property' | 'unit'; id: string; nombre: string } | null>(null);
@@ -307,30 +292,30 @@ export default function PortadaHospitality() {
     }
     setSaving(true);
     try {
-      const url = unitDialog.editing
-        ? `/api/hospitality/units/${unitDialog.editing.id}`
-        : '/api/hospitality/units';
-      const res = await fetch(url, {
-        method: unitDialog.editing ? 'PATCH' : 'POST',
+      // Alta mínima: la API resuelve moneda y defaults; el resto del fichaje
+      // (descripción, distribución, amenidades, fotos, tarifa) lo completa el
+      // editor guiado con autosave.
+      const res = await fetch('/api/hospitality/units', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...unitForm,
+          propertyId: unitForm.propertyId,
+          nombre: unitForm.nombre,
+          codigo: unitForm.codigo || undefined,
+          tipo: unitForm.tipo,
           capacidad: Number(unitForm.capacidad) || 2,
-          tarifaBase: unitForm.tarifaBase || null,
-          // Distribución de ESTA unidad (habitaciones/camas); vacío = null.
-          detalleAlojamiento:
-            Object.keys(unitForm.detalle.habitaciones).length > 0 ||
-            Object.keys(unitForm.detalle.camas).length > 0
-              ? unitForm.detalle
-              : null,
         }),
       });
       const data = await res.json();
       if (res.ok) {
-        toast.success(unitDialog.editing ? 'Unidad actualizada' : 'Unidad creada');
+        toast.success('Unidad creada');
         setUnitDialog({ open: false, editing: null });
         setUnitForm({ ...EMPTY_UNIT_FORM, propertyId: properties[0]?.id || '' });
         await loadAll();
+        // Aterrizamos en el editor guiado para completar la ficha.
+        if (data.unit?.id) {
+          router.push(`/dashboard/hospitality?unit=${data.unit.id}`, { scroll: false });
+        }
       } else {
         toast.error(data.error || 'Error al guardar');
       }
@@ -403,87 +388,32 @@ export default function PortadaHospitality() {
   };
 
   const openNewUnit = () => {
-    setUnitForm({
-      ...EMPTY_UNIT_FORM,
-      propertyId: properties[0]?.id || '',
-      // La misma precedencia que aplica la API al crear una unidad (la del
-      // inventario que ya existe y, si no, la del tenant). Si no hay ninguna,
-      // el campo va vacío y la resuelve el servidor: el mínimo del esquema no
-      // viaja como si fuera una divisa elegida.
-      moneda: monedaEfectiva(
-        units.map((u) => u.moneda),
-        monedaTenant
-      ),
-    });
+    setUnitForm({ ...EMPTY_UNIT_FORM, propertyId: properties[0]?.id || '' });
     setUnitDialog({ open: true, editing: null });
   };
 
+  // La edición completa de la unidad es el editor guiado (mismo UX que la
+  // propiedad): el modal denso de la portada ya no la edita.
   const openEditUnit = (u: Unit) => {
-    setUnitForm({
-      propertyId: u.propertyId,
-      nombre: u.nombre,
-      codigo: u.codigo || '',
-      tipo: u.tipo,
-      capacidad: String(u.capacidad),
-      tarifaBase: u.tarifaBase != null ? String(u.tarifaBase) : '',
-      moneda: u.moneda,
-      descripcion: u.descripcion || '',
-      fotos: u.fotos || [],
-      amenidades: u.amenidades || [],
-      estado: u.estado,
-      detalle: {
-        habitaciones: normalizarDetalleUnidad(u.detalleAlojamiento)?.habitaciones ?? {},
-        camas: normalizarDetalleUnidad(u.detalleAlojamiento)?.camas ?? {},
-      },
-    });
-    setUnitDialog({ open: true, editing: u });
+    router.push(`/dashboard/hospitality?unit=${u.id}`, { scroll: false });
   };
 
-  const addFoto = (target: 'property' | 'unit') => {
-    const url = (target === 'property' ? fotoUrl : unitFotoUrl).trim();
+  const addFoto = (target: 'property') => {
+    const url = fotoUrl.trim();
     if (!url) return;
     if (!/^https?:\/\//i.test(url)) {
       toast.error('La URL de la foto debe empezar por http(s)://');
       return;
     }
-    if (target === 'property') {
-      setPropertyForm((f) => ({ ...f, fotos: [...f.fotos, url].slice(0, 10) }));
-      setFotoUrl('');
-    } else {
-      setUnitForm((f) => ({ ...f, fotos: [...f.fotos, url].slice(0, 10) }));
-      setUnitFotoUrl('');
-    }
+    setPropertyForm((f) => ({ ...f, fotos: [...f.fotos, url].slice(0, 10) }));
+    setFotoUrl('');
   };
 
-  const removeFoto = (target: 'property' | 'unit', idx: number) => {
+  const removeFoto = (target: 'property', idx: number) => {
     if (target === 'property') {
       setPropertyForm((f) => ({ ...f, fotos: f.fotos.filter((_, i) => i !== idx) }));
-    } else {
-      setUnitForm((f) => ({ ...f, fotos: f.fotos.filter((_, i) => i !== idx) }));
     }
   };
-
-  const toggleAmenidad = (a: string) => {
-    setUnitForm((f) => ({
-      ...f,
-      amenidades: f.amenidades.includes(a) ? f.amenidades.filter((x) => x !== a) : [...f.amenidades, a],
-    }));
-  };
-
-  // Contadores de la distribución de la unidad: +1 por clic, − para quitar.
-  const detalleAdd = (grupo: 'habitaciones' | 'camas', id: string) =>
-    setUnitForm((f) => ({
-      ...f,
-      detalle: { ...f.detalle, [grupo]: { ...f.detalle[grupo], [id]: (f.detalle[grupo][id] ?? 0) + 1 } },
-    }));
-  const detalleSub = (grupo: 'habitaciones' | 'camas', id: string) =>
-    setUnitForm((f) => {
-      const mapa = { ...f.detalle[grupo] };
-      const n = (mapa[id] ?? 0) - 1;
-      if (n <= 0) delete mapa[id];
-      else mapa[id] = n;
-      return { ...f, detalle: { ...f.detalle, [grupo]: mapa } };
-    });
 
   const toggleServicioComun = (s: string) => {
     setPropertyForm((f) => ({
@@ -1032,42 +962,46 @@ export default function PortadaHospitality() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog Unidad */}
+      {/* Dialog Unidad: SOLO alta mínima. La edición completa (descripción,
+          distribución de habitaciones y camas, amenidades, fotos y tarifa)
+          vive en el editor guiado ?unit=<id>, con el mismo UX por secciones
+          que la propiedad. */}
       <Dialog open={unitDialog.open} onOpenChange={(open) => setUnitDialog({ open, editing: unitDialog.editing })}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{unitDialog.editing ? 'Editar Unidad' : 'Nueva Unidad'}</DialogTitle>
+            <DialogTitle>Nueva Unidad</DialogTitle>
             <DialogDescription>
-              Unidad alojativa reservable dentro de una propiedad
+              Crea la unidad y te llevamos al editor guiado para completar su ficha
+              (habitaciones, camas, amenidades, fotos y tarifa).
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="u-propiedad">Propiedad *</Label>
-                <Select value={unitForm.propertyId} onValueChange={(v) => setUnitForm({ ...unitForm, propertyId: v })}>
-                  <SelectTrigger id="u-propiedad"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {properties.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="u-propiedad">Propiedad *</Label>
+              <Select value={unitForm.propertyId} onValueChange={(v) => setUnitForm({ ...unitForm, propertyId: v })}>
+                <SelectTrigger id="u-propiedad"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {properties.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="u-nombre">Nombre *</Label>
                 <Input id="u-nombre" value={unitForm.nombre} onChange={(e) => setUnitForm({ ...unitForm, nombre: e.target.value })} placeholder="Ej: Suite Océano 101" />
               </div>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="u-codigo">Código</Label>
                 <Input id="u-codigo" value={unitForm.codigo} onChange={(e) => setUnitForm({ ...unitForm, codigo: e.target.value })} placeholder="Ej: SUI-101" />
               </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="u-tipo">Tipo</Label>
+                <Label>Tipo</Label>
                 <Select value={unitForm.tipo} onValueChange={(v) => setUnitForm({ ...unitForm, tipo: v })}>
-                  <SelectTrigger id="u-tipo"><SelectValue /></SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {TIPOS_UNIDAD.map((t) => (
                       <SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>
@@ -1079,149 +1013,14 @@ export default function PortadaHospitality() {
                 <Label htmlFor="u-capacidad">Capacidad</Label>
                 <Input id="u-capacidad" type="number" min={1} value={unitForm.capacidad} onChange={(e) => setUnitForm({ ...unitForm, capacidad: e.target.value })} />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="u-estado">Estado</Label>
-                <Select value={unitForm.estado} onValueChange={(v) => setUnitForm({ ...unitForm, estado: v })}>
-                  <SelectTrigger id="u-estado"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(ESTADO_UNIDAD_LABEL).map(([k, v]) => (
-                      <SelectItem key={k} value={k}>{v}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="u-tarifa">Tarifa base ({unitForm.moneda})</Label>
-                <Input id="u-tarifa" type="number" min={0} value={unitForm.tarifaBase} onChange={(e) => setUnitForm({ ...unitForm, tarifaBase: e.target.value })} placeholder="Ej: 2500" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="u-moneda">Moneda</Label>
-                <Select value={unitForm.moneda} onValueChange={(v) => setUnitForm({ ...unitForm, moneda: v })}>
-                  <SelectTrigger id="u-moneda"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {MONEDAS_SELECCIONABLES.map((m) => (
-                      <SelectItem key={m} value={m}>{m}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="u-descripcion">Descripción</Label>
-              <Textarea
-                id="u-descripcion"
-                value={unitForm.descripcion}
-                onChange={(e) => setUnitForm({ ...unitForm, descripcion: e.target.value })}
-                placeholder="Describe la unidad: vista, ambiente, detalles..."
-                rows={3}
-              />
-            </div>
-            {/* Distribución de ESTA unidad: habitaciones por tipo (catálogo del editor). */}
-            <div className="space-y-2">
-              <Label>Habitaciones</Label>
-              {HABITACIONES_GRUPOS_HOSPEDAJE.map((grupo) => (
-                <div key={grupo.titulo} className="space-y-1.5">
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{grupo.titulo}</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {grupo.items.map((h) => {
-                      const n = unitForm.detalle.habitaciones[h.id] ?? 0;
-                      return (
-                        <span key={h.id} className={`inline-flex items-center gap-1 rounded-full border text-xs px-2 py-1 ${n > 0 ? 'border-primary bg-primary/10' : 'bg-background text-muted-foreground'}`}>
-                          <button type="button" onClick={() => detalleAdd('habitaciones', h.id)} className="hover:text-primary">{h.label}</button>
-                          {n > 0 && (
-                            <>
-                              <span className="font-semibold">×{n}</span>
-                              <button type="button" onClick={() => detalleSub('habitaciones', h.id)} className="text-muted-foreground hover:text-destructive" aria-label={`Quitar ${h.label}`}>−</button>
-                            </>
-                          )}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-            {/* Distribución de camas de ESTA unidad. */}
-            <div className="space-y-2">
-              <Label>Distribución de camas</Label>
-              <div className="flex flex-wrap gap-1.5">
-                {CAMAS_CATALOGO_HOSPEDAJE.map((c) => {
-                  const n = unitForm.detalle.camas[c.id] ?? 0;
-                  return (
-                    <span key={c.id} className={`inline-flex items-center gap-1 rounded-full border text-xs px-2 py-1 ${n > 0 ? 'border-primary bg-primary/10' : 'bg-background text-muted-foreground'}`}>
-                      <button type="button" onClick={() => detalleAdd('camas', c.id)} className="hover:text-primary">{c.label}</button>
-                      {n > 0 && (
-                        <>
-                          <span className="font-semibold">×{n}</span>
-                          <button type="button" onClick={() => detalleSub('camas', c.id)} className="text-muted-foreground hover:text-destructive" aria-label={`Quitar ${c.label}`}>−</button>
-                        </>
-                      )}
-                    </span>
-                  );
-                })}
-              </div>
-            </div>
-            {/* Amenidades */}
-            <div className="space-y-2">
-              <Label>Amenidades</Label>
-              <div className="flex flex-wrap gap-1.5">
-                {AMENIDADES_DISPONIBLES.map((a) => (
-                  <button
-                    key={a}
-                    type="button"
-                    onClick={() => toggleAmenidad(a)}
-                    className={`text-xs rounded-full px-2.5 py-1 border transition-colors ${
-                      unitForm.amenidades.includes(a)
-                        ? 'bg-primary text-primary-foreground border-primary'
-                        : 'bg-background text-muted-foreground hover:bg-muted'
-                    }`}
-                  >
-                    {a}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {/* Fotos */}
-            <div className="space-y-2">
-              <Label>Fotos (URLs, máx. 10)</Label>
-              {unitForm.fotos.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {unitForm.fotos.map((f, i) => (
-                    <div key={i} className="relative group">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={f} alt={`foto ${i + 1}`} className="h-16 w-24 object-cover rounded border" />
-                      <button
-                        type="button"
-                        onClick={() => removeFoto('unit', i)}
-                        className="absolute -top-1.5 -right-1.5 bg-destructive text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <div className="flex gap-2">
-                <Input
-                  value={unitFotoUrl}
-                  onChange={(e) => setUnitFotoUrl(e.target.value)}
-                  placeholder="https://... (foto de la unidad)"
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addFoto('unit'); } }}
-                />
-                <Button type="button" variant="outline" size="sm" onClick={() => addFoto('unit')}>
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setUnitDialog({ open: false, editing: null })}>Cancelar</Button>
-            <AccionHospitality capacidad={unitDialog.editing ? 'reservas.editar' : 'reservas.crear'}>
+            <AccionHospitality capacidad="reservas.crear">
               <Button onClick={saveUnit} disabled={saving}>
                 {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                Guardar
+                Crear y editar ficha
               </Button>
             </AccionHospitality>
           </DialogFooter>

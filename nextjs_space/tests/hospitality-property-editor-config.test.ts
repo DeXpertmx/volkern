@@ -31,7 +31,23 @@ import {
   TIPOS_UNIDAD_HOSPEDAJE,
   ESTADOS_UNIDAD_HOSPEDAJE,
   FORM_UNIDAD_VACIO,
+  SECCIONES_UNIDAD_HOSPEDAJE,
+  PRIMERA_SECCION_UNIDAD,
+  AMENIDADES_UNIDAD_CATALOGO,
+  MONEDAS_UNIDAD_CATALOGO,
+  fotosUnidadDe,
+  amenidadesUnidadDe,
+  borradorDesdeUnidad,
+  hayEspacioUnidad,
+  payloadDesdeBorradorUnidad,
+  estadoSeccionesUnidadHospedaje,
+  progresoUnidadHospedaje,
+  resumenHabitacionesUnidad,
+  resumenCamasUnidad,
+  resumenAmenidadesUnidad,
+  resumenTarifaUnidad,
   type PropertyWire,
+  type UnitWireFull,
 } from '../lib/hospitality/property-editor-config';
 
 function vacioFormUnidad() {
@@ -436,5 +452,190 @@ describe('tarjeta de fotos de la Vista global', () => {
     expect(reordenarFotosHospedaje(null, 0, 1)).toEqual([]);
     // No muta el original
     expect(base).toEqual(['a', 'b', 'c', 'd']);
+  });
+});
+
+// ─── Editor de unidad por secciones (mismo UX que la propiedad) ──────────────
+
+function unidadWire(overrides: Partial<UnitWireFull> = {}): UnitWireFull {
+  return {
+    id: 'u-1',
+    propertyId: 'hp-1',
+    nombre: 'Suite Océano 101',
+    codigo: 'SUI-101',
+    tipo: 'apartamento',
+    capacidad: 4,
+    tarifaBase: 200,
+    moneda: 'EUR',
+    descripcion: 'Vista al mar',
+    fotos: ['https://cdn.example.com/f1.jpg', { url: 'https://cdn.example.com/f2.jpg' }],
+    amenidades: ['Wifi', 'Wifi', 'Alberca', ''],
+    detalleAlojamiento: { habitaciones: { dormitorio: 2, basura: 0 }, camas: { cama_doble: 1 } },
+    estado: 'available',
+    ...overrides,
+  };
+}
+
+describe('SECCIONES_UNIDAD_HOSPEDAJE', () => {
+  it('arranca en la vista global y tiene grupos como la propiedad', () => {
+    expect(PRIMERA_SECCION_UNIDAD).toBe('general');
+    expect(SECCIONES_UNIDAD_HOSPEDAJE[0]).toMatchObject({ id: 'general', grupo: 'Vista global' });
+    expect(SECCIONES_UNIDAD_HOSPEDAJE.map((s) => s.id)).toEqual([
+      'general',
+      'basico',
+      'espacio',
+      'amenidades',
+      'fotos',
+      'tarifas',
+    ]);
+  });
+});
+
+describe('fotosUnidadDe y amenidadesUnidadDe', () => {
+  it('sanean URLs (strings u objetos { url }) y amenidades sin duplicados', () => {
+    const u = unidadWire();
+    expect(fotosUnidadDe(u.fotos)).toEqual([
+      'https://cdn.example.com/f1.jpg',
+      'https://cdn.example.com/f2.jpg',
+    ]);
+    expect(amenidadesUnidadDe(u.amenidades)).toEqual(['Wifi', 'Alberca']);
+    expect(fotosUnidadDe(null)).toEqual([]);
+    expect(amenidadesUnidadDe('no-array')).toEqual([]);
+  });
+});
+
+describe('borradorDesdeUnidad', () => {
+  it('normaliza el detalle con el módulo unit-detalle (descarta basura y ceros)', () => {
+    const d = borradorDesdeUnidad(unidadWire());
+    expect(d.habitaciones).toEqual({ dormitorio: 2 });
+    expect(d.camas).toEqual({ cama_doble: 1 });
+    expect(d.capacidad).toBe('4');
+    expect(d.tarifaBase).toBe('200');
+    expect(d.amenidades).toEqual(['Wifi', 'Alberca']);
+  });
+
+  it('una unidad sin detalle ni tarifa nace con contadores vacíos y tarifa vacía', () => {
+    const d = borradorDesdeUnidad(unidadWire({ detalleAlojamiento: null, tarifaBase: null }));
+    expect(d.habitaciones).toEqual({});
+    expect(d.camas).toEqual({});
+    expect(d.tarifaBase).toBe('');
+  });
+});
+
+describe('hayEspacioUnidad', () => {
+  it('es false con contadores vacíos y true con cualquier contador positivo', () => {
+    expect(hayEspacioUnidad({ habitaciones: {}, camas: {} })).toBe(false);
+    expect(hayEspacioUnidad({ habitaciones: { dormitorio: 1 }, camas: {} })).toBe(true);
+    expect(hayEspacioUnidad({ habitaciones: {}, camas: { cama_doble: 2 } })).toBe(true);
+  });
+});
+
+describe('payloadDesdeBorradorUnidad', () => {
+  it('convierte a números capacidad y tarifa y limpia vacíos como la API', () => {
+    const payload = payloadDesdeBorradorUnidad({
+      ...borradorDesdeUnidad(unidadWire()),
+      capacidad: '4',
+      tarifaBase: '200',
+    });
+    expect(payload).toMatchObject({
+      nombre: 'Suite Océano 101',
+      codigo: 'SUI-101',
+      capacidad: 4,
+      tarifaBase: 200,
+      detalleAlojamiento: { habitaciones: { dormitorio: 2 }, camas: { cama_doble: 1 } },
+    });
+    // Sin propertyId: la unidad no se mueve de propiedad desde el editor.
+    expect(payload.propertyId).toBeUndefined();
+  });
+
+  it('vacío limpia: descripción/tarifa → null y detalle → null (la API pisa con DbNull)', () => {
+    const payload = payloadDesdeBorradorUnidad({
+      nombre: '  Suite  ',
+      codigo: '',
+      tipo: 'apartamento',
+      descripcion: '   ',
+      capacidad: '',
+      estado: 'available',
+      tarifaBase: 'abc',
+      moneda: 'EUR',
+      amenidades: [],
+      fotos: [],
+      habitaciones: {},
+      camas: {},
+    });
+    expect(payload).toMatchObject({
+      nombre: 'Suite',
+      codigo: null,
+      descripcion: null,
+      capacidad: 2,
+      tarifaBase: null,
+      detalleAlojamiento: null,
+    });
+  });
+});
+
+describe('estadoSeccionesUnidadHospedaje y progresoUnidadHospedaje', () => {
+  it('marca secciones por criterio publicable y calcula el progreso', () => {
+    const llena = borradorDesdeUnidad(unidadWire());
+    const estado = estadoSeccionesUnidadHospedaje(llena);
+    expect(estado).toEqual({
+      general: true,
+      basico: true,
+      espacio: true,
+      amenidades: true,
+      fotos: true,
+      tarifas: true,
+    });
+    expect(progresoUnidadHospedaje(llena)).toBe(100);
+
+    const vacia = borradorDesdeUnidad(
+      unidadWire({
+        nombre: '',
+        descripcion: null,
+        tarifaBase: null,
+        fotos: [],
+        amenidades: [],
+        detalleAlojamiento: null,
+      })
+    );
+    const estadoVacio = estadoSeccionesUnidadHospedaje(vacia);
+    expect(estadoVacio.general).toBe(false);
+    expect(estadoVacio.espacio).toBe(false);
+    expect(progresoUnidadHospedaje(vacia)).toBe(0);
+  });
+
+  it('la vista global exige identidad Y algo de espacio declarado', () => {
+    const sinEspacio = borradorDesdeUnidad(unidadWire({ detalleAlojamiento: null }));
+    expect(estadoSeccionesUnidadHospedaje(sinEspacio).general).toBe(false);
+    const sinDescripcion = borradorDesdeUnidad(unidadWire({ descripcion: '' }));
+    expect(estadoSeccionesUnidadHospedaje(sinDescripcion).general).toBe(false);
+  });
+});
+
+describe('resúmenes de la vista global de unidad', () => {
+  it('habitaciones, camas, amenidades y tarifa resumen lo declarado', () => {
+    const d = borradorDesdeUnidad(unidadWire());
+    expect(resumenHabitacionesUnidad(d)).toBe('2 habitaciones');
+    expect(resumenCamasUnidad(d)).toBe('1 cama doble');
+    expect(resumenAmenidadesUnidad(d)).toBe('2 amenidades');
+    expect(resumenTarifaUnidad(d)).toBe('200 EUR / noche · Disponible');
+  });
+
+  it('sin configurar devuelven textos nulos y la tarifa vacía dice «Sin tarifa»', () => {
+    const d = borradorDesdeUnidad(
+      unidadWire({ detalleAlojamiento: null, amenidades: [], tarifaBase: null })
+    );
+    expect(resumenHabitacionesUnidad(d)).toBe('Sin configurar');
+    expect(resumenCamasUnidad(d)).toBe('Sin configurar');
+    expect(resumenAmenidadesUnidad(d)).toBe('Sin configurar');
+    expect(resumenTarifaUnidad(d)).toBe('Sin tarifa · Disponible');
+  });
+});
+
+describe('catálogos del editor de unidad', () => {
+  it('amenidades y divisas coinciden con lo que ya usaba la portada y lib/moneda', () => {
+    expect(AMENIDADES_UNIDAD_CATALOGO).toContain('Wifi');
+    expect(AMENIDADES_UNIDAD_CATALOGO.length).toBe(16);
+    expect(MONEDAS_UNIDAD_CATALOGO).toEqual(['MXN', 'USD', 'EUR', 'COP']);
   });
 });
