@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest'
+import fs from 'node:fs'
+import path from 'node:path'
 import {
   MODULE_GROUPS,
   PERFIL_SUGGESTED_MODULES,
@@ -16,9 +18,11 @@ import { ALL_MODULES } from '@/lib/plans'
 // MODULE_GROUPS
 // ============================================================
 describe('MODULE_GROUPS', () => {
-  it('debe ser un array con exactamente 6 grupos', () => {
+  // 7 desde que Hospitality tiene grupo propio: su módulo es el producto de
+  // un hotel, no un extra, y esconderlo bajo «Extras» lo hacía irreconocible.
+  it('debe ser un array con exactamente 7 grupos', () => {
     expect(Array.isArray(MODULE_GROUPS)).toBe(true)
-    expect(MODULE_GROUPS.length).toBe(6)
+    expect(MODULE_GROUPS.length).toBe(7)
   })
 
   it('cada grupo debe tener nombre y array de módulos', () => {
@@ -78,6 +82,12 @@ describe('MODULE_GROUPS', () => {
     expect(ids).toContain('pipeline')
     expect(ids).toContain('tareas')
     expect(ids).toContain('analytics')
+  })
+
+  it('debe existir un grupo Hospitality con el módulo del hub', () => {
+    const grupo = MODULE_GROUPS.find(g => g.group === 'Hospitality')
+    expect(grupo).toBeDefined()
+    expect(grupo!.modules.map(m => m.id)).toContain('hospitality')
   })
 
   it('Contabilidad y ERP debe ser el grupo más grande (8 módulos)', () => {
@@ -268,10 +278,11 @@ describe('getDefaultModules', () => {
 // PERFIL_SUGGESTED_MODULES
 // ============================================================
 describe('PERFIL_SUGGESTED_MODULES', () => {
-  it('debe tener exactamente 10 perfiles (8 verticales + 2 legacy)', () => {
+  it('debe tener exactamente 11 perfiles (9 verticales + 2 legacy)', () => {
     const keys = Object.keys(PERFIL_SUGGESTED_MODULES)
-    expect(keys).toHaveLength(10)
-    // 8 verticales
+    expect(keys).toHaveLength(11)
+    // 9 verticales
+    expect(keys).toContain('hospitality')
     expect(keys).toContain('crm_ventas')
     expect(keys).toContain('agencia_marketing')
     expect(keys).toContain('academia')
@@ -326,6 +337,10 @@ describe('PERFIL_SUGGESTED_MODULES', () => {
     expect(PERFIL_SUGGESTED_MODULES.industria.length).toBe(13)
   })
 
+  it('hospitality debe tener exactamente 6 módulos', () => {
+    expect(PERFIL_SUGGESTED_MODULES.hospitality.length).toBe(6)
+  })
+
   it('todos los módulos sugeridos deben ser IDs válidos en ALL_MODULES', () => {
     const validIds = new Set(ALL_MODULES.map(m => m.id))
     for (const modules of Object.values(PERFIL_SUGGESTED_MODULES)) {
@@ -367,6 +382,14 @@ describe('PERFIL_SUGGESTED_MODULES', () => {
     expect(g).toContain('calidad')
     expect(g).toContain('activos')
     expect(g).toContain('logistica')
+  })
+
+  it('hospitality debe incluir el módulo del hub y la comunicación con el huésped', () => {
+    const h = PERFIL_SUGGESTED_MODULES.hospitality
+    expect(h).toContain('hospitality')
+    expect(h).toContain('mensajes')
+    expect(h).toContain('citas')
+    expect(h).toContain('catalogo')
   })
 
   it('academia debe incluir módulos educativos', () => {
@@ -642,5 +665,57 @@ describe('Escenarios de onboarding', () => {
     // (ej: finanzas_consolidado, calidad, taskforce, api_access, etc.)
     expect(missingFromOnboarding.length).toBeGreaterThan(0)
     expect(missingFromOnboarding.length).toBeLessThan(ALL_MODULES.length)
+  })
+})
+
+// ============================================================
+// Guardia: los selectores de vertical del alta no se quedan cortos
+// ============================================================
+//
+// El fallo que motiva esta guardia: Hospitality se dio de alta como vertical
+// de producto (`VERTICAL_DEFINITIONS`, perfil de onboarding), pero las dos
+// pantallas del alta llevan su propia lista de tarjetas escrita a mano, así que
+// un hotel que se registraba no podía elegir su vertical. Aquí se vigila que
+// toda vertical del alta tenga su tarjeta en las dos pantallas — incluidas las
+// futuras, que es donde el fallo se repetiría.
+describe('Selectores de vertical del alta', () => {
+  const RAIZ = path.resolve(__dirname, '..')
+  const leer = (relativo: string) => {
+    const contenido = fs.readFileSync(path.join(RAIZ, relativo), 'utf8')
+    expect(contenido.length, `El archivo ${relativo} está vacío`).toBeGreaterThan(0)
+    return contenido
+  }
+
+  const ONBOARDING = 'app/dashboard/onboarding-quick/page.tsx'
+  const SIGNUP = 'app/signup/page.tsx'
+
+  /** Verticales ofrecidas en el alta: todos los perfiles menos los legacy. */
+  const VERTICALES_DEL_ALTA = Object.keys(PERFIL_SUGGESTED_MODULES).filter(
+    (id) => id !== 'gestoria' && id !== 'general',
+  )
+
+  it('hay verticales que vigilar (no pasa por vacío)', () => {
+    expect(VERTICALES_DEL_ALTA.length).toBeGreaterThanOrEqual(9)
+  })
+
+  it('el parser ve las tarjetas de las dos pantallas', () => {
+    const tarjetasOnboarding = leer(ONBOARDING).match(/id: '[a-z_]+', title:/g) ?? []
+    const tarjetasSignup = leer(SIGNUP).match(/id: '[a-z_]+', label:/g) ?? []
+    expect(tarjetasOnboarding.length).toBeGreaterThanOrEqual(VERTICALES_DEL_ALTA.length)
+    expect(tarjetasSignup.length).toBeGreaterThanOrEqual(VERTICALES_DEL_ALTA.length)
+  })
+
+  it('cada vertical del alta tiene su tarjeta en el onboarding rápido', () => {
+    const src = leer(ONBOARDING)
+    for (const id of VERTICALES_DEL_ALTA) {
+      expect(src, `${id} no tiene tarjeta en ${ONBOARDING}`).toContain(`id: '${id}', title:`)
+    }
+  })
+
+  it('cada vertical del alta tiene su botón en el registro', () => {
+    const src = leer(SIGNUP)
+    for (const id of VERTICALES_DEL_ALTA) {
+      expect(src, `${id} no tiene botón en ${SIGNUP}`).toContain(`id: '${id}', label:`)
+    }
   })
 })

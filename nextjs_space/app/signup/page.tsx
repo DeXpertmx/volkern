@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from 'sonner'
-import { Building2, Mail, Lock, User, Loader2, Zap, Shield, Users, BookOpen, PenTool, GraduationCap, Calculator, Factory, UserCheck, CheckCircle2, LayoutGrid } from 'lucide-react'
+import { Building2, Mail, Lock, User, Loader2, Zap, Shield, Users, BookOpen, PenTool, GraduationCap, Calculator, Factory, UserCheck, CheckCircle2, LayoutGrid, Hotel } from 'lucide-react'
 
 /* ─── Plan Summary Card ──────────────────────────────────────────────────── */
 
@@ -250,6 +250,7 @@ function SignupForm() {
                 { id: 'asesoria_contable', label: 'Asesoría Contable', icon: Calculator, color: 'border-blue-300 bg-blue-50', iconColor: 'text-blue-500' },
                 { id: 'rrhh', label: 'RRHH', icon: UserCheck, color: 'border-rose-300 bg-rose-50', iconColor: 'text-rose-500' },
                 { id: 'inmobiliaria', label: 'Inmobiliaria', icon: Building2, color: 'border-emerald-300 bg-emerald-50', iconColor: 'text-emerald-500' },
+                { id: 'hospitality', label: 'Hospitality', icon: Hotel, color: 'border-sky-300 bg-sky-50', iconColor: 'text-sky-500' },
                 { id: 'industria', label: 'Industria', icon: Factory, color: 'border-orange-300 bg-orange-50', iconColor: 'text-orange-500' },
                 { id: 'facturacion', label: 'Facturación', icon: Calculator, color: 'border-green-300 bg-green-50', iconColor: 'text-green-500' },
               ].map(v => {

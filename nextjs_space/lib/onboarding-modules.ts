@@ -84,6 +84,12 @@ export const MODULE_GROUPS: ModuleGroup[] = [
     ],
   },
   {
+    group: 'Hospitality',
+    modules: [
+      { id: 'hospitality', label: 'Hospitality', icon: '🏨', description: 'Propiedades, unidades alojativas y reservas' },
+    ],
+  },
+  {
     group: 'Extras',
     modules: [
       { id: 'cursos', label: 'Academia LMS', icon: '📚', description: 'Cursos y estudiantes' },
@@ -147,6 +153,14 @@ export const PERFIL_SUGGESTED_MODULES: Record<string, string[]> = {
     'catalogo',
     'mensajes', 'citas',
     'finanzas',
+  ],
+  // Hospitality es vertical de producto pero no comercial: no aparece en la
+  // tabla de precios (`lib/vertical-plans.ts`) porque no tiene tarifa
+  // publicada. Aquí sí, porque es la que un hotel elige al darse de alta y la
+  // que le enciende el módulo `hospitality` (hub de propiedades y reservas).
+  hospitality: [
+    'catalogo', 'hospitality', 'automatizaciones', 'mi_tarjeta',
+    'mensajes', 'citas',
   ],
 
   // ─── Legacy (mantener compatibilidad) ────────────────────────────────────

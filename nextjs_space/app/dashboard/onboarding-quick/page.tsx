@@ -10,7 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Loader2, CheckCircle2, MessageCircle, ArrowRight, Bot, Zap,
   Building2, Calculator, FileKey, Users, Upload, LayoutGrid, CheckSquare, Square,
-  PenTool, GraduationCap, Factory, UserCheck,
+  PenTool, GraduationCap, Factory, UserCheck, Hotel,
 } from 'lucide-react'
 import {
   MODULE_GROUPS,
@@ -20,7 +20,7 @@ import {
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
 
-type VerticalProfile = 'crm_ventas' | 'agencia_marketing' | 'academia' | 'asesoria_contable' | 'rrhh' | 'inmobiliaria' | 'industria' | 'facturacion' | 'gestoria' | 'general'
+type VerticalProfile = 'crm_ventas' | 'agencia_marketing' | 'academia' | 'asesoria_contable' | 'rrhh' | 'inmobiliaria' | 'hospitality' | 'industria' | 'facturacion' | 'gestoria' | 'general'
 
 const VERTICAL_CARDS: { id: VerticalProfile; title: string; subtitle: string; icon: React.ElementType; color: string; bgClass: string; borderColor: string }[] = [
   { id: 'crm_ventas', title: 'CRM Ventas', subtitle: 'Pipeline que convierte', icon: Zap, color: 'cyan', bgClass: 'from-cyan-500/20 to-sky-500/10 border-cyan-500/30 hover:border-cyan-400', borderColor: 'border-cyan-400' },
@@ -29,6 +29,7 @@ const VERTICAL_CARDS: { id: VerticalProfile; title: string; subtitle: string; ic
   { id: 'asesoria_contable', title: 'Asesoría Contable', subtitle: 'Digitaliza tu gestoría', icon: Calculator, color: 'blue', bgClass: 'from-blue-500/20 to-indigo-500/10 border-blue-500/30 hover:border-blue-400', borderColor: 'border-blue-400' },
   { id: 'rrhh', title: 'RRHH', subtitle: 'Capital humano inteligente', icon: UserCheck, color: 'rose', bgClass: 'from-rose-500/20 to-pink-500/10 border-rose-500/30 hover:border-rose-400', borderColor: 'border-rose-400' },
   { id: 'inmobiliaria', title: 'Inmobiliaria', subtitle: 'ERP inmobiliario completo', icon: Building2, color: 'emerald', bgClass: 'from-emerald-500/20 to-green-500/10 border-emerald-500/30 hover:border-emerald-400', borderColor: 'border-emerald-400' },
+  { id: 'hospitality', title: 'Hospitality', subtitle: 'Hoteles y alojamientos', icon: Hotel, color: 'sky', bgClass: 'from-sky-500/20 to-blue-500/10 border-sky-500/30 hover:border-sky-400', borderColor: 'border-sky-400' },
   { id: 'industria', title: 'Industria', subtitle: 'ERP industrial completo', icon: Factory, color: 'orange', bgClass: 'from-orange-500/20 to-amber-500/10 border-orange-500/30 hover:border-orange-400', borderColor: 'border-orange-400' },
   { id: 'facturacion', title: 'Facturación', subtitle: 'Facturas y cobros sin estrés', icon: Calculator, color: 'green', bgClass: 'from-green-500/20 to-emerald-500/10 border-green-500/30 hover:border-green-400', borderColor: 'border-green-400' },
 ]
@@ -42,6 +43,7 @@ const VERTICAL_COLORS: Record<string, { gradient: string; iconBg: string; iconCo
   emerald: { gradient: 'bg-gradient-to-r from-emerald-600 to-green-600', iconBg: 'bg-emerald-500/20', iconColor: 'text-emerald-400' },
   orange: { gradient: 'bg-gradient-to-r from-orange-600 to-amber-600', iconBg: 'bg-orange-500/20', iconColor: 'text-orange-400' },
   green: { gradient: 'bg-gradient-to-r from-green-600 to-emerald-600', iconBg: 'bg-green-500/20', iconColor: 'text-green-400' },
+  sky: { gradient: 'bg-gradient-to-r from-sky-600 to-blue-600', iconBg: 'bg-sky-500/20', iconColor: 'text-sky-400' },
 }
 
 export default function OnboardingQuickPage() {
@@ -168,6 +170,9 @@ export default function OnboardingQuickPage() {
     const groups = new Set(['CRM Esencial', 'Ventas y Documentos', 'Comunicación'])
     if (erpVerticals.includes(p)) groups.add('Contabilidad y ERP')
     if (marketingVerticals.includes(p)) groups.add('Marketing')
+    // Hospitality: el módulo del hub vive en su propio grupo y `mi_tarjeta` en
+    // Extras; sin expandirlos, los módulos preseleccionados del perfil no se ven.
+    if (p === 'hospitality') { groups.add('Hospitality'); groups.add('Extras') }
     setExpandedGroups(groups)
   }
 
