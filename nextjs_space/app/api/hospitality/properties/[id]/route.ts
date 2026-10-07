@@ -232,6 +232,12 @@ export async function PATCH(req: NextRequest, ctx: Params) {
         ...(politicaSalidaAnticipada !== undefined ? { politicaSalidaAnticipada } : {}),
         ...(holdHoras !== undefined ? { holdHoras: Number(holdHoras) } : {}),
       },
+      // Mismo shapes que el GET: el editor guiado rearma su borrador con la
+      // respuesta de cada autosave y necesita las unidades para pintar el
+      // inventario, el agregado de habitaciones/camas y el progreso. Sin el
+      // include, la respuesta llega sin `units` y la ficha pasa a «Sin
+      // unidades» en cuanto el usuario guarda cualquier sección.
+      include: { units: { orderBy: { nombre: 'asc' } }, _count: { select: { reservations: true } } },
     });
 
     // El apagador cambia el criterio de liberación de noches A PARTIR DEL

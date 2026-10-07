@@ -365,7 +365,14 @@ export function PropertyEditorHospedaje({ propertyId, onBack }: PropertyEditorHo
       const data = await res.json();
       const p: PropertyWire = data.property;
       setPropiedad(p);
-      setDraft((prev) => (prev && draftRef.current !== prev ? prev : borradorDesdeProperty(p)));
+      // La respuesta del PATCH debe traer las unidades (igual que el GET, que
+      // sí las incluye). Si algún día llegaran omitidas, se conservan las del
+      // borrador: perderlas aquí pintaba «Sin unidades» tras cada autosave.
+      setDraft((prev) =>
+        prev && draftRef.current !== prev
+          ? prev
+          : borradorDesdeProperty({ ...p, units: p.units ?? prev?.units ?? [] })
+      );
     } catch {
       sucioRef.current = true;
       toast.error('Error de conexión al guardar');

@@ -93,6 +93,32 @@ describe('Hospitality CRUD — aislamiento multi-tenant', () => {
     expect(hoisted.hospitalityProperty.update).not.toHaveBeenCalled();
   });
 
+  it('PATCH property [id] responde la propiedad CON sus unidades (el editor rearma el borrador con esta respuesta)', async () => {
+    const conUnidades = {
+      id: 'prop_a',
+      tenantId: 'tenant_a',
+      nombre: 'Viejo',
+      units: [{ id: 'u1', nombre: 'Suite 1', capacidad: 4 }],
+      _count: { reservations: 0 },
+    };
+    hoisted.hospitalityProperty.findFirst.mockResolvedValue(conUnidades);
+    hoisted.hospitalityProperty.update.mockResolvedValue({ ...conUnidades, nombre: 'Nuevo' });
+    const res = await patchProperty(jsonReq({ nombre: 'Nuevo' }), CTX('prop_a'));
+
+    expect(res.status).toBe(200);
+    // Guard de regresión: sin `include.units` en el update, la respuesta llega
+    // sin unidades y la ficha pasa a «Sin unidades» en cuanto el autosave
+    // rearma el borrador del editor guiado.
+    const args = hoisted.hospitalityProperty.update.mock.calls[0][0];
+    expect(args.include).toEqual({
+      units: { orderBy: { nombre: 'asc' } },
+      _count: { select: { reservations: true } },
+    });
+    const body = await res.json();
+    expect(body.property.units).toHaveLength(1);
+    expect(body.property.units[0].id).toBe('u1');
+  });
+
   it('DELETE property [id] rechaza si la propiedad no es del tenant', async () => {
     hoisted.hospitalityProperty.findFirst.mockResolvedValue(null);
     const res = await deleteProperty(REQ(), CTX('prop_ajena'));
