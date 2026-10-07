@@ -1274,7 +1274,7 @@ export default function AdminConectividad() {
                     onChange={(e) => setTestHotel(e.target.value)}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Si se deja vacío se usa el hotel de prueba del entorno (sandbox-pms).
+                    Si se deja vacío se usa el hotel de la sonda (el configurado para el entorno; por defecto el sandbox del contrato).
                   </p>
                 </div>
                 <Button type="submit" disabled={testing}>

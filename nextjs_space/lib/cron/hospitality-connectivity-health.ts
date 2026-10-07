@@ -7,7 +7,8 @@
  * proveedor revoca las credenciales un martes sin reservas ni pushes, el badge
  * sigue «Conectado» hasta el siguiente evento. Este job llama a la MISMA sonda
  * que el botón «Probar» (`testConnectivityConnection` → `property_details` con
- * el hotel sandbox), mueve el estado de la capa con las mismas reglas y deja
+ * el hotel de la sonda, ver `resolveProbeHotelCode`), mueve el estado de la
+ * capa con las mismas reglas y deja
  * una marca de última verificación visible — así el verde se renueva a
  * propósito, sin esperar tráfico real.
  *
@@ -35,7 +36,7 @@ import {
   getConnectivityProvider,
   testConnectivityConnection,
   updateConnectivityStatus,
-  CONNECTIVITY_SANDBOX_HOTEL,
+  resolveProbeHotelCode,
 } from '@/lib/hospitality/connectivity';
 
 /** Identificador del job en el panel de estado de crons. */
@@ -84,9 +85,11 @@ export async function runConnectivityHealthCheck(): Promise<ConnectivityHealthRe
     };
   }
 
-  // La sonda es la del botón «Probar»: property_details con el hotel sandbox.
-  // El health-check no inventa su propia verdad sobre la capa.
-  const sondeo = await testConnectivityConnection(CONNECTIVITY_SANDBOX_HOTEL);
+  // La sonda es la del botón «Probar»: property_details con el hotel de la
+  // sonda, configurable (por defecto el sandbox del contrato). El health-check
+  // no inventa su propia verdad sobre la capa.
+  const hotelCode = resolveProbeHotelCode(provider);
+  const sondeo = await testConnectivityConnection(hotelCode);
 
   // Mover el estado de la capa con las MISMAS reglas que el botón «Probar»:
   // la sonda es la misma, así que las consecuencias también deben serlo.
@@ -121,10 +124,10 @@ export async function runConnectivityHealthCheck(): Promise<ConnectivityHealthRe
         entidad: 'connectivity_provider',
         entidadId: provider.id,
         descripcion: sondeo.ok
-          ? `Health-check de conectividad OK (hotelCode ${CONNECTIVITY_SANDBOX_HOTEL}).`
+          ? `Health-check de conectividad OK (hotelCode ${hotelCode}).`
           : `Health-check de conectividad fallido: ${detalle}`,
         metadata: {
-          hotelCode: CONNECTIVITY_SANDBOX_HOTEL,
+          hotelCode,
           ok: sondeo.ok,
           estado: sondeo.ok ? 'conectado' : 'error',
           detalle,
@@ -141,7 +144,7 @@ export async function runConnectivityHealthCheck(): Promise<ConnectivityHealthRe
     ok: sondeo.ok,
     ejecutado: true,
     motivo: null,
-    hotelCode: CONNECTIVITY_SANDBOX_HOTEL,
+    hotelCode,
     estado: sondeo.ok ? 'conectado' : 'error',
     detalle,
     durationMs: Date.now() - startedAt,

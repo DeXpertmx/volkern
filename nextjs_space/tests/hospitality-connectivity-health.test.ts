@@ -42,7 +42,7 @@ import {
   JOB_LABEL_HEALTH_CHECK,
   JOB_SCHEDULE_HEALTH_CHECK,
 } from '@/lib/cron/hospitality-connectivity-health';
-import { CONNECTIVITY_SANDBOX_HOTEL } from '@/lib/hospitality/connectivity';
+import { CONNECTIVITY_SANDBOX_HOTEL, resolveProbeHotelCode } from '@/lib/hospitality/connectivity';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -87,6 +87,38 @@ describe('runConnectivityHealthCheck', () => {
     expect(r.ok).toBe(true);
     expect(r.ejecutado).toBe(true);
     expect(r.hotelCode).toBe(CONNECTIVITY_SANDBOX_HOTEL);
+  });
+
+  it('si el proveedor configura `healthHotelCode`, la sonda usa ESE hotel (no el sandbox retirado)', async () => {
+    mocks.providerFindUnique.mockResolvedValue({
+      ...filaConfigurada(),
+      configuracion: { healthHotelCode: '75fdbbce2e' },
+    });
+    mocks.testConnection.mockResolvedValue({ ok: true });
+
+    const r = await runConnectivityHealthCheck();
+
+    expect(mocks.testConnection).toHaveBeenCalledWith('75fdbbce2e');
+    expect(r.hotelCode).toBe('75fdbbce2e');
+    expect(mocks.auditLogCreate.mock.calls[0][0].data.metadata.hotelCode).toBe('75fdbbce2e');
+  });
+
+  it('CONNECTIVITY_HEALTH_HOTEL gana a la config del proveedor', async () => {
+    process.env.CONNECTIVITY_HEALTH_HOTEL = 'hotel-entorno';
+    try {
+      mocks.providerFindUnique.mockResolvedValue({
+        ...filaConfigurada(),
+        configuracion: { healthHotelCode: '75fdbbce2e' },
+      });
+      mocks.testConnection.mockResolvedValue({ ok: true });
+
+      const r = await runConnectivityHealthCheck();
+
+      expect(mocks.testConnection).toHaveBeenCalledWith('hotel-entorno');
+      expect(r.hotelCode).toBe('hotel-entorno');
+    } finally {
+      delete process.env.CONNECTIVITY_HEALTH_HOTEL;
+    }
   });
 
   it('sondeo OK → estado conectado, errores a cero y marca de última verificación', async () => {
@@ -177,6 +209,40 @@ describe('runConnectivityHealthCheck', () => {
     mocks.updateStatus.mockRejectedValue(new Error('update roto'));
 
     await expect(runConnectivityHealthCheck()).rejects.toThrow('update roto');
+  });
+});
+
+describe('resolveProbeHotelCode (hotel de la sonda)', () => {
+  it('sin entorno ni config del proveedor → sandbox del contrato', () => {
+    expect(resolveProbeHotelCode(null)).toBe(CONNECTIVITY_SANDBOX_HOTEL);
+    expect(resolveProbeHotelCode({ configuracion: null })).toBe(CONNECTIVITY_SANDBOX_HOTEL);
+    expect(resolveProbeHotelCode({})).toBe(CONNECTIVITY_SANDBOX_HOTEL);
+  });
+
+  it('config del proveedor → ese hotel', () => {
+    expect(resolveProbeHotelCode({ configuracion: { healthHotelCode: '75fdbbce2e' } })).toBe(
+      '75fdbbce2e',
+    );
+  });
+
+  it('el entorno gana a la config del proveedor', () => {
+    process.env.CONNECTIVITY_HEALTH_HOTEL = 'hotel-entorno';
+    try {
+      expect(
+        resolveProbeHotelCode({ configuracion: { healthHotelCode: '75fdbbce2e' } }),
+      ).toBe('hotel-entorno');
+    } finally {
+      delete process.env.CONNECTIVITY_HEALTH_HOTEL;
+    }
+  });
+
+  it('valores vacíos o de otro tipo se ignoran (nunca se sondea la cadena vacía)', () => {
+    expect(resolveProbeHotelCode({ configuracion: { healthHotelCode: '   ' } })).toBe(
+      CONNECTIVITY_SANDBOX_HOTEL,
+    );
+    expect(resolveProbeHotelCode({ configuracion: { healthHotelCode: 42 } })).toBe(
+      CONNECTIVITY_SANDBOX_HOTEL,
+    );
   });
 });
 

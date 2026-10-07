@@ -326,6 +326,35 @@ export function buildReservationWebhookUrl(): string {
 /** Hotel de prueba del sandbox documentado en el contrato. */
 export const CONNECTIVITY_SANDBOX_HOTEL = 'sandbox-pms';
 
+/**
+ * Hotel con el que se sondea la capa: health-check diario y botón «Probar»
+ * cuando no se indica un hotel.
+ *
+ * La sonda nació apuntando al hotel del sandbox del proveedor, pero un partner
+ * de producción puede no tener concedido ese hotel de pruebas (Aiosell lo
+ * retiró: `property_details/sandbox-pms` pasó de 200 a 403). Cuando eso ocurre
+ * el panel quedaría en rojo aunque el tráfico real funcionase, así que el hotel
+ * de la sonda es configurable, en este orden:
+ *
+ *   1. `CONNECTIVITY_HEALTH_HOTEL` (entorno), p. ej. el hotel real del partner.
+ *   2. `configuracion.healthHotelCode` de la fila del proveedor.
+ *   3. `CONNECTIVITY_SANDBOX_HOTEL`, el sandbox documentado en el contrato.
+ *
+ * Es una función pura sobre la fila ya leída: quien la llama no paga una
+ * segunda consulta a la base de datos.
+ */
+export function resolveProbeHotelCode(
+  provider?: { configuracion?: unknown } | null,
+): string {
+  const desdeEntorno = (process.env.CONNECTIVITY_HEALTH_HOTEL || '').trim();
+  if (desdeEntorno) return desdeEntorno;
+
+  const cfg = (provider?.configuracion ?? null) as Record<string, unknown> | null;
+  const desdeConfig =
+    typeof cfg?.healthHotelCode === 'string' ? cfg.healthHotelCode.trim() : '';
+  return desdeConfig || CONNECTIVITY_SANDBOX_HOTEL;
+}
+
 export interface PropertyDetailsRatePlan {
   rateplan_id: string;
   rateplan_name?: string | null;

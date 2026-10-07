@@ -5,9 +5,10 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/db';
 import {
+  getConnectivityProvider,
   testConnectivityConnection,
   updateConnectivityStatus,
-  CONNECTIVITY_SANDBOX_HOTEL,
+  resolveProbeHotelCode,
 } from '@/lib/hospitality/connectivity';
 import { notifyDeveloperSensitiveAction } from '@/lib/telegram/developer-notify';
 
@@ -28,9 +29,11 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({}));
+    // Sin hotel indicado se sondea el de la sonda (el mismo del health-check
+    // diario), no un sandbox fijo que puede no estar concedido al partner.
     const hotelCode = typeof body?.hotelCode === 'string' && body.hotelCode.trim()
       ? body.hotelCode.trim()
-      : CONNECTIVITY_SANDBOX_HOTEL;
+      : resolveProbeHotelCode(await getConnectivityProvider());
 
     const result = await testConnectivityConnection(hotelCode);
 
