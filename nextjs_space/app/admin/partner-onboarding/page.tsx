@@ -48,6 +48,7 @@ import {
   VERTICAL_DEFINITIONS,
   type Vertical,
 } from '@/lib/plans';
+import { AltaHospitalityPaso } from '@/components/admin/AltaHospitalityPaso';
 
 type WizardStep = 'empresa' | 'vertical' | 'subdominio' | 'email' | 'telegram' | 'moneda' | 'resumen' | 'done';
 
@@ -741,6 +742,15 @@ function DoneCard({
           highlighted
         />
       </div>
+
+      {/*
+        Hospitality no acaba en «tenant creado»: sin roles ni propiedad el
+        cliente entra a una cuenta vacía. El paso va aquí, después del resumen,
+        porque necesita el tenantId que acaba de devolver la creación.
+      */}
+      {form.vertical === 'hospitality' && result.tenantId && (
+        <AltaHospitalityPaso tenantId={result.tenantId} />
+      )}
 
       {telegramSkipped && result.tenantId && (
         <div className="border border-amber-200 bg-amber-50 rounded-xl overflow-hidden">
