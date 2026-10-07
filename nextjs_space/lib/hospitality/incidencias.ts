@@ -667,7 +667,54 @@ export async function cargarHotelCodesDelTenant(
       }
     }
   }
+
+  // El mapa incluye los hotelCode de vínculos ya deshechos a propósito: un
+  // vínculo inactivo del PROPIO tenant sigue siendo suyo y sus incidencias
+  // pendientes no pueden desaparecer. Lo que no puede quedarse es un hotelCode
+  // que HOY tiene activo otra cuenta: los eventos sin mapping se guardan con
+  // `hotelCode` y SIN tenantId (el tenant es justo lo que falta por resolver),
+  // así que el tenant que lo tuvo antes seguiría leyendo —y, en
+  // `registrar-partida`, registrando— reservas del nuevo dueño.
+  const reclamados = await hotelCodesReclamadosPorOtroTenant(tenantId, [
+    ...porHotelCode.keys(),
+  ]);
+  for (const code of reclamados) porHotelCode.delete(code);
+
   return porHotelCode;
+}
+
+/**
+ * De los `codigos` dados, los que hoy tiene activos OTRA cuenta.
+ *
+ * El hotelCode identifica la propiedad en el proveedor y el onboarding lo
+ * declara exclusivo de un tenant (`/api/hospitality/onboarding/*`), así que
+ * «activo para otro» significa «ya no es mío». Ante un estado incoherente
+ * (mismo hotelCode activo en dos cuentas) se falla cerrando: se considera del
+ * otro, nunca se le muestra al que no lo tiene.
+ */
+export async function hotelCodesReclamadosPorOtroTenant(
+  tenantId: string,
+  codigos: string[]
+): Promise<Set<string>> {
+  const limpios = [...new Set(codigos.map((c) => (c ?? '').trim()).filter(Boolean))];
+  if (limpios.length === 0) return new Set();
+
+  const activos = await prisma.connectivityMapping.findMany({
+    where: {
+      provider: PROVIDER_CONECTIVIDAD,
+      estado: 'activo',
+      externalPropertyId: { in: limpios },
+    },
+    select: { externalPropertyId: true, tenantId: true },
+  });
+
+  const ajenos = new Set<string>();
+  for (const m of activos) {
+    const code = (m.externalPropertyId ?? '').trim();
+    if (!code) continue;
+    if (m.tenantId !== tenantId) ajenos.add(code);
+  }
+  return ajenos;
 }
 
 /** Proveedor de conectividad de canal (único adapter de la plataforma). */

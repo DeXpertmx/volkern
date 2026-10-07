@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   authenticateRequest: vi.fn(),
   hospitalityProperty: { findMany: vi.fn() },
   hospitalityWebhookEvent: { findMany: vi.fn() },
+  connectivityMapping: { findMany: vi.fn() },
   processReservationWebhook: vi.fn(),
   resolveMappingDetailed: vi.fn(),
   processCancel: vi.fn(),
@@ -66,6 +67,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.authenticateRequest.mockResolvedValue({ valid: true, tenant: { id: 't1' }, user: { id: 'u1', role: { id: 'role_test', nombre: 'Superadmin', permisos: { all: true } } } });
   mocks.hospitalityProperty.findMany.mockResolvedValue([PROPIEDAD]);
+  // Ningún hotelCode del tenant está reclamado por otra cuenta.
+  mocks.connectivityMapping.findMany.mockResolvedValue([]);
   mocks.hospitalityWebhookEvent.findMany.mockResolvedValue([evento()]);
   mocks.resolveMappingDetailed.mockResolvedValue({
     mapping: { property: { id: 'p1', tenantId: 't1' } },

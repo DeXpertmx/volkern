@@ -33,6 +33,7 @@ import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
 import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
 import { logAuditAction } from '@/lib/permissions';
+import { hotelCodesReclamadosPorOtroTenant } from '@/lib/hospitality/incidencias';
 import {
   externalIdDeParte,
   registrarReservaPartida,
@@ -90,6 +91,23 @@ export async function POST(req: NextRequest) {
 
     // Aislamiento: el hotelCode del evento debe estar vinculado a una propiedad
     // de este tenant (misma regla que el reenvío).
+    //
+    // Un vínculo inactivo del propio tenant cuenta como suyo (la incidencia se
+    // resuelve precisamente asignando unidades), pero un hotelCode que HOY tiene
+    // activo otra cuenta no: los eventos sin mapping se guardan sin tenantId, de
+    // modo que sin este corte un tenant podría registrar la reserva partida del
+    // nuevo dueño con solo conocer su `eventoId`.
+    const codigoEvento = (evento.hotelCode ?? '').trim();
+    if (codigoEvento) {
+      const reclamados = await hotelCodesReclamadosPorOtroTenant(tenantId, [codigoEvento]);
+      if (reclamados.has(codigoEvento)) {
+        return NextResponse.json(
+          { error: 'El evento no pertenece a este tenant' },
+          { status: 404 }
+        );
+      }
+    }
+
     const properties = await prisma.hospitalityProperty.findMany({
       where: {
         tenantId,

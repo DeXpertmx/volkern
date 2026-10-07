@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   hospitalityProperty: { findMany: vi.fn() },
   hospitalityReservation: { findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn() },
   hospitalityUnit: { findMany: vi.fn() },
+  connectivityMapping: { findMany: vi.fn() },
   logAuditAction: vi.fn(),
   registrarReservaPartida: vi.fn(),
   externalIdDeParte: vi.fn(),
@@ -67,6 +68,8 @@ describe('POST /api/hospitality/incidencias/registrar-partida', () => {
     mocks.hospitalityWebhookEvent.update.mockResolvedValue({});
     mocks.hospitalityProperty.findMany.mockResolvedValue([{ id: 'p1' }]);
     mocks.hospitalityReservation.findMany.mockResolvedValue([]); // partes ya registradas
+    // Ningún hotelCode del tenant está reclamado por otra cuenta.
+    mocks.connectivityMapping.findMany.mockResolvedValue([]);
     mocks.logAuditAction.mockResolvedValue(undefined);
     mocks.registrarReservaPartida.mockResolvedValue({
       ok: true,
@@ -82,6 +85,48 @@ describe('POST /api/hospitality/incidencias/registrar-partida', () => {
     mocksAuth.authenticateRequest.mockResolvedValue({ valid: false, error: 'No autorizado' });
     const res = await POST(req({ eventoId: 'ev_1', unidades: [{ indice: 0, unitId: 'u1' }] }));
     expect(res.status).toBe(401);
+  });
+
+  it('evento de un hotelCode que hoy tiene activo OTRA cuenta → 404 y no registra nada', async () => {
+    // El tenant conserva su vínculo (inactivo) al hotelCode, pero el hotel ya
+    // es de otra cuenta: el evento sin mapping no lleva tenantId, así que sin
+    // este corte bastaría conocer su `eventoId` para registrar la reserva ajena.
+    mocks.connectivityMapping.findMany.mockResolvedValue([
+      { externalPropertyId: 'sandbox-pms', tenantId: 'otro_tenant' },
+    ]);
+
+    const res = await POST(
+      req({
+        eventoId: 'ev_1',
+        unidades: [
+          { indice: 0, unitId: 'u1' },
+          { indice: 1, unitId: 'u2' },
+        ],
+      })
+    );
+
+    expect(res.status).toBe(404);
+    expect((await res.json()).error).toContain('no pertenece a este tenant');
+    expect(mocks.registrarReservaPartida).not.toHaveBeenCalled();
+  });
+
+  it('vínculo activo del PROPIO tenant: el evento sigue siendo suyo', async () => {
+    mocks.connectivityMapping.findMany.mockResolvedValue([
+      { externalPropertyId: 'sandbox-pms', tenantId: 't1' },
+    ]);
+
+    const res = await POST(
+      req({
+        eventoId: 'ev_1',
+        unidades: [
+          { indice: 0, unitId: 'u1' },
+          { indice: 1, unitId: 'u2' },
+        ],
+      })
+    );
+
+    expect(res.status).toBe(200);
+    expect(mocks.registrarReservaPartida).toHaveBeenCalled();
   });
 
   it('faltan campos → 400', async () => {

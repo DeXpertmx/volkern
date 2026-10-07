@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   hospitalityProperty: { findMany: vi.fn() },
   hospitalityWebhookEvent: { findMany: vi.fn() },
   hospitalityReservation: { findMany: vi.fn() },
+  connectivityMapping: { findMany: vi.fn() },
 }));
 
 vi.mock('@/lib/db', () => ({ default: mocks, prisma: mocks }));
@@ -45,6 +46,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.authenticateRequest.mockResolvedValue({ valid: true, tenant: { id: 't1' }, user: { id: 'u1', role: { id: 'role_test', nombre: 'Superadmin', permisos: { all: true } } } });
   mocks.hospitalityProperty.findMany.mockResolvedValue([PROPIEDAD]);
+  // Ningún hotelCode del tenant está reclamado por otra cuenta.
+  mocks.connectivityMapping.findMany.mockResolvedValue([]);
   mocks.hospitalityWebhookEvent.findMany.mockResolvedValue([]);
   mocks.hospitalityReservation.findMany.mockResolvedValue([]);
 });
@@ -189,6 +192,46 @@ describe('GET /api/hospitality/incidencias', () => {
       externalUnitCode: '',
     });
     expect(body.incidencias[0].eventoIds).toEqual(['ev_1']);
+  });
+
+  it('un hotelCode que hoy tiene activo OTRA cuenta no muestra sus incidencias', async () => {
+    // El tenant conserva su vínculo (inactivo) al hotelCode, pero el hotel ya
+    // es de otra cuenta. Los eventos sin mapping no llevan tenantId —el tenant
+    // es justo lo que falta por resolver—, así que sin este corte el dueño
+    // anterior seguiría leyendo las reservas del nuevo.
+    mocks.connectivityMapping.findMany.mockResolvedValue([
+      { externalPropertyId: 'sandbox-pms', tenantId: 'otro_tenant' },
+    ]);
+    mocks.hospitalityWebhookEvent.findMany.mockResolvedValue([evento()]);
+
+    const res = await GET(req());
+    const body = await res.json();
+
+    expect(body.incidencias).toEqual([]);
+    expect(mocks.hospitalityWebhookEvent.findMany).not.toHaveBeenCalled();
+  });
+
+  it('un vínculo activo del PROPIO tenant no se descarta (no se filtra de más)', async () => {
+    mocks.connectivityMapping.findMany.mockResolvedValue([
+      { externalPropertyId: 'sandbox-pms', tenantId: 't1' },
+    ]);
+    mocks.hospitalityWebhookEvent.findMany.mockResolvedValue([evento()]);
+
+    const res = await GET(req());
+    const body = await res.json();
+
+    expect(body.incidencias).toHaveLength(1);
+    expect(mocks.hospitalityWebhookEvent.findMany).toHaveBeenCalled();
+  });
+
+  it('el filtro de reclamo ajeno no consulta la tabla cuando no hay hotelCode', async () => {
+    mocks.hospitalityProperty.findMany.mockResolvedValue([
+      { id: 'p1', nombre: 'Villa Mar Azul', mappings: [] },
+    ]);
+
+    await GET(req());
+
+    expect(mocks.connectivityMapping.findMany).not.toHaveBeenCalled();
   });
 
   it('consulta solo los hotelCode del tenant y no consulta eventos sin propiedades', async () => {
