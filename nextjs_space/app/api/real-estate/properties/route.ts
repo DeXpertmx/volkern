@@ -108,6 +108,22 @@ export const GET = withTenantAuth(async (req, auth) => {
 });
 
 /**
+ * Valida un mapa de contadores para `habitaciones_detalle`/`camas_detalle`.
+ * Devuelve `undefined` cuando la forma no es un objeto de enteros ≥ 0.
+ */
+function saneardetalle(valor: unknown): Record<string, number> | undefined {
+  if (!valor || typeof valor !== 'object' || Array.isArray(valor)) return undefined;
+  const salida: Record<string, number> = {};
+  for (const [clave, numero] of Object.entries(valor as Record<string, unknown>)) {
+    const n = Number(numero);
+    if (typeof clave === 'string' && clave.length > 0 && Number.isInteger(n) && n >= 0) {
+      salida[clave] = n;
+    }
+  }
+  return Object.keys(salida).length > 0 ? salida : undefined;
+}
+
+/**
  * POST /api/real-estate/properties
  *
  * Crea una nueva propiedad inmobiliaria.
@@ -159,6 +175,11 @@ export const POST = withTenantAuth(async (req, auth) => {
       seoTags,
       amenities,
 
+      // 🛏️ Detalle del editor por secciones
+      roomsDetail,
+      bedsDetail,
+      servicios,
+
       // Propietario / Vendedor
       ownerName,
       ownerPhone,
@@ -205,6 +226,11 @@ export const POST = withTenantAuth(async (req, auth) => {
       featured,
       longDescription,
       seoTags,
+      roomsDetail: saneardetalle(roomsDetail),
+      bedsDetail: saneardetalle(bedsDetail),
+      servicios: Array.isArray(servicios)
+        ? servicios.filter((s: unknown): s is string => typeof s === 'string' && s.length > 0)
+        : undefined,
       owner: {
         name: ownerName,
         phone: ownerPhone,

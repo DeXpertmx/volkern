@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { apiFetch } from '@/lib/api-client';
 import { formatearImporte, MONEDAS_SELECCIONABLES } from '@/lib/moneda';
 import type { InmuebleParsed } from '@/lib/real-estate/property-helpers';
@@ -45,9 +45,12 @@ import {
   BedDouble,
   Maximize,
   User,
+  FileSignature,
 } from 'lucide-react';
 import Link from 'next/link';
 import { OwnerCard, OwnerBadge } from '@/components/real-estate/OwnerCard';
+import { RealEstateModuleNav } from '@/components/real-estate/RealEstateModuleNav';
+import { PropertyEditor } from '@/components/real-estate/PropertyEditor';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -166,7 +169,18 @@ const getOperationBadge = (type: string | null) => {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function RealEstatePropertiesPage() {
+  // `useSearchParams` exige un límite de Suspense en el prerender de la página.
+  return (
+    <Suspense fallback={null}>
+      <RealEstatePropertiesInner />
+    </Suspense>
+  );
+}
+
+function RealEstatePropertiesInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const editId = searchParams.get('edit');
 
   // Data
   const [properties, setProperties] = useState<InmuebleParsed[]>([]);
@@ -359,11 +373,16 @@ export default function RealEstatePropertiesPage() {
       });
 
       if (res.ok) {
+        const creada = await res.json();
         toast.success('Propiedad creada correctamente');
         setDialogOpen(false);
         setForm(formularioInicial(monedaTenant));
         fetchProperties(1);
         fetchStats();
+        // Abrir el nuevo editor por secciones con la propiedad recién creada.
+        if (creada?.id) {
+          router.push(`/dashboard/real-estate/properties?edit=${creada.id}`);
+        }
       } else {
         const err = await res.json();
         toast.error(err.error || 'Error al crear');
@@ -396,8 +415,24 @@ export default function RealEstatePropertiesPage() {
 
   // ─── Render ─────────────────────────────────────────────────────────────────
 
+  // Editor por secciones (estilo Airbnb): sustituye por completo el listado
+  // mientras `?edit=<id>` está en la URL. «Volver» limpia el parámetro.
+  if (editId) {
+    return (
+      <div className="space-y-0 p-4 md:p-8 pt-6">
+        <RealEstateModuleNav />
+        <PropertyEditor
+          propertyId={editId}
+          onBack={() => router.push('/dashboard/real-estate/properties', { scroll: false })}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 p-4 md:p-8 pt-6">
+      <RealEstateModuleNav />
+
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
@@ -417,6 +452,12 @@ export default function RealEstatePropertiesPage() {
           <Button onClick={() => { setForm(formularioInicial(monedaTenant)); setDialogOpen(true); }}>
             <Plus className="h-4 w-4 mr-2" />
             Nueva Propiedad
+          </Button>
+          <Button variant="outline" asChild>
+            <Link href="/dashboard/real-estate/captaciones">
+              <FileSignature className="h-4 w-4 mr-2" />
+              Captaciones
+            </Link>
           </Button>
           <Button variant="outline" asChild>
             <Link href="/dashboard/catalogo?tipo=inmueble">
@@ -666,7 +707,7 @@ export default function RealEstatePropertiesPage() {
                       <TableRow
                         key={property.id}
                         className="group cursor-pointer hover:bg-muted/50"
-                        onClick={() => router.push(`/dashboard/catalogo?edit=${property.id}`)}
+                        onClick={() => router.push(`/dashboard/real-estate/properties?edit=${property.id}`)}
                       >
                         <TableCell>
                           <div className="flex items-center gap-3">
@@ -795,7 +836,7 @@ export default function RealEstatePropertiesPage() {
                               title="Editar"
                               asChild
                             >
-                              <Link href={`/dashboard/catalogo?edit=${property.id}`}>
+                              <Link href={`/dashboard/real-estate/properties?edit=${property.id}`}>
                                 <Edit2 className="h-4 w-4" />
                               </Link>
                             </Button>

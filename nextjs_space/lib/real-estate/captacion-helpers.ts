@@ -8,11 +8,22 @@
 
 import { prisma } from '@/lib/db';
 import type { Captacion, Contact, CatalogoItem } from '@prisma/client';
+import {
+  calcularComisionCaptacion,
+  isCaptacionVigente,
+  type CaptacionEstado,
+  type CaptacionTipo,
+} from './captacion-shared';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+//
+// Los tipos del modelo y las etiquetas de la interfaz viven en
+// `captacion-shared.ts`, que no importa Prisma: así el panel puede usar el mismo
+// vocabulario sin arrastrar el cliente de base de datos al navegador. Aquí se
+// reexportan para que el contrato público del servidor siga siendo este módulo.
 
-export type CaptacionTipo = 'exclusiva' | 'compartida' | 'mandato';
-export type CaptacionEstado = 'borrador' | 'activa' | 'vencida' | 'cancelada' | 'cerrada';
+export type { CaptacionTipo, CaptacionEstado };
+export { calcularComisionCaptacion, isCaptacionVigente };
 
 export interface CaptacionInput {
   propiedadId?: string;
@@ -76,32 +87,6 @@ export function serializeCaptacion(
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/**
- * Calcula el monto de comisión de captación
- */
-export function calcularComisionCaptacion(
-  precioOferta: number,
-  porcentaje?: number | null,
-  montoFijo?: number | null
-): number {
-  if (porcentaje && porcentaje > 0) {
-    return precioOferta * (porcentaje / 100);
-  }
-  return montoFijo || 0;
-}
-
-/**
- * Determina si una captación está vigente según sus fechas
- */
-export function isCaptacionVigente(captacion: { fechaInicio: Date; fechaFin: Date; estado: string }): boolean {
-  const ahora = new Date();
-  return (
-    captacion.estado === 'activa' &&
-    ahora >= captacion.fechaInicio &&
-    ahora <= captacion.fechaFin
-  );
-}
 
 /**
  * Obtiene todas las captaciones activas para una propiedad

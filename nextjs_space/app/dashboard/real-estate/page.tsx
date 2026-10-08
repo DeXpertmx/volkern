@@ -36,8 +36,11 @@ import {
   Store,
   ChevronDown,
   ChevronRight,
+  FileSignature,
+  Tag,
 } from 'lucide-react';
 import Link from 'next/link';
+import { RealEstateModuleNav } from '@/components/real-estate/RealEstateModuleNav';
 import {
   BarChart,
   Bar,
@@ -221,6 +224,8 @@ export default function RealEstateDashboardPage() {
 
   return (
     <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
+      <RealEstateModuleNav />
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -595,8 +600,20 @@ export default function RealEstateDashboardPage() {
           </div>
           <div className="flex flex-wrap gap-3">
             <Button variant="default" asChild>
-              <Link href="/dashboard/catalogo?tipo=inmueble">
+              <Link href="/dashboard/real-estate/properties">
                 <Home className="h-4 w-4 mr-2" />
+                Inmuebles
+              </Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href="/dashboard/real-estate/captaciones">
+                <FileSignature className="h-4 w-4 mr-2" />
+                Captaciones
+              </Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href="/dashboard/catalogo?tipo=inmueble">
+                <Tag className="h-4 w-4 mr-2" />
                 Catálogo
               </Link>
             </Button>

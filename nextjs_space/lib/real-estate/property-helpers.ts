@@ -61,6 +61,14 @@ export interface InmuebleParsed {
   longDescription: string | null;     // descripcion_larga
   seoTags: string | null;             // tags_seo
 
+  // 🛏️ Detalle del editor por secciones (JSONB)
+  /** Contadores por tipo de habitación: `{ bano: 1, dormitorio: 2 }`. */
+  roomsDetail: Record<string, number> | null;   // habitaciones_detalle
+  /** Contadores por tipo de cama: `{ cama_doble: 1, sofa_cama: 2 }`. */
+  bedsDetail: Record<string, number> | null;    // camas_detalle
+  /** Ids de servicios/equipamiento marcados en el editor. */
+  servicios: string[] | null;                   // servicios
+
   // 👤 Propietario / Vendedor
   owner: {
     name: string | null;
@@ -104,6 +112,20 @@ export interface PropertyStats {
  */
 function extractFields(item: CatalogoItem): Record<string, any> {
   return (item.customFieldValues as Record<string, any>) || {};
+}
+
+/**
+ * Valida un mapa de contadores (`habitaciones_detalle`/`camas_detalle`).
+ *
+ * El JSONB acepta cualquier cosa; una pantalla que asuma la forma puede pintar
+ * «NaN +» en los contadores. Solo se aceptan objetos cuyos valores sean números
+ * enteros positivos (el cero se conserva: es un contador a cero legítimo).
+ */
+function esContadorDetalle(valor: unknown): valor is Record<string, number> {
+  if (!valor || typeof valor !== 'object' || Array.isArray(valor)) return false;
+  return Object.values(valor).every(
+    (n) => typeof n === 'number' && Number.isInteger(n) && n >= 0
+  );
 }
 
 /**
@@ -160,6 +182,13 @@ export function parseInmueble(item: CatalogoItem): InmuebleParsed {
     featured: Boolean(f.destacada),
     longDescription: f.descripcion_larga || null,
     seoTags: f.tags_seo || null,
+
+    // 🛏️ Detalle del editor
+    roomsDetail: esContadorDetalle(f.habitaciones_detalle) ? f.habitaciones_detalle : null,
+    bedsDetail: esContadorDetalle(f.camas_detalle) ? f.camas_detalle : null,
+    servicios: Array.isArray(f.servicios)
+      ? f.servicios.filter((s: unknown): s is string => typeof s === 'string')
+      : null,
 
     // 👤 Propietario
     owner: {
@@ -411,6 +440,12 @@ export function buildCustomFieldValues(
   if (data.featured) result.destacada = true;
   if (data.longDescription) result.descripcion_larga = data.longDescription;
   if (data.seoTags) result.tags_seo = data.seoTags;
+  if (esContadorDetalle(data.roomsDetail)) result.habitaciones_detalle = data.roomsDetail;
+  if (esContadorDetalle(data.bedsDetail)) result.camas_detalle = data.bedsDetail;
+  if (Array.isArray(data.servicios)) {
+    const servicios = data.servicios.filter((s): s is string => typeof s === 'string');
+    if (servicios.length > 0) result.servicios = servicios;
+  }
 
   // 👤 Propietario / Vendedor
   if (data.owner?.name) result.propietario_nombre = data.owner.name;

@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
+import { RealEstateModuleNav } from '@/components/real-estate/RealEstateModuleNav'
 import {
   Card,
   CardContent,
@@ -39,6 +41,7 @@ import { toast } from 'sonner'
 import {
   Building2,
   Settings,
+  LayoutDashboard,
   Globe,
   DollarSign,
   Percent,
@@ -312,6 +315,8 @@ export default function RealEstateConfigDashboard() {
 
   return (
     <div className="space-y-8">
+      <RealEstateModuleNav />
+
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
@@ -332,6 +337,12 @@ export default function RealEstateConfigDashboard() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" asChild>
+            <Link href="/dashboard/real-estate">
+              <LayoutDashboard className="mr-2 h-4 w-4" />
+              Abrir panel
+            </Link>
+          </Button>
           <Button
             variant="outline"
             onClick={fetchConfig}

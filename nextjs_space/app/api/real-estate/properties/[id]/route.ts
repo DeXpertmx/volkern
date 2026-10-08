@@ -6,6 +6,22 @@ import { withTenantAuth } from '@/lib/api-key-auth';
 import { parseInmueble, buildCustomFieldValues, updatePropertyCustomFields, syncPropertyOwnerToContact, type InmuebleParsed } from '@/lib/real-estate/property-helpers';
 
 /**
+ * Valida un mapa de contadores para `habitaciones_detalle`/`camas_detalle`.
+ * Devuelve `{}` cuando la forma no es un objeto de enteros ≥ 0.
+ */
+function saneardetalle(valor: unknown): Record<string, number> {
+  if (!valor || typeof valor !== 'object' || Array.isArray(valor)) return {};
+  const salida: Record<string, number> = {};
+  for (const [clave, numero] of Object.entries(valor as Record<string, unknown>)) {
+    const n = Number(numero);
+    if (typeof clave === 'string' && clave.length > 0 && Number.isInteger(n) && n >= 0) {
+      salida[clave] = n;
+    }
+  }
+  return salida;
+}
+
+/**
  * GET /api/real-estate/properties/[id]
  *
  * Obtiene una propiedad por ID.
@@ -131,6 +147,21 @@ export const PATCH = withTenantAuth(async (req, auth, { params }: { params: { id
       if (body[f.key] !== undefined) {
         customFields[f.field] = body[f.key] ? true : false;
       }
+    }
+
+    // 🛏️ Detalle del editor por secciones: habitaciones, camas y servicios.
+    // Se sanea antes de persistir: el JSONB acepta cualquier forma y un mapa
+    // corrupto rompería los contadores del editor.
+    if (body.roomsDetail !== undefined) {
+      customFields.habitaciones_detalle = saneardetalle(body.roomsDetail);
+    }
+    if (body.bedsDetail !== undefined) {
+      customFields.camas_detalle = saneardetalle(body.bedsDetail);
+    }
+    if (body.servicios !== undefined) {
+      customFields.servicios = Array.isArray(body.servicios)
+        ? body.servicios.filter((s: unknown) => typeof s === 'string' && s.length > 0)
+        : [];
     }
 
     // Si hay campos inmobiliarios, hacer merge con los existentes
