@@ -6,7 +6,9 @@ import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Search, Receipt, Eye, ShieldCheck, Scan, ArrowUp, ArrowDown, ArrowUpDown, FileSpreadsheet } from "lucide-react"
+import { Plus, Search, Receipt, Eye, ShieldCheck, Scan, ArrowUp, ArrowDown, ArrowUpDown, FileSpreadsheet, TrendingUp, Clock, CheckCircle } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { 
   Sheet, 
   SheetContent, 
@@ -40,6 +42,7 @@ export default function GastosPage() {
   const moneda = useMonedaTenant()
   const [selectedExpense, setSelectedExpense] = useState<any>(null)
   const [importOpen, setImportOpen] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
 
   // ─── Filtros y ordenación ──────────────────────────────────────────────
   const [supplierFilter, setSupplierFilter] = useState('all')
@@ -60,7 +63,9 @@ export default function GastosPage() {
     router.replace(id === 'all' ? '/dashboard/finanzas/gastos' : `/dashboard/finanzas/gastos?proveedor=${id}`, { scroll: false })
   }
 
-  const expenses = data?.expenses || []
+  // Identidad estable: los memos de KPIs y filtros dependen de este array y,
+  // sin el useMemo, se recalcularian en cada render.
+  const expenses = useMemo<any[]>(() => data?.expenses || [], [data?.expenses])
   const tenantConfig = data?.tenantConfig || { baseLatitude: 40.416775, baseLongitude: -3.703790 }
 
   // Proveedores únicos presentes en los gastos (para el filtro)
@@ -68,6 +73,19 @@ export default function GastosPage() {
     const map = new Map<string, any>()
     expenses.forEach((e: any) => { if (e.supplier?.id) map.set(e.supplier.id, e.supplier) })
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name))
+  }, [expenses])
+
+  // KPIs del periodo cargado: mismos accesos que el listado, para que la
+  // cabecera cuente exactamente lo que ve el usuario en la tabla.
+  const stats = useMemo(() => {
+    const total = expenses.length
+    const pagados = expenses.filter((e: any) => e.status === 'PAID').length
+    return {
+      total,
+      pagados,
+      pendientes: total - pagados,
+      importeTotal: expenses.reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0),
+    }
   }, [expenses])
 
   const toggleSort = (key: SortKey) => {
@@ -92,12 +110,16 @@ export default function GastosPage() {
       }
       return sortDir === 'asc' ? cmp : -cmp
     })
+    const q = searchTerm.trim().toLowerCase()
     return list.filter((e: any) =>
       (supplierFilter === 'all' || e.supplier?.id === supplierFilter) &&
       (baseFilter === 'all' || (baseFilter === 'with' ? e.taxableBase != null : e.taxableBase == null)) &&
-      (ivaFilter === 'all' || (ivaFilter === 'with' ? e.vatAmount != null : e.vatAmount == null))
+      (ivaFilter === 'all' || (ivaFilter === 'with' ? e.vatAmount != null : e.vatAmount == null)) &&
+      (q === '' || [e.description, e.supplier?.name, e.supplier?.taxId]
+        .filter(Boolean)
+        .some((v: any) => String(v).toLowerCase().includes(q)))
     )
-  }, [expenses, sortKey, sortDir, supplierFilter, baseFilter, ivaFilter])
+  }, [expenses, sortKey, sortDir, supplierFilter, baseFilter, ivaFilter, searchTerm])
 
   const thBase = "px-6 py-4 text-[10px] font-black uppercase text-muted-foreground tracking-widest"
   const thButton = "inline-flex items-center gap-1 uppercase tracking-widest hover:text-foreground transition-colors"
@@ -106,8 +128,11 @@ export default function GastosPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-black tracking-tight uppercase">Listado de Gastos</h1>
-          <p className="text-muted-foreground">Control detallado de cada egreso operativo.</p>
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <Receipt className="h-8 w-8 text-primary" />
+            Listado de Gastos
+          </h1>
+          <p className="text-muted-foreground mt-1">Control detallado de cada egreso y factura de compra.</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" className="rounded-xl font-bold uppercase text-xs tracking-wider" onClick={() => setImportOpen(true)}>
@@ -126,40 +151,112 @@ export default function GastosPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input className="w-full bg-slate-100 dark:bg-slate-900 border-none rounded-xl pl-10 pr-4 py-3 text-sm" placeholder="Buscar por descripción..." />
-        </div>
-        <select
-          value={supplierFilter}
-          onChange={e => changeSupplierFilter(e.target.value)}
-          className="w-full bg-slate-100 dark:bg-slate-900 border-none rounded-xl px-4 py-3 text-sm font-bold appearance-none outline-none cursor-pointer"
-        >
-          <option value="all">Todos los proveedores</option>
-          {suppliers.map(s => (
-            <option key={s.id} value={s.id}>{s.name}</option>
-          ))}
-        </select>
-        <select
-          value={baseFilter}
-          onChange={e => setBaseFilter(e.target.value as PresenceFilter)}
-          className="w-full bg-slate-100 dark:bg-slate-900 border-none rounded-xl px-4 py-3 text-sm font-bold appearance-none outline-none cursor-pointer"
-        >
-          <option value="all">Base: todas</option>
-          <option value="with">Base: solo con dato</option>
-          <option value="without">Base: sin dato</option>
-        </select>
-        <select
-          value={ivaFilter}
-          onChange={e => setIvaFilter(e.target.value as PresenceFilter)}
-          className="w-full bg-slate-100 dark:bg-slate-900 border-none rounded-xl px-4 py-3 text-sm font-bold appearance-none outline-none cursor-pointer"
-        >
-          <option value="all">IVA: todo</option>
-          <option value="with">IVA: solo con cuota</option>
-          <option value="without">IVA: sin cuota</option>
-        </select>
+      {/* KPIs — mismo tratamiento premium que el módulo de Ventas */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="glass-card hover:scale-105 transition-all duration-300 premium-shadow">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total Gastos</p>
+                <p className="text-3xl font-bold mt-1 tracking-tight">{stats.total}</p>
+              </div>
+              <div className="h-12 w-12 bg-blue-100/50 rounded-xl flex items-center justify-center">
+                <Receipt className="h-6 w-6 text-blue-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="glass-card hover:scale-105 transition-all duration-300 premium-shadow">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Pendientes</p>
+                <p className="text-3xl font-bold mt-1 text-amber-600 tracking-tight">{stats.pendientes}</p>
+              </div>
+              <div className="h-12 w-12 bg-amber-100/50 rounded-xl flex items-center justify-center">
+                <Clock className="h-6 w-6 text-amber-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="glass-card hover:scale-105 transition-all duration-300 premium-shadow">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Pagados</p>
+                <p className="text-3xl font-bold mt-1 text-emerald-600 tracking-tight">{stats.pagados}</p>
+              </div>
+              <div className="h-12 w-12 bg-emerald-100/50 rounded-xl flex items-center justify-center">
+                <CheckCircle className="h-6 w-6 text-emerald-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="premium-gradient-primary hover:scale-105 transition-all duration-300 shadow-lg border-none text-white">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-white/80 uppercase tracking-wider">Importe Total</p>
+                <p className="text-2xl font-bold mt-1 tracking-tight truncate">{formatearImporte(stats.importeTotal, moneda)}</p>
+              </div>
+              <div className="h-12 w-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm shrink-0">
+                <TrendingUp className="h-6 w-6 text-white" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Filtros */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por descripción, proveedor o CIF..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <Select value={supplierFilter} onValueChange={changeSupplierFilter}>
+              <SelectTrigger className="w-full md:w-[220px]">
+                <SelectValue placeholder="Proveedor" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los proveedores</SelectItem>
+                {suppliers.map(s => (
+                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={baseFilter} onValueChange={v => setBaseFilter(v as PresenceFilter)}>
+              <SelectTrigger className="w-full md:w-[190px]">
+                <SelectValue placeholder="Base" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Base: todas</SelectItem>
+                <SelectItem value="with">Base: con dato</SelectItem>
+                <SelectItem value="without">Base: sin dato</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={ivaFilter} onValueChange={v => setIvaFilter(v as PresenceFilter)}>
+              <SelectTrigger className="w-full md:w-[190px]">
+                <SelectValue placeholder="IVA" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">IVA: todo</SelectItem>
+                <SelectItem value="with">IVA: con cuota</SelectItem>
+                <SelectItem value="without">IVA: sin cuota</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="border-none shadow-sm">
         <CardContent className="p-0">

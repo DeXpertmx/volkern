@@ -1,13 +1,14 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Plus, Search, Building2, Phone, Mail, MapPin, Calendar, CreditCard, Tag, Receipt } from "lucide-react"
+import { Plus, Search, Building2, Phone, Mail, MapPin, Calendar, CreditCard, Tag, Receipt, TrendingUp, Clock, CheckCircle } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import Link from "next/link"
 import useSWR from "swr"
 import { toast } from "sonner"
@@ -60,6 +61,8 @@ export default function ProveedoresPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [detailSupplier, setDetailSupplier] = useState<any>(null)
   const [deepLinkedId, setDeepLinkedId] = useState<string | null>(null)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('all')
 
   // Entrada directa a una ficha desde el listado de gastos (?proveedor=ID)
   useEffect(() => {
@@ -99,6 +102,30 @@ export default function ProveedoresPage() {
       .finally(() => { if (!cancelled) setExpensesLoading(false) })
     return () => { cancelled = true }
   }, [detailSupplier?.id])
+
+  // Filtro local del directorio: búsqueda por nombre/CIF/email y categoría.
+  const filteredSuppliers = useMemo(() => {
+    if (!Array.isArray(suppliers)) return []
+    const q = searchTerm.trim().toLowerCase()
+    return suppliers.filter((s: any) =>
+      (categoryFilter === 'all' || s.category === categoryFilter) &&
+      (q === '' || [s.name, s.taxId, s.email]
+        .filter(Boolean)
+        .some((v: any) => String(v).toLowerCase().includes(q)))
+    )
+  }, [suppliers, searchTerm, categoryFilter])
+
+  // KPIs del directorio: totales y exposición pendiente con proveedores.
+  const stats = useMemo(() => {
+    const list = Array.isArray(suppliers) ? suppliers : []
+    const conSaldo = list.filter((s: any) => Number(s.balance) > 0).length
+    return {
+      total: list.length,
+      conSaldo,
+      alDia: list.length - conSaldo,
+      saldoTotal: list.reduce((sum: number, s: any) => sum + (Number(s.balance) || 0), 0),
+    }
+  }, [suppliers])
 
   async function saveDetailRates() {
     if (!detailSupplier) return
@@ -150,8 +177,11 @@ export default function ProveedoresPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-black tracking-tight uppercase">Base de Proveedores</h1>
-          <p className="text-muted-foreground">Directorio centralizado de partners y suministradores.</p>
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <Building2 className="h-8 w-8 text-primary" />
+            Base de Proveedores
+          </h1>
+          <p className="text-muted-foreground mt-1">Directorio centralizado de partners y suministradores.</p>
         </div>
         <Button onClick={() => setCreateOpen(true)} className="rounded-xl font-bold uppercase text-xs tracking-wider">
           <Plus className="w-4 h-4 mr-2" /> Nuevo Proveedor
@@ -268,40 +298,98 @@ export default function ProveedoresPage() {
         </DialogContent>
       </Dialog>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="md:col-span-2 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input className="w-full bg-slate-100 dark:bg-slate-900 border-none rounded-xl pl-10 pr-4 py-3 text-sm" placeholder="Buscar por nombre o identificación..." />
-        </div>
-        <div>
-             <select className="w-full bg-slate-100 dark:bg-slate-900 border-none rounded-xl px-4 py-3 text-sm font-bold appearance-none outline-none">
-             <option>Todas las categorías</option>
-             <option>Varios</option>
-             <option>Software</option>
-             <option>Marketing</option>
-             <option>Logística</option>
-             <option>Consultoría</option>
-             <option>Hosting</option>
-             <option>Servicios Profesionales</option>
-             <option>Materia Prima</option>
-             <option>Transporte</option>
-             <option>Mantenimiento</option>
-             <option>Telecomunicaciones</option>
-             <option>Seguros</option>
-             <option>Servicios Públicos</option>
-             <option>Papelería</option>
-             <option>Equipo de Cómputo</option>
-             <option>Alimentos y Bebidas</option>
-             <option>Capacitación</option>
-           </select>
-        </div>
+      {/* KPIs — mismo tratamiento premium que el módulo de Ventas */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="glass-card hover:scale-105 transition-all duration-300 premium-shadow">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total Proveedores</p>
+                <p className="text-3xl font-bold mt-1 tracking-tight">{stats.total}</p>
+              </div>
+              <div className="h-12 w-12 bg-blue-100/50 rounded-xl flex items-center justify-center">
+                <Building2 className="h-6 w-6 text-blue-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="glass-card hover:scale-105 transition-all duration-300 premium-shadow">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Con Saldo Pendiente</p>
+                <p className="text-3xl font-bold mt-1 text-amber-600 tracking-tight">{stats.conSaldo}</p>
+              </div>
+              <div className="h-12 w-12 bg-amber-100/50 rounded-xl flex items-center justify-center">
+                <Clock className="h-6 w-6 text-amber-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="glass-card hover:scale-105 transition-all duration-300 premium-shadow">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Al Día</p>
+                <p className="text-3xl font-bold mt-1 text-emerald-600 tracking-tight">{stats.alDia}</p>
+              </div>
+              <div className="h-12 w-12 bg-emerald-100/50 rounded-xl flex items-center justify-center">
+                <CheckCircle className="h-6 w-6 text-emerald-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="premium-gradient-primary hover:scale-105 transition-all duration-300 shadow-lg border-none text-white">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-white/80 uppercase tracking-wider">Saldo Pendiente</p>
+                <p className="text-2xl font-bold mt-1 tracking-tight truncate">{formatearImporte(stats.saldoTotal, moneda)}</p>
+              </div>
+              <div className="h-12 w-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm shrink-0">
+                <TrendingUp className="h-6 w-6 text-white" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Filtros */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por nombre, CIF o email..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="w-full md:w-[260px]">
+                <SelectValue placeholder="Categoría" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las categorías</SelectItem>
+                {EXPENSE_CATEGORIES.map(c => (
+                  <SelectItem key={c.value} value={c.label}>{c.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {isLoading ? (
           <div className="col-span-full text-center py-20 text-muted-foreground font-medium uppercase tracking-widest text-xs">Cargando proveedores...</div>
-        ) : (suppliers && suppliers.length > 0) ? (
-          suppliers.map((supplier: any) => (
+        ) : (filteredSuppliers.length > 0) ? (
+          filteredSuppliers.map((supplier: any) => (
             <Card key={supplier.id} className="border-none shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
                <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
                  <Building2 className="w-20 h-20 -mr-6 -mt-6 rotate-12" />
@@ -354,7 +442,11 @@ export default function ProveedoresPage() {
         ) : (
           <div className="col-span-full py-20 bg-slate-50 rounded-2xl border border-dashed border-slate-200 flex flex-col items-center justify-center space-y-2">
              <Building2 className="w-8 h-8 text-slate-300" />
-             <p className="text-sm font-medium text-slate-500 uppercase tracking-tight">No hay proveedores en tu directorio</p>
+             <p className="text-sm font-medium text-slate-500 uppercase tracking-tight">
+               {Array.isArray(suppliers) && suppliers.length > 0
+                 ? 'No hay proveedores que coincidan con la búsqueda o filtros'
+                 : 'No hay proveedores en tu directorio'}
+             </p>
           </div>
         )}
       </div>
