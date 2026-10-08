@@ -20,3 +20,6 @@ fluy_crm.zip
 
 # credenciales locales: nunca versionar
 .db_pass
+
+# capturas de verificacion temporales (no son documentacion del repo)
+tmp-verificacion-*/
