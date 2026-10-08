@@ -668,7 +668,10 @@ export async function conciliarFacturaConCompra(input: {
 
   const anterior = redondear2(compra.gasto.amount)
   const nuevo = redondear2(factura.amount)
+  /** `pedido - factura`: positivo cuando el provisional apuntó de más. */
   const diferencia = redondear2(anterior - nuevo)
+  /** Lo que hay que mover la deuda del proveedor: `factura - provisional`. */
+  const ajusteDeSaldo = redondear2(nuevo - anterior)
   const conciliadoEn = new Date()
 
   const actualizado = await prisma.expense.update({
@@ -693,6 +696,7 @@ export async function conciliarFacturaConCompra(input: {
           conciliadoDesde: 'factura',
           conciliadoEn: conciliadoEn.toISOString(),
           importeProvisional: anterior,
+          importeFactura: nuevo,
           diferencia,
         },
       }),
@@ -700,13 +704,15 @@ export async function conciliarFacturaConCompra(input: {
     select: { id: true, amount: true, category: true, invoiceNumber: true, reconciledAt: true },
   })
 
-  // Cuentas por pagar: el provisional ya sumó su importe al saldo del proveedor
-  // (lo hace `createExpense` cuando el gasto está PENDING). Si la factura trae
-  // otro importe, el saldo se corrige por la diferencia o la deuda miente.
-  if (diferencia !== 0 && compra.gasto.status === 'PENDING') {
+  // Cuentas por pagar: el provisional ya sumó su importe a la deuda del
+  // proveedor (lo hace `createExpense` cuando el gasto está PENDING). Si la
+  // factura trae otro importe, el saldo se corrige por la DIFERENCIA REAL
+  // (`factura - provisional`), no por el signo con el que se presenta: una
+  // factura mayor debe subir la deuda, no bajarla.
+  if (ajusteDeSaldo !== 0 && compra.gasto.status === 'PENDING') {
     await prisma.supplier.update({
       where: { id: compra.gasto.supplierId },
-      data: { balance: { increment: diferencia } },
+      data: { balance: { increment: ajusteDeSaldo } },
     })
   }
 
