@@ -77,6 +77,7 @@ export const MODULE_GROUPS: ModuleGroup[] = [
       { id: 'conciliacion', label: 'Conciliación', icon: '🏦', description: 'Conciliación bancaria' },
       { id: 'rrhh', label: 'RRHH', icon: '👥', description: 'Nóminas y talento' },
       { id: 'inventario', label: 'Inventario', icon: '📦', description: 'Almacenes y stock' },
+      { id: 'compras', label: 'Compras', icon: '🧾', description: 'Pedidos a proveedores y recepción de mercancía' },
       { id: 'produccion', label: 'Producción', icon: '🏭', description: 'Manufactura y BOM' },
       { id: 'proyectos', label: 'Proyectos', icon: '🏗️', description: 'Obras y proyectos' },
       { id: 'logistica', label: 'Logística', icon: '🚚', description: 'Flota y envíos' },
@@ -143,7 +144,7 @@ export const PERFIL_SUGGESTED_MODULES: Record<string, string[]> = {
     'proyectos', 'inventario',
   ],
   industria: [
-    'produccion', 'inventario', 'proyectos', 'calidad', 'activos', 'logistica',
+    'produccion', 'inventario', 'compras', 'proyectos', 'calidad', 'activos', 'logistica',
     'finanzas', 'conciliacion',
     'mensajes', 'citas',
     'cotizaciones', 'contratos', 'ordenes_venta',
@@ -159,7 +160,7 @@ export const PERFIL_SUGGESTED_MODULES: Record<string, string[]> = {
   // publicada. Aquí sí, porque es la que un hotel elige al darse de alta y la
   // que le enciende el módulo `hospitality` (hub de propiedades y reservas).
   hospitality: [
-    'catalogo', 'hospitality', 'automatizaciones', 'mi_tarjeta',
+    'catalogo', 'hospitality', 'compras', 'automatizaciones', 'mi_tarjeta',
     'mensajes', 'citas',
   ],
 

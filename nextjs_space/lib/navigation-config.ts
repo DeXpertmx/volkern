@@ -438,6 +438,23 @@ export const HUBS: HubConfig[] = [
     ]
   },
   {
+    id: 'compras',
+    name: 'Compras',
+    icon: ShoppingCart,
+    href: '/dashboard/compras',
+    description: 'Pedidos a proveedores, recepción de mercancía y coste en contabilidad.',
+    requiredAccountType: 'BUSINESS',
+    requiredModule: 'compras',
+    basePaths: [
+      '/dashboard/compras'
+    ],
+    items: [
+      { name: 'Pedidos', href: '/dashboard/compras', icon: ListTodo, planModule: 'compras', description: 'Pedidos a proveedor y su estado' },
+      { name: 'Recepciones', href: '/dashboard/compras/recepciones', icon: Package, planModule: 'compras', description: 'Mercancía esperada y entradas de almacén' },
+      { name: 'Proveedores', href: '/dashboard/compras/proveedores', icon: Building2, planModule: 'compras', description: 'Directorio de proveedores' },
+    ]
+  },
+  {
     id: 'proyectos',
     name: 'Proyectos',
     icon: Briefcase,

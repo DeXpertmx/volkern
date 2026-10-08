@@ -40,6 +40,7 @@ export type CrmModule =
   | 'rrhh' | 'finanzas' | 'finanzas_consolidado'
   | 'insurance'
   | 'hospitality'
+  | 'compras'
   | 'calidad' | 'produccion' | 'inventario' | 'proyectos'
   | 'taskforce' | 'activos' | 'conocimiento' | 'estrategia'
   | 'conciliacion' | 'logistica'
@@ -106,6 +107,7 @@ export const ALL_MODULES: ModuleDefinition[] = [
   { id: 'calidad', label: 'Calidad', description: 'Control de calidad industrial', icon: '✅', group: 'ERP' },
   { id: 'produccion', label: 'Producción', description: 'Gestión de manufactura y BOM', icon: '🏭', group: 'ERP' },
   { id: 'inventario', label: 'Inventario', description: 'Gestión de almacenes y stock', icon: '📦', group: 'ERP' },
+  { id: 'compras', label: 'Compras', description: 'Pedidos a proveedores, recepción de mercancía y coste', icon: '🧾', group: 'ERP' },
   { id: 'proyectos', label: 'Proyectos', description: 'Gestión de obras y proyectos', icon: '🏗️', group: 'ERP' },
   { id: 'taskforce', label: 'Taskforce', description: 'Gestión de equipos operativos', icon: '👷', group: 'ERP' },
   { id: 'activos', label: 'Activos', description: 'Gestión de maquinaria y activos fijos', icon: '🚜', group: 'ERP' },
@@ -209,6 +211,7 @@ export const VERTICAL_DEFINITIONS: Record<Vertical, VerticalDefinition> = {
       'leads', 'contactos', 'empresas', 'tareas', 'analytics',
       'mensajes', 'citas', 'catalogo',
       'hospitality',
+      'compras',
       'automatizaciones',
       'mi_tarjeta',
       'equipo', 'configuracion',

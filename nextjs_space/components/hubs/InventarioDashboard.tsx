@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { 
   Package, 
   Warehouse as WarehouseIcon, 
@@ -223,7 +224,13 @@ export default function InventarioDashboard() {
                       "La tendencia actual sugiere que <span className="text-white font-bold">3 items</span> críticos se agotarán en menos de <span className="text-primary font-bold">48 horas</span>."
                     </p>
                  </div>
-                 <Button className="w-full rounded-xl text-[10px] font-bold uppercase tracking-widest py-5 bg-primary text-white hover:bg-primary/90"> Generar Orden de Compra Sugerida </Button>
+                 {/* Este botón no hacía nada: no tenía handler. Ahora lleva al
+                     hub de Compras, donde «Añadir sugerencias de stock» trae
+                     exactamente los artículos que están bajo su punto de
+                     pedido y los convierte en líneas revisables. */}
+                 <Button asChild className="w-full rounded-xl text-[10px] font-bold uppercase tracking-widest py-5 bg-primary text-white hover:bg-primary/90">
+                   <Link href="/dashboard/compras">Preparar orden de compra</Link>
+                 </Button>
               </CardContent>
               {/* Abstract Background for AI section */}
               <div className="absolute -bottom-10 -right-10 opacity-20">

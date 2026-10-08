@@ -31,20 +31,66 @@ export async function updateInventory(config: any, ctx: ActionContext): Promise<
   return true
 }
 
+/**
+ * crear_orden_compra — Pedido a proveedor desde una automatización.
+ *
+ * Antes escribía `compra.create` a mano contra un modelo que NO existía en el
+ * esquema: la acción fallaba en runtime en cuanto alguien la usaba. Ahora crea
+ * el pedido por el mismo camino que la pantalla (`lib/compras/service`), así
+ * que sale con su correlativo (`OC-AAAA-0001`), sus totales calculados y en el
+ * estado inicial del ciclo (`borrador`), no en un `pendiente` que no era
+ * ninguno de los estados reales.
+ *
+ * Config: `{ proveedorId?, almacenId?, notas?, fechaEntrega?, items[] }`, donde
+ * cada línea es `{ catalogoItemId|itemId, concepto?, cantidad, precioUnitario|precio, porcentajeImpuesto? }`.
+ */
 export async function createPurchaseOrder(config: any, ctx: ActionContext): Promise<boolean> {
-  const { proveedorId, items, notas } = config
-  const { getTenantDb } = await import('@/lib/db')
-  const tenantClient = await getTenantDb(ctx.state.tenantId)
+  const lineasEntrada: any[] = Array.isArray(config.items) ? config.items : []
+  const lineas = lineasEntrada
+    .filter((item: any) => item?.catalogoItemId || item?.itemId || item?.concepto || item?.nombre)
+    .map((item: any) => ({
+      catalogoItemId: item.catalogoItemId ?? item.itemId ?? null,
+      concepto: item.concepto ?? item.nombre ?? 'Línea de compra',
+      cantidad: Number(item.cantidad) || 0,
+      precioUnitario: Number(item.precioUnitario ?? item.precio) || 0,
+      porcentajeImpuesto: Number(item.porcentajeImpuesto ?? 21),
+    }))
 
-  const order = await (tenantClient as any).compra.create({
-    data: {
-      tenantId: ctx.state.tenantId, proveedorId, estado: 'pendiente', notas,
-      fechaEntrega: config.fechaEntrega,
-      items: { create: items.map((item: any) => ({ itemId: item.itemId, cantidad: item.cantidad, precioUnitario: item.precio })) },
-    },
-  })
-  await ctx.log('create_purchase_order', 'action', 'success', `Orden de compra ${order.id} creada`)
-  return true
+  if (lineas.length === 0) {
+    await ctx.log(
+      'create_purchase_order',
+      'action',
+      'error',
+      'La acción necesita al menos una línea con artículo o concepto (items)'
+    )
+    return false
+  }
+
+  try {
+    const { crearCompra } = await import('@/lib/compras/service')
+    const compra = await crearCompra({
+      // El contexto de una automatización siempre trae el tenant: la acción se
+      // ejecuta dentro de él (mismo criterio que el resto de acciones del motor).
+      tenantId: ctx.state.tenantId as string,
+      proveedorId: config.proveedorId ?? null,
+      almacenId: config.almacenId ?? null,
+      notas: config.notas ?? null,
+      fechaEntrega: config.fechaEntrega ? new Date(config.fechaEntrega) : null,
+      // Sin divisa en la acción, el servicio usa la del tenant.
+      moneda: config.moneda ?? null,
+      items: lineas,
+    })
+    await ctx.log('create_purchase_order', 'action', 'success', `Pedido de compra ${compra.numero} creado en borrador`)
+    return true
+  } catch (error) {
+    await ctx.log(
+      'create_purchase_order',
+      'action',
+      'error',
+      error instanceof Error ? error.message : 'Error al crear el pedido de compra'
+    )
+    return false
+  }
 }
 
 export async function adjustStock(config: any, ctx: ActionContext): Promise<boolean> {

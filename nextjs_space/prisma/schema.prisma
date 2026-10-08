@@ -110,6 +110,7 @@ model User {
   marketingAuditLogs      MarketingAuditLog[]
   metasVenta              MetaVenta[]                @relation("MetasVenta")
   ordenesVentaCreadoPor   OrdenVenta[]               @relation("OrdenVentaCreadoPor")
+  comprasCreadas          Compra[]                   @relation("CompraCreadaPor")
   outgoingWebhooks        OutgoingWebhook[]
   componentesCreados      PageComponent[]            @relation("ComponentCreator")
   paginasCreadas          Page[]                     @relation("PageCreator")
@@ -345,6 +346,7 @@ model Tenant {
   campaignRecipients             CampaignRecipient[]
   catalogoFieldDefinitions       CatalogoFieldDefinition[]        @relation("TenantCatalogoFieldDefinitions")
   catalogoItems                  CatalogoItem[]
+  compras                        Compra[]
   channels                       Channel[]
   signatureSettings              ClientSignatureSettings?
   client_subscriptions           client_subscriptions[]
@@ -3581,6 +3583,7 @@ model CatalogoItem {
   erp_sales_order_items       erp_sales_order_items[]
   stockLevels                 StockLevel[]
   movements                   StockMovement[]
+  compraItems                 CompraItem[]
   ordenVentaItems             OrdenVentaItem[]
 
   @@unique([tenantId, sku])
@@ -4391,6 +4394,7 @@ model Supplier {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   expenses      Expense[]
+  compras       Compra[] @relation("CompraProveedor")
   tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
@@ -4470,6 +4474,7 @@ model Expense {
   issuerTaxId        String?  // NIF del emisor
 
   createdBy          User     @relation("ExpenseCreator", fields: [createdById], references: [id])
+  compra             Compra?  @relation("CompraGasto")
   lead               Lead?    @relation(fields: [leadId], references: [id])
   project            Project? @relation(fields: [projectId], references: [id])
   supplier           Supplier @relation(fields: [supplierId], references: [id])
@@ -4520,6 +4525,7 @@ model Warehouse {
   updatedAt   DateTime        @updatedAt
   stockLevels StockLevel[]
   movements   StockMovement[]
+  compras     Compra[]     @relation("CompraAlmacen")
   tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
@@ -4587,6 +4593,83 @@ model StockMovement {
   @@index([type])
   @@index([createdAt])
   @@map("erp_stock_movements")
+}
+
+/// Pedido a proveedor (módulo Compras).
+///
+/// Ciclo de vida: `borrador` → `enviada` → (`parcial`) → `recibida`;
+/// `cancelada` en cualquier punto antes de recibir mercancía. El estado no se
+/// escribe a mano: sale de `estadoTrasRecepcion()` (lib/compras/estado.ts) a
+/// partir de lo recibido en las líneas, para que «recibida» no pueda mentir.
+///
+/// El coste entra en la contabilidad en el momento en que la orden queda
+/// recibida del todo: entonces se crea el `Expense` enlazado (`gastoId`) con
+/// el total del pedido. Las recepciones parciales NO generan gasto — facturar
+/// dos veces la misma orden es peor que esperar a la factura del proveedor.
+model Compra {
+  id             String    @id @default(cuid())
+  tenantId       String
+  /// Correlativo por tenant y año: `OC-2026-0001`.
+  numero         String
+  proveedorId    String?
+  /// Almacén de destino; en la recepción es donde entra el stock.
+  almacenId      String?
+  estado         String    @default("borrador")
+  fechaPedido    DateTime  @default(now())
+  /// Fecha prevista de entrega que compromete el proveedor.
+  fechaEntrega   DateTime?
+  fechaRecepcion DateTime?
+  moneda         String    @default("EUR")
+  subtotal       Float     @default(0)
+  totalImpuestos Float     @default(0)
+  total          Float     @default(0)
+  notas          String?
+  creadoPorId    String?
+  /// Gasto contable generado al recibir la orden completa.
+  gastoId        String?   @unique
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  items      CompraItem[]
+  almacen    Warehouse?    @relation("CompraAlmacen", fields: [almacenId], references: [id], onDelete: SetNull)
+  creadoPor  User?         @relation("CompraCreadaPor", fields: [creadoPorId], references: [id], onDelete: SetNull)
+  gasto      Expense?      @relation("CompraGasto", fields: [gastoId], references: [id], onDelete: SetNull)
+  proveedor  Supplier?     @relation("CompraProveedor", fields: [proveedorId], references: [id], onDelete: SetNull)
+  tenant     Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, numero])
+  @@index([tenantId, estado])
+  @@index([proveedorId])
+  @@map("erp_compras")
+}
+
+/// Línea de un pedido a proveedor.
+///
+/// `cantidadRecibida` acumula lo que ya entró en almacén, así que una línea
+/// puede recibirse en varias entregas. El stock solo se mueve para las líneas
+/// con `catalogoItemId`: una línea de texto libre (un servicio, una gestión)
+/// es coste, no existencias.
+model CompraItem {
+  id                 String   @id @default(cuid())
+  compraId           String
+  catalogoItemId     String?
+  concepto           String
+  cantidad           Float
+  precioUnitario     Float
+  porcentajeImpuesto Float    @default(21)
+  montoImpuesto      Float    @default(0)
+  total              Float    @default(0)
+  cantidadRecibida   Float    @default(0)
+  orden              Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  catalogoItem CatalogoItem? @relation(fields: [catalogoItemId], references: [id], onDelete: SetNull)
+  compra       Compra        @relation(fields: [compraId], references: [id], onDelete: Cascade)
+
+  @@index([compraId])
+  @@index([catalogoItemId])
+  @@map("erp_compra_items")
 }
 
 model Project {

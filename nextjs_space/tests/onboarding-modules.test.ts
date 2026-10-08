@@ -90,9 +90,11 @@ describe('MODULE_GROUPS', () => {
     expect(grupo!.modules.map(m => m.id)).toContain('hospitality')
   })
 
-  it('Contabilidad y ERP debe ser el grupo más grande (8 módulos)', () => {
+  it('Contabilidad y ERP debe ser el grupo más grande (9 módulos)', () => {
     const erpGroup = MODULE_GROUPS.find(g => g.group === 'Contabilidad y ERP')
-    expect(erpGroup!.modules.length).toBe(8)
+    expect(erpGroup!.modules.length).toBe(9)
+    // Compras entra en el grupo del ERP: pedidos a proveedores y recepción.
+    expect(erpGroup!.modules.map(m => m.id)).toContain('compras')
   })
 
   it('todos los IDs deben existir en ALL_MODULES (validez)', () => {
@@ -333,12 +335,16 @@ describe('PERFIL_SUGGESTED_MODULES', () => {
     expect(PERFIL_SUGGESTED_MODULES.inmobiliaria.length).toBe(12)
   })
 
-  it('industria debe tener exactamente 13 módulos', () => {
-    expect(PERFIL_SUGGESTED_MODULES.industria.length).toBe(13)
+  it('industria debe tener exactamente 14 módulos', () => {
+    expect(PERFIL_SUGGESTED_MODULES.industria.length).toBe(14)
+    expect(PERFIL_SUGGESTED_MODULES.industria).toContain('compras')
   })
 
-  it('hospitality debe tener exactamente 6 módulos', () => {
-    expect(PERFIL_SUGGESTED_MODULES.hospitality.length).toBe(6)
+  it('hospitality debe tener exactamente 7 módulos', () => {
+    expect(PERFIL_SUGGESTED_MODULES.hospitality.length).toBe(7)
+    // Un hotel compra: suministros, amenities, lavandería. El módulo viaja en
+    // el paquete de la vertical para que el alta lo encienda sin pedirlo.
+    expect(PERFIL_SUGGESTED_MODULES.hospitality).toContain('compras')
   })
 
   it('todos los módulos sugeridos deben ser IDs válidos en ALL_MODULES', () => {
