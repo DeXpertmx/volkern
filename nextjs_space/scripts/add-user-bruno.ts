@@ -1,10 +1,21 @@
 import { prisma } from '../lib/db'
 import bcrypt from 'bcryptjs'
 
-const TEMP_PASSWORD = 'BrunoHess2026!'
+/** La contraseña temporal se lee del entorno; ver scripts/bootstrap-admin.env.example. */
+function requireEnv(name: string): string {
+  const value = process.env[name]
+  if (!value) {
+    console.error(`❌ Define ${name} en el entorno antes de ejecutar.`)
+    process.exit(1)
+  }
+  return value
+}
+
 const EMAIL = 'bruno.hess@dimensionexpert.com'
 
 async function main() {
+  const TEMP_PASSWORD = requireEnv('BRUNO_TEMP_PASSWORD')
+
   const tenant = await prisma.tenant.findFirst({
     where: { subdomain: 'dexpert' },
     select: { id: true, nombre: true }
@@ -64,11 +75,10 @@ async function main() {
       },
       role: { id: back?.roleId, nombre: back?.role?.nombre },
     },
-    tempPassword: TEMP_PASSWORD,
     instructions: [
       'Bruno logs in at https://dexpert.volkern.app/auth/login',
       'Email: ' + EMAIL,
-      'Password: ' + TEMP_PASSWORD + ' (cambiar en primer login)',
+      'Contraseña: la de BRUNO_TEMP_PASSWORD (cambiar en el primer login). No se imprime aquí.',
     ],
   }, null, 2))
 }

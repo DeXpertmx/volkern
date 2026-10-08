@@ -3,12 +3,29 @@ import bcrypt from 'bcryptjs'
 
 const prisma = new PrismaClient()
 
+/**
+ * Las contraseñas se leen del entorno, igual que en `bootstrap-admin.ts`:
+ * nunca viven en el repositorio. Son las mismas dos variables que usa el
+ * bootstrap para no poder divergir entre crear y verificar.
+ */
+function requireEnv(name: string): string {
+  const value = process.env[name]
+  if (!value) {
+    console.error(`❌ Define ${name} en el entorno antes de ejecutar.`)
+    process.exit(1)
+  }
+  return value
+}
+
+const ADMIN_PASSWORD = requireEnv('ADMIN_TEMP_PASSWORD')
+const DEXPERT_ADMIN_PASSWORD = requireEnv('DEXPERT_ADMIN_TEMP_PASSWORD')
+
 async function main() {
   console.log('🔍 Verificando que las credenciales bootstrap funcionan\n')
 
   const cases = [
-    { email: 'admin@volkern.app',          password: 'Admin123!' },
-    { email: 'admin@dexpert.volkern.app',  password: 'Dexpert123!' },
+    { email: 'admin@volkern.app',          password: ADMIN_PASSWORD },
+    { email: 'admin@dexpert.volkern.app',  password: DEXPERT_ADMIN_PASSWORD },
   ]
 
   for (const c of cases) {
@@ -65,7 +82,7 @@ async function main() {
     const testEmail = requestSubdomain === 'admin'
       ? 'admin@volkern.app'
       : 'admin@dexpert.volkern.app'
-    const testPassword = requestSubdomain === 'admin' ? 'Admin123!' : 'Dexpert123!'
+    const testPassword = requestSubdomain === 'admin' ? ADMIN_PASSWORD : DEXPERT_ADMIN_PASSWORD
 
     const user = await prisma.user.findUnique({
       where: { email: testEmail.toLowerCase() },

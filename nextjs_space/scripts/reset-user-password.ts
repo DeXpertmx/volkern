@@ -1,3 +1,5 @@
+// ⚠️ Sustituido por scripts/reset-bruno-password.ts, que además escribe audit log.
+// Se conserva solo por compatibilidad; la contraseña ya no vive en el código.
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
@@ -5,7 +7,11 @@ const prisma = new PrismaClient();
 
 async function main() {
   const email = 'bruno.hess@dimensionexpert.com';
-  const newPassword = 'Volkern2024!'; // Temporary password
+  const newPassword = process.env.BRUNO_TEMP_PASSWORD; // Nunca en el repositorio
+  if (!newPassword) {
+    console.error('❌ Define BRUNO_TEMP_PASSWORD en el entorno antes de ejecutar.');
+    process.exit(1);
+  }
 
   console.log(`Checking user: ${email}`);
 
@@ -27,8 +33,8 @@ async function main() {
     data: { password: hashedPassword },
   });
 
+  // No se imprime la contraseña: la salida de estos scripts acaba en logs.
   console.log(`Password reset successfully for ${email}`);
-  console.log(`New password: ${newPassword}`);
 }
 
 main()
