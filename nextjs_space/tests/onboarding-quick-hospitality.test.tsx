@@ -58,7 +58,7 @@ describe('Onboarding rápido — la vertical Hospitality es elegible', () => {
 
     // El grupo se despliega y aparece el módulo del hub, ya marcado.
     expect(screen.getByText('Propiedades, unidades alojativas y reservas')).toBeTruthy();
-    expect(screen.getByText(contador(6))).toBeTruthy();
+    expect(screen.getByText(contador(7))).toBeTruthy();
     expect((screen.getByRole('button', { name: /comenzar/i }) as HTMLButtonElement).disabled).toBe(false);
   });
 
@@ -66,7 +66,7 @@ describe('Onboarding rápido — la vertical Hospitality es elegible', () => {
     searchParamsStub = new URLSearchParams('vertical=hospitality');
     render(<OnboardingQuickPage />);
 
-    await waitFor(() => expect(screen.getByText(contador(6))).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(contador(7))).toBeTruthy());
     expect((screen.getByRole('button', { name: /comenzar/i }) as HTMLButtonElement).disabled).toBe(false);
   });
 
