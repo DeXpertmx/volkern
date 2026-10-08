@@ -169,6 +169,19 @@ export default function PedidoCompraDetallePage() {
           <Badge className={`${ESTILO_ESTADO[compra.estado] ?? 'bg-muted'} border-none text-[10px] font-bold uppercase mt-2`}>
             {compra.estadoEtiqueta}
           </Badge>
+          {/* Lo que se quiere saber de un vistazo: si el coste ya tiene factura
+              detrás o sigue siendo el provisional de la recepción. */}
+          {compra.estado === 'recibida' && compra.gasto && (
+            compra.gasto.reconciledAt ? (
+              <Badge className="bg-emerald-100 text-emerald-700 border-none text-[10px] font-bold uppercase mt-2">
+                Conciliado{compra.gasto.invoiceNumber ? ` · fra. ${compra.gasto.invoiceNumber}` : ''}
+              </Badge>
+            ) : (
+              <Badge className="bg-amber-100 text-amber-700 border-none text-[10px] font-bold uppercase mt-2">
+                Coste provisional, sin factura
+              </Badge>
+            )
+          )}
         </div>
 
         <div className="flex gap-2">

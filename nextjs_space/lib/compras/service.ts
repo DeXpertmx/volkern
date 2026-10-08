@@ -1,6 +1,8 @@
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db'
 import { monedaEscritura } from '@/lib/moneda'
 import { adjustStock } from '@/lib/skills/inventory-skills'
+import { createExpense } from '@/lib/skills/finance-skills'
 import {
   PREFIJO_COMPRA,
   calcularLinea,
@@ -11,9 +13,19 @@ import {
   estadoTrasRecepcion,
   siguienteNumeroCompra,
   pendienteDeLinea,
+  redondear2,
   validarRecepcionDeLinea,
   type EstadoCompra,
 } from './reglas'
+import {
+  candidatoDesdePedido,
+  emparejarFactura,
+  importesCompatibles,
+  monedasCompatibles,
+  ordenarCandidatos,
+  type CandidatoConciliacion,
+  type Emparejamiento,
+} from './conciliacion'
 
 /**
  * service.ts — Los dos únicos escritores de una compra: `crearCompra` y
@@ -342,15 +354,52 @@ export async function recibirCompra(input: RecibirCompraInput): Promise<Resultad
   // 4. El coste entra en contabilidad cuando el pedido está completo. Una
   //    recepción parcial no genera gasto: facturar dos veces la misma orden es
   //    peor que esperar a la factura del proveedor.
+  //
+  //    Antes de crear nada se mira si la factura del proveedor ya estaba
+  //    registrada —pasa cuando el papel llega antes que la mercancía—. En ese
+  //    caso el pedido se imputa a aquel gasto y se marca conciliado, en vez de
+  //    dejar dos apuntes del mismo suministro.
   let gasto: ResultadoRecepcion['gasto'] = null
 
   if (nuevoEstado === 'recibida' && !compra.gastoId) {
     if (!compra.proveedorId) {
       avisos.push('El pedido no tiene proveedor: no se ha generado el gasto contable')
     } else {
-      const category = categoriaGastoDeCompra(compra.items)
-      const creado = await prisma.expense.create({
-        data: {
+      const facturaPrevia = await buscarFacturaSueltaDelProveedor({
+        tenantId,
+        proveedorId: compra.proveedorId,
+        importe: actualizada.total,
+        moneda: compra.moneda,
+      })
+
+      if (facturaPrevia) {
+        await prisma.expense.update({
+          where: { id: facturaPrevia.id },
+          data: {
+            reconciledAt: fechaRecepcion,
+            metadata: fusionarMetadata(facturaPrevia.metadata, {
+              conciliacion: {
+                compraId: compra.id,
+                numero: compra.numero,
+                conciliadoDesde: 'recepcion',
+                conciliadoEn: fechaRecepcion.toISOString(),
+              },
+            }),
+          },
+        })
+        await prisma.compra.update({ where: { id: compra.id }, data: { gastoId: facturaPrevia.id } })
+        gasto = { id: facturaPrevia.id, amount: facturaPrevia.amount, category: facturaPrevia.category }
+        avisos.push(
+          `La factura ${facturaPrevia.invoiceNumber ?? 'del proveedor'} ya estaba registrada: el pedido se ha imputado a ese gasto en lugar de crear uno nuevo`
+        )
+      } else {
+        const category = categoriaGastoDeCompra(compra.items)
+        // Mismo camino que la factura del proveedor: el gasto queda encadenado
+        // (huella del gasto anterior), con la retención del proveedor aplicada y
+        // sumando en las cuentas por pagar. Antes se escribía con
+        // `prisma.expense.create` a mano, así que el mismo apunte salía distinto
+        // según hubiera entrado por la recepción o por la factura.
+        const creado = await createExpense({
           tenantId,
           createdById: usuarioId,
           supplierId: compra.proveedorId,
@@ -360,16 +409,318 @@ export async function recibirCompra(input: RecibirCompraInput): Promise<Resultad
           date: fechaRecepcion,
           status: 'PENDING',
           category,
-          metadata: { origen: 'compras', compraId: compra.id, numero: compra.numero },
-        },
-        select: { id: true, amount: true, category: true },
-      })
-      await prisma.compra.update({ where: { id: compra.id }, data: { gastoId: creado.id } })
-      gasto = creado
+          metadataExtra: { origen: 'compras', compraId: compra.id, numero: compra.numero },
+        })
+        await prisma.compra.update({ where: { id: compra.id }, data: { gastoId: creado.id } })
+        gasto = { id: creado.id, amount: creado.amount, category: creado.category }
+        avisos.push(
+          `Coste de ${creado.amount.toFixed(2)} ${compra.moneda} apuntado como provisional: quedará conciliado cuando registres la factura del pedido ${compra.numero}`
+        )
+      }
     }
   }
 
   return { compra: actualizada, movimientos, gasto, avisos }
+}
+
+// ─── Conciliación con la factura del proveedor ───────────────────────────────
+//
+// Un pedido recibido y la factura que lo justifica son el MISMO coste visto dos
+// veces. El pedido lo apunta al recibirse (provisional, `reconciledAt = null`) y
+// la factura lo completa: número, base, IVA, vencimiento y justificante. Lo que
+// NO puede pasar es que acaben en dos gastos, que es lo que ocurría antes.
+//
+// El emparejamiento es conservador a propósito (ver `conciliacion.ts`): sólo se
+// decide solo cuando el importe cuadra al céntimo, la divisa coincide y hay un
+// único candidato. Todo lo demás vuelve a la pantalla para que lo confirme una
+// persona, porque imputar una factura al pedido equivocado es peor que preguntar.
+
+/**
+ * Mezcla metadatos de izquierda a derecha: lo de la derecha gana.
+ *
+ * Acepta `unknown` porque las columnas `Json?` de Prisma llegan como `JsonValue`
+ * (puede ser un escalar suelto), no como objeto.
+ */
+export function fusionarMetadata(...fuentes: unknown[]): Prisma.InputJsonObject {
+  const salida: Record<string, unknown> = {}
+  for (const fuente of fuentes) {
+    if (!fuente || typeof fuente !== 'object' || Array.isArray(fuente)) continue
+    for (const [clave, valor] of Object.entries(fuente as Record<string, unknown>)) {
+      salida[clave] = valor
+    }
+  }
+  return salida as Prisma.InputJsonObject
+}
+
+/** Datos de la factura que se vuelcan sobre el gasto provisional del pedido. */
+export interface FacturaParaConciliar {
+  amount: number
+  supplierId?: string | null
+  currency?: string | null
+  invoiceNumber?: string | null
+  date?: Date | null
+  dueDate?: Date | null
+  receiptUrl?: string | null
+  category?: string | null
+  taxableBase?: number | null
+  vatRate?: number | null
+  vatAmount?: number | null
+  issuerName?: string | null
+  /** Claves sueltas de la factura (serie, tramos de IVA, IBAN…) para `metadata`. */
+  metadata?: Record<string, unknown> | null
+}
+
+export interface ResultadoConciliacion {
+  compra: { id: string; numero: string; estado: string; total: number }
+  gasto: { id: string; amount: number; category: string; invoiceNumber: string | null; reconciledAt: Date }
+  /** `importe provisional - importe factura`: lo que se ha corregido en el gasto. */
+  diferencia: number
+}
+
+/**
+ * La factura llegó antes que la mercancía: busca el gasto de factura que ese
+ * pedido debería completar en vez de crear uno nuevo al recibirlo.
+ *
+ * Sólo devuelve algo con coincidencia **exacta y única**. Si hay dos gastos del
+ * mismo importe no se adivina: se devuelve `null`, el pedido crea su provisional
+ * y la pantalla de gastos marcará el otro como posible duplicado.
+ */
+export async function buscarFacturaSueltaDelProveedor(input: {
+  tenantId: string
+  proveedorId: string
+  importe: number
+  moneda?: string | null
+}): Promise<{
+  id: string
+  amount: number
+  category: string
+  invoiceNumber: string | null
+  metadata: unknown
+} | null> {
+  const facturas = await prisma.expense.findMany({
+    where: {
+      tenantId: input.tenantId,
+      supplierId: input.proveedorId,
+      reconciledAt: null,
+      // Sólo una factura de verdad: un gasto sin número no es «el papel» que
+      // justifica este pedido, así que no se le imputa.
+      invoiceNumber: { not: null },
+      // Y que no esté ya imputada a otro pedido.
+      compra: { is: null },
+    },
+    select: { id: true, amount: true, category: true, currency: true, invoiceNumber: true, metadata: true },
+    orderBy: { date: 'desc' },
+    take: 50,
+  })
+
+  const exactas = facturas.filter(
+    (f) =>
+      monedasCompatibles(f.currency, input.moneda) &&
+      redondear2(f.amount - input.importe) === 0
+  )
+
+  return exactas.length === 1 ? exactas[0] : null
+}
+
+/**
+ * Pedidos recibidos cuyo coste sigue siendo provisional, compatibles con el
+ * importe de una factura. Es la lista que se le enseña a quien concilia.
+ */
+export async function buscarComprasPendientesDeFactura(input: {
+  tenantId: string
+  proveedorId?: string | null
+  importeFactura: number
+  monedaFactura?: string | null
+}): Promise<CandidatoConciliacion[]> {
+  const importeFactura = Number(input.importeFactura)
+  if (!Number.isFinite(importeFactura)) return []
+
+  const compras = await prisma.compra.findMany({
+    where: {
+      tenantId: input.tenantId,
+      estado: 'recibida',
+      gastoId: { not: null },
+      // Sólo los pedidos cuyo gasto sigue sin factura.
+      gasto: { is: { reconciledAt: null } },
+      ...(input.proveedorId ? { proveedorId: input.proveedorId } : {}),
+    },
+    select: {
+      id: true,
+      numero: true,
+      total: true,
+      moneda: true,
+      fechaRecepcion: true,
+      proveedorId: true,
+      proveedor: { select: { name: true } },
+    },
+    orderBy: { fechaRecepcion: 'desc' },
+    take: 50,
+  })
+
+  const candidatos: CandidatoConciliacion[] = []
+  for (const compra of compras) {
+    if (!monedasCompatibles(compra.moneda, input.monedaFactura)) continue
+    if (!importesCompatibles(compra.total, importeFactura)) continue
+    candidatos.push(
+      candidatoDesdePedido({
+        compraId: compra.id,
+        numero: compra.numero,
+        proveedorId: compra.proveedorId,
+        proveedorNombre: compra.proveedor?.name ?? null,
+        importePedido: compra.total,
+        moneda: compra.moneda,
+        fechaRecepcion: compra.fechaRecepcion,
+        importeFactura,
+      })
+    )
+  }
+
+  return ordenarCandidatos(candidatos)
+}
+
+/** Candidatos + decisión, que es lo que necesita la ruta de gastos de una vez. */
+export async function sugerirConciliacionParaFactura(input: {
+  tenantId: string
+  proveedorId?: string | null
+  importeFactura: number
+  monedaFactura?: string | null
+}): Promise<{ emparejamiento: Emparejamiento; candidatos: CandidatoConciliacion[] }> {
+  const candidatos = await buscarComprasPendientesDeFactura(input)
+  return { emparejamiento: emparejarFactura(candidatos), candidatos }
+}
+
+/**
+ * Completa el gasto provisional del pedido con los datos de la factura y lo
+ * marca como conciliado. Es la operación que evita el doble apunte.
+ */
+export async function conciliarFacturaConCompra(input: {
+  tenantId: string
+  compraId: string
+  factura: FacturaParaConciliar
+}): Promise<ResultadoConciliacion> {
+  const { tenantId, factura } = input
+
+  if (!Number.isFinite(Number(factura.amount))) {
+    throw new ErrorCompra('invalido', 'La factura necesita un importe para poder conciliarse')
+  }
+
+  const compra = await prisma.compra.findFirst({
+    where: { id: input.compraId, tenantId },
+    select: {
+      id: true,
+      numero: true,
+      estado: true,
+      total: true,
+      moneda: true,
+      proveedorId: true,
+      proveedor: { select: { name: true } },
+      gasto: {
+        select: {
+          id: true,
+          amount: true,
+          status: true,
+          supplierId: true,
+          invoiceNumber: true,
+          reconciledAt: true,
+          metadata: true,
+        },
+      },
+    },
+  })
+  if (!compra) throw new ErrorCompra('no_encontrado', 'Pedido no encontrado')
+
+  if (!compra.gasto) {
+    throw new ErrorCompra(
+      'conflicto',
+      `El pedido ${compra.numero} todavía no tiene coste contable: recibe la mercancía antes de conciliar la factura`
+    )
+  }
+  if (compra.gasto.reconciledAt) {
+    throw new ErrorCompra(
+      'conflicto',
+      `El pedido ${compra.numero} ya está conciliado${compra.gasto.invoiceNumber ? ` con la factura ${compra.gasto.invoiceNumber}` : ''}`
+    )
+  }
+
+  // El proveedor de la factura tiene que ser el del pedido, o se estaría
+  // imputando el papel de uno al compromiso de otro.
+  if (factura.supplierId && compra.proveedorId && factura.supplierId !== compra.proveedorId) {
+    throw new ErrorCompra(
+      'invalido',
+      `La factura es de otro proveedor: el pedido ${compra.numero} es de ${compra.proveedor?.name ?? 'otro proveedor'}`
+    )
+  }
+
+  if (!importesCompatibles(compra.total, factura.amount)) {
+    throw new ErrorCompra(
+      'invalido',
+      `El importe de la factura (${redondear2(factura.amount)}) no cuadra con el pedido ${compra.numero} (${redondear2(compra.total)})`
+    )
+  }
+
+  const moneda = monedaEscritura(factura.currency, compra.moneda)
+  if (!monedasCompatibles(moneda, compra.moneda)) {
+    throw new ErrorCompra(
+      'invalido',
+      `La factura está en ${moneda} y el pedido en ${compra.moneda}: no se pueden conciliar sin convertir`
+    )
+  }
+
+  const anterior = redondear2(compra.gasto.amount)
+  const nuevo = redondear2(factura.amount)
+  const diferencia = redondear2(anterior - nuevo)
+  const conciliadoEn = new Date()
+
+  const actualizado = await prisma.expense.update({
+    where: { id: compra.gasto.id },
+    data: {
+      amount: nuevo,
+      currency: moneda,
+      reconciledAt: conciliadoEn,
+      ...(factura.invoiceNumber ? { invoiceNumber: factura.invoiceNumber } : {}),
+      ...(factura.date ? { date: factura.date } : {}),
+      ...(factura.dueDate ? { dueDate: factura.dueDate } : {}),
+      ...(factura.receiptUrl ? { receiptUrl: factura.receiptUrl } : {}),
+      ...(factura.category ? { category: factura.category } : {}),
+      ...(factura.taxableBase != null ? { taxableBase: factura.taxableBase } : {}),
+      ...(factura.vatRate != null ? { vatRate: factura.vatRate } : {}),
+      ...(factura.vatAmount != null ? { vatAmount: factura.vatAmount } : {}),
+      ...(factura.issuerName ? { issuerName: factura.issuerName } : {}),
+      metadata: fusionarMetadata(compra.gasto.metadata, factura.metadata, {
+        conciliacion: {
+          compraId: compra.id,
+          numero: compra.numero,
+          conciliadoDesde: 'factura',
+          conciliadoEn: conciliadoEn.toISOString(),
+          importeProvisional: anterior,
+          diferencia,
+        },
+      }),
+    },
+    select: { id: true, amount: true, category: true, invoiceNumber: true, reconciledAt: true },
+  })
+
+  // Cuentas por pagar: el provisional ya sumó su importe al saldo del proveedor
+  // (lo hace `createExpense` cuando el gasto está PENDING). Si la factura trae
+  // otro importe, el saldo se corrige por la diferencia o la deuda miente.
+  if (diferencia !== 0 && compra.gasto.status === 'PENDING') {
+    await prisma.supplier.update({
+      where: { id: compra.gasto.supplierId },
+      data: { balance: { increment: diferencia } },
+    })
+  }
+
+  return {
+    compra: { id: compra.id, numero: compra.numero, estado: compra.estado, total: compra.total },
+    gasto: {
+      id: actualizado.id,
+      amount: actualizado.amount,
+      category: actualizado.category,
+      invoiceNumber: actualizado.invoiceNumber,
+      reconciledAt: actualizado.reconciledAt ?? conciliadoEn,
+    },
+    diferencia,
+  }
 }
 
 // ─── Sugerencias de reposición ───────────────────────────────────────────────

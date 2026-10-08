@@ -33,7 +33,21 @@ export const GET = withTenantAuth(async (_request, auth, { params }) => {
           select: { id: true, name: true, taxId: true, email: true, city: true, country: true },
         },
         almacen: { select: { id: true, name: true } },
-        gasto: { select: { id: true, amount: true, currency: true, status: true, category: true } },
+        // El estado de la conciliación viaja con el pedido: la ficha tiene que
+        // poder decir si su coste ya lo justifica una factura o sigue siendo
+        // una estimación.
+        gasto: {
+          select: {
+            id: true,
+            amount: true,
+            currency: true,
+            status: true,
+            category: true,
+            invoiceNumber: true,
+            reconciledAt: true,
+            date: true,
+          },
+        },
       },
     });
 

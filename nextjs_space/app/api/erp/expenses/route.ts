@@ -4,6 +4,13 @@ import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { skills } from '@/lib/skills';
 import { monedaEscritura } from '@/lib/moneda';
+import {
+  ErrorCompra,
+  conciliarFacturaConCompra,
+  statusDeErrorCompra,
+  sugerirConciliacionParaFactura,
+  type FacturaParaConciliar,
+} from '@/lib/compras/service';
 
 /**
  * GET /api/erp/expenses - Listar gastos con filtros
@@ -150,6 +157,109 @@ export const POST = withTenantAuth(async (request, auth) => {
           description: duplicate.description,
         },
       }, { status: 409 });
+    }
+
+    // ── Conciliación con el pedido de compra ────────────────────────────────
+    // Un pedido recibido ya dejó su coste apuntado como provisional. Si esta
+    // factura es la suya, se completa ESE apunte; antes se creaba otro y el
+    // mismo suministro se contaba dos veces.
+    const importeFactura = Number(body.totalFactura || body.amount)
+    const numeroFactura = Number.isFinite(importeFactura) ? importeFactura : NaN
+    const aNumero = (valor: unknown): number | null => {
+      if (valor === null || valor === undefined || valor === '') return null
+      const n = typeof valor === 'number' ? valor : parseFloat(String(valor))
+      return Number.isFinite(n) ? n : null
+    }
+
+    const facturaParaConciliar: FacturaParaConciliar = {
+      amount: numeroFactura,
+      supplierId: body.supplierId,
+      currency: body.currency,
+      invoiceNumber: invoiceNumber || null,
+      date: body.date ? new Date(body.date) : null,
+      dueDate: body.dueDate ? new Date(body.dueDate) : null,
+      receiptUrl: body.receiptUrl ?? null,
+      category: body.category ?? null,
+      taxableBase: aNumero(body.taxableBase),
+      vatRate: aNumero(body.vatRate),
+      vatAmount: aNumero(body.vatAmount),
+      issuerName: body.issuerName ?? null,
+      metadata: {
+        serie: body.serie ?? null,
+        totalFactura: aNumero(body.totalFactura),
+        receptorNombre: body.receptorNombre ?? null,
+        receptorNif: body.receptorNif ?? null,
+        iban: body.iban ?? null,
+        vatBreakdown: Array.isArray(body.vatBreakdown) ? body.vatBreakdown : null,
+      },
+    }
+
+    // Conciliación explícita: quien envía ya ha dicho a qué pedido pertenece.
+    if (body.compraId) {
+      try {
+        const resultado = await conciliarFacturaConCompra({
+          tenantId,
+          compraId: String(body.compraId),
+          factura: facturaParaConciliar,
+        })
+        return NextResponse.json({
+          ...resultado.gasto,
+          conciliacion: {
+            estado: 'conciliada',
+            compraId: resultado.compra.id,
+            numero: resultado.compra.numero,
+            diferencia: resultado.diferencia,
+          },
+        })
+      } catch (error) {
+        if (error instanceof ErrorCompra) {
+          return NextResponse.json({ error: error.message }, { status: statusDeErrorCompra(error.codigo) })
+        }
+        throw error
+      }
+    }
+
+    // Automática sólo con coincidencia exacta y única. Si hay cualquier duda se
+    // devuelven los candidatos y decide una persona: dar de alta el gasto a
+    // ciegas es justo lo que duplicaba.
+    if (!body.allowDuplicate && !body.sinConciliar && Number.isFinite(numeroFactura)) {
+      const { emparejamiento, candidatos } = await sugerirConciliacionParaFactura({
+        tenantId,
+        proveedorId: body.supplierId,
+        importeFactura: numeroFactura,
+        monedaFactura: monedaEscritura(body.currency, auth.tenant?.moneda),
+      })
+
+      if (emparejamiento.estado === 'automatica') {
+        const resultado = await conciliarFacturaConCompra({
+          tenantId,
+          compraId: emparejamiento.candidato.compraId,
+          factura: facturaParaConciliar,
+        })
+        return NextResponse.json({
+          ...resultado.gasto,
+          conciliacion: {
+            estado: 'conciliada',
+            compraId: resultado.compra.id,
+            numero: resultado.compra.numero,
+            diferencia: resultado.diferencia,
+          },
+        })
+      }
+
+      if (emparejamiento.estado === 'revisar') {
+        return NextResponse.json(
+          {
+            code: 'CONCILIACION_SUGERIDA',
+            error:
+              candidatos.length === 1
+                ? `Esta factura parece corresponder al pedido ${candidatos[0].numero}. Confírmalo para conciliarla, o guárdala como gasto nuevo.`
+                : `Hay ${candidatos.length} pedidos de este proveedor que podrían ser el de esta factura. Indica cuál, o guárdala como gasto nuevo.`,
+            candidatos,
+          },
+          { status: 409 }
+        )
+      }
     }
 
     // Si la captura es manual o el OCR dejó vacío el receptor, completar desde

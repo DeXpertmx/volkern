@@ -4463,6 +4463,12 @@ model Expense {
   // imputarse a una reserva concreta para calcular su rentabilidad real.
   hospitalityReservationId String?
 
+  /// Cuándo este gasto dejó de ser una estimación y quedó atado a la factura
+  /// del proveedor que lo justifica. `null` = sigue provisional (por ejemplo el
+  /// coste que genera un pedido de compra al recibirse). Evita contabilizar dos
+  /// veces el mismo suministro: la factura completa este gasto en vez de crear otro.
+  reconciledAt       DateTime?
+
   // ── Verifactu ─────────────────────────────────────────────
   invoiceNumber      String?  // Número y serie de la factura
   taxableBase        Float?   // Base imponible
@@ -4488,6 +4494,7 @@ model Expense {
   @@index([status])
   @@index([date])
   @@index([hospitalityReservationId])
+  @@index([tenantId, supplierId, reconciledAt])
   @@map("erp_expenses")
 }
 

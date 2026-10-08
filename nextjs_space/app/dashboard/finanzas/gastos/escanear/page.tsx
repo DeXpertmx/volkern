@@ -134,6 +134,21 @@ function detectTipoIdEspanol(id: string): 'NIF' | 'CIF' | 'NIE' | null {
   return null
 }
 
+/**
+ * Pedido recibido que podría ser el de la factura que se está capturando. Lo
+ * calcula el servidor (`lib/compras/conciliacion.ts`) y aquí sólo se pinta.
+ */
+interface CandidatoConciliacionUI {
+  compraId: string
+  numero: string
+  proveedorNombre?: string | null
+  importePedido: number
+  moneda?: string | null
+  fechaRecepcion?: string | null
+  diferencia: number
+  exacto: boolean
+}
+
 export default function EscanearGastoPage() {
   const router = useRouter()
   const cameraInputRef = useRef<HTMLInputElement>(null)
@@ -180,6 +195,14 @@ export default function EscanearGastoPage() {
   const proposalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [saving, setSaving] = useState(false)
   const [duplicateCandidate, setDuplicateCandidate] = useState<{ body: Record<string, any>; message: string; duplicate?: { id?: string; invoiceNumber?: string | null; amount?: number; date?: string; currency?: string; description?: string } } | null>(null)
+  // Factura que parece ser la de un pedido a proveedor ya recibido. No se
+  // registra hasta que alguien diga si se imputa a ese pedido: crear un gasto
+  // nuevo sería justo lo que duplicaba el coste del mismo suministro.
+  const [conciliacionCandidate, setConciliacionCandidate] = useState<{
+    body: Record<string, any>
+    message: string
+    candidatos: CandidatoConciliacionUI[]
+  } | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [showSelect, setShowSelect] = useState(true)
   // Tipos de IVA del proveedor: se ofrecen como opciones para el IVA % y se
@@ -1503,7 +1526,7 @@ export default function EscanearGastoPage() {
           body: JSON.stringify({ id: inboxId, status: 'PROCESSED', expenseId: data.id, extractedData: body }),
         }).catch(() => { /* el gasto ya está guardado; la bandeja se puede reconciliar después */ })
       }
-      toast.success('Gasto registrado correctamente')
+      toast.success(data.conciliacion ? 'Factura conciliada con su pedido' : 'Gasto registrado correctamente')
       // Confirmación de los tramos: aprender su posición en la plantilla del
       // proveedor para que el siguiente escaneo los extraiga sin re-detectar.
       void saveVatRowTemplate()
@@ -1513,6 +1536,15 @@ export default function EscanearGastoPage() {
 
     if (res.status === 409 && data.code === 'POSSIBLE_DUPLICATE' && !allowDuplicate) {
       setDuplicateCandidate({ body, message: data.error || 'Se encontró un posible duplicado.', duplicate: data.duplicate })
+      return false
+    }
+
+    if (res.status === 409 && data.code === 'CONCILIACION_SUGERIDA') {
+      setConciliacionCandidate({
+        body,
+        message: data.error || 'Esta factura podría corresponder a un pedido a proveedor.',
+        candidatos: Array.isArray(data.candidatos) ? data.candidatos : [],
+      })
       return false
     }
 
@@ -1529,6 +1561,39 @@ export default function EscanearGastoPage() {
       await submitExpenseBody(body, true)
     } catch {
       toast.error('Error de conexión')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  /**
+   * La factura se imputa al pedido indicado: el servidor completa el gasto
+   * provisional de ese pedido en vez de crear un segundo apunte.
+   */
+  const confirmConciliarConPedido = async (compraId: string) => {
+    if (!conciliacionCandidate) return
+    const body = { ...conciliacionCandidate.body, compraId }
+    setConciliacionCandidate(null)
+    setSaving(true)
+    try {
+      await submitExpenseBody(body)
+    } catch {
+      toast.error('No se pudo conciliar la factura con el pedido')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  /** La factura no es de ningún pedido: se registra como gasto suelto. */
+  const confirmGastoNuevo = async () => {
+    if (!conciliacionCandidate) return
+    const body = { ...conciliacionCandidate.body, sinConciliar: true }
+    setConciliacionCandidate(null)
+    setSaving(true)
+    try {
+      await submitExpenseBody(body)
+    } catch {
+      toast.error('No se pudo registrar el gasto')
     } finally {
       setSaving(false)
     }
@@ -2390,6 +2455,53 @@ export default function EscanearGastoPage() {
           </Card>
         </div>
       )}
+
+      {/* Conciliación con un pedido a proveedor ya recibido */}
+      <Dialog open={conciliacionCandidate !== null} onOpenChange={open => { if (!open) setConciliacionCandidate(null) }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-primary">
+              <AlertTriangle className="h-5 w-5" /> ¿Es la factura de un pedido?
+            </DialogTitle>
+            <DialogDescription>
+              {conciliacionCandidate?.message}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            {(conciliacionCandidate?.candidatos ?? []).map(candidato => (
+              <button
+                key={candidato.compraId}
+                type="button"
+                onClick={() => confirmConciliarConPedido(candidato.compraId)}
+                disabled={saving}
+                className="w-full text-left rounded-xl border p-3 hover:border-primary/60 hover:bg-primary/5 transition-colors disabled:opacity-50"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-bold text-sm">{candidato.numero}</span>
+                  <span className="text-sm font-semibold">
+                    {formatearImporte(Number(candidato.importePedido || 0), candidato.moneda || monedaTenant)}
+                  </span>
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  {candidato.proveedorNombre || 'Sin proveedor'}
+                  {candidato.fechaRecepcion
+                    ? ` · recibido el ${new Intl.DateTimeFormat('es-ES').format(new Date(candidato.fechaRecepcion))}`
+                    : ''}
+                  {candidato.exacto
+                    ? ' · importe exacto'
+                    : ` · diferencia de ${Math.abs(Number(candidato.diferencia || 0)).toFixed(2)}`}
+                </div>
+              </button>
+            ))}
+          </div>
+          <DialogFooter className="gap-2 sm:justify-between">
+            <Button variant="ghost" onClick={() => setConciliacionCandidate(null)}>Cancelar</Button>
+            <Button variant="outline" onClick={confirmGastoNuevo} disabled={saving}>
+              No, es un gasto nuevo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Confirmación de posible factura duplicada */}
       <Dialog open={duplicateCandidate !== null} onOpenChange={open => { if (!open) setDuplicateCandidate(null) }}>

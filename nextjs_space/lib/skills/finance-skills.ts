@@ -33,6 +33,13 @@ export interface CreateExpenseInput {
   leadId?: string;
   /** Atribución opcional a una reserva de hospitality (rentabilidad real). */
   hospitalityReservationId?: string;
+  /**
+   * Claves que se guardan en `metadata` tal cual, sin pisar las propias. Sirven
+   * para dejar constancia de la procedencia del apunte (el pedido de compra que
+   * lo generó, si ya venía de una factura conciliada…) sin abrir un campo nuevo
+   * en el esquema por cada origen.
+   */
+  metadataExtra?: Record<string, unknown>;
   description: string;
   amount: number;
   currency?: string;
@@ -185,7 +192,7 @@ export async function createExpense(input: CreateExpenseInput) {
     const { irpfRate, irpfAmount, ivaRetentionRate, ivaRetentionAmount } = retention;
 
     // Extraer campos nuevos (no existen en Prisma) para guardarlos en metadata
-    const { serie, surchargeRate, surchargeAmount, taxRegime, operationType, totalFactura, receptorNombre, receptorNif, receptorDireccion, iban, vatBreakdown, irpfRate: _ir, irpfAmount: _ia, ivaRetentionRate: _ivr, ivaRetentionAmount: _iva, ...prismaInput } = input
+    const { serie, surchargeRate, surchargeAmount, taxRegime, operationType, totalFactura, receptorNombre, receptorNif, receptorDireccion, iban, vatBreakdown, irpfRate: _ir, irpfAmount: _ia, ivaRetentionRate: _ivr, ivaRetentionAmount: _iva, metadataExtra: _me, ...prismaInput } = input
     
     const expense = await prisma.expense.create({
       data: {
@@ -195,6 +202,9 @@ export async function createExpense(input: CreateExpenseInput) {
         parentFingerprint: lastExpense?.fingerprint || null,
         isAnomaly,
         metadata: {
+          // La procedencia va primero: las claves propias del gasto (retenciones,
+          // tramos de IVA…) siempre mandan sobre lo que declare quien lo crea.
+          ...(input.metadataExtra ?? {}),
           serie: serie || null,
           irpfRate: irpfRate || null,
           irpfAmount: irpfAmount || null,
