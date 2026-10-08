@@ -124,9 +124,13 @@ La aplicación estará disponible en `http://localhost:3000`
 
 | Rol | Email | Password |
 |-----|-------|----------|
-| Superadmin | `bruno.hess@dimensionexpert.com` | `Volkern-admin2025` |
-| Admin | `admin@volkern.com` | `volkern123456` |
-| Admin Test | `john@doe.com` | `johndoe123` |
+| Superadmin | `bruno.hess@dimensionexpert.com` | `SEED_SUPERADMIN_PASSWORD` |
+| Admin | `admin@volkern.com` | `SEED_ADMIN_PASSWORD` |
+| Admin Test | `john@doe.com` | `SEED_TEST_USER_PASSWORD` |
+
+Las contraseñas ya no están escritas en ningún sitio: el seed las lee del entorno
+(`scripts/bootstrap-admin.env.example`) y aborta si faltan. Ver
+docs/ROTACION-CREDENCIALES-ADMIN.md.
 
 ---
 

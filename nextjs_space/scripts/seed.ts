@@ -6,6 +6,16 @@ import { seedLogistics } from './seed-logistics'
 
 const prisma = new PrismaClient()
 
+/** Las contraseñas de la semilla se leen del entorno; ver scripts/bootstrap-admin.env.example. */
+function requireEnv(name: string): string {
+  const value = process.env[name]
+  if (!value) {
+    console.error(`❌ Define ${name} en el entorno antes de ejecutar el seed.`)
+    process.exit(1)
+  }
+  return value
+}
+
 async function main() {
   console.log('🌱 Iniciando seed de la base de datos...')
 
@@ -53,10 +63,11 @@ async function main() {
     process.exit(1);
   }
 
-  // Crear usuario administrador
-  const hashedPassword = await bcrypt.hash('johndoe123', 12)
-  const hashedPasswordAdmin = await bcrypt.hash('volkern123456', 12)
-  const hashedPasswordSuperadmin = await bcrypt.hash('Volkern-admin2025', 12)
+  // Crear usuario administrador. Ninguna contraseña de la semilla vive en el
+  // código: un literal aquí es un literal en la historia de git para siempre.
+  const hashedPassword = await bcrypt.hash(requireEnv('SEED_TEST_USER_PASSWORD'), 12)
+  const hashedPasswordAdmin = await bcrypt.hash(requireEnv('SEED_ADMIN_PASSWORD'), 12)
+  const hashedPasswordSuperadmin = await bcrypt.hash(requireEnv('SEED_SUPERADMIN_PASSWORD'), 12)
 
   // Usuario Superadmin - Acceso total
   // ⚠️ update NUNCA toca password para no sobrescribir la contraseña del usuario en producción
@@ -1397,7 +1408,7 @@ El equipo de Volkern CRM`,
   console.log('')
   console.log('Credenciales de acceso:')
   console.log('📧 Admin: admin@volkern.com')
-  console.log('🔒 Password: volkern123456')
+  console.log('🔒 Password: la de SEED_ADMIN_PASSWORD (no se imprime aquí)')
   console.log('')
   console.log('📊 Datos de prueba:')
   console.log(`- ${leads.length} leads`)

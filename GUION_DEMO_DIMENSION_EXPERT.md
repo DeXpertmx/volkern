@@ -25,26 +25,32 @@
 
 ## 2. Credenciales de acceso
 
+> Las contraseñas ya no se escriben en este documento (ni en ningún otro del
+> repositorio): están en el gestor de contraseñas del equipo. Si falta alguna,
+> pídesela a quien administra el VPS. Ver `nextjs_space/docs/ROTACION-CREDENCIALES-ADMIN.md`.
+>
+> Los nombres entre backticks son **variables de entorno**, no valores.
+
 ### 🏢 DeXpert Inmobiliaria — el cliente (entrar por `dimension-expert.volkern.app`)
 
 | Rol | Email | Contraseña |
 |---|---|---|
-| **Admin (principal)** | `dximobilia@dimensionexpert.com` | `SXqvhCDd_Qm5` ⚠️ provisional — cambiar antes de compartir con el cliente |
-| Admin (legado, en desuso) | `direccion@dexpert.volkern.app` | `Dexpert123!` (cuenta antigua, pendiente de eliminar) |
+| **Admin (principal)** | `dximobilia@dimensionexpert.com` | 🔐 En el gestor del equipo ⚠️ provisional — cambiar antes de compartir con el cliente |
+| Admin (legado, en desuso) | `direccion@dexpert.volkern.app` | — cuenta antigua, pendiente de eliminar |
 
 ### 🏢 Dimension eXpert — Bruno / la empresa que presenta (entrar por `dexpert.volkern.app`)
 
 | Rol | Email | Contraseña |
 |---|---|---|
-| **Admin** | `admin@dexpert.volkern.app` | `Dexpert123!` |
-| Propietario | `bruno.hess@dimensionexpert.com` | 🔒 Contraseña propia del usuario (se cambió tras el reset del 03/09 — **no** usar la antigua `DimensionExpert2024!`) |
+| **Admin** | `admin@dexpert.volkern.app` | 🔐 `DEXPERT_ADMIN_TEMP_PASSWORD` (ver `scripts/bootstrap-admin.env.example`) |
+| Propietario | `bruno.hess@dimensionexpert.com` | 🔒 Contraseña propia del usuario (se cambió tras el reset del 03/09 — **no** usar ninguna antigua) |
 
 ### 🏢 Demo Real Estate — demo sintética (entrar por `demo-real-estate.volkern.app`)
 
 | Rol | Email | Contraseña |
 |---|---|---|
-| Directora | `admin@demorealestate.com` | `DemoRE2026!` |
-| Ejecutivo | `agente@demorealestate.com` | `DemoRE2026!` |
+| Directora | `admin@demorealestate.com` | 🔐 `DEMO_RE_PASSWORD` |
+| Ejecutivo | `agente@demorealestate.com` | 🔐 `DEMO_RE_PASSWORD` |
 
 ---
 

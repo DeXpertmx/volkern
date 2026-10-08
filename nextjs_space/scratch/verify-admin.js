@@ -1,5 +1,19 @@
+/**
+ * Comprueba si una contraseña candidata abre la cuenta indicada.
+ *
+ * La contraseña llega por entorno, nunca escrita aquí: ver
+ * scripts/bootstrap-admin.env.example.
+ *
+ *   ADMIN_CHECK_PASSWORD='…' node scratch/verify-admin.js
+ */
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
+
+const PASSWORD = process.env.ADMIN_CHECK_PASSWORD;
+if (!PASSWORD) {
+  console.error('❌ Define ADMIN_CHECK_PASSWORD en el entorno antes de ejecutar.');
+  process.exit(1);
+}
 
 const prisma = new PrismaClient({
   datasources: {
@@ -27,8 +41,9 @@ async function main() {
     hasPassword: !!user.password
   });
 
-  const isPasswordValid = await bcrypt.compare('Volkern2024!', user.password);
-  console.log('¿Password "Volkern2024!" es válido?', isPasswordValid);
+  // No se imprime la contraseña: la salida de estos scripts acaba en logs.
+  const isPasswordValid = await bcrypt.compare(PASSWORD, user.password);
+  console.log('¿La contraseña de ADMIN_CHECK_PASSWORD es válida?', isPasswordValid);
 }
 
 main()
