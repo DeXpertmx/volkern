@@ -1,0 +1,426 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<idealista:feed xmlns:idealista="http://idealista.com/schema/feed/1.0" version="1.0">
+  <idealista:info>
+    <company>Demo Real Estate</company>
+    <email>admin@demorealestate.com</email>
+    
+    <generated>2026-09-28</generated>
+    <totalProperties>11</totalProperties>
+  </idealista:info>
+  <properties>
+    <property>
+      <reference>inm-cmtlytty10000s1uuafjc2ril-casa-moderna-con-vista-al-golf-en-playacar</reference>
+      <title>Casa moderna con vista al golf en Playacar</title>
+      <description>Residencia de 4 recámaras dentro del campo de golf de Playacar, con alberca, terraza y área de servicio completa. Acceso controlado 24/7 y club de playa exclusivo. Gran oportunidad de inversión: se puede incorporar a renta vacacional con ROI proyectado del 9% anual.</description>
+      <price>7500000</price>
+      <currency>MXN</currency>
+      <operation>venta</operation>
+      <propertyType>Casa</propertyType>
+      <area>350</area>
+      
+      <bedrooms>4</bedrooms>
+      <bathrooms>4</bathrooms>
+      <condition>good</condition>
+      
+      
+      
+      
+      
+      
+      
+      
+      <location>
+        <address>Av. Xaman-Ha s/n, Fracc. Playacar Fase II</address>
+        <city>Playacar, Playa del Carmen</city>
+        <latitude>20.5902</latitude>
+        <longitude>-87.0847</longitude>
+      </location>
+      <features>
+          <feature>piscina</feature>
+          <feature>jardin</feature>
+      </features>
+      <images>
+          <image>https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800</image>
+          <image>https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800</image>
+          <image>https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800</image>
+      </images>
+      <status>available</status>
+    </property>
+    <property>
+      <reference>inm-cmtlytty10000s1uuafjc2ril-departamento-en-roma-norte-ciudad-de-m-xico</reference>
+      <title>Departamento en Roma Norte, Ciudad de México</title>
+      <description>Departamento en edificio art déco de los años 40, restaurado con acabados de autor. En el corazón de la Roma Norte: cafeterías, bares y restaurantes a pie de calle. Ideal para viajes de placer o trabajo. Favorito de Airbnb para estancias medias (5-10 noches).</description>
+      <price>1650</price>
+      <currency>MXN</currency>
+      <operation>alquiler_temporada</operation>
+      <propertyType>Departamento</propertyType>
+      <area>78</area>
+      
+      <bedrooms>2</bedrooms>
+      <bathrooms>2</bathrooms>
+      <condition>good</condition>
+      
+      
+      
+      
+      
+      
+      
+      
+      <location>
+        <address>Calle Colima 158, Int. 4</address>
+        <city>Roma Norte, Ciudad de México</city>
+        <latitude>19.4167</latitude>
+        <longitude>-99.1617</longitude>
+      </location>
+      <features>
+          <feature>ascensor</feature>
+          <feature>amueblado</feature>
+      </features>
+      <images>
+          <image>https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800</image>
+          <image>https://images.unsplash.com/photo-1493809842364-78817add7ffb?w=800</image>
+          <image>https://images.unsplash.com/photo-1560185007-cde436f6a4d0?w=800</image>
+      </images>
+      <status>available</status>
+    </property>
+    <property>
+      <reference>inm-cmtlytty10000s1uuafjc2ril-villa-privada-con-alberca-en-tulum</reference>
+      <title>Villa privada con alberca en Tulum</title>
+      <description>Villa boutique de estilo boho-chic con alberca privada, palapa y jardín tropical. Tres recámaras con baño completo cada una. Perfecta para grupos y familias en Tulum. Publicada en Airbnb y Booking con calendarios sincronizados, ocupación promedio del 78% en temporada alta.</description>
+      <price>4200</price>
+      <currency>MXN</currency>
+      <operation>alquiler_temporada</operation>
+      <propertyType>Villa</propertyType>
+      <area>220</area>
+      
+      <bedrooms>3</bedrooms>
+      <bathrooms>3</bathrooms>
+      <condition>good</condition>
+      
+      
+      
+      
+      
+      
+      
+      
+      <location>
+        <address>Cenote Tortuga 45, Aldea Zamá</address>
+        <city>Tulum, Quintana Roo</city>
+        <latitude>20.2114</latitude>
+        <longitude>-87.4654</longitude>
+      </location>
+      <features>
+          <feature>piscina</feature>
+          <feature>jardin</feature>
+          <feature>amueblado</feature>
+      </features>
+      <images>
+          <image>https://images.unsplash.com/photo-1512918728675-ed5a9ecdebfd?w=800</image>
+          <image>https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=800</image>
+          <image>https://images.unsplash.com/photo-1615880484746-a134be9a6ecf?w=800</image>
+      </images>
+      <status>available</status>
+    </property>
+    <property>
+      <reference>inm-cmtlytty10000s1uuafjc2ril-loft-con-vistas-al-mar-en-playa-del-carmen</reference>
+      <title>Loft con vistas al mar en Playa del Carmen</title>
+      <description>Loft moderno en rooftop con alberca y vistas al mar Caribe. A 5 minutos caminando de la playa Mamitas y de la 5ª Avenida. Totalmente equipado: cocina integral, smart TV, WiFi de alta velocidad y aire acondicionado inverter. Registro Airbnb con 4.9 estrellas y 120 reseñas.</description>
+      <price>1850</price>
+      <currency>MXN</currency>
+      <operation>alquiler_temporada</operation>
+      <propertyType>Loft</propertyType>
+      <area>55</area>
+      
+      <bedrooms>1</bedrooms>
+      <bathrooms>1</bathrooms>
+      <condition>good</condition>
+      
+      
+      
+      
+      
+      
+      
+      
+      <location>
+        <address>Av. Constituyentes 120, Ed. Marina Blanca Depto 302</address>
+        <city>Playa del Carmen, Quintana Roo</city>
+        <latitude>20.6296</latitude>
+        <longitude>-87.0733</longitude>
+      </location>
+      <features>
+          <feature>ascensor</feature>
+          <feature>piscina</feature>
+          <feature>amueblado</feature>
+      </features>
+      <images>
+          <image>https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800</image>
+          <image>https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800</image>
+          <image>https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800</image>
+      </images>
+      <status>available</status>
+    </property>
+    <property>
+      <reference>inm-cmtlytty10000s1uuafjc2ril-terreno-con-proyecto-hotelero-en-bacalar</reference>
+      <title>Terreno con proyecto hotelero en Bacalar</title>
+      <description>Terreno en la costera de Bacalar con licencia aprobada para construir 8 cabañas + recepción + restaurante. A 200 metros de la Laguna de los Siete Colores. Proyecto rentable con plan de negocio incluido (demanda turística creciendo 25% anual).</description>
+      <price>3200000</price>
+      <currency>MXN</currency>
+      <operation>venta</operation>
+      <propertyType>Terreno</propertyType>
+      <area>1200</area>
+      
+      
+      
+      <condition>good</condition>
+      
+      
+      
+      
+      
+      
+      
+      
+      <location>
+        <address>Camino Costera s/n, Km 3.5</address>
+        <city>Bacalar, Quintana Roo</city>
+        <latitude>18.6764</latitude>
+        <longitude>-88.3906</longitude>
+      </location>
+      
+      <images>
+          <image>https://images.unsplash.com/photo-1560185127-6ed189bf02f4?w=800</image>
+          <image>https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=800</image>
+      </images>
+      <status>available</status>
+    </property>
+    <property>
+      <reference>inm-cmtlytty10000s1uuafjc2ril-departamento-en-venta-en-polanco</reference>
+      <title>Departamento en venta en Polanco</title>
+      <description>Departamento en torre premium de Polanco con gimnasio, alberca climatizada, salón de eventos y 24/7 security. Vista al parque Lincoln. Zona con la plusvalía más alta de la CDMX, ideal para inversión patrimonial.</description>
+      <price>11800000</price>
+      <currency>MXN</currency>
+      <operation>venta</operation>
+      <propertyType>Departamento</propertyType>
+      <area>165</area>
+      
+      <bedrooms>2</bedrooms>
+      <bathrooms>2</bathrooms>
+      <condition>good</condition>
+      
+      
+      
+      
+      
+      
+      
+      
+      <location>
+        <address>Calle Julio Verne 92, Piso 9</address>
+        <city>Polanco, Ciudad de México</city>
+        <latitude>19.4326</latitude>
+        <longitude>-99.1953</longitude>
+      </location>
+      <features>
+          <feature>ascensor</feature>
+          <feature>piscina</feature>
+      </features>
+      <images>
+          <image>https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800</image>
+          <image>https://images.unsplash.com/photo-1493809842364-78817add7ffb?w=800</image>
+          <image>https://images.unsplash.com/photo-1560185007-cde436f6a4d0?w=800</image>
+      </images>
+      <status>available</status>
+    </property>
+    <property>
+      <reference>inm-cmtlytty10000s1uuafjc2ril-casa-de-campo-con-huerto-en-valle-de-guadalupe</reference>
+      <title>Casa de campo con huerto en Valle de Guadalupe</title>
+      <description>Casa contenedora sustentable con paneles solares, huerto y Fogata exterior. Rodeada de viñedos a 15 minutos de la ruta del vino. Negocio redondo: renta vacacional de fin de semana con ocupación del 95% en temporada de vendimia.</description>
+      <price>4100000</price>
+      <currency>MXN</currency>
+      <operation>venta</operation>
+      <propertyType>Casa</propertyType>
+      <area>500</area>
+      
+      <bedrooms>2</bedrooms>
+      <bathrooms>2</bathrooms>
+      <condition>good</condition>
+      
+      
+      
+      
+      
+      
+      
+      
+      <location>
+        <address>Rancho La Lomita, Camino Viejo a San Antonio de las Minas</address>
+        <city>Valle de Guadalupe, Baja California</city>
+        <latitude>32.5264</latitude>
+        <longitude>-116.5919</longitude>
+      </location>
+      <features>
+          <feature>jardin</feature>
+          <feature>amueblado</feature>
+      </features>
+      <images>
+          <image>https://images.unsplash.com/photo-1523217582562-09d0def993a6?w=800</image>
+          <image>https://images.unsplash.com/photo-1416331108676-a22ccb276e35?w=800</image>
+      </images>
+      <status>available</status>
+    </property>
+    <property>
+      <reference>inm-cmtlytty10000s1uuafjc2ril-penthouse-en-venta-zona-hotelera-canc-n</reference>
+      <title>Penthouse en venta zona hotelera Cancún</title>
+      <description>Penthouse con lock-off (dos unidades independientes que se unen en una). Diseñado para maximizar ingresos de renta vacacional en la Zona Hotelera de Cancún. Amenidades: alberca infinity, gimnasio, beach club y coworking.</description>
+      <price>9200000</price>
+      <currency>MXN</currency>
+      <operation>venta</operation>
+      <propertyType>Departamento</propertyType>
+      <area>240</area>
+      
+      <bedrooms>3</bedrooms>
+      <bathrooms>3</bathrooms>
+      <condition>good</condition>
+      
+      
+      
+      
+      
+      
+      
+      
+      <location>
+        <address>Blvd. Kukulcán Km 12.5, Torre Coral</address>
+        <city>Zona Hotelera, Cancún, Quintana Roo</city>
+        <latitude>21.1009</latitude>
+        <longitude>-86.8283</longitude>
+      </location>
+      <features>
+          <feature>ascensor</feature>
+          <feature>piscina</feature>
+          <feature>amueblado</feature>
+      </features>
+      <images>
+          <image>https://images.unsplash.com/photo-1560185127-6ed189bf02f4?w=800</image>
+          <image>https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=800</image>
+      </images>
+      <status>available</status>
+    </property>
+    <property>
+      <reference>inm-cmtlytty10000s1uuafjc2ril-villa-en-venta-en-puerto-escondido</reference>
+      <title>Villa en venta en Puerto Escondido</title>
+      <description>Villa de autor sobre el acantilado de Zicatela con vista completa al mar. Arquitectura contemporánea oaxaqueña con madera de cocobolo y palapa. Ideal como casa de descanso o segunda casa con renta vacacional los meses que no se usa.</description>
+      <price>5600000</price>
+      <currency>MXN</currency>
+      <operation>venta</operation>
+      <propertyType>Villa</propertyType>
+      <area>280</area>
+      
+      <bedrooms>3</bedrooms>
+      <bathrooms>3</bathrooms>
+      <condition>good</condition>
+      
+      
+      
+      
+      
+      
+      
+      
+      <location>
+        <address>Camino a Zicatela s/n, Col. Brisas de Zicatela</address>
+        <city>Puerto Escondido, Oaxaca</city>
+        <latitude>15.8555</latitude>
+        <longitude>-97.0572</longitude>
+      </location>
+      <features>
+          <feature>piscina</feature>
+          <feature>jardin</feature>
+          <feature>amueblado</feature>
+      </features>
+      <images>
+          <image>https://images.unsplash.com/photo-1580587771525-78b9dba3b914?w=800</image>
+          <image>https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800</image>
+      </images>
+      <status>available</status>
+    </property>
+    <property>
+      <reference>inm-cmtlytty10000s1uuafjc2ril-casa-colonial-en-el-centro-de-m-rida</reference>
+      <title>Casa colonial en el centro de Mérida</title>
+      <description>Casa colonial yucateca restaurada respetando pasta italiana,techos altos y pasta original. Patio central con alberca de inmersión y comedor exterior. Ubicación inmejorable para turismo cultural en Mérida. Calificación 4.8 en Booking con etiqueta &quot;Excelente ubicación&quot;.</description>
+      <price>1900</price>
+      <currency>MXN</currency>
+      <operation>alquiler_temporada</operation>
+      <propertyType>Casa</propertyType>
+      <area>180</area>
+      
+      <bedrooms>3</bedrooms>
+      <bathrooms>2</bathrooms>
+      <condition>good</condition>
+      
+      
+      
+      
+      
+      
+      
+      
+      <location>
+        <address>Calle 62 #435 entre 51 y 53</address>
+        <city>Centro Histórico, Mérida, Yucatán</city>
+        <latitude>20.9674</latitude>
+        <longitude>-89.6217</longitude>
+      </location>
+      <features>
+          <feature>piscina</feature>
+          <feature>jardin</feature>
+          <feature>amueblado</feature>
+      </features>
+      <images>
+          <image>https://images.unsplash.com/photo-1560184897-ae75f418493e?w=800</image>
+          <image>https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800</image>
+      </images>
+      <status>available</status>
+    </property>
+    <property>
+      <reference>inm-cmtlytty10000s1uuafjc2ril-bungalow-frente-al-mar-en-holbox</reference>
+      <title>Bungalow frente al mar en Holbox</title>
+      <description>Bungalow artesanal de madera con palapa y hamacas, a 80 metros de la playa. Energía solar, agua purificada y mosquiteros en todas las ventanas. Experiencia eco-friendly muy buscada en Holbox. Temporada alta (dic-ago) vendida con 3 meses de anticipación.</description>
+      <price>2400</price>
+      <currency>MXN</currency>
+      <operation>alquiler_temporada</operation>
+      <propertyType>Bungalow</propertyType>
+      <area>60</area>
+      
+      <bedrooms>1</bedrooms>
+      <bathrooms>1</bathrooms>
+      <condition>good</condition>
+      
+      
+      
+      
+      
+      
+      
+      
+      <location>
+        <address>Calle Tiburón Ballena s/n, Zona Hotelera</address>
+        <city>Isla Holbox, Quintana Roo</city>
+        <latitude>21.5246</latitude>
+        <longitude>-87.3694</longitude>
+      </location>
+      <features>
+          <feature>jardin</feature>
+          <feature>amueblado</feature>
+      </features>
+      <images>
+          <image>https://images.unsplash.com/photo-1573843981267-be1999ff37cd?w=800</image>
+          <image>https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=800</image>
+      </images>
+      <status>available</status>
+    </property>
+  </properties>
+</idealista:feed>

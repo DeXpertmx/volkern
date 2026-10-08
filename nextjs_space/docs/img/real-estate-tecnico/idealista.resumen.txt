@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<idealista:feed xmlns:idealista="http://idealista.com/schema/feed/1.0" version="1.0">
+  <idealista:info>
+    <company>Demo Real Estate</company>
+    <email>admin@demorealestate.com</email>
+    
+    <generated>2026-09-28</generated>
+    <totalProperties>11</totalProperties>
+  </idealista:info>
+  <properties>
+    <property>
+      <reference>inm-cmtlytty10000s1uuafjc2ril-casa-moderna-con-vista-al-golf-en-playacar</reference>
+      <title>Casa moderna con vista al golf en Playacar</title>
+      <description>Residencia de 4 recámaras dentro del campo de golf de Playacar, con alberca, terraza y área de servicio completa. Acceso controlado 24/7 y club de playa exclusivo. Gran oportunidad de inversión: se puede incorporar a renta vacacional con ROI proyectado del 9% anual.</description>
+      <price>7500000</price>
+      <currency>MXN</currency>
+      <operation>venta</operation>
+      <propertyType>Casa</propertyType>
+      <area>350</area>
+      
+      <bedrooms>4</bedrooms>
+      <bathrooms>4</bathrooms>

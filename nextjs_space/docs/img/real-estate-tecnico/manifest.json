@@ -1,0 +1,96 @@
+{
+  "base": "https://demo-real-estate.volkern.app",
+  "generadoEn": "2026-09-28T23:18:37.657Z",
+  "capturas": [
+    {
+      "id": "01-dashboard",
+      "titulo": "Dashboard inmobiliario",
+      "ruta": "/dashboard/real-estate",
+      "archivo": "img/real-estate-tecnico/01-dashboard.jpg"
+    },
+    {
+      "id": "02-propiedades",
+      "titulo": "Propiedades (listado operativo)",
+      "ruta": "/dashboard/real-estate/properties",
+      "archivo": "img/real-estate-tecnico/02-propiedades.jpg"
+    },
+    {
+      "id": "03-propiedades-filtros",
+      "titulo": "Propiedades · filtros avanzados",
+      "ruta": "/dashboard/real-estate/properties",
+      "archivo": "img/real-estate-tecnico/03-propiedades-filtros.jpg"
+    },
+    {
+      "id": "04-nueva-propiedad",
+      "titulo": "Alta rápida de propiedad (con certificación energética)",
+      "ruta": "/dashboard/real-estate/properties",
+      "archivo": "img/real-estate-tecnico/04-nueva-propiedad.jpg"
+    },
+    {
+      "id": "05-propietario",
+      "titulo": "Ficha del propietario desde el listado (OwnerCard)",
+      "ruta": "/dashboard/real-estate/properties",
+      "archivo": "img/real-estate-tecnico/05-propietario.jpg"
+    },
+    {
+      "id": "06-catalogo",
+      "titulo": "El inmueble en el Catálogo (tipo inmueble)",
+      "ruta": "/dashboard/catalogo?tipo=inmueble",
+      "archivo": "img/real-estate-tecnico/06-catalogo.jpg"
+    },
+    {
+      "id": "07-campos",
+      "titulo": "Campos personalizados del inmueble (preset)",
+      "ruta": "/dashboard/catalogo/campos",
+      "archivo": "img/real-estate-tecnico/07-campos.jpg"
+    },
+    {
+      "id": "08-pipeline",
+      "titulo": "Pipeline de venta de propiedades",
+      "ruta": "/dashboard/pipeline",
+      "archivo": "img/real-estate-tecnico/08-pipeline.jpg"
+    },
+    {
+      "id": "09-config-general",
+      "titulo": "Configuración inmobiliaria · General",
+      "ruta": "/dashboard/configuracion/real-estate",
+      "archivo": "img/real-estate-tecnico/09-config-general.jpg"
+    },
+    {
+      "id": "10-config-portal",
+      "titulo": "Configuración · Portal público",
+      "ruta": "/dashboard/configuracion/real-estate?tab=portal",
+      "archivo": "img/real-estate-tecnico/10-config-portal.jpg"
+    },
+    {
+      "id": "11-config-comisiones",
+      "titulo": "Configuración · Comisiones",
+      "ruta": "/dashboard/configuracion/real-estate?tab=commissions",
+      "archivo": "img/real-estate-tecnico/11-config-comisiones.jpg"
+    },
+    {
+      "id": "12-config-exportacion",
+      "titulo": "Configuración · Exportación a portales",
+      "ruta": "/dashboard/configuracion/real-estate?tab=export",
+      "archivo": "img/real-estate-tecnico/12-config-exportacion.jpg"
+    },
+    {
+      "id": "13-portal-publico",
+      "titulo": "Portal público de propiedades",
+      "ruta": "/p/demo-real-estate/propiedades",
+      "archivo": "img/real-estate-tecnico/13-portal-publico.jpg"
+    },
+    {
+      "id": "14-portal-detalle",
+      "titulo": "Ficha pública del inmueble",
+      "ruta": "/p/demo-real-estate/propiedades/inm-cmtlytty10000s1uuafjc2ril-casa-moderna-con-vista-al-golf-en-playacar",
+      "archivo": "img/real-estate-tecnico/14-portal-detalle.jpg"
+    },
+    {
+      "id": "15-landing",
+      "titulo": "Página comercial del vertical",
+      "ruta": "/soluciones/real-estate",
+      "archivo": "img/real-estate-tecnico/15-landing.jpg"
+    }
+  ]
+}
