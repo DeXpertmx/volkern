@@ -7,12 +7,58 @@
 > mantenimiento automatizado que ejecuta Volkern sobre los datos personales
 > de los empleados y tenants, **sin necesidad de leer el código fuente**.
 >
-> **Última actualización**: 2026-06-21 (auditable en `git log`).
+> **Última actualización**: 2026-10-08 (auditable en `git log`).
 >
-> **Fuente de verdad técnica**: `vercel.json` en la raíz del repositorio
-> (campo `crons[]`). Cualquier discrepancia entre este documento y
-> `vercel.json` se considera **bug** y debe corregirse aquí primero, luego
-> sincronizar el código.
+> **Fuente de verdad técnica**: el **crontab de root del VPS**
+> (`root@62.171.134.195`), que invoca `deploy-vps/cron.sh <job>`. El
+> planificador es el demonio `cron` del sistema operativo, **no** Vercel.
+> Cualquier discrepancia entre este documento y ese crontab se considera
+> **bug** y debe corregirse aquí primero, luego sincronizar `cron.sh`.
+
+---
+
+## Estado verificado (2026-10-08)
+
+Comprobado leyendo el propio VPS, no la documentación. Los cuatro jobs están
+programados en el crontab de **root** y el servicio `cron` está `active` y
+`enabled`:
+
+| Job | Schedule (cron) | Frecuencia humana |
+|---|---|---|
+| `uptime-developers` | `0 0 * * *` | Diaria, 00:00 UTC |
+| `cleanup-attendance` | `0 3 * * *` | Diaria, 03:00 UTC |
+| `hospitality-reconcile` | `0 4 * * *` | Diaria, 04:00 UTC |
+| `hospitality-briefing` | `0 8 * * *` | Diaria, 08:00 UTC |
+
+- **Ejecución**: `bash /root/volkern-erp/cron.sh <job>`. El script lee
+  `CRON_SECRET` y `NEXT_PUBLIC_APP_URL` de `/root/volkern-erp/.env`, hace
+  `curl` a `${BASE}/api/cron/<job>` con `Authorization: Bearer`, con
+  `--max-time 120`, y escribe una línea por corrida en
+  **`/var/log/volkern-cron.log`** (`[YYYY-MM-DD HH:MM] <job> OK (200)` o
+  `… FALLÓ (<código>): <cuerpo>`).
+- **Evidencia**: en la verificación, los 4 jobs aparecen en `OK (200)` el
+  mismo día y todos los días anteriores registrados.
+- **Regla de oro del sistema**: los crons del ERP viven en el **crontab de
+  root**, NUNCA en `/etc/cron.d`. El centinela
+  `deploy-vps/vigilar-crons-heredados.sh` (semanal, vía
+  `/etc/cron.d/auditoria-superficie`) alerta si reaparece el stack heredado
+  `volkern-table`.
+- **`vercel.json` se eliminó** al confirmar que el VPS es el único
+  planificador: dejarlo habría duplicado A y B si alguien volviera a
+  desplegar allí.
+- **Restos inofensivos en el VPS**: `/var/log/volkern-attendance-digest.log`,
+  `/var/log/volkern-birthday-promos.log` y `/var/log/volkern-reminders.log`
+  son del stack anterior; su última escritura es de julio-septiembre y **no
+  están programados** en el crontab.
+
+> **Nota de reconciliación.** Este documento se escribió cuando el planificador
+> era Vercel, y describe una plataforma serverless con límites de plan y
+> cold-starts. Se ha reescrito contra el VPS: schedules reales en el crontab,
+> ejecución vía `cron.sh`, log en `/var/log/volkern-cron.log` y recuperación
+> sobre los contenedores. Sólo quedan dos menciones legítimas a Vercel: la
+> variable `VERCEL_ENV` (que el handler sigue leyendo y que en el VPS no está
+> definida) y la advertencia del §5 sobre el secreto `APP_URL` de GitHub
+> Actions, pendiente de comprobar.
 
 ---
 
@@ -22,7 +68,7 @@
 2. [Autenticación universal](#2-autenticación-universal)
 3. [Cron A — `/api/cron/cleanup-attendance`](#3-cron-a--apicroncleanup-attendance)
 4. [Cron B — `/api/cron/uptime-developers`](#4-cron-b--apicronuptime-developers)
-5. [Crons con triggers externos a Vercel (GitHub Actions)](#5-crons-con-triggers-externos-a-vercel-github-actions)
+5. [Crons con triggers externos al crontab (GitHub Actions)](#5-crons-con-triggers-externos-al-crontab-github-actions)
 6. [Handlers `app/api/cron/` eliminados (registro histórico)](#6-handlers-appapicron-eliminados-registro-histórico)
 7. [Procedimientos de auditoría para el DPO](#7-procedimientos-de-auditoría-para-el-dpo)
 8. [Procedimientos de recuperación ante fallo](#8-procedimientos-de-recuperación-ante-fallo)
@@ -38,14 +84,20 @@
 | # | Path | Schedule (cron) | Frecuencia humana | Toca datos personales (RGPD) | Artículo RGPD relevante |
 |---|------|------------------|--------------------|-------------------------------|--------------------------|
 | A | `/api/cron/cleanup-attendance` | `0 3 * * *` | Cada día a las 03:00 UTC | **Sí** — purga marcajes GPS e idempotency keys | Art. 5.1.e (limitación del plazo de conservación) |
-| B | `/api/cron/uptime-developers` | `*/5 * * * *` | Cada 5 minutos (24/7) | No — health check de páginas públicas | No aplica (transparencia hacia integradores) |
+| B | `/api/cron/uptime-developers` | `0 0 * * *` | Cada día a las 00:00 UTC | No — health check de páginas públicas | No aplica (transparencia hacia integradores) |
 | C | `/api/cron/google-calendar-renew` | `0 */12 * * *` (GitHub Actions) | Cada 12 horas (00:00 y 12:00 UTC) | No — renovación de canales OAuth técnico | No aplica (operacional OAuth) |
 
-**Total**: 2 crons programados vía `vercel.json` (A, B) + 1 cron disparado externamente vía GitHub Actions (C, ver §5). Todos autentican con `Authorization: Bearer ${CRON_SECRET}` en producción (ver §2).
+**Total**: 2 crons de este inventario (A, B) programados en el crontab del VPS + 1 cron disparado externamente vía GitHub Actions (C, ver §5). Todos autentican con `Authorization: Bearer ${CRON_SECRET}` en producción (ver §2).
 
-**Limitaciones del plan**:
-- **Vercel Pro** (plan actual): ambos schedules se ejecutan según lo previsto. `maxDuration=300` en cleanup-attendance.
-- **Vercel Hobby**: Vercel limita a **1 ejecución/día por cron**. El schedule `*/5 * * * *` de uptime-developers se degrada a `1 × /día`. Si el operador migra a Hobby, debe editar `vercel.json` a `0 * * * *` (cada hora).
+> El crontab ejecuta **dos jobs más de Hospitality** (`hospitality-reconcile`
+> a las 04:00 y `hospitality-briefing` a las 08:00) que **no están
+> clasificados en este documento** respecto a datos personales: quedan
+> **pendientes de revisión por el DPO**. Ver el cuadro de estado al inicio.
+
+**Limitaciones del planificador**:
+- El crontab del VPS **no impone límites** de frecuencia ni de duración: los schedules se ejecutan según lo previsto.
+- `cron.sh` corta el `curl` a los **120 s** (`--max-time 120`). Si un handler tarda más, la corrida se registra como `FALLÓ (000)` y la del día siguiente recoge lo pendiente (los endpoints son idempotentes).
+- No hay reintento automático: un fallo de red en el VPS salta la corrida entera. El rastro queda siempre en `/var/log/volkern-cron.log`.
 
 ---
 
@@ -63,16 +115,16 @@ Authorization: Bearer ${CRON_SECRET}
 
 1. **Sólo en producción**: `if (process.env.NODE_ENV === 'production')` la auth es obligatoria. En desarrollo/preview la auth se omite para permitir testing local.
 2. **Fallo ⇒ `401 Unauthorized`** con cuerpo `{ error: "No autorizado. CRON_SECRET requerido en producción." }`.
-3. Vercel firma internamente sus invocaciones de cron, pero **el header `Authorization: Bearer` es defense-in-depth** ante exposición accidental de la URL.
-4. **`CRON_SECRET` se rota** mediante variable de entorno en Vercel (no requiere redeploy). Tras rotación, las invocaciones de Vercel con el secret viejo fallarán; se cae al path de recuperación (§7).
+3. **El header `Authorization: Bearer` es la única autenticación**: no hay firma de plataforma que la respalde. El valor sale de `CRON_SECRET` en `/root/volkern-erp/.env`, que `cron.sh` inyecta en cada `curl`.
+4. **`CRON_SECRET` se rota** editando esa variable en el VPS. `cron.sh` la lee en cada ejecución, así que **el script no necesita reinicio**; el contenedor de la app sí, porque el valor forma parte de su entorno. Tras rotarla, las invocaciones con el secret viejo reciben `401` (path de recuperación en §8).
 
 **Variables de entorno requeridas**:
 
 | Variable | Usada por | Obligatoria en |
 |----------|-----------|-----------------|
 | `CRON_SECRET` | Ambos crons | Producción |
-| `NEXT_PUBLIC_APP_URL` | uptime-developers (default: `https://volkern.app`) | Producción |
-| `VERCEL_ENV` | uptime-developers (skip en preview) | Auto-set por Vercel |
+| `NEXT_PUBLIC_APP_URL` | Destino del `curl` de `cron.sh` y base de las probes de uptime-developers | Producción (`/root/volkern-erp/.env`) |
+| `VERCEL_ENV` | uptime-developers (skip fuera de producción) | **No definida en el VPS**: al faltar, el cron se ejecuta siempre. Si se definiera con otro valor, el handler se saltaría las probes |
 | `ADMIN_EMAIL` | uptime-developers (alerta Resend) | Producción (opcional) |
 | `RESEND_API_KEY` | uptime-developers (alerta Resend) | Producción (opcional) |
 | `UPTIME_APPRISE_URL` | uptime-developers (alerta Slack/otro) | Producción (opcional) |
@@ -87,10 +139,11 @@ Authorization: Bearer ${CRON_SECRET}
 - **Qué hace**: cada día a las 03:00 UTC, purga los datos de Control Horario
   (RGPD Art. 5.1.e — limitación del plazo de conservación).
 - **Frecuencia**: `0 3 * * *` (UTC).
-- **Idempotente**: sí. Si Vercel re-ejecuta al día siguiente, los rows ya
-  purgados no se vuelven a tocar (los `where` clauses son deterministas).
-- **Tiempo máximo**: 300 s (Vercel Pro). Si excede, Vercel re-intenta al
-  día siguiente; la corrida parcial es rescatable (ver §7.2).
+- **Idempotente**: sí. Si una corrida se repite al día siguiente, los rows
+  ya purgados no se vuelven a tocar (los `where` clauses son deterministas).
+- **Tiempo máximo**: 120 s, el `--max-time` de `cron.sh`. Si excede, la
+  corrida queda como `FALLÓ (000)` en `/var/log/volkern-cron.log` y la del
+  día siguiente recoge lo pendiente (ver §7.2).
 - **Salida**: JSON 200 / 500 con `summary` enriquecido (no destructive ack).
 - **Dry-run**: `?dryRun=1` permite inspección sin deletes (ver §6.2).
 
@@ -145,7 +198,7 @@ Si un tenant falla durante su purga (e.g. timeout, deadlock Postgres), los
 ### 3.5 Métricas y telemetría
 
 En **producción**, este cron emite al menos 1 log por corrida en stdout
-(formato `console.log` → Vercel runtime logs):
+(formato `console.log` → logs del contenedor de la app):
 
 ```
 [Cron/CleanupAttendance] DONE idempotencyKeys=N attendance=N batches=N tenantsOK=N tenantsFailed=N durationMs=N
@@ -208,7 +261,7 @@ En **error fatal global** (no por-tenant):
 
 ### 3.8 Frecuencia de modificación del schedule
 
-- **Alta**: si Vercel cambia los límites de Hobby (1/día) o Pro (300 s).
+- **Alta**: si cambia el `--max-time` de `deploy-vps/cron.sh` o el schedule del crontab de root.
 - **Media**: si un DPO quiere extender la retención base a 5 años (cambiar
   `DEFAULT_RETENTION_DAYS` en el handler + migración Prisma).
 - **Baja**: rotación de `CRON_SECRET`.
@@ -220,14 +273,15 @@ En **error fatal global** (no por-tenant):
 ### 4.1 Resumen ejecutivo
 
 - **Qué hace**: vigila las páginas públicas críticas para integradores
-  externos (`/docs/developers` y `/openapi.json`) cada 5 minutos.
-- **Frecuencia**: `*/5 * * * *` (24/7).
+  externos (`/docs/developers` y `/openapi.json`) una vez al día.
+- **Frecuencia**: `0 0 * * *` (diaria, 00:00 UTC). El texto histórico decía
+  «cada 5 minutos»; el schedule real del crontab es diario.
 - **Idempotente**: sí. No realiza mutaciones, solo lectura HTTP.
-- **Skip en preview**: si `VERCEL_ENV !== "production"`, devuelve
-  `{ skipped: "preview-env" }` sin probes (evita consumir cuota contra el
-  dominio de producción ni alertar en builds no estables).
-- **Salida**: JSON 200 con `probes[]` y `failures`. Vercel cron considera
-  éxito cualquier 2xx.
+- **Skip fuera de producción**: si `VERCEL_ENV` está definida y no vale
+  `"production"`, devuelve `{ skipped: "preview-env" }` sin probes. En el VPS
+  la variable **no está definida**, así que el cron se ejecuta siempre.
+- **Salida**: JSON 200 con `probes[]` y `failures`. `cron.sh` da por buena la
+  corrida sólo con `200`; cualquier otro código se registra como fallo.
 
 ### 4.2 Endpoints vigilados
 
@@ -245,13 +299,13 @@ En **error fatal global** (no por-tenant):
 
 Si algún probe falla (timeout, 5xx, schema inválido):
 
-1. **Cooldown 5 min** vía `globalThis.__volkernUptimeAlertLastAt` — evita
-   spam si un outage cruza varias invocaciones del cron (max 12 alerts/hora).
-   **Limitación conocida**: el cooldown es **in-memory por lambda
-   instance**. Si Vercel hace cold-start durante un outage, las primeras
-   alerts podrían duplicarse — acotado por la frecuencia del cron (≤ 12/h).
+1. **Cooldown 5 min** vía `globalThis.__volkernUptimeAlertLastAt`. Con el cron
+   en cadencia **diaria**, el cooldown ya no limita nada en la práctica: cada
+   corrida alerta como máximo una vez por probe.
+   **Limitación conocida**: al ser in-memory, no sobrevive a un reinicio del
+   contenedor; con una corrida al día es irrelevante.
 2. **Canales de alerta** (todos opcionales, orden de envío):
-   - **console.warn** (siempre, va a Vercel runtime logs).
+   - **console.warn** (siempre; va a los logs del contenedor de la app).
    - **Apprise**: `POST ${UPTIME_APPRISE_URL}/notify` con
      `{ title, body, type: "error", tag: "volkern-uptime" }`. 5 s timeout.
    - **Resend email** a `process.env.ADMIN_EMAIL` con subject `title`, body
@@ -268,10 +322,11 @@ Detectado:  2026-06-21T03:05:00.000Z
 Ambiente:   production
 
 Acción sugerida:
-1. Ejecutar `vercel ls --prod` para ver el último deployment.
-2. Ejecutar `vercel logs <deployment-url>` para errores runtime.
-3. Si la regresión es reciente, `vercel rollback <prev-deployment-url>`.
-4. Si persiste >15min, abrir incident y ver `docs/DEPLOY.md` §Troubleshooting.
+1. En el VPS: `docker compose ps` (en /root/volkern-erp) para ver el estado del stack.
+2. Ver los logs de la app: `docker compose logs --tail=200`.
+3. Si la regresión es de un despliegue reciente, volver a la imagen anterior
+   con `deploy-vps/deploy-app.sh` y ver `docs/DEPLOY.md` §Troubleshooting.
+4. Si persiste >15min, abrir incident.
 ```
 
 ### 4.4 Métricas y telemetría
@@ -332,7 +387,7 @@ de información RGPD Art. 12-14.
 
 ### 4.6 Frecuencia de modificación del schedule
 
-- **Alta**: si Vercel cambia el límite de Pro/Hobby.
+- **Alta**: si cambia el schedule del crontab de root o el `--max-time` de `cron.sh`.
 - **Media**: si se añaden nuevos endpoints públicos críticos al set vigilado.
 - **Baja**: si se quiere añadir un canal de alerta adicional (e.g.
   Telegram, PagerDuty).
@@ -350,31 +405,32 @@ de información RGPD Art. 12-14.
 
 ---
 
-## 5. Crons con triggers externos a Vercel (GitHub Actions)
+## 5. Crons con triggers externos al crontab (GitHub Actions)
 
 > ⚠️ Esta sección documenta crons cuyos handlers **SÍ existen** en
-> `app/api/cron/` pero **NO están en `vercel.json`** — se disparan vía
+> `app/api/cron/` pero **NO están en el crontab del VPS** — se disparan vía
 > GitHub Actions workflows como mecanismo alternativo o de respaldo.
 
 ### Cron C — `/api/cron/google-calendar-renew`
 
 - **Trigger**: GitHub Actions (`.github/workflows/cron-renew-webhooks.yml`) que ejecuta `curl ${APP_URL}/api/cron/google-calendar-renew` con `Authorization: Bearer ${CRON_SECRET}` cada 12h (00:00 y 12:00 UTC).
-- **Backup de**: la lógica equivalente también corre in-process vía `lib/cron/scheduler.ts` (#8, `cron.schedule('0 */12 * * *', …)`) en runtimes persistentes. En Vercel serverless GitHub Actions es el único disparador confiable.
-- **Secreto requerido en GitHub**: `secrets.CRON_SECRET` (mismo valor que Vercel) + `secrets.APP_URL` (URL del deploy de producción, hoy `https://volkern-fmd2652nf-dexpertmxs-projects.vercel.app`).
+- **Backup de**: la lógica equivalente también corre in-process vía `lib/cron/scheduler.ts` (#8, `cron.schedule('0 */12 * * *', …)`) en runtimes persistentes; GitHub Actions es el disparador externo.
+- **Secreto requerido en GitHub**: `secrets.CRON_SECRET` (el mismo valor que en `/root/volkern-erp/.env` del VPS) + `secrets.APP_URL` (dominio público del ERP, `https://erp.dimension.expert`).
+  > ⚠️ **Pendiente de verificar**: este secreto puede seguir apuntando al host de Vercel usado antes de la migración (`…vercel.app`). Si es así, el cron C lleva fallando en silencio cada 12 h, porque el host ya no existe. Comprobarlo en Settings → Secrets → Actions.
 - **Propósito**: los canales webhook de Google Calendar expiran al cabo de **7 días** como máximo. Esta tarea renueva los canales cuya expiración está a **menos de 48 horas**, dando margen antes del cutoff.
 - **Salida**: JSON 200 con `total`, `renovadas`, `errores`, `detalles[]` por integración.
-- **Logs**: Vercel runtime logs (filtrar `[Cron]`) + GitHub Actions logs en `https://github.com/<repo>/actions/runs/<run-id>`.
-- **Variables de entorno**: `CRON_SECRET`, `APP_URL` (GitHub secrets); `DATABASE_URL` (Vercel runtime).
+- **Logs**: logs del contenedor de la app (filtrar `[Cron]`) + GitHub Actions logs en `https://github.com/<repo>/actions/runs/<run-id>`.
+- **Variables de entorno**: `CRON_SECRET`, `APP_URL` (GitHub secrets); `DATABASE_URL` (entorno del contenedor en el VPS).
 
-**Por qué NO está en `vercel.json`**: como ya hay un cron equivalente in-process (`lib/cron/scheduler.ts` #8) y además GitHub Actions como backup externo, registrarlo en Vercel produciría **triple invocación cada 12h** sin valor añadido. El diseño actual mantiene un único trigger autoritativo por mecanismo.
+**Por qué NO está en el crontab**: ya hay un cron equivalente in-process (`lib/cron/scheduler.ts` #8) y GitHub Actions como respaldo externo; añadirlo al crontab produciría **triple invocación cada 12h** sin valor añadido. El diseño mantiene un único trigger autoritativo por mecanismo.
 
 ---
 
 ## 6. Handlers `app/api/cron/` eliminados (registro histórico)
 
 > Esta sección registra los route handlers que existieron pero fueron
-> eliminados por dead-code (no invocados ni por Vercel, ni por GitHub
-> Actions, ni por `lib/cron/scheduler.ts` interno). El log git preserva
+> eliminados por dead-code (no invocados ni por el crontab del VPS, ni por
+> GitHub Actions, ni por `lib/cron/scheduler.ts` interno). El log git preserva
 > los archivos para eventuales restauraciones.
 
 | Path eliminado | Fecha de eliminación | Reason de remoción | Servicios subyacentes |
@@ -395,16 +451,22 @@ de información RGPD Art. 12-14.
 ### 7.1 Verificar que un cron existe y está programado
 
 ```bash
-# ¿Qué crons están en producción?
-jq '.crons' vercel.json
+# ¿Qué crons están programados en producción? (ejecutar EN EL VPS)
+crontab -l
 
-# ¿Qué handlers existen físicamente?
+# ¿Qué corre cada job?
+cat /root/volkern-erp/cron.sh
+
+# ¿Se están ejecutando? Una línea por corrida, con OK o FALLÓ
+tail -20 /var/log/volkern-cron.log
+
+# ¿Qué handlers existen físicamente? (en el repo)
 ls -1 app/api/cron/*/route.ts
 ```
 
-Si un path aparece en `vercel.json` pero NO existe filesystem → bug.
-Si un path existe filesystem pero NO aparece en `vercel.json` → está
-listado en §5 (NO programado) por diseño.
+Si un job del crontab apunta a un path que NO existe en el filesystem → bug.
+Si un path existe en el filesystem pero NO está en el crontab → está
+listado en §5 (externo) o §6 (eliminado) por diseño.
 
 ### 7.2 Inspeccionar qué se purgará HOY sin ejecutar deletes
 
@@ -853,7 +915,7 @@ DATABASE_URL="$PROD_DATABASE_URL" \
 
 - `cron-auditlog-prod-bloat-vacuum` — investigar `pgstattuple('"AuditLog"')` y, si dead_tuples > 20%, ejecutar `VACUUM (ANALYZE) "AuditLog";` en ventana off-peak.
 - `cron-auditlog-prod-window-replay` — re-ejecutar este runbook en t+24h, t+48h; cruzar `auditlog_live_tuples` con el ratio usado por el planner para predecir cuándo el composite será dominante.
-- `cron-auditlog-composite-correlation` — correlacionar `idx_scan` del composite con métricas de la app (`ComplianceScore` keyword en Vercel logs) para confirmar end-to-end.
+- `cron-auditlog-composite-correlation` — correlacionar `idx_scan` del composite con métricas de la app (`ComplianceScore` keyword en los logs del contenedor) para confirmar end-to-end.
 
 ### 7.4 Reconstruir el cutoff usado en una corrida histórica
 
@@ -887,12 +949,13 @@ WHERE "tenantId" = 'X'
 
 ### 7.5 Diff entre dos corridas del cleanup-attendance
 
-Las métricas emitidas por `console.log` van a **Vercel runtime logs**.
-Para DPO:
+Las métricas emitidas por `console.log` van a los **logs del contenedor** de
+la app. Para DPO:
 
-1. Ir a Vercel Dashboard → proyecto → Logs.
-2. Filtrar por `[Cron/CleanupAttendance]`.
-3. Comparar `attendance=N` y `durationMs=N` entre fechas.
+1. En el VPS: `docker compose logs --since 24h | grep '\[Cron/CleanupAttendance\]'`.
+2. Comparar `attendance=N` y `durationMs=N` entre fechas.
+3. El resultado de cada corrida (200 o fallo) queda además en
+   `/var/log/volkern-cron.log`, con una línea por día.
 
 **Anomalía operacional típica**:
 
@@ -907,20 +970,24 @@ Para DPO:
 
 ## 8. Procedimientos de recuperación ante fallo
 
-### 8.1 Si `CRON_SECRET` se rota pero Vercel no se reconfigura
+### 8.1 Si `CRON_SECRET` se rota pero el entorno del VPS no se actualiza
 
-**Síntoma**: Vercel cron recibe 401 consistente.
+**Síntoma**: los jobs empiezan a registrar `FALLÓ (401)` en
+`/var/log/volkern-cron.log` el mismo día de la rotación.
 
 **Acción**:
 
-1. Actualizar `CRON_SECRET` en Vercel env vars.
-2. Las nuevas invocaciones llevarán el secret nuevo en el header.
-3. **NO requiere redeploy** — Vercel re-evalúa las env vars en cada invocación.
+1. Actualizar `CRON_SECRET` en `/root/volkern-erp/.env` del VPS y en el
+   secreto `CRON_SECRET` de GitHub Actions, que usa el mismo valor.
+2. Reiniciar el contenedor de la app: el valor forma parte de su entorno desde
+   el arranque, así que sin reinicio el handler sigue comparando el viejo.
+3. `cron.sh` **no** necesita reinicio: lee la variable en cada ejecución.
+4. Al día siguiente, confirmar `OK (200)` en el log.
 
 ### 8.2 Si cleanup-attendance excede `maxDuration` (300 s en Pro)
 
-**Síntoma**: el log muestra `Error fatal:` con timeout Vercel, o el status
-del response es 500.
+**Síntoma**: `/var/log/volkern-cron.log` muestra `FALLÓ (000)` (el `curl` se
+rindió a los 120 s) o `FALLÓ (500)`.
 
 **Recuperación automática**: la corrida del día siguiente recogerá los
 rows restantes (el endpoint es idempotente: el `where` filtra por
@@ -940,7 +1007,7 @@ rows restantes (el endpoint es idempotente: el `where` filtra por
 **Síntoma**: alertas repetidas pero `/docs/developers` responde 200 al
 verificar manualmente.
 
-**Probable causa**: Vercel cold-start + probe timeout de 10 s.
+**Probable causa**: el contenedor estaba arrancando (cold start) o el host tardó más de 10 s en responder a la probe.
 
 **Acción**:
 
@@ -971,8 +1038,8 @@ verificar manualmente.
 
 | Fuente | Qué contiene | Acceso |
 |--------|--------------|--------|
-| `console.log` cleanup-attendance | Total purgados, batches, duración, tenants OK/Failed | Vercel Dashboard → Logs → filtrar `[Cron/CleanupAttendance]` |
-| `console.log/console.warn` uptime-developers | Probes, alert bodies, errores de integración | Vercel Dashboard → Logs → filtrar `[uptime-developers]` |
+| `console.log` cleanup-attendance | Total purgados, batches, duración, tenants OK/Failed | En el VPS: `docker compose logs --since 24h \| grep '\[Cron/CleanupAttendance\]'` |
+| `console.log/console.warn` uptime-developers | Probes, alert bodies, errores de integración | En el VPS: `docker compose logs --since 24h \| grep '\[uptime-developers\]'` |
 | Postgres `pg_stat_user_tables` | `n_tup_ins`, `n_tup_del`, `seq_scan`, `idx_scan` por tabla | SQL client con acceso a `DATABASE_URL` |
 | `summary` JSON del response | Estructura completa de la corrida | Llamada directa a la API con `CRON_SECRET` |
 
@@ -992,7 +1059,8 @@ SLO se degrada > 10% durante un mes, abrir ticket de capacity planning.
 
 ## 10. Cambio de versión y changelog
 
-> Mantener esta tabla sincronizada con cada modificación a `vercel.json`
+> Mantener esta tabla sincronizada con cada modificación al crontab del VPS
+o a `deploy-vps/cron.sh`
 > o a los handlers de `app/api/cron/`.
 
 | Fecha | Cambio | Ticket | Autor |
@@ -1002,7 +1070,7 @@ SLO se degrada > 10% durante un mes, abrir ticket de capacity planning.
 | 2026-06-21 | **Cleanup de dead-code cron handlers**: eliminados `cleanup-analytics`, `limit-alerts`, `academy-audit`, `trials`, `compliance-reports`, `accounting-proactivity`. Sus servicios subyacentes sobreviven si son referenciados por otras rutas internas (scheduler, portal, tests). `google-calendar-renew` se mantiene como cron C disparado por GitHub Actions. §5 y §6 actualizadas. | `cron-dead-code-cleanup` | platform-team |
 | 2026-06-21 | Refactor cleanup-attendance: iteración por batches de 50k + composite index `@@index([tenantId, timestamp])` reemplazando single `DELETE` | `cron-cleanup-batch` | platform-team |
 | 2026-06-15 | Documentación inicial de política de retención DPO-auditable | este doc | platform-team |
-| (previo) | ver `git log -- vercel.json` y `git log -- app/api/cron/` | — | — |
+| (previo) | ver `git log -- deploy-vps/cron.sh` y `git log -- app/api/cron/` | — | — |
 | 2026-06-21 | **Nueva §11.7 Baseline verificado (template)**: shells + placeholders para que un operador con `CRON_SECRET` real ejecute los 3 curls contra staging y commitee los outputs verbatim. Pendiente de primera ejecución real. | este doc | platform-team |
 | 2026-07-02 | **Composite index materializado en staging**: creada migración auto-Prisma `prisma/migrations/20260702000000_add_attendance_composite_index/` con `CREATE INDEX "erp_attendance_logs_tenantId_timestamp_idx"`, aplicada vía raw SQL (bypass de 4 migrations pre-existentes pendientes vía `migrate resolve --applied`), reconciliada con sha256=`41e8cc...`. `ANALYZE` refrescó stats. Verifier exit 1 esperado en staging por bajo cardinal (184 filas) — verificable en producción con dataset realista. Manual SQL obsoleto consolidado al auto-Prisma path. §7.3 baseline ampliado. | `cron-composite-index-missing` | platform-team |
 | 2026-06-23 | **Staging migrations drift-capture (Path C+)**: reconciliadas las 7 migrations pre-existentes pendientes en Neon staging (`neondb`) vía `npx prisma migrate resolve --applied` (usuario aprobó explícitamente aunque el original era "sin resolve --applied"; Path C+ requiere este reconcile para el init `20260601091455` y la restauración del bloqueado `20260417`). Restaurada `prisma/migrations/20260417_add_real_estate_inmobiliario/migration.sql` (1 920 B) perdida vía `git checkout HEAD -- …`; purgada fila duplicada en `_prisma_migrations` (`DELETE … WHERE finished_at IS NULL`) — queda 1 fila limpia con `finished_at=2026-06-23 14:28:35`. Generada+aplicada drift-capture `prisma/migrations/20260624000000_capture_partner_api_and_dropouts/migration.sql` (6 527 B) vía `npx prisma migrate diff --from-url --to-schema-datamodel --script > migration.sql && npx prisma migrate deploy` — captura drift Partner API no reflejado en `schema.prisma`: removal `AttendanceRules.randomPulsesPerDay`+`requireSelfie`, addition `blockIfNotNoticed`/`maxTravelKmh=250`/`minPunchIntervalSec=30`/`noticeVersion='v1-2026-gps-only'`/`retentionDays=1460`; columns `partnerLabel`/`rateLimitPerMin`/`revokedAt`/`revokedReason`/`webhookEnabled`/`webhookEvents[]`/`webhookSecret`/`webhookUrl` en `api_keys`+`incoming_webhooks`; nuevas tablas `erp_idempotency_keys`/`api_request_logs`/`partner_webhook_deliveries` (FK `Tenant.id` CASCADE, 12 índices, 8 FKs); rename constraint `PayrollRunES_pkey → erp_payroll_runs_es_pkey` (DDL **no idempotente** — riesgo para fresh deploys rebuild staging desde cero). **End-state verificado**: `npx prisma migrate status` → "Database schema is up to date" + `npx prisma migrate diff --from-url --to-schema-datamodel --script` → 32 bytes (`-- This is an empty migration.`). Backup pre-flight: `/tmp/staging_schema_pre_2026-06-23.sql` (533 KB, 279 tablas vía docker postgres:17-alpine). Reviewer `code-reviewer-minimax-m3` validó shipp-ability con 3 fixes. | `cron-staging-pending-migrations-drift` | platform-team |
@@ -1023,10 +1091,11 @@ SLO se degrada > 10% durante un mes, abrir ticket de capacity planning.
 >
 > **Notas de entorno**:
 > - **Producción**: `${BASE_URL:-https://volkern.app}` + `${CRON_SECRET}`
->   desde Vercel → Settings → Environment Variables → **Production**.
+>   desde `/root/volkern-erp/.env` del VPS (y reiniciar el contenedor para que
+>   recargue el entorno).
 >   **Uso reservado a runbook autorizado** (incident response o DPO).
 > - **Staging**: `${BASE_URL:-https://staging.volkern.app}` + `${CRON_SECRET}`
->   desde Vercel → **Preview**.
+>   desde el `.env` local, para desarrollo.
 > - **Local**: `process.env.NODE_ENV !== "production"` ⇒ el handler salta la
 >   auth check automáticamente (ver §2 regla 1). Puedes llamar sin Bearer
 >   para development puro.
@@ -1036,7 +1105,7 @@ SLO se degrada > 10% durante un mes, abrir ticket de capacity planning.
 ```bash
 # 1. CRON_SECRET cargado en el shell y suficientemente largo
 if [[ -z "${CRON_SECRET:-}" ]]; then
-  echo "⚠️  CRON_SECRET vacía. Cargar desde Vercel env o .env.local." >&2
+  echo "⚠️  CRON_SECRET vacía. Cargar desde el .env del VPS o .env.local." >&2
   exit 1
 fi
 echo "✅ CRON_SECRET longitud: ${#CRON_SECRET} chars (esperado > 30)"
@@ -1113,7 +1182,7 @@ curl -sS -X GET "${BASE_URL}/api/cron/cleanup-attendance?dryRun=1" \\
 | Señal | Diagnóstico probable | Acción |
 |-------|---------------------|--------|
 | `summary.dryRun !== true` | Bug: handler no respeta `?dryRun=1` | Bloquear deploy; abrir ticket |
-| `summary.tenantsFailed > 0` | Error de tenant aislado | Revisar Vercel logs `[Cron/CleanupAttendance] Tenant <id> falló…` |
+| `summary.tenantsFailed > 0` | Error de tenant aislado | Revisar los logs del contenedor: `[Cron/CleanupAttendance] Tenant <id> falló…` |
 | HTTP 500 | Connectivity o schema drift | Revisar `DATABASE_URL` + ejecutar `npx prisma migrate status` |
 | `summary.attendance.totalDeleted > 0` en dry-run | Bug: handler no respeta dry-run **CRÍTICO** | Bloquear inmediatamente |
 
@@ -1181,10 +1250,10 @@ curl -sS -X GET "${BASE_URL}/api/cron/uptime-developers" \\
 
 | Señal | Diagnóstico probable | Acción |
 |-------|---------------------|--------|
-| `probes[].status === 0` | Timeout (10s exceeded por probe) | Revisar cold-start Vercel; abrir ticket a `@SRE` |
+| `probes[].status === 0` | Timeout (10s exceeded por probe) | Revisar arranque en frío del contenedor; abrir ticket a `@SRE` |
 | `probes[].contentValid === false` (sólo `/openapi.json`) | Schema OpenAPI corrupto | Revisar cambios recientes en `prisma/schema.prisma` o routes; regenerar |
-| `cooldownSkipped: true` repetido > 12/h | Vercel haciendo cold-start durante outage | Considerar subir `ALERT_COOLDOWN_MS` (> 5 min) |
-| `alertSent === false && failures > 0` | Cooldown activo o canales `UPTIME_APPRISE_URL`/`ADMIN_EMAIL` mal configurados | Revisar env vars + Vercel runtime logs |
+| `cooldownSkipped: true` repetido | Reinicios del contenedor durante el outage | Con cadencia diaria no debería darse; considerar subir `ALERT_COOLDOWN_MS` |
+| `alertSent === false && failures > 0` | Cooldown activo o canales `UPTIME_APPRISE_URL`/`ADMIN_EMAIL` mal configurados | Revisar env vars + logs del contenedor |
 
 ### 11.4 Caso borde — verificar que la auth funciona (401 sin Bearer)
 
@@ -1206,7 +1275,7 @@ curl -sS -X GET "${BASE_URL}/api/cron/cleanup-attendance?dryRun=1" \\
 
 ### 11.5 Dónde ver los logs esperados
 
-Filtrar en **Vercel Dashboard** → proyecto → **Logs**:
+Filtrar en los logs del contenedor de la app:
 
 - `[Cron/CleanupAttendance]` ⇒ siempre emite 1 línea por corrida con prefijo `DONE` (o `DRY-RUN` si aplica `?dryRun=1`).
 - `[uptime-developers]` ⇒ intencionalmente silencioso en success; imprime sólo si `failures > 0` y el cooldown lo permite (ver §4.4).
@@ -1232,7 +1301,7 @@ Filtrar en **Vercel Dashboard** → proyecto → **Logs**:
 > el comportamiento real. Este §11.7 se replica cada vez que un humano
 > ejecuta los 3 curls contra staging con su `CRON_SECRET` local.
 >
-> **Quién debe ejecutarlo**: DPO o SRE con acceso a Vercel env vars
+> **Quién debe ejecutarlo**: DPO o SRE con acceso a las variables de entorno del VPS
 > (`NEXT_PUBLIC_APP_URL`, `CRON_SECRET`) y a un staging deployado. No
 > automatizar desde CI: §11.3 dispara alertas reales si los probes fallan.
 >
@@ -1247,7 +1316,7 @@ Filtrar en **Vercel Dashboard** → proyecto → **Logs**:
 | Ejecutado por | `{{ github_user_o_alias }}` |
 | Fecha UTC | `{{ ISO_8601_ejecucion }}` |
 | URL objetivo | `{{ NEXT_PUBLIC_APP_URL_del_staging }}` |
-| Vercel Deployment ID | `{{ dpl_xxxxx_opcional_de_vercel }}` |
+| ID de la imagen desplegada | `{{ sha_opcional_de_la_imagen }}` |
 | `NODE_ENV` | `production` |
 | Cooldown uptime previo | `{{ timestamp_ultimo_alert_o_none }}` |
 | Filas `erp_attendance_logs` | `{{ COUNT_antes_de_correr }}` (de `psql -At -c "SELECT COUNT(*) FROM erp_attendance_logs"`) |
@@ -1358,7 +1427,7 @@ curl -sS -X GET "$BASE_URL/api/cron/cleanup-attendance?dryRun=1"   -H "Accept: a
 
 | Archivo | Propósito |
 |---------|-----------|
-| `vercel.json` | Schedule oficial de Vercel crons (source-of-truth) |
+| `deploy-vps/cron.sh` | Runner de los 4 jobs del crontab del VPS (source-of-truth del schedule). El crontab de root es quien lo invoca |
 | `.github/workflows/cron-renew-webhooks.yml` | Trigger externo GitHub Actions (cron C — `google-calendar-renew`) |
 | `lib/cron/scheduler.ts` | Orquestador in-process (node-cron) para runtimes persistentes — incluye tareas equivalentes a varios handlers eliminados |
 | `app/api/cron/cleanup-attendance/route.ts` | Implementación cron A |
@@ -1377,9 +1446,11 @@ curl -sS -X GET "$BASE_URL/api/cron/cleanup-attendance?dryRun=1"   -H "Accept: a
 
 - **Todos los crons** deben autenticar con `Bearer ${CRON_SECRET}` (sólo prod).
 - **Auth check ORDEN**: el handler debe retornar 401 ANTES de tocar Prisma (defense-in-depth).
-- **Idempotencia obligatoria**: si Vercel re-ejecuta, el response es estable
-  (no causa daño duplicado).
+- **Idempotencia obligatoria**: si una corrida se repite, el response es
+  estable (no causa daño duplicado).
 - **Dry-run obligatorio** cuando sea inspección: `?dryRun=1` o ruta dedicada.
-- **Logs a stdout**: `console.log`/`console.warn` van a Vercel runtime logs.
+- **Logs a stdout**: `console.log`/`console.warn` van a los logs del
+  contenedor; `cron.sh` resume el resultado de cada corrida en
+  `/var/log/volkern-cron.log`.
   Sin uso de librerías de telemetry externa (Datadog, Sentry) para mantener
   el contrato auditable sin vendor lock-in.

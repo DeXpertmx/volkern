@@ -3,7 +3,8 @@
  *
  * GET /api/cron/cleanup-attendance
  *
- * Job diario (03:00 UTC, vercel.json `crons[]`) que purga datos del sistema
+ * Job diario (03:00 UTC) programado en el crontab de root del VPS, que lo
+ * invoca vía `deploy-vps/cron.sh cleanup-attendance`. Purga datos del sistema
  * de Control Horario conforme a la política de retención RGPD Art. 5.1.e.
  *
  * ────────────────────────────────────────────────────────────────────────────

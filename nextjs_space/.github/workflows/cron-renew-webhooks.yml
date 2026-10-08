@@ -2,13 +2,16 @@
 # Volkern ERP — Google Calendar Webhook Renewal (Cron Backup)
 # Renueva los canales webhook de Google Calendar cada 12 horas.
 #
-# Respaldo para el cron job de Vercel. Ejecuta el mismo endpoint
-# GET /api/cron/google-calendar-renew que el vercel.json.
+# Este workflow es el ÚNICO disparador de este cron: no está en el crontab
+# del VPS (deploy-vps/cron.sh), que solo ejecuta los 4 jobs diarios.
+# Ejecuta GET /api/cron/google-calendar-renew con Bearer.
 #
 # Configurar en GitHub:
 #   Settings → Secrets and variables → Actions → New repository secret
-#   - CRON_SECRET:  (el mismo valor configurado en Vercel)
-#   - APP_URL:      https://volkern-fmd2652nf-dexpertmxs-projects.vercel.app
+#   - CRON_SECRET:  el mismo valor que en /root/volkern-erp/.env del VPS
+#   - APP_URL:      dominio público del ERP — https://erp.dimension.expert
+#                   ⚠️ COMPROBAR: si sigue apuntando a un host *.vercel.app,
+#                   este cron lleva fallando en silencio cada 12 h.
 # ═══════════════════════════════════════════════════════════════
 
 name: Google Calendar Webhook Renewal

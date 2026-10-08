@@ -8,16 +8,16 @@ import { NextRequest, NextResponse } from "next/server";
  *
  * Vigila que las páginas públicas críticas para integradores externos
  * (`/docs/developers` + `/openapi.json`) respondan 200 y contenido válido.
- * Schedule configurado en `vercel.json` → `crons[]`.
- *   - Plan Pro de Vercel: cron cada 5 minutos acepta esto sin problema.
- *   - Plan Hobby de Vercel: cron jobs solo corren 1 vez/día → cambiar
- *     schedule a `0 * * * *` (cada hora, minuto 0) en `vercel.json`.
+ * Schedule: `0 0 * * *` (diario, 00:00 UTC) en el crontab de root del VPS,
+ * que lo invoca vía `deploy-vps/cron.sh uptime-developers`.
+ *   - No hay límite de plataforma: una corrida al día. El `curl` de
+ *     `cron.sh` corta a los 120 s (`--max-time 120`).
  *
  * Comportamiento:
  *   - Auth con CRON_SECRET (Header Bearer) — solo en producción.
- *   - En Vercel Preview deployments el handler se salta los probes
- *     (`skipped: preview-env`) para no consumir cuota contra el
- *     dominio de producción ni alertar en un build que aún no es estable.
+ *   - Si `VERCEL_ENV` está definida y no vale "production", el handler se
+ *     salta los probes (`skipped: preview-env`). En el VPS la variable no
+ *     está definida, así que los probes se ejecutan siempre.
  *   - Probe en paralelo con timeout 10s por endpoint.
  *   - Primer intento usa `redirect: "manual"` (no sigue redirects CDN).
  *   - Si el primer intento recibe 3xx legítimo, retry 1 vez con

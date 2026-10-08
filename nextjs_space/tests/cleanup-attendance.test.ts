@@ -32,7 +32,7 @@ vi.mock('@/lib/db', () => ({
 // HELPERS
 // ────────────────────────────────────────────────────────────────────────────────
 
-// 2026-07-15 03:00:00 UTC = exactamente la hora programada en `vercel.json`.
+// 2026-07-15 03:00:00 UTC = exactamente la hora programada en el crontab del VPS.
 const FIXED_NOW = new Date('2026-07-15T03:00:00.000Z');
 const CRON_SECRET = 'cron-secret-test-xyz';
 const BATCH_SIZE = 50_000; // Espejo de ATTENDANCE_BATCH_SIZE en route.ts.
