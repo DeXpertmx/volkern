@@ -9,11 +9,19 @@
 >
 > **Última actualización**: 2026-10-08 (auditable en `git log`).
 >
-> **Fuente de verdad técnica**: el **crontab de root del VPS**
-> (`root@62.171.134.195`), que invoca `deploy-vps/cron.sh <job>`. El
-> planificador es el demonio `cron` del sistema operativo, **no** Vercel.
-> Cualquier discrepancia entre este documento y ese crontab se considera
-> **bug** y debe corregirse aquí primero, luego sincronizar `cron.sh`.
+> **Fuente de verdad técnica**: hay **dos** planificadores, y este documento
+> debe reflejar ambos:
+>
+> 1. El **crontab de root del VPS** (`root@62.171.134.195`), que invoca
+>    `deploy-vps/cron.sh <job>` vía HTTP. El planificador es el demonio `cron`
+>    del sistema operativo, **no** Vercel.
+> 2. El **scheduler in-process** `lib/cron/scheduler.ts` (node-cron), arrancado
+>    desde `instrumentation.ts` en el contenedor de la app. Verificado en los
+>    logs de producción de 2026-10-08.
+>
+> Cualquier discrepancia entre este documento y cualquiera de los dos se
+> considera **bug** y debe corregirse aquí primero, luego sincronizar
+> `cron.sh` o `scheduler.ts`.
 
 ---
 
@@ -55,10 +63,11 @@ programados en el crontab de **root** y el servicio `cron` está `active` y
 > era Vercel, y describe una plataforma serverless con límites de plan y
 > cold-starts. Se ha reescrito contra el VPS: schedules reales en el crontab,
 > ejecución vía `cron.sh`, log en `/var/log/volkern-cron.log` y recuperación
-> sobre los contenedores. Sólo quedan dos menciones legítimas a Vercel: la
+> sobre los contenedores. Sólo queda una mención legítima a Vercel: la
 > variable `VERCEL_ENV` (que el handler sigue leyendo y que en el VPS no está
-> definida) y la advertencia del §5 sobre el secreto `APP_URL` de GitHub
-> Actions, pendiente de comprobar.
+> definida). La advertencia del §5 sobre el secreto `APP_URL` de GitHub Actions
+> **está resuelta** (2026-10-08): ese workflow nunca llegó a registrarse y el
+> secreto nunca existió; el archivo se eliminó.
 
 ---
 
@@ -68,7 +77,7 @@ programados en el crontab de **root** y el servicio `cron` está `active` y
 2. [Autenticación universal](#2-autenticación-universal)
 3. [Cron A — `/api/cron/cleanup-attendance`](#3-cron-a--apicroncleanup-attendance)
 4. [Cron B — `/api/cron/uptime-developers`](#4-cron-b--apicronuptime-developers)
-5. [Crons con triggers externos al crontab (GitHub Actions)](#5-crons-con-triggers-externos-al-crontab-github-actions)
+5. [Crons disparados por el scheduler in-process (no por el crontab)](#5-crons-disparados-por-el-scheduler-in-process-no-por-el-crontab)
 6. [Handlers `app/api/cron/` eliminados (registro histórico)](#6-handlers-appapicron-eliminados-registro-histórico)
 7. [Procedimientos de auditoría para el DPO](#7-procedimientos-de-auditoría-para-el-dpo)
 8. [Procedimientos de recuperación ante fallo](#8-procedimientos-de-recuperación-ante-fallo)
@@ -83,16 +92,82 @@ programados en el crontab de **root** y el servicio `cron` está `active` y
 
 | # | Path | Schedule (cron) | Frecuencia humana | Toca datos personales (RGPD) | Artículo RGPD relevante |
 |---|------|------------------|--------------------|-------------------------------|--------------------------|
-| A | `/api/cron/cleanup-attendance` | `0 3 * * *` | Cada día a las 03:00 UTC | **Sí** — purga marcajes GPS e idempotency keys | Art. 5.1.e (limitación del plazo de conservación) |
-| B | `/api/cron/uptime-developers` | `0 0 * * *` | Cada día a las 00:00 UTC | No — health check de páginas públicas | No aplica (transparencia hacia integradores) |
-| C | `/api/cron/google-calendar-renew` | `0 */12 * * *` (GitHub Actions) | Cada 12 horas (00:00 y 12:00 UTC) | No — renovación de canales OAuth técnico | No aplica (operacional OAuth) |
+| A | `/api/cron/cleanup-attendance` | `0 3 * * *` (crontab VPS) | Cada día a las 03:00 UTC | **Sí** — purga marcajes GPS e idempotency keys | Art. 5.1.e (limitación del plazo de conservación) |
+| B | `/api/cron/uptime-developers` | `0 0 * * *` (crontab VPS) | Cada día a las 00:00 UTC | No — health check de páginas públicas | No aplica (transparencia hacia integradores) |
+| C | `/api/cron/google-calendar-renew` | `0 */12 * * *` (scheduler in-process) | Cada 12 horas (00:00 y 12:00 UTC) | No — renovación de canales OAuth técnico | No aplica (operacional OAuth) |
+| D | `/api/cron/hospitality-reconcile` | `0 4 * * *` (crontab VPS) | Cada día a las 04:00 UTC | **Sí** — lee y escribe reservas con datos del huésped; registra divergencias | Art. 6.1.b (contrato de alojamiento) + Art. 5.1.d (exactitud) |
+| E | `/api/cron/hospitality-briefing` | `0 8 * * *` (crontab VPS) | Cada día a las 08:00 UTC | **Sí** — envía al equipo del hotel el nombre del huésped de las llegadas/salidas | Art. 6.1.b + Art. 6.1.f (operación del alojamiento) + Art. 5.1.c (minimización) |
 
-**Total**: 2 crons de este inventario (A, B) programados en el crontab del VPS + 1 cron disparado externamente vía GitHub Actions (C, ver §5). Todos autentican con `Authorization: Bearer ${CRON_SECRET}` en producción (ver §2).
+**Total**: 4 crons del crontab del VPS (A, B, D, E) + 1 cron disparado por el
+scheduler in-process (C, ver §5). Los cinco autentican con
+`Authorization: Bearer ${CRON_SECRET}` cuando se invocan por HTTP en
+producción (ver §2).
 
-> El crontab ejecuta **dos jobs más de Hospitality** (`hospitality-reconcile`
-> a las 04:00 y `hospitality-briefing` a las 08:00) que **no están
-> clasificados en este documento** respecto a datos personales: quedan
-> **pendientes de revisión por el DPO**. Ver el cuadro de estado al inicio.
+### 1.1 Clasificación RGPD de los crons de Hospitality (D y E)
+
+Clasificación **técnica**, derivada del código y no una opinión legal: es el
+material campo por campo sobre el que el DPO da el visto bueno. Cierra el
+pendiente que este documento arrastraba (antes decía "pendientes de revisión
+por el DPO").
+
+**D — `hospitality-reconcile`** (`0 4 * * *` · `lib/cron/hospitality-reconcile.ts`)
+
+- **Qué hace**: recorre los tenants con mappings de conectividad activos y
+  reconcilia **30 días** de reservas contra el proveedor. Crea, actualiza y
+  cancela reservas, y anota las divergencias en `HospitalitySyncLog`.
+- **Datos personales**: **sí**, y son el núcleo del job. Lee y escribe
+  `HospitalityReservation.guestData` (Json: identificativos y contacto del
+  huésped) — nombre, email y teléfono del titular y de los acompañantes — más
+  los datos de la estancia (fechas, unidad, importes).
+- **Base jurídica**: **Art. 6.1.b** — el tratamiento es la ejecución del
+  contrato de alojamiento: la reserva debe reflejar lo que el huésped contrató.
+- **Principio que lo justifica**: **Art. 5.1.d** (exactitud) — corregir
+  reservas desincronizadas *es* mantener los datos exactos.
+- **Minimización**: `cancelarAusentes` siempre en `false`: una reserva interna
+  activa que el proveedor ya no reporta se registra como **divergencia**, nunca
+  se cancela automáticamente. Sólo escribe si hay diferencias (idempotente).
+- **Seguridad**: **Art. 32** — `Bearer ${CRON_SECRET}`, con el 401 devuelto
+  antes de tocar Prisma.
+- **Nota operativa**: este job está programado **dos veces** — crontab 04:00 y
+  scheduler in-process 04:15. Es idempotente (sin diferencias no hay
+  escrituras), pero es una corrida redundante: candidata a unificar.
+
+**E — `hospitality-briefing`** (`0 8 * * *` · `lib/cron/hospitality-briefing.ts`)
+
+- **Qué hace**: envía la plantilla activa `briefing_diario` de cada tenant al
+  equipo que puede operar el PMS (capacidad `operaciones.ver`, máximo 10
+  destinatarios) por email o WhatsApp, con la foto del día.
+- **Datos personales**: **sí**, de **dos categorías de interesados**:
+  1. **Huéspedes** — el cuerpo del mensaje lleva el nombre
+     (`detalleLlegadas` / `detalleSalidas` → `{huesped, unidad}`) junto a la
+     unidad.
+  2. **Equipo del hotel** — email, teléfono y nombre como destinatarios
+     (`User.email` / `User.telefono` / `User.name`).
+- **Base jurídica**: **Art. 6.1.b** para los destinatarios internos (relación
+  laboral) y **Art. 6.1.f** (interés legítimo del hotel en operar las llegadas
+  del día) para la comunicación. No es una finalidad nueva: es el mismo
+  tratamiento operativo del alojamiento.
+- **Minimización**: **Art. 5.1.c** — sólo viaja **nombre + unidad**. No viajan
+  documentos (los de `viajeros.documento_completo` quedan fuera), ni importes
+  de terceros, ni datos de pago. Evidencia en código: el `AuditLog` de
+  idempotencia guarda únicamente contadores (`ocupacionHoyPct`, `llegadasHoy`,
+  `salidasHoy`, `incidenciasAbiertas`, `cobrosPendientes`), **nunca nombres**.
+- **Encargados**: **Art. 28** — la entrega sale por canales de terceros (email
+  y WhatsApp); sus DPA se siguen en
+  `docs/compliance/ENCARGADOS-DPA-PENDIENTES.md`.
+- **Retención**: el `AuditLog` de idempotencia es por tenant y fecha. El
+  mensaje enviado **no se persiste** en el ERP (vive en el proveedor del canal).
+
+> **Pendiente declarado (no clasificado en este documento)**: el scheduler
+> in-process ejecuta además otros jobs de Hospitality — `hospitality-checkin-due`
+> (cada hora), `hospitality-registro-viajeros` (cada hora, minuto 30),
+> `hospitality-holds-expirados` (cada hora), `hospitality-review-request`
+> (10:30), `hospitality-vinculos-pendientes` (09:45) y
+> `hospitality-connectivity-health` (05:00). Tres de ellos tratan datos
+> personales de forma sustantiva (`checkin-due` y `review-request` comunican con
+> el huésped; `registro-viajeros` comunica documentos al Ministerio del
+> Interior, RD 933/2021) y **merecen su propia ficha**: queda como siguiente
+> revisión del DPO, sin clasificar aquí.
 
 **Limitaciones del planificador**:
 - El crontab del VPS **no impone límites** de frecuencia ni de duración: los schedules se ejecutan según lo previsto.
@@ -405,24 +480,44 @@ de información RGPD Art. 12-14.
 
 ---
 
-## 5. Crons con triggers externos al crontab (GitHub Actions)
+## 5. Crons disparados por el scheduler in-process (no por el crontab)
 
-> ⚠️ Esta sección documenta crons cuyos handlers **SÍ existen** en
-> `app/api/cron/` pero **NO están en el crontab del VPS** — se disparan vía
-> GitHub Actions workflows como mecanismo alternativo o de respaldo.
+> Esta sección documenta jobs cuyos handlers **SÍ existen** en
+> `app/api/cron/` pero **NO están en el crontab del VPS**: se ejecutan dentro
+> del proceso de la app vía `lib/cron/scheduler.ts` (node-cron), que arranca
+> desde `instrumentation.ts` (`register()`, runtime `nodejs`) en **todos** los
+> entornos, incluido el contenedor de producción.
 
 ### Cron C — `/api/cron/google-calendar-renew`
 
-- **Trigger**: GitHub Actions (`.github/workflows/cron-renew-webhooks.yml`) que ejecuta `curl ${APP_URL}/api/cron/google-calendar-renew` con `Authorization: Bearer ${CRON_SECRET}` cada 12h (00:00 y 12:00 UTC).
-- **Backup de**: la lógica equivalente también corre in-process vía `lib/cron/scheduler.ts` (#8, `cron.schedule('0 */12 * * *', …)`) en runtimes persistentes; GitHub Actions es el disparador externo.
-- **Secreto requerido en GitHub**: `secrets.CRON_SECRET` (el mismo valor que en `/root/volkern-erp/.env` del VPS) + `secrets.APP_URL` (dominio público del ERP, `https://erp.dimension.expert`).
-  > ⚠️ **Pendiente de verificar**: este secreto puede seguir apuntando al host de Vercel usado antes de la migración (`…vercel.app`). Si es así, el cron C lleva fallando en silencio cada 12 h, porque el host ya no existe. Comprobarlo en Settings → Secrets → Actions.
-- **Propósito**: los canales webhook de Google Calendar expiran al cabo de **7 días** como máximo. Esta tarea renueva los canales cuya expiración está a **menos de 48 horas**, dando margen antes del cutoff.
-- **Salida**: JSON 200 con `total`, `renovadas`, `errores`, `detalles[]` por integración.
-- **Logs**: logs del contenedor de la app (filtrar `[Cron]`) + GitHub Actions logs en `https://github.com/<repo>/actions/runs/<run-id>`.
-- **Variables de entorno**: `CRON_SECRET`, `APP_URL` (GitHub secrets); `DATABASE_URL` (entorno del contenedor en el VPS).
+- **Trigger autoritativo**: `lib/cron/scheduler.ts`, job **#5**
+  (`cron.schedule('0 */12 * * *', …)` → `calendar-renewal`), in-process en el
+  contenedor. Verificado en los logs de producción: `✅ [Scheduler] Google
+  Calendar webhook renewal programado (cada 12h)`.
+- **Propósito**: los canales webhook de Google Calendar expiran al cabo de **7
+  días** como máximo. Esta tarea renueva los canales cuya expiración está a
+  **menos de 48 horas**. La cadencia de 12 h contra un umbral de 48 h tolera
+  varias corridas perdidas sin que caduque ningún canal.
+- **Salida**: JSON 200 con `total`, `renovadas`, `errores`, `detalles[]` por
+  integración.
+- **Logs**: logs del contenedor de la app
+  (`docker service logs volkern-erp_app`, filtrar `[Cron]`).
+- **Variables de entorno**: `DATABASE_URL` (entorno del contenedor);
+  `CRON_SECRET` sólo si se invoca por HTTP.
+- **El workflow `cron-renew-webhooks.yml` se eliminó** (2026-10-08). Vivía en
+  `nextjs_space/.github/workflows/`, una ruta que **GitHub no lee** (sólo lee
+  `.github/workflows/` en la raíz del repo), así que nunca se registró como
+  workflow: `gh run list --workflow=cron-renew-webhooks.yml` devuelve **404** y
+  los secretos `CRON_SECRET` / `APP_URL` de Actions **nunca se crearon**
+  (`gh secret list` sale vacío). No era un respaldo: era un archivo muerto que
+  hacía creer que existía un segundo disparador. Ver §10 (changelog).
 
-**Por qué NO está en el crontab**: ya hay un cron equivalente in-process (`lib/cron/scheduler.ts` #8) y GitHub Actions como respaldo externo; añadirlo al crontab produciría **triple invocación cada 12h** sin valor añadido. El diseño mantiene un único trigger autoritativo por mecanismo.
+**Por qué NO está en el crontab**: ya corre in-process cada 12 h. Añadirlo
+crearía una **segunda invocación** del mismo trabajo, y `renewWebhookChannel`
+crea un canal nuevo, de modo que dos corridas solapadas dejan **canales
+duplicados** en Google Calendar. El criterio del sistema es **un único trigger
+autoritativo por job**. Para un respaldo externo real habría que crear los dos
+secretos de Actions y aceptar explícitamente esa duplicación.
 
 ---
 
@@ -1065,6 +1160,8 @@ o a `deploy-vps/cron.sh`
 
 | Fecha | Cambio | Ticket | Autor |
 |-------|--------|--------|-------|
+| 2026-10-08 | **Clasificación RGPD de los dos crons de Hospitality** que estaban sin clasificar (§1.1): `hospitality-reconcile` (D) y `hospitality-briefing` (E), con categorías de datos, base jurídica, minimización y retención, derivadas del código. Se declara explícitamente el pendiente restante: los 6 jobs de Hospitality del scheduler in-process siguen sin ficha. | `cron-hospitality-rgpd` | platform-team |
+| 2026-10-08 | **Cron C reasignado al scheduler in-process y eliminado el workflow muerto**: se comprobó contra GitHub que `nextjs_space/.github/workflows/cron-renew-webhooks.yml` **nunca se registró** (ruta que GitHub no lee; `gh run list` = 404) y que sus secretos **nunca existieron** (`gh secret list` vacío). La renovación de canales de Google Calendar **sí** está corriendo, in-process (`lib/cron/scheduler.ts` #5), verificado en los logs del contenedor. Se elimina el archivo y se reescribe §5. **No** se añade al crontab: produciría canales duplicados. Se documenta también que `hospitality-reconcile` corre dos veces (04:00 crontab + 04:15 scheduler). | `cron-c-trigger-real` | platform-team |
 | 2026-06-21 | **Auditoría DPO §7.3 + ticket pre-deploy**: captura del EXPLAIN ANALYZE baseline contra Neon staging (exit 1, FAIL). Acciones reunidas en `docs/cron-tickets/CLEANUP-ATTENDANCE-INDEX-MISSING.md`. Bug naming fixer verifier regex aceptado. | `cron-composite-index-missing` | platform-team |
 | 2026-06-21 | **Nueva §11 Procedimientos de testing manual**: 6 sub-secciones con curls copy-paste (dry-run cleanup + smoke uptime + 401 sin bearer) para que el DPO dispare crons manualmente sin tocar código. Antigua §11 renumerada a §12. | este doc | platform-team |
 | 2026-06-21 | **Cleanup de dead-code cron handlers**: eliminados `cleanup-analytics`, `limit-alerts`, `academy-audit`, `trials`, `compliance-reports`, `accounting-proactivity`. Sus servicios subyacentes sobreviven si son referenciados por otras rutas internas (scheduler, portal, tests). `google-calendar-renew` se mantiene como cron C disparado por GitHub Actions. §5 y §6 actualizadas. | `cron-dead-code-cleanup` | platform-team |
@@ -1419,6 +1516,11 @@ curl -sS -X GET "$BASE_URL/api/cron/cleanup-attendance?dryRun=1"   -H "Accept: a
 | RGPD | Art. 5.1.c | Minimización (composite index evita full-table scan) |
 | RGPD | Art. 12-14 | Soportado por uptime-developers (`/docs/developers` alive) |
 | RGPD | Art. 32 | Auth `Bearer ${CRON_SECRET}` + límites de retención |
+| RGPD | Art. 6.1.b | Crons D/E: ejecución del contrato de alojamiento (reserva y comunicación operativa) |
+| RGPD | Art. 6.1.f | Cron E: interés legítimo del hotel en operar las llegadas del día |
+| RGPD | Art. 5.1.d | Cron D: exactitud — reconciliar reservas desincronizadas |
+| RGPD | Art. 5.1.c | Cron E: minimización — el briefing sólo lleva nombre + unidad |
+| RGPD | Art. 28 | Cron E: entrega por canales de terceros (email / WhatsApp) — ver `docs/compliance/ENCARGADOS-DPA-PENDIENTES.md` |
 | LOPDGDD (LO 3/2018) | Art. 88 | `Employee.noticeAcknowledgedAt`/`acceptedPolicies` **fuera del scope de purga** (preservados) |
 | LISOS (RD 5/2000) | Art. 7 | Prescripción laboral de 4 años → justifica default `1460` |
 | Ley 58/2003 (LGT) | Art. 66 | Prescripción tributaria de 4 años → justifica default `1460` |
@@ -1428,11 +1530,11 @@ curl -sS -X GET "$BASE_URL/api/cron/cleanup-attendance?dryRun=1"   -H "Accept: a
 | Archivo | Propósito |
 |---------|-----------|
 | `deploy-vps/cron.sh` | Runner de los 4 jobs del crontab del VPS (source-of-truth del schedule). El crontab de root es quien lo invoca |
-| `.github/workflows/cron-renew-webhooks.yml` | Trigger externo GitHub Actions (cron C — `google-calendar-renew`) |
-| `lib/cron/scheduler.ts` | Orquestador in-process (node-cron) para runtimes persistentes — incluye tareas equivalentes a varios handlers eliminados |
+| `lib/cron/scheduler.ts` | Orquestador in-process (node-cron) — **trigger autoritativo del cron C** (#5) y de los jobs de Hospitality §1.1. Verificado activo en producción 2026-10-08 |
+| `instrumentation.ts` | Arranca `initCronJobs()` en el runtime `nodejs`; sin él, el scheduler in-process no se registra |
 | `app/api/cron/cleanup-attendance/route.ts` | Implementación cron A |
 | `app/api/cron/uptime-developers/route.ts` | Implementación cron B |
-| `app/api/cron/google-calendar-renew/route.ts` | Implementación cron C (disparado por GH Actions) |
+| `app/api/cron/google-calendar-renew/route.ts` | Implementación cron C (disparado por el scheduler in-process) |
 | `prisma/schema.prisma` | Definición de modelos `Attendance`, `IdempotencyKey`, `AttendanceRules` (composite index al final del bloque) |
 | `prisma/migrations/20260702000000_add_attendance_composite_index/migration.sql` | Auto-Prisma migration: `CREATE INDEX "erp_attendance_logs_tenantId_timestamp_idx"` (post-fix 2026-07-02) |
 | `prisma/manual-migrations/` | Reservado para DDL CONCURRENTLY no auto-aplicable (tablas ultra-grandes) — ver `manual-migrations/README.md` |
