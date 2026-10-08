@@ -22,7 +22,7 @@
 import { useState } from 'react';
 import { AlertCircle, Building2, CheckCircle2, ChevronRight, Loader2, Sparkles } from 'lucide-react';
 
-interface RespuestaAlta {
+export interface RespuestaAlta {
   ok?: boolean;
   error?: string;
   roles?: {
@@ -58,7 +58,17 @@ function Campo({
   );
 }
 
-export function AltaHospitalityPaso({ tenantId }: { tenantId: string }) {
+export function AltaHospitalityPaso({
+  tenantId,
+  onDone,
+}: {
+  tenantId: string;
+  /**
+   * Avisa al contenedor de que el alta salió bien, para que refresque lo que
+   * muestre por su cuenta (el estado de la puesta en marcha, por ejemplo).
+   */
+  onDone?: (respuesta: RespuestaAlta) => void;
+}) {
   const [abierto, setAbierto] = useState(false);
   const [estado, setEstado] = useState<Estado>({ kind: 'idle' });
   const [nombre, setNombre] = useState('');
@@ -94,6 +104,7 @@ export function AltaHospitalityPaso({ tenantId }: { tenantId: string }) {
         return;
       }
       setEstado({ kind: 'success', respuesta: data });
+      onDone?.(data);
     } catch (err: unknown) {
       setEstado({
         kind: 'error',

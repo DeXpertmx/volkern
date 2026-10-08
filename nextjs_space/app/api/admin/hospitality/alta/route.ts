@@ -29,13 +29,34 @@ export const dynamic = 'force-dynamic';
  *   404 NOT_FOUND       → el cliente no existe.
  *
  * Idempotente: repetir la llamada no duplica roles ni propiedades.
+ *
+ * GET /api/admin/hospitality/alta?tenantId=...
+ *
+ * Estado de la puesta en marcha de un cliente que YA existe: qué roles del
+ * catálogo faltan o están incompletos, qué propiedades tiene (y con cuántas
+ * unidades), y por dónde continuar el onboarding. Existe porque el alta guiada
+ * del wizard de partner solo cubre el tenant recién creado: cuando el cliente
+ * lleva meses registrado, el operador necesita ver el hueco antes de pasarle la
+ * puerta. Sólo lee.
+ *
+ * Respuestas GET:
+ *   200 { ok: true, tenant, roles: { catalogo, alDia, detalle, completos },
+ *         propiedades: [{ id, nombre, ciudad, pais, estado, unidades,
+ *                         enlaceWizard }], enlaceWizard, listo }
+ *   400 VALIDACIÓN      → falta tenantId.
+ *   401 No autorizado / 403 Acceso denegado.
+ *   404 NOT_FOUND       → el cliente no existe.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/db';
-import { prepararTenantHospitality } from '@/lib/provisioning/hospitality-alta';
+import {
+  estadoPuestaEnMarchaHospitality,
+  enlaceWizardHospitality,
+  prepararTenantHospitality,
+} from '@/lib/provisioning/hospitality-alta';
 
 // Unión explícita (sin propiedades opcionales): con `error?: undefined` la
 // comprobación `'error' in auth` no estrecha el tipo y `return auth.error`
@@ -80,10 +101,32 @@ export async function POST(request: NextRequest) {
       propiedad: resultado.propiedad,
       // El enlace que el operador le pasa al cliente para que termine por su
       // cuenta: unidades, tarifas, mapping y las pruebas de la capa.
-      enlaceWizard: `/dashboard/hospitality/onboarding?propertyId=${resultado.propiedad.id}`,
+      enlaceWizard: enlaceWizardHospitality(resultado.propiedad.id),
     });
   } catch (error) {
     console.error('[Hospitality] Error en el alta de cliente:', error);
     return NextResponse.json({ error: 'Error al preparar el cliente' }, { status: 500 });
+  }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const auth = await requireSuperadmin();
+    if ('error' in auth) return auth.error;
+
+    const tenantId = new URL(request.url).searchParams.get('tenantId');
+    const resultado = await estadoPuestaEnMarchaHospitality(tenantId ?? '');
+
+    if (!resultado.ok) {
+      return NextResponse.json({ ok: false, error: resultado.error }, { status: resultado.status });
+    }
+
+    return NextResponse.json({ ok: true, ...resultado.estado });
+  } catch (error) {
+    console.error('[Hospitality] Error consultando la puesta en marcha:', error);
+    return NextResponse.json(
+      { ok: false, error: 'Error al consultar la puesta en marcha' },
+      { status: 500 }
+    );
   }
 }

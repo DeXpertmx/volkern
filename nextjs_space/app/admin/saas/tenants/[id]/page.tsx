@@ -42,6 +42,7 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { PuestaEnMarchaHospitality } from '@/components/admin/PuestaEnMarchaHospitality';
 import { toast } from 'sonner';
 
 export default function TenantDetail() {
@@ -810,6 +811,20 @@ export default function TenantDetail() {
                   </Card>
                 ));
               })()}
+
+              {/* Puesta en marcha de Hospitality.
+                  El alta guiada del wizard de partner cubre el tenant recién
+                  creado; un cliente ya registrado (o uno al que se le enciende
+                  la vertical ahora) no tenía por dónde entrar, y su cuenta se
+                  quedaba con el módulo encendido y sin roles ni propiedades.
+                  Solo aparece si la vertical es de este cliente. */}
+              {modulesData.modules?.some((m: any) => m.id === 'hospitality') && (
+                <PuestaEnMarchaHospitality
+                  tenantId={String(params?.id ?? '')}
+                  moduloActivo={!!modulesData.modules.find((m: any) => m.id === 'hospitality')
+                    ?.active}
+                />
+              )}
 
               {/* Add-ons */}
               <Card>

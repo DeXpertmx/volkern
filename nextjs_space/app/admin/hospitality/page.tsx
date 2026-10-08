@@ -34,6 +34,7 @@ import {
   TableRow,
   TableCell,
 } from '@/components/ui/table';
+import { PuestasEnMarchaHospitality } from '@/components/admin/PuestasEnMarchaHospitality';
 
 interface CronJob {
   id: string;
@@ -167,6 +168,9 @@ export default function AdminHospitality() {
           Actualizar
         </Button>
       </div>
+
+      {/* ── Puestas en marcha: a quién hay que empujar hoy ──────────────────── */}
+      <PuestasEnMarchaHospitality />
 
       {/* ── Estado de los crons ─────────────────────────────────────────────── */}
       <Card>

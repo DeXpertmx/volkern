@@ -73,6 +73,60 @@ export interface AltaHospitalityError {
 export type AltaHospitalityResult = AltaHospitalityOk | AltaHospitalityError;
 
 /**
+ * Cómo está el catálogo de roles de este tenant. `ausente` no es un error —el
+ * tenant puede no haber dado el alta nunca—, es lo que el operador tiene que
+ * resolver antes de pasarle el enlace al cliente.
+ */
+export interface RolEstado {
+  nombre: string;
+  descripcion: string;
+  estado: 'al_dia' | 'incompleto' | 'ausente';
+  /** Capacidades `modulo.accion` que le faltan del catálogo. */
+  faltantes: string[];
+}
+
+export interface PropiedadPuestaEnMarcha {
+  id: string;
+  nombre: string;
+  ciudad: string | null;
+  pais: string | null;
+  estado: string;
+  /** Unidades creadas por el cliente. 0 = todavía no ha empezado el paso 2. */
+  unidades: number;
+  /** A dónde mandar al cliente para que siga por esta propiedad. */
+  enlaceWizard: string;
+}
+
+export interface PuestaEnMarchaHospitality {
+  tenant: { id: string; nombre: string };
+  roles: {
+    catalogo: number;
+    alDia: number;
+    detalle: RolEstado[];
+    /** `true` si no queda ningún rol ausente ni incompleto. */
+    completos: boolean;
+  };
+  propiedades: PropiedadPuestaEnMarcha[];
+  /** Qué falta, en frases listas para una tabla. Vacío = nada pendiente. */
+  faltantes: string[];
+  /**
+   * Enlace sin propiedad: el wizard del cliente le pide elegir entre las suyas.
+   * Es el que se le pasa cuando aún no hay ninguna.
+   */
+  enlaceWizard: string;
+  /**
+   * Si el operador ya puede pasarle la puerta al cliente: catálogo de roles al
+   * día y al menos una propiedad. Las unidades y el mapping NO entran aquí —
+   * esos los pone el cliente en su wizard, que es justo el punto.
+   */
+  listo: boolean;
+}
+
+export type PuestaEnMarchaResult =
+  | { ok: true; estado: PuestaEnMarchaHospitality }
+  | AltaHospitalityError;
+
+/**
  * Un identificador de zona horaria IANA, o `null` si no lo es.
  *
  * El proyecto guarda las fechas por propiedad con `timezone` y de ahí salen las
@@ -245,5 +299,381 @@ export async function prepararTenantHospitality(
       catalogo: ROLES_HOSPITALITY.map((r) => r.nombre),
     },
     propiedad,
+  };
+}
+
+/**
+ * Enlace del wizard del cliente para una propiedad concreta (o la raíz si aún
+ * no hay ninguna). Lo comparten el alta y el estado para que no se separen.
+ */
+export function enlaceWizardHospitality(propertyId?: string | null): string {
+  const base = '/dashboard/hospitality/onboarding';
+  return propertyId ? `${base}?propertyId=${encodeURIComponent(propertyId)}` : base;
+}
+
+/** Nombres del catálogo, para reconocer a un cliente de Hospitality por sus roles. */
+export const NOMBRES_ROLES_HOSPITALITY = ROLES_HOSPITALITY.map((r) => r.nombre);
+
+/** Una propiedad tal y como sale de la consulta, sin derivar nada. */
+export interface PropiedadCruda {
+  id: string;
+  nombre: string;
+  ciudad: string | null;
+  pais: string | null;
+  estado: string;
+  unidades: number;
+}
+
+/**
+ * Qué le falta a la cuenta, en frases que se pueden leer en una tabla sin
+ * abrir nada. Lo comparten el detalle de un tenant y el listado global: si cada
+ * uno redactara lo suyo, acabarían diciendo cosas distintas del mismo cliente.
+ */
+function faltantesDe(
+  roles: PuestaEnMarchaHospitality['roles'],
+  propiedades: PropiedadPuestaEnMarcha[]
+): string[] {
+  const frases: string[] = [];
+
+  const pendientes = roles.detalle.filter((r) => r.estado !== 'al_dia');
+  if (pendientes.length) {
+    frases.push(
+      `${pendientes.length} de ${roles.catalogo} roles por preparar: ` +
+        pendientes.map((r) => r.nombre).join(', ')
+    );
+  }
+
+  if (!propiedades.length) {
+    frases.push('Sin ninguna propiedad: falta el paso 1 del cliente');
+  } else if (propiedades.every((p) => p.unidades === 0)) {
+    frases.push('Propiedades sin unidades: el cliente aún no ha empezado');
+  }
+
+  return frases;
+}
+
+/**
+ * La puesta en marcha vista desde los datos crudos. **Pura**: mismas reglas
+ * para un tenant (tarjeta del detalle) y para cientos (listado del panel), y
+ * probable sin base de datos.
+ */
+export function evaluarPuestaEnMarcha(
+  rolesExistentes: { nombre: string; permisos: unknown }[],
+  propiedades: PropiedadCruda[]
+): Omit<PuestaEnMarchaHospitality, 'tenant'> {
+  const porNombre = new Map<string, Permisos>(
+    rolesExistentes.map((r) => [r.nombre, r.permisos as Permisos] as const)
+  );
+
+  const detalle: RolEstado[] = ROLES_HOSPITALITY.map((definicion) => {
+    if (!porNombre.has(definicion.nombre)) {
+      return {
+        nombre: definicion.nombre,
+        descripcion: definicion.descripcion,
+        estado: 'ausente' as const,
+        faltantes: [],
+      };
+    }
+    const faltantes = capacidadesFaltantes(
+      porNombre.get(definicion.nombre) as Permisos,
+      permisosDeRol(definicion.id)
+    );
+    return {
+      nombre: definicion.nombre,
+      descripcion: definicion.descripcion,
+      estado: faltantes.length ? ('incompleto' as const) : ('al_dia' as const),
+      faltantes,
+    };
+  });
+
+  const alDia = detalle.filter((r) => r.estado === 'al_dia').length;
+  const roles: PuestaEnMarchaHospitality['roles'] = {
+    catalogo: ROLES_HOSPITALITY.length,
+    alDia,
+    detalle,
+    completos: alDia === ROLES_HOSPITALITY.length,
+  };
+
+  const propiedadesEstado: PropiedadPuestaEnMarcha[] = propiedades.map((p) => ({
+    id: p.id,
+    nombre: p.nombre,
+    ciudad: p.ciudad,
+    pais: p.pais,
+    estado: p.estado,
+    unidades: p.unidades,
+    enlaceWizard: enlaceWizardHospitality(p.id),
+  }));
+
+  return {
+    roles,
+    propiedades: propiedadesEstado,
+    faltantes: faltantesDe(roles, propiedadesEstado),
+    enlaceWizard: enlaceWizardHospitality(propiedadesEstado[0]?.id ?? null),
+    listo: roles.completos && propiedadesEstado.length > 0,
+  };
+}
+
+/**
+ * Estado de la puesta en marcha de un tenant que YA existe.
+ *
+ * El alta guiada del wizard de partner cubre el tenant recién creado, pero un
+ * tenant registrado hace meses (o un partner al que se le enciende Hospitality
+ * después) entra por el panel de plataforma: allí hacía falta saber qué falta
+ * antes de pasarle la puerta al cliente, y el enlace exacto por donde sigue.
+ *
+ * Solo lee: derivar este estado no escribe nada ni reclama el alta.
+ */
+export async function estadoPuestaEnMarchaHospitality(
+  tenantId: string
+): Promise<PuestaEnMarchaResult> {
+  const id = texto(tenantId);
+  if (!id) {
+    return { ok: false, status: 400, error: 'Indica el cliente del que consultar la puesta en marcha.' };
+  }
+
+  const tenant = await prisma.tenant.findUnique({
+    where: { id },
+    select: { id: true, nombre: true },
+  });
+  if (!tenant) {
+    return { ok: false, status: 404, error: 'El cliente no existe.' };
+  }
+
+  const [rolesExistentes, propiedades] = await Promise.all([
+    prisma.role.findMany({
+      where: { tenantId: id },
+      select: { nombre: true, permisos: true },
+    }),
+    prisma.hospitalityProperty.findMany({
+      where: { tenantId: id },
+      orderBy: { fechaCreacion: 'desc' },
+      select: {
+        id: true,
+        nombre: true,
+        ciudad: true,
+        pais: true,
+        estado: true,
+        _count: { select: { units: true } },
+      },
+    }),
+  ]);
+
+  return {
+    ok: true,
+    estado: {
+      tenant,
+      ...evaluarPuestaEnMarcha(
+        rolesExistentes,
+        propiedades.map((p) => ({
+          id: p.id,
+          nombre: p.nombre,
+          ciudad: p.ciudad,
+          pais: p.pais,
+          estado: p.estado,
+          unidades: p._count?.units ?? 0,
+        }))
+      ),
+    },
+  };
+}
+
+/** Tope de filas del listado: el panel no necesita más, y así no se lleva la base por delante. */
+export const TOPE_LISTADO_PUESTA_EN_MARCHA = 200;
+
+export interface PuestaEnMarchaFila {
+  tenantId: string;
+  tenant: string;
+  plan: string;
+  /** Alta del tenant (ISO), para saber desde cuándo espera. */
+  desde: string;
+  /**
+   * Última señal de Hospitality en la cuenta (ISO): el alta, los roles del
+   * catálogo o las propiedades, lo más reciente de todo. Es el ancla honesta de
+   * «desde cuándo está parada»: si el módulo se encendió ayer en un cliente
+   * viejo, la señal es de ayer, no de hace un año.
+   */
+  senal: string;
+  /**
+   * El operador apagó Hospitality a mano: el cliente no lo ve aunque tenga
+   * datos. No es un descarte — es la avería que hay que arreglar primero.
+   */
+  moduloApagado: boolean;
+  roles: { catalogo: number; alDia: number; pendientes: string[] };
+  propiedades: { total: number; unidades: number; primera: { id: string; nombre: string } | null };
+  enlaceWizard: string;
+  faltantes: string[];
+  listo: boolean;
+}
+
+export interface ListadoPuestaEnMarcha {
+  generadoEn: string;
+  totales: { tenants: number; pendientes: number; listos: number; apagados: number };
+  /** `true` si hay más clientes de los que caben en el listado. */
+  truncado: boolean;
+  tenants: PuestaEnMarchaFila[];
+}
+
+/**
+ * Los clientes de Hospitality con su puesta en marcha, de un solo barrido.
+ *
+ * Qué entra y qué no, que es la decisión que hace útil la lista:
+ *
+ *  - **Entra quien tiene Hospitality de verdad**: el override de la vertical
+ *    (lo que siembra el wizard de partner), una propiedad o los roles del
+ *    catálogo.
+ *  - **NO entra por entitlement del plan.** Casi todos los planes incluyen la
+ *    vertical, así que "su plan podría tener Hospitality" es todo el mundo y la
+ *    tabla no diría nada. Esto es una lista de clientes, no de candidatos.
+ *  - **Sí entra, y marcado, el que tiene datos con el módulo apagado**: eso es
+ *    una avería (el cliente no ve lo suyo), no un onboarding pendiente.
+ *
+ * Solo lee. Las consultas son cuatro fijas —tenants, roles, propiedades y
+ * overrides—, no una por cliente.
+ */
+export async function listarPuestasEnMarchaHospitality(opts?: {
+  tope?: number;
+}): Promise<{ ok: true; listado: ListadoPuestaEnMarcha } | AltaHospitalityError> {
+  const tope = Number.isFinite(opts?.tope) ? Math.max(1, Math.floor(opts!.tope!)) : TOPE_LISTADO_PUESTA_EN_MARCHA;
+
+  // Candidatos: evidencia de Hospitality, no entitlement. Se pide una fila de
+  // más para poder decir si el listado quedó corto.
+  const candidatos = await prisma.tenant.findMany({
+    where: {
+      OR: [
+        { tenantFeatures: { some: { feature: 'hospitality', habilitado: true } } },
+        { hospitalityProperties: { some: {} } },
+        { roles: { some: { nombre: { in: NOMBRES_ROLES_HOSPITALITY } } } },
+      ],
+    },
+    orderBy: { fechaCreacion: 'asc' },
+    take: tope + 1,
+    select: { id: true, nombre: true, plan: true, fechaCreacion: true },
+  });
+
+  const truncado = candidatos.length > tope;
+  const elegidos = truncado ? candidatos.slice(0, tope) : candidatos;
+  const ids = elegidos.map((t) => t.id);
+
+  if (!ids.length) {
+    return {
+      ok: true,
+      listado: {
+        generadoEn: new Date().toISOString(),
+        totales: { tenants: 0, pendientes: 0, listos: 0, apagados: 0 },
+        truncado: false,
+        tenants: [],
+      },
+    };
+  }
+
+  const [roles, propiedades, features] = await Promise.all([
+    prisma.role.findMany({
+      where: { tenantId: { in: ids } },
+      select: { tenantId: true, nombre: true, permisos: true, fechaCreacion: true },
+    }),
+    prisma.hospitalityProperty.findMany({
+      where: { tenantId: { in: ids } },
+      orderBy: { fechaCreacion: 'desc' },
+      select: {
+        tenantId: true,
+        id: true,
+        nombre: true,
+        ciudad: true,
+        pais: true,
+        estado: true,
+        fechaCreacion: true,
+        _count: { select: { units: true } },
+      },
+    }),
+    prisma.tenantFeature.findMany({
+      where: { tenantId: { in: ids }, feature: 'hospitality' },
+      select: { tenantId: true, habilitado: true },
+    }),
+  ]);
+
+  const apagados = new Set(
+    features.filter((f) => f.habilitado === false).map((f) => f.tenantId)
+  );
+
+  const filas: PuestaEnMarchaFila[] = elegidos.map((tenant) => {
+    const susRoles = roles.filter((r) => r.tenantId === tenant.id);
+    const susPropiedades = propiedades.filter((p) => p.tenantId === tenant.id);
+
+    const suyos = evaluarPuestaEnMarcha(
+      susRoles,
+      susPropiedades.map((p) => ({
+        id: p.id,
+        nombre: p.nombre,
+        ciudad: p.ciudad,
+        pais: p.pais,
+        estado: p.estado,
+        unidades: p._count?.units ?? 0,
+      }))
+    );
+
+    // La señal solo cuenta actividad que sea de Hospitality: los roles del
+    // catálogo y las propiedades, no cualquier rol genérico del tenant.
+    const momentos = [
+      tenant.fechaCreacion.getTime(),
+      ...susPropiedades.map((p) => p.fechaCreacion.getTime()),
+      ...susRoles
+        .filter((r) => NOMBRES_ROLES_HOSPITALITY.includes(r.nombre))
+        .map((r) => r.fechaCreacion.getTime()),
+    ];
+    const senal = new Date(Math.max(...momentos));
+
+    const moduloApagado = apagados.has(tenant.id);
+    const unidades = suyos.propiedades.reduce((n, p) => n + p.unidades, 0);
+
+    return {
+      tenantId: tenant.id,
+      tenant: tenant.nombre,
+      plan: tenant.plan,
+      desde: tenant.fechaCreacion.toISOString(),
+      senal: senal.toISOString(),
+      moduloApagado,
+      roles: {
+        catalogo: suyos.roles.catalogo,
+        alDia: suyos.roles.alDia,
+        pendientes: suyos.roles.detalle
+          .filter((r) => r.estado !== 'al_dia')
+          .map((r) => r.nombre),
+      },
+      propiedades: {
+        total: suyos.propiedades.length,
+        unidades,
+        primera: suyos.propiedades[0]
+          ? { id: suyos.propiedades[0].id, nombre: suyos.propiedades[0].nombre }
+          : null,
+      },
+      enlaceWizard: suyos.enlaceWizard,
+      faltantes: suyos.faltantes,
+      // Con el módulo apagado no está listo aunque tenga todo: el cliente no lo ve.
+      listo: suyos.listo && !moduloApagado,
+    };
+  });
+
+  // Lo pendiente primero, y dentro de lo pendiente lo que ya está en marcha: así
+  // lo que se ve al abrir la pantalla es a quién hay que empujar.
+  filas.sort((a, b) => {
+    if (a.listo !== b.listo) return a.listo ? 1 : -1;
+    const enMarcha = (f: PuestaEnMarchaFila) => (f.propiedades.total > 0 ? 0 : 1);
+    if (enMarcha(a) !== enMarcha(b)) return enMarcha(a) - enMarcha(b);
+    return a.desde.localeCompare(b.desde);
+  });
+
+  return {
+    ok: true,
+    listado: {
+      generadoEn: new Date().toISOString(),
+      totales: {
+        tenants: filas.length,
+        pendientes: filas.filter((f) => !f.listo).length,
+        listos: filas.filter((f) => f.listo).length,
+        apagados: filas.filter((f) => f.moduloApagado).length,
+      },
+      truncado,
+      tenants: filas,
+    },
   };
 }

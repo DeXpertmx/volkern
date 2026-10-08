@@ -13,6 +13,11 @@ import {
   JOB_LABEL_HEALTH_CHECK,
   JOB_SCHEDULE_HEALTH_CHECK,
 } from './hospitality-connectivity-health';
+import {
+  JOB_ID_PUESTA_EN_MARCHA_AVISOS,
+  JOB_LABEL_PUESTA_EN_MARCHA_AVISOS,
+  JOB_SCHEDULE_PUESTA_EN_MARCHA_AVISOS,
+} from './hospitality-puesta-en-marcha-avisos';
 
 /**
  * Orquestador de Tareas Programadas para Gemma 4 Proactivity
@@ -207,6 +212,27 @@ export function initCronJobs() {
   }));
 
   console.log('✅ [Scheduler] Hospitality recordatorio de vínculos automáticos programado (diaria 09:45)');
+
+  // 16h. Hospitality: aviso al operador por cuentas con la puesta en marcha
+  //      parada. El listado del panel ya dice quién está a medias, pero hay que
+  //      abrirlo; esto lo saca por email (Resend/Apprise) para que un alta
+  //      olvidada no espere a que alguien entre a mirar. Los días se cuentan
+  //      desde la última señal de Hospitality, no desde el alta del cliente, y
+  //      cada cuenta tiene su intervalo: no repite el mismo aviso a diario.
+  // El id/etiqueta/cadencia deben coincidir con las constantes del módulo
+  // (`JOB_ID_PUESTA_EN_MARCHA_AVISOS` etc.): hay un test que lo exige, porque el
+  // panel de estado cruza los dos registros.
+  cron.schedule(JOB_SCHEDULE_PUESTA_EN_MARCHA_AVISOS, runCronJob(JOB_ID_PUESTA_EN_MARCHA_AVISOS, JOB_LABEL_PUESTA_EN_MARCHA_AVISOS, JOB_SCHEDULE_PUESTA_EN_MARCHA_AVISOS, async () => {
+    const { runHospitalityPuestaEnMarchaAvisosScan } = await import(
+      './hospitality-puesta-en-marcha-avisos'
+    );
+    const resultado = await runHospitalityPuestaEnMarchaAvisosScan();
+    // El mismo resumen y los mismos avisos que el disparo por HTTP: el panel de
+    // estado no puede contar una cosa u otra según quién haya lanzado el job.
+    return { mensaje: resultado.message, avisos: resultado.avisos };
+  }));
+
+  console.log('✅ [Scheduler] Hospitality aviso de puestas en marcha paradas programado (diaria 09:20)');
 
   // 16e. Hospitality: caducidad de holds `pending` olvidados.
   //      Una reserva pendiente bloquea la unidad en todas las vistas; si nadie

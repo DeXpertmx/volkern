@@ -169,6 +169,51 @@ por el DPO").
 > Interior, RD 933/2021) y **merecen su propia ficha**: queda como siguiente
 > revisión del DPO, sin clasificar aquí.
 
+> **Añadido 2026-10-08**: el job `hospitality-puesta-en-marcha-avisos` (09:20)
+> entra en el mismo scheduler in-process y **sí queda clasificado aquí abajo**
+> (§1.2), así que no engrosa la lista de pendientes.
+
+### 1.2 Clasificación RGPD — `hospitality-puesta-en-marcha-avisos`
+
+**Ficha del job** (`09:20` · `lib/cron/hospitality-puesta-en-marcha-avisos.ts`)
+
+- **Qué hace**: recorre los clientes de Hospitality con la puesta en marcha a
+  medias y envía **un** correo al operador con las cuentas que llevan días sin
+  avanzar (roles del catálogo sin preparar o sin ninguna propiedad) y las que
+  tienen datos con el módulo apagado. Un solo aviso agregado, con intervalo
+  mínimo por cuenta.
+- **Datos personales**: **no hay datos de interesados** (huéspedes, viajeros,
+  usuarios del cliente). Lo que viaja es el **nombre del cliente** de la
+  plataforma, su plan y el estado de su puesta en marcha — datos de la relación
+  comercial, no de personas físicas por cuenta ajena. El destinatario único es
+  el **buzón interno del operador** (`ADMIN_EMAIL`).
+- **Base jurídica**: **Art. 6.1.f** — interés legítimo en operar el servicio
+  contratado (un alta a medias es un cliente que no puede trabajar). No hay
+  finalidad nueva: es el mismo tratamiento operativo de la relación comercial,
+  solo que por un canal saliente.
+- **Minimización**: **Art. 5.1.c** — el cuerpo lleva nombre del cliente,
+  contadores (roles, propiedades, unidades) y qué falta. **Nunca** datos de
+  huéspedes ni importes. Evidencia en código: `construirAviso()` solo compone el
+  texto desde `PuestaEnMarchaFila`, que no incluye `guestData`.
+- **Encargados**: **Art. 28** — el envío sale por **Resend** (email) y, si está
+  configurado, **Apprise**; sus DPA se siguen en
+  `docs/compliance/ENCARGADOS-DPA-PENDIENTES.md`. Un canal caído no impide los
+  demás y el fallo queda en los logs.
+- **Retención**: cada aviso deja una fila en `hospitality_sync_logs`
+  (`tipo = aviso_puesta_en_marcha`) que es a la vez auditoría del envío y el
+  reloj del intervalo entre avisos. **No** se persiste el correo enviado.
+- **Seguridad**: **Art. 32** — el disparo por HTTP exige
+  `Bearer ${CRON_SECRET}`; el 401 se devuelve antes de tocar Prisma (ver §2).
+- **Programación**: **solo scheduler in-process** (09:20). **No** se añade al
+  crontab del VPS a propósito: sería una segunda corrida del mismo job diario,
+  exactamente la redundancia que §1.1 señala como candidata a unificar en
+  `hospitality-reconcile`. Si algún día el proceso persistente no está, el
+  disparo manual por HTTP sigue disponible.
+- **Sin destinatario, sin canal**: si `ADMIN_EMAIL`/`RESEND_API_KEY` no están
+  configurados, el aviso queda en el log y **se publica en ámbar en
+  `/admin/hospitality`** — el panel de estado no deja que un aviso se pierda en
+  silencio.
+
 **Limitaciones del planificador**:
 - El crontab del VPS **no impone límites** de frecuencia ni de duración: los schedules se ejecutan según lo previsto.
 - `cron.sh` corta el `curl` a los **120 s** (`--max-time 120`). Si un handler tarda más, la corrida se registra como `FALLÓ (000)` y la del día siguiente recoge lo pendiente (los endpoints son idempotentes).
