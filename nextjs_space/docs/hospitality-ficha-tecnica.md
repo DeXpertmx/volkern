@@ -2,6 +2,10 @@
 
 **Documento de inventario y estado real**
 Fecha: 2026-09-15 · Rama: `master` · Migraciones aplicadas en producción: 78
+
+**Versión ilustrada en PDF:** `docs/hospitality-tecnico.pdf` — este inventario
+reorganizado por flujos y con capturas reales del módulo; se regenera con
+`scripts/generar-pdf-tecnico-hospitality.cjs`.
 Fuentes: esquema de Prisma, rutas de `app/api`, páginas de `app/dashboard`, módulos de
 `lib/hospitality`, y consulta de solo lectura a la base de producción.
 

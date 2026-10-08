@@ -1,0 +1,108 @@
+{
+  "base": "https://demo-real-estate.volkern.app",
+  "generadoEn": "2026-09-28T21:41:18.256Z",
+  "capturas": [
+    {
+      "id": "01-inicio",
+      "titulo": "Inicio · Resumen del día",
+      "ruta": "/dashboard/hospitality",
+      "archivo": "img/hospitality-tecnico/01-inicio.jpg"
+    },
+    {
+      "id": "02-propiedades",
+      "titulo": "Propiedades y unidades",
+      "ruta": "/dashboard/hospitality?tab=propiedades",
+      "archivo": "img/hospitality-tecnico/02-propiedades.jpg"
+    },
+    {
+      "id": "03-onboarding",
+      "titulo": "Puesta en marcha (onboarding)",
+      "ruta": "/dashboard/hospitality/onboarding",
+      "archivo": "img/hospitality-tecnico/03-onboarding.jpg"
+    },
+    {
+      "id": "04-dashboard",
+      "titulo": "Dashboard operativo",
+      "ruta": "/dashboard/hospitality/dashboard",
+      "archivo": "img/hospitality-tecnico/04-dashboard.jpg"
+    },
+    {
+      "id": "05-planning",
+      "titulo": "Planning (calendario por unidad)",
+      "ruta": "/dashboard/hospitality/calendar",
+      "archivo": "img/hospitality-tecnico/05-planning.jpg"
+    },
+    {
+      "id": "06-operaciones",
+      "titulo": "Operaciones (vista del planning)",
+      "ruta": "/dashboard/hospitality/calendar?vista=operaciones",
+      "archivo": "img/hospitality-tecnico/06-operaciones.jpg"
+    },
+    {
+      "id": "07-reservas",
+      "titulo": "Reservas",
+      "ruta": "/dashboard/hospitality/reservas",
+      "archivo": "img/hospitality-tecnico/07-reservas.jpg"
+    },
+    {
+      "id": "08-viajeros",
+      "titulo": "Registro de viajeros (RH/PV)",
+      "ruta": "/dashboard/hospitality/viajeros",
+      "archivo": "img/hospitality-tecnico/08-viajeros.jpg"
+    },
+    {
+      "id": "09-tarifas",
+      "titulo": "Tarifas y planes de tarifa",
+      "ruta": "/dashboard/hospitality/tarifas",
+      "archivo": "img/hospitality-tecnico/09-tarifas.jpg"
+    },
+    {
+      "id": "10-booking-engine",
+      "titulo": "Booking Engine (configuración)",
+      "ruta": "/dashboard/hospitality/booking-engine",
+      "archivo": "img/hospitality-tecnico/10-booking-engine.jpg"
+    },
+    {
+      "id": "11-huespedes",
+      "titulo": "Huéspedes",
+      "ruta": "/dashboard/hospitality/huespedes",
+      "archivo": "img/hospitality-tecnico/11-huespedes.jpg"
+    },
+    {
+      "id": "12-comunicaciones",
+      "titulo": "Comunicaciones al huésped",
+      "ruta": "/dashboard/hospitality/comunicaciones",
+      "archivo": "img/hospitality-tecnico/12-comunicaciones.jpg"
+    },
+    {
+      "id": "13-automatizaciones",
+      "titulo": "Automatizaciones",
+      "ruta": "/dashboard/hospitality/automatizaciones",
+      "archivo": "img/hospitality-tecnico/13-automatizaciones.jpg"
+    },
+    {
+      "id": "14-finanzas",
+      "titulo": "Finanzas de la reserva",
+      "ruta": "/dashboard/hospitality/finanzas",
+      "archivo": "img/hospitality-tecnico/14-finanzas.jpg"
+    },
+    {
+      "id": "15-reportes",
+      "titulo": "Reportes",
+      "ruta": "/dashboard/hospitality/reportes",
+      "archivo": "img/hospitality-tecnico/15-reportes.jpg"
+    },
+    {
+      "id": "16-roles",
+      "titulo": "Equipo y roles",
+      "ruta": "/dashboard/hospitality/roles",
+      "archivo": "img/hospitality-tecnico/16-roles.jpg"
+    },
+    {
+      "id": "17-booking-publico",
+      "titulo": "Motor de reserva directa (página pública)",
+      "ruta": "/reservar/volkern-demo",
+      "archivo": "img/hospitality-tecnico/17-booking-publico.jpg"
+    }
+  ]
+}
