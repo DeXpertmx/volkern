@@ -16,10 +16,22 @@
 
 import { Pool } from 'pg';
 
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_qi4kcVBa1vUR@ep-withered-mode-al6o4sjg-pooler.c-3.eu-central-1.aws.neon.tech/neondb?sslmode=require';
+/**
+ * La conexión se lee siempre del entorno y sin valor por defecto: un fallback
+ * incrustado apunta a la base de datos de producción y convierte un olvido en
+ * una migración contra datos reales.
+ */
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    console.error(`❌ Define ${name} en el entorno antes de ejecutar.`);
+    process.exit(1);
+  }
+  return value;
+}
 
 async function main() {
-  const pool = new Pool({ connectionString: DATABASE_URL });
+  const pool = new Pool({ connectionString: requireEnv('DATABASE_URL') });
   const client = await pool.connect();
 
   try {

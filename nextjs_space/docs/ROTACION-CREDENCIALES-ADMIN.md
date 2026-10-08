@@ -13,7 +13,7 @@ entorno), pero **ninguna credencial está rotada todavía**.
 
 | Credencial | Dónde estaba escrita | Estado |
 |---|---|---|
-| **Postgres de producción** (usuario propietario de Neon) | `scratch/reset_admin_volkern.js`, `scratch/reset_admin_direct.js` | Retirada del código. **Sin rotar** — es el hallazgo más grave |
+| **Postgres de producción** (usuario propietario de Neon) | `scratch/reset_admin_volkern.js`, `scratch/reset_admin_direct.js`, `scratch/cleanup_db.sh`, `scripts/safe-insurance-migration.ts` | Retirada del código. **Sin rotar** — es el hallazgo más grave |
 | `admin@volkern.app` | `verify-auth-bootstrap.ts`, `try-admin-passwords.ts`, `scratch/verify-admin.js`, `scratch/reset_admin_volkern.js`, `scratch/reset_admin_direct.js`, `seed.ts`, `README.md` | Retirada del código. Sin rotar |
 | `admin@dexpert.volkern.app` | `verify-auth-bootstrap.ts`, `GUION_DEMO_DIMENSION_EXPERT.md` | Retirada del código. Sin rotar |
 | `dximobilia@dimensionexpert.com` | `GUION_DEMO_DIMENSION_EXPERT.md` | Provisional y sin rotar; es cuenta de cliente |
@@ -22,7 +22,14 @@ entorno), pero **ninguna credencial está rotada todavía**.
 | `admin@volkern.com`, `admin@demorealestate.com`, `agente@demorealestate.com` | `README.md`, `GUION_DEMO_DIMENSION_EXPERT.md` | Retirada del código. Sin rotar |
 
 Los ficheros `scratch/` siguen en el repositorio, ya saneados, por decisión explícita:
-no se borran.
+no se borran. Ojo: `scratch/` está en `nextjs_space/.gitignore`, así que sus ficheros
+son rastreados de antes de esa regla; para volver a tocarlos hay que usar
+`git add -u` (o `-f`), no un `git add` normal.
+
+La misma cadena de conexión aparece además en `nextjs_space/.env` y
+`nextjs_space/.env.production.local`. **No están rastreados** (`.gitignore` cubre
+`.env*`), así que no se han tocado, pero hay que actualizarlos al rotar la base de
+datos o la aplicación se quedará sin conexión.
 
 ## Variables de entorno
 
@@ -118,7 +125,9 @@ resuelve bien.
 - [x] `README.md` (tabla de credenciales → nombres de variables)
 - [x] `GUION_DEMO_DIMENSION_EXPERT.md` (seis credenciales, dos de cliente)
 - [x] `scratch/verify-admin.js`, `scratch/reset_admin_volkern.js`, `scratch/reset_admin_direct.js`
-      (incluida la cadena de conexión de Postgres)
+- [x] `scratch/cleanup_db.sh` y `scripts/safe-insurance-migration.ts` (cadena de Postgres,
+      una de ellas como valor por defecto en código)
+- [ ] Actualizar `.env` y `.env.production.local` al rotar la base de datos (no rastreados)
 - [ ] **Rotar todo lo de arriba.** La limpieza no sustituye a la rotación.
 
 ## Qué no hacer
