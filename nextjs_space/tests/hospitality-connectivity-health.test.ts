@@ -192,6 +192,37 @@ describe('runConnectivityHealthCheck', () => {
     expect(mocks.testConnection).not.toHaveBeenCalled();
   });
 
+  it('par Basic sin ID de socio de plataforma → no-op razonado: la sonda no aplica y NO se marca error', async () => {
+    // El ID de socio es de cada hotel (el estado normal): sondear `property_details`
+    // exige un ID de socio concreto y no se puede tomar prestado el de un cliente
+    // para una verificación de plataforma.
+    mocks.providerFindUnique.mockResolvedValue({ ...filaConfigurada(), partnerIdEnc: null });
+
+    const r = await runConnectivityHealthCheck();
+
+    expect(r.ejecutado).toBe(false);
+    expect(r.ok).toBeNull();
+    expect(r.motivo).toMatch(/cada hotel/i);
+    // El estado se informa tal cual: nada de pintar en rojo una capa que funciona.
+    expect(r.estado).toBe('conectado');
+    expect(mocks.testConnection).not.toHaveBeenCalled();
+    expect(mocks.updateStatus).not.toHaveBeenCalled();
+    expect(mocks.auditLogCreate).not.toHaveBeenCalled();
+    // Y sin aviso ámbar en el panel de crons: no es un fallo, no aplica.
+    expect(avisosDelHealthCheck(r)).toEqual([]);
+    expect(mensajeDelHealthCheck(r)).toMatch(/cada hotel/i);
+  });
+
+  it('con ID de socio de plataforma la sonda SÍ corre (la regla no lo desactiva todo)', async () => {
+    mocks.providerFindUnique.mockResolvedValue(filaConfigurada());
+    mocks.testConnection.mockResolvedValue({ ok: true });
+
+    const r = await runConnectivityHealthCheck();
+
+    expect(r.ejecutado).toBe(true);
+    expect(mocks.testConnection).toHaveBeenCalledTimes(1);
+  });
+
   it('si la auditoría falla, el health-check reporta igual (la auditoría no manda)', async () => {
     mocks.providerFindUnique.mockResolvedValue(filaConfigurada());
     mocks.testConnection.mockResolvedValue({ ok: true });

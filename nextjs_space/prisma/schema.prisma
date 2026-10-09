@@ -525,6 +525,8 @@ model Tenant {
   hospitalityCommunicationTemplates HospitalityCommunicationTemplate[] @relation("HospitalityCommunicationTemplates")
   // Registro de viajeros (MIR / SES Hospedajes, RD 933/2021, art. 6).
   hospitalityMirConfigs         HospitalityMirConfig[]            @relation("HospitalityMirConfigs")
+  // ID de socio del proveedor de conectividad, por cliente (ver el modelo).
+  hospitalityConnectivityConfig HospitalityConnectivityConfig?    @relation("HospitalityConnectivityConfigs")
   hospitalityComplianceConfigs  HospitalityComplianceConfig[]     @relation("HospitalityComplianceConfigs")
   hospitalityTravelers          HospitalityTraveler[]             @relation("HospitalityTravelers")
   hospitalityCompliances        HospitalityCompliance[]           @relation("HospitalityCompliances")
@@ -8438,6 +8440,29 @@ model ConnectivityMapping {
   @@index([propertyId])
   @@index([unitId])
   @@map("connectivity_mappings")
+}
+
+// ID de socio (partner id) del proveedor de conectividad, POR TENANT.
+//
+// El proveedor emite un partner id al registrarse cada hotel, y ese id es la
+// clave con la que se piden SUS propiedades (`property_details/{hotelCode}`
+// viaja con `?partnerId=`). Sin el suyo, el hotel no puede ver su catálogo ni
+// empujar inventario: la fila de plataforma (`ConnectivityProvider`) sirve el
+// par Basic y su partner id solo como RESPALDO de quien no tenga el propio.
+//
+// El valor se guarda cifrado y se escribe desde el dashboard del cliente; la
+// pantalla de plataforma (`/admin/conectividad`) sigue siendo la única que
+// administra el usuario y la contraseña, que son compartidos.
+model HospitalityConnectivityConfig {
+  id             String   @id @default(cuid())
+  tenantId       String   @unique
+  partnerIdEnc   String?
+  activo         Boolean  @default(true)
+  fechaCreacion  DateTime @default(now())
+  fechaEdicion   DateTime @updatedAt
+  tenant         Tenant   @relation("HospitalityConnectivityConfigs", fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("hospitality_connectivity_config")
 }
 
 model HospitalityReservation {

@@ -2,3 +2,8 @@
 .env.vps
 .db_pass
 .env.neon
+
+# Marcador del gate de build (decidir-build.sh): estado local de la máquina que
+# construye la imagen, no del repositorio. Si se versionara, viajaría entre
+# máquinas y el gate compararía contra un despliegue que no es el local.
+.ultimo-deploy

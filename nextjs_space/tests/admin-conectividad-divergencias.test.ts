@@ -245,8 +245,10 @@ describe('POST /api/admin/conectividad/divergencias (cancelar reserva revisada)'
     expect(data.ok).toBe(true);
     expect(data.estado).toBe('cancelled');
 
-    // Re-verificación contra el proveedor con el rango de la reserva.
-    expect(mocks.fetchReservations).toHaveBeenCalledWith('HOTEL-1', '2026-09-20', '2026-09-24');
+    // Re-verificación contra el proveedor con el rango de la reserva. El tenant
+    // viaja en la llamada porque el ID de socio con el que se consulta puede ser
+    // el del cliente, no el de plataforma.
+    expect(mocks.fetchReservations).toHaveBeenCalledWith('HOTEL-1', '2026-09-20', '2026-09-24', 't1');
     // La cancelación usa el tenant del LOG, no un tenant del cliente.
     expect(mocks.processCancel).toHaveBeenCalledWith(
       't1',

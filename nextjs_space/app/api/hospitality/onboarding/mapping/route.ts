@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Validación contra el catálogo real del proveedor.
-    const catalogo = await testConnectivityConnection(hotelCode);
+    const catalogo = await testConnectivityConnection(hotelCode, tenantId);
     if (!catalogo.ok || !catalogo.property) {
       return NextResponse.json(
         {

@@ -574,11 +574,20 @@ describe('la deuda del resto de la plataforma no puede crecer', () => {
     // intención llevaban la lista de divisas copiada en siete expresiones
     // regulares. Ahora piden la divisa al dato o al tenant y la escriben con
     // `formatearImporte`.
+    // La bajada siguiente (118 → 117 archivos, 316 → 315 divisas; los formatos
+    // se quedan en 87) es la del módulo de compras y el catálogo del motor de
+    // agentes: las tres tarjetas de KPI de compras y las dos escrituras de
+    // catálogo respaldaban con `'EUR'`, así que un pedido, una cotización o un
+    // item de un tenant que factura en pesos nacía en euros; ahora piden la
+    // divisa al dato, a la configuración fiscal o al tenant. El formato baja por
+    // la ficha pública del hotel: escribía las distancias con su propio
+    // `Intl.NumberFormat` y ahora usa `formatearMedida`, que mantiene el número
+    // en el idioma del visitante sin que la vista elija una convención.
     // El techo solo puede bajar; cada bajada exige regenerar el inventario, así que
     // queda en el diff y se ve.
-    expect(Object.keys(baseline).length).toBeLessThanOrEqual(118);
+    expect(Object.keys(baseline).length).toBeLessThanOrEqual(117);
     expect(divisa).toBeGreaterThan(0);
-    expect(divisa).toBeLessThanOrEqual(316);
+    expect(divisa).toBeLessThanOrEqual(315);
     expect(formato).toBeLessThanOrEqual(87);
   });
 

@@ -9,7 +9,7 @@
  */
 
 import { prisma } from '@/lib/db';
-import { getConnectivityProvider } from './connectivity';
+import { getConnectivityProvider, getTenantPartnerId } from './connectivity';
 import {
   computeOnboardingSteps,
   puedeActivar,
@@ -89,7 +89,7 @@ export async function loadOnboardingSnapshot(
     return { ok: false, status: 404, error: 'Propiedad no encontrada en este tenant' };
   }
 
-  const [units, provider, logs, mappingPropiedad] = await Promise.all([
+  const [units, provider, partnerIdPropio, logs, mappingPropiedad] = await Promise.all([
     prisma.hospitalityUnit.findMany({
       where: { tenantId, propertyId },
       orderBy: { nombre: 'asc' },
@@ -118,6 +118,9 @@ export async function loadOnboardingSnapshot(
       },
     }),
     getConnectivityProvider(),
+    // El ID de socio de ESTE hotel: el paso 4 del wizard se da por hecho con el
+    // suyo o, si no lo ha registrado, con el de plataforma.
+    getTenantPartnerId(tenantId),
     prisma.hospitalitySyncLog.findMany({
       where: {
         tenantId,
@@ -159,11 +162,15 @@ export async function loadOnboardingSnapshot(
     };
   });
 
+  // «Configurada» para ESTE hotel = par Basic de plataforma + algún ID de
+  // socio (el suyo si lo registró; si no, el de plataforma). Exigir el ID de
+  // plataforma dejaba el paso bloqueado a un hotel que ya había registrado el
+  // suyo, que es justo el caso que este cambio abre.
   const conectividadConfigurada = !!(
     provider &&
-    provider.partnerIdEnc &&
     provider.usernameEnc &&
-    provider.passwordEnc
+    provider.passwordEnc &&
+    (partnerIdPropio || provider.partnerIdEnc)
   );
 
   // hotelCode: código externo ya vinculado (si hay mapping activo).

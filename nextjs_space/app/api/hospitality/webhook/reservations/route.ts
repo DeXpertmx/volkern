@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { createHash } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  getConnectivityCredentials,
+  getConnectivityBasicAuth,
   updateConnectivityStatus,
 } from '@/lib/hospitality/connectivity';
 import {
@@ -15,8 +15,9 @@ import {
  * Webhook de reservas de la capa de conectividad.
  *
  * El proveedor llama a este endpoint con `book` / `modify` / `cancel` /
- * `no_show` (campo `action`), usando HTTP Basic Auth con las credenciales
- * cargadas en /admin/conectividad.
+ * `no_show` (campo `action`), usando HTTP Basic Auth con el par de
+ * /admin/conectividad (usuario y contraseña). El ID de socio NO entra en la
+ * autenticación: es de cada hotel y solo se usa en las llamadas SALIENTES.
  *
  * Contrato: docs/hospitality-connectivity-contract.md
  * - Idempotente por bookingId.
@@ -104,8 +105,12 @@ function safeCompare(a: string, b: string): boolean {
 
 export async function POST(request: NextRequest) {
   try {
-    // 1. Autenticación: Basic Auth contra las credenciales guardadas.
-    const creds = await getConnectivityCredentials();
+    // 1. Autenticación: Basic Auth contra el par de la plataforma.
+    //    Solo el par Basic: en una llamada ENTRANTE el ID de socio no participa
+    //    (el hotel se resuelve por el mapeo), así que exigirlo aquí dejaría
+    //    fuera todas las reservas de todos los hoteles en cuanto el ID de socio
+    //    fuera de cada hotel —que es donde corresponde—.
+    const creds = await getConnectivityBasicAuth();
     if (!creds) {
       await updateConnectivityStatus({ estado: 'error', error: true });
       // La política de reintentos viaja en el propio HTTP (contrato: reintento

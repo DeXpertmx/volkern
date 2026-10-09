@@ -153,18 +153,173 @@ export async function getConnectivityPublic() {
 }
 
 /**
- * Lee las credenciales descifradas (solo uso interno del adapter).
- * Devuelve null si no están configuradas.
+ * ID de socio (partner id) PROPIO del cliente, ya descifrado.
+ *
+ * El proveedor emite un partner id al registrarse cada hotel: es la clave con
+ * la que se piden SUS propiedades (`?partnerId=`) y con la que se empuja su
+ * inventario. Devuelve null cuando el cliente no tiene el suyo, y entonces
+ * manda el de la fila de plataforma.
+ *
+ * `activo: false` se lee igual que «no lo tiene»: es la forma de retirarlo sin
+ * borrar el valor.
  */
-export async function getConnectivityCredentials(): Promise<ConnectivityCredentials | null> {
-  const provider = await getConnectivityProvider();
-  if (!provider || !provider.partnerIdEnc || !provider.usernameEnc || !provider.passwordEnc) {
+export async function getTenantPartnerId(tenantId?: string | null): Promise<string | null> {
+  const id = (tenantId ?? '').trim();
+  if (!id) return null;
+
+  const config = await prisma.hospitalityConnectivityConfig.findUnique({
+    where: { tenantId: id },
+    select: { partnerIdEnc: true, activo: true },
+  });
+  if (!config || !config.activo || !config.partnerIdEnc) return null;
+
+  const descifrado = decrypt(config.partnerIdEnc);
+  if (!descifrado) return null;
+
+  // `decrypt` es tolerante por diseño: si el valor no está en el formato
+  // cifrado —o la clave de cifrado cambió— devuelve el texto tal cual. Un valor
+  // así viaja al proveedor y vuelve como 403 «partner desconocido»: un fallo
+  // mudo que dejaría a ese hotel sin ver sus propiedades. Se valida con el
+  // MISMO preflight que la entrada y, si no lo pasa, se cae al ID de
+  // plataforma en vez de condenarlo.
+  const revision = preflightConectividad({ partnerId: descifrado });
+  if (!revision.ok) {
+    console.warn(
+      '[Conectividad] El ID de socio guardado del cliente no tiene un formato válido; se usa el de plataforma.'
+    );
     return null;
   }
+  return revision.valores.partnerId ?? null;
+}
+
+/**
+ * Lee las credenciales descifradas (solo uso interno del adapter).
+ * Devuelve null si no están configuradas.
+ *
+ * El par Basic (usuario y contraseña) es de la plataforma para todos los
+ * clientes; el **partner id es lo único que puede ser del cliente**: si tiene
+ * el suyo, gana; si no, se usa el de la fila de plataforma —el comportamiento
+ * que había antes de existir el ID por cliente—. Sin `tenantId` (llamadas de
+ * plataforma: health-check, panel admin) se usa siempre el de plataforma.
+ */
+export async function getConnectivityCredentials(
+  tenantId?: string | null
+): Promise<ConnectivityCredentials | null> {
+  const provider = await getConnectivityProvider();
+  if (!provider || !provider.usernameEnc || !provider.passwordEnc) {
+    return null;
+  }
+
+  const partnerId =
+    (await getTenantPartnerId(tenantId)) ??
+    (provider.partnerIdEnc ? decrypt(provider.partnerIdEnc) : null);
+  if (!partnerId) return null;
+
   return {
-    partnerId: decrypt(provider.partnerIdEnc),
+    partnerId,
     username: decrypt(provider.usernameEnc),
     password: decrypt(provider.passwordEnc),
+  };
+}
+
+/**
+ * Lee el par Basic de plataforma SIN exigir ID de socio.
+ *
+ * Lo pide el webhook ENTRANTE: ahí el proveedor nos llama a nosotros, así que
+ * se autentica con usuario y contraseña y el ID de socio no participa —el
+ * hotel sale del mapeo `hotelCode`/`roomCode` → propiedad—. Exigirlo dejaba el
+ * webhook en 503, y con él fuera LAS RESERVAS DE TODOS LOS HOTELES, en cuanto
+ * el ID de socio viviera solo en cada hotel, que es como debe vivir.
+ */
+export async function getConnectivityBasicAuth(): Promise<{
+  username: string;
+  password: string;
+} | null> {
+  const provider = await getConnectivityProvider();
+  if (!provider?.usernameEnc || !provider?.passwordEnc) return null;
+  return {
+    username: decrypt(provider.usernameEnc),
+    password: decrypt(provider.passwordEnc),
+  };
+}
+
+/**
+ * ¿La plataforma tiene par Basic pero NO un ID de socio propio?
+ *
+ * Es el estado normal cuando el ID de socio es de cada hotel: la plataforma
+ * guarda el par Basic (compartido por todos) y cada hotel el suyo. Lo que NO
+ * puede pasar en ese estado es que algo de plataforma lo lea como «sin
+ * configurar» o como error: no falta nada, simplemente la sonda de plataforma
+ * no aplica.
+ *
+ * Es una función pura sobre la fila ya leída: quien la llama no paga una
+ * segunda consulta, y la regla vive en un solo sitio (health-check, prueba del
+ * panel admin) en vez de repetida en cada consumidor.
+ */
+export function partnerIdEsDeCadaHotel(
+  provider:
+    | { partnerIdEnc?: string | null; usernameEnc?: string | null; passwordEnc?: string | null }
+    | null
+    | undefined
+): boolean {
+  return !!provider && !provider.partnerIdEnc && !!provider.usernameEnc && !!provider.passwordEnc;
+}
+
+/**
+ * Guarda (o borra) el ID de socio del cliente.
+ *
+ * Pasa por el MISMO preflight que el guardado de plataforma: un espacio de más
+ * o unas comillas pegadas de un PDF se convertirían aquí en un 403 «partner
+ * desconocido», indistinguible de estar usando el id de otro hotel. `null` o
+ * vacío borra el valor y devuelve al cliente al ID de plataforma.
+ */
+export async function saveTenantPartnerId(
+  tenantId: string,
+  partnerId?: string | null
+): Promise<{ ok: boolean; avisos?: AvisoPreflight[] }> {
+  const id = (tenantId ?? '').trim();
+  if (!id) return { ok: false };
+
+  const crudo = (partnerId ?? '').trim();
+  let partnerIdEnc: string | null = null;
+  if (crudo) {
+    const revision = preflightConectividad({ partnerId: crudo });
+    if (!revision.ok) return { ok: false, avisos: revision.bloqueantes };
+    // Valor normalizado por el preflight (recortes y comillas fuera).
+    partnerIdEnc = encrypt(revision.valores.partnerId ?? crudo);
+  }
+
+  await prisma.hospitalityConnectivityConfig.upsert({
+    where: { tenantId: id },
+    create: { tenantId: id, partnerIdEnc },
+    update: { partnerIdEnc },
+  });
+  return { ok: true };
+}
+
+/**
+ * Estado de la conectividad para la pantalla del CLIENTE: sin secretos y sin
+ * nombrar al proveedor (regla de marca). Dice si la plataforma ya tiene con qué
+ * llamar y si el cliente tiene ya su propio ID de socio.
+ */
+export async function getTenantConnectivityPublic(tenantId: string) {
+  const [provider, propio] = await Promise.all([
+    getConnectivityProvider(),
+    getTenantPartnerId(tenantId),
+  ]);
+  const parBasic = !!(provider?.usernameEnc && provider?.passwordEnc);
+
+  return {
+    nombre: provider?.nombreVisible || CONNECTIVITY_PROVIDER_NOMBRE,
+    /** La plataforma tiene el par Basic cargado: sin él no hay ninguna vía. */
+    plataformaConfigurada: parBasic,
+    /** El cliente ya guardó su propio ID de socio. */
+    tienePartnerIdPropio: !!propio,
+    /** Marcador de presencia, nunca el valor. */
+    partnerId: propio ? '••••••' : '',
+    /** Hay con qué llamar por este cliente: par Basic + algún ID de socio. */
+    completo: parBasic && (!!propio || !!provider?.partnerIdEnc),
+    estado: (provider?.estado as ConnectivityEstado) || 'sin_configurar',
   };
 }
 
@@ -406,9 +561,15 @@ export interface TestConnectionResult {
  * de detalle de propiedad (contrato: GET /property_details/{hotelCode}?partnerId={pms}).
  * Devuelve la configuración de la propiedad (habitaciones y planes de tarifa),
  * que es exactamente lo que se necesita para construir el mapping.
+ *
+ * Con `tenantId` se usa el ID de socio de ESE cliente —es lo que le deja ver
+ * sus propiedades—; sin él (panel admin, health-check) se usa el de plataforma.
  */
-export async function testConnectivityConnection(hotelCode?: string): Promise<TestConnectionResult> {
-  const creds = await getConnectivityCredentials();
+export async function testConnectivityConnection(
+  hotelCode?: string,
+  tenantId?: string | null
+): Promise<TestConnectionResult> {
+  const creds = await getConnectivityCredentials(tenantId);
   if (!creds) {
     // Diagnóstico útil: puede ser que no haya nada guardado o que falte solo
     // el ID de socio (el par Basic se guarda de forma independiente).
@@ -418,8 +579,9 @@ export async function testConnectivityConnection(hotelCode?: string): Promise<Te
     }
     return {
       ok: false,
-      error:
-        'Falta el ID de socio: guárdalo en esta pantalla (junto al usuario y la contraseña) para poder llamar al servicio.',
+      error: tenantId
+        ? 'Falta tu ID de socio: guárdalo en Conectividad para poder consultar tus propiedades.'
+        : 'Falta el ID de socio: guárdalo en esta pantalla (junto al usuario y la contraseña) para poder llamar al servicio.',
     };
   }
 
@@ -625,11 +787,12 @@ async function readBody(res: Response): Promise<unknown> {
  */
 export async function pushInventory(
   hotelCode: string,
-  updates: InventoryPushUpdate[]
+  updates: InventoryPushUpdate[],
+  tenantId?: string | null
 ): Promise<PushResult> {
   const started = Date.now();
   try {
-    const creds = await getConnectivityCredentials();
+    const creds = await getConnectivityCredentials(tenantId);
     if (!creds) {
       return { ok: false, tipo: 'inventory', error: 'Conectividad no configurada.', duracionMs: 0 };
     }
@@ -701,11 +864,12 @@ export interface FetchReservationsResult {
 export async function fetchReservations(
   hotelCode: string,
   startDate: string,
-  endDate: string
+  endDate: string,
+  tenantId?: string | null
 ): Promise<FetchReservationsResult> {
   const started = Date.now();
   try {
-    const creds = await getConnectivityCredentials();
+    const creds = await getConnectivityCredentials(tenantId);
     if (!creds) {
       return { ok: false, error: 'Conectividad no configurada.', duracionMs: 0 };
     }
@@ -759,11 +923,12 @@ export async function fetchReservations(
  */
 export async function pushRates(
   hotelCode: string,
-  updates: RatePushUpdate[]
+  updates: RatePushUpdate[],
+  tenantId?: string | null
 ): Promise<PushResult> {
   const started = Date.now();
   try {
-    const creds = await getConnectivityCredentials();
+    const creds = await getConnectivityCredentials(tenantId);
     if (!creds) {
       return { ok: false, tipo: 'rates', error: 'Conectividad no configurada.', duracionMs: 0 };
     }
@@ -814,11 +979,12 @@ async function postConnectivityUpdate(
   endpoint: '/update' | '/update-rates',
   hotelCode: string,
   updates: unknown[],
-  tipo: PushResult['tipo']
+  tipo: PushResult['tipo'],
+  tenantId?: string | null
 ): Promise<PushResult> {
   const started = Date.now();
   try {
-    const creds = await getConnectivityCredentials();
+    const creds = await getConnectivityCredentials(tenantId);
     if (!creds) {
       return { ok: false, tipo, error: 'Conectividad no configurada.', duracionMs: 0 };
     }
@@ -868,9 +1034,10 @@ async function postConnectivityUpdate(
  */
 export async function pushInventoryRestrictions(
   hotelCode: string,
-  updates: InventoryRestrictionsPushUpdate[]
+  updates: InventoryRestrictionsPushUpdate[],
+  tenantId?: string | null
 ): Promise<PushResult> {
-  return postConnectivityUpdate('/update', hotelCode, updates, 'inventory_restrictions');
+  return postConnectivityUpdate('/update', hotelCode, updates, 'inventory_restrictions', tenantId);
 }
 
 /**
@@ -880,7 +1047,8 @@ export async function pushInventoryRestrictions(
  */
 export async function pushRateRestrictions(
   hotelCode: string,
-  updates: RateRestrictionsPushUpdate[]
+  updates: RateRestrictionsPushUpdate[],
+  tenantId?: string | null
 ): Promise<PushResult> {
-  return postConnectivityUpdate('/update-rates', hotelCode, updates, 'rates_restrictions');
+  return postConnectivityUpdate('/update-rates', hotelCode, updates, 'rates_restrictions', tenantId);
 }

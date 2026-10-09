@@ -31,7 +31,8 @@ import {
   X,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { interpolar, TEXTOS, type Idioma } from '@/lib/hospitality/booking-i18n';
+import { interpolar, localeDeIdioma, TEXTOS, type Idioma } from '@/lib/hospitality/booking-i18n';
+import { formatearMedida } from '@/lib/moneda';
 
 /** Número de servicios que se listan antes de resumir el resto en «+N». */
 const SERVICIOS_VISIBLES = 8;
@@ -351,10 +352,12 @@ export function FichaPropiedad({
                 <span className="text-muted-foreground">{icono}</span>
                 <span className="flex-1">{label}</span>
                 <span className="font-medium">
-                  {new Intl.NumberFormat(idioma === 'en' ? 'en-US' : 'es-ES', {
-                    maximumFractionDigits: 2,
-                  }).format(km)}{' '}
-                  {distancias?.unidad === 'millas' ? (idioma === 'en' ? 'mi' : 'mi') : idioma === 'en' ? 'km' : 'km'}
+                  {/* La unidad cambia con el idioma del visitante, así que el
+                      número también: `es` → «1,5 km», `en` → «1.5 mi». La
+                      medida la escribe el módulo de dinero, que es el único
+                      sitio de la plataforma que elige una convención. */}
+                  {formatearMedida(km, 2, localeDeIdioma(idioma))}{' '}
+                  {distancias?.unidad === 'millas' ? 'mi' : 'km'}
                 </span>
               </li>
             ))}

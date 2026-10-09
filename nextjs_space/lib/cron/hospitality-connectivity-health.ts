@@ -16,7 +16,9 @@
  * GARANTÍAS
  * ────────────────────────────────────────────────────────────────────────────
  *   • Sin configuración, no-op silencioso: un job de salud no puede ser el que
- *     rompa (ni llamar a un servicio sin credenciales).
+ *     rompa (ni llamar a un servicio sin credenciales). Y cuando el ID de socio
+ *     es de cada hotel, tampoco marca error: la sonda de plataforma no aplica
+ *     (ver No-op razonado #2).
  *   • Reutiliza la sonda y las reglas de estado del panel: nunca decide él su
  *     propia verdad — un 401 es «Credenciales rechazadas» en el badge igual
  *     que aquí.
@@ -34,6 +36,7 @@
 import { prisma } from '@/lib/db';
 import {
   getConnectivityProvider,
+  partnerIdEsDeCadaHotel,
   testConnectivityConnection,
   updateConnectivityStatus,
   resolveProbeHotelCode,
@@ -80,6 +83,26 @@ export async function runConnectivityHealthCheck(): Promise<ConnectivityHealthRe
       motivo: 'Conectividad sin configurar: nada que verificar todavía.',
       hotelCode: null,
       estado: provider?.estado ?? null,
+      detalle: null,
+      durationMs: Date.now() - startedAt,
+    };
+  }
+
+  // No-op razonado #2: hay par Basic, pero el ID de socio es de cada hotel (la
+  // plataforma no tiene uno propio). La sonda es `property_details` de UN hotel
+  // con UN ID de socio: sin id de plataforma no hay a qué hotel sondear sin
+  // tomar prestado el de un cliente —y usar el secreto de un hotel para una
+  // verificación de plataforma no es aceptable—. El estado NO se toca: este job
+  // no puede pintar en rojo una capa que funciona porque su sonda no aplique; el
+  // que sabe si ve sus propiedades es cada hotel, desde su Conectividad.
+  if (partnerIdEsDeCadaHotel(provider)) {
+    return {
+      ok: null,
+      ejecutado: false,
+      motivo:
+        'El ID de socio es de cada hotel: la sonda de plataforma no aplica. Cada hotel comprueba el suyo desde Conectividad.',
+      hotelCode: null,
+      estado: provider.estado,
       detalle: null,
       durationMs: Date.now() - startedAt,
     };

@@ -420,6 +420,36 @@ export function formatearNumero(valor: number | null | undefined, decimales = 0)
 }
 
 /**
+ * Magnitud medida —una distancia en km, una superficie, un peso— con la
+ * convención que se le indique.
+ *
+ * Hermana de `formatearNumero` y separada a propósito: un contador es un entero
+ * (`12 usuarios`) y se escribe con decimales fijos, mientras que una medida
+ * lleva decimales **opcionales** y se escribe sin ceros de relleno (`1,5 km`, no
+ * `1,50 km`). Forzar una cifra fija en la ficha de una propiedad llenaba el dato
+ * de ceros que el hotel no declaró.
+ *
+ * El `locale` lo decide quien llama porque una medida la lee una persona: la
+ * ficha pública del hotel existe en dos idiomas y su unidad ya cambia con él
+ * (`mi`/`km`), así que el número tiene que cambiar igual. Sin locale se usa la
+ * convención de la plataforma, que es la que vale en la interfaz interna.
+ *
+ * Un valor ausente devuelve '—', igual que `formatearNumero`: un cero fingiría
+ * un dato que nadie midió.
+ */
+export function formatearMedida(
+  valor: number | null | undefined,
+  decimalesMaximos = 2,
+  locale: string = CONVENCION_POR_DEFECTO
+): string {
+  if (valor === null || valor === undefined || !Number.isFinite(valor)) return '—';
+  return valor.toLocaleString(locale, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: decimalesMaximos,
+  });
+}
+
+/**
  * Importe formateado en la convención de su divisa, con su símbolo.
  *
  * Un valor ausente devuelve '—' en lugar de un cero que parecería un dato.

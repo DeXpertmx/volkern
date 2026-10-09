@@ -40,10 +40,33 @@ vi.mock('@/lib/db', () => ({
       count: mockCount,
       create: mockCreate,
     },
+    // El alta del slot PROVISIONA el acceso del administrador del cliente
+    // (catálogo básico de roles + owner invitado): sin estos modelos el camino
+    // feliz reventaba en 500 y los tests solo ejercitaban los rechazos.
+    role: {
+      findMany: vi.fn().mockResolvedValue([]),
+      findFirst: vi.fn().mockResolvedValue({ id: 'role_admin', nombre: 'Admin' }),
+      create: vi.fn().mockResolvedValue({}),
+      update: vi.fn().mockResolvedValue({}),
+    },
+    user: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      create: vi.fn().mockResolvedValue({ id: 'user_invitado' }),
+      update: vi.fn().mockResolvedValue({}),
+    },
+  },
+  // El catálogo del slot se lee de la base «global» (sin contexto de tenant).
+  globalPrisma: {
+    tenant: { findUnique: vi.fn().mockResolvedValue({ nombre: 'Test Agency' }) },
   },
   dbContext: {
     run: (_opts: any, fn: () => any) => fn(),
   },
+}));
+
+// El email de aceptación no es lo que se mide aquí (y no debe salir de verdad).
+vi.mock('@/lib/emails/invitacion', () => ({
+  enviarEmailInvitacion: vi.fn().mockResolvedValue({ success: true }),
 }));
 
 // ─── Dynamic imports ──────────────────────────────────────────────

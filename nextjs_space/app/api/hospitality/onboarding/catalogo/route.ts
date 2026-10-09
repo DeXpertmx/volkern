@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const result = await testConnectivityConnection(hotelCode);
+    const result = await testConnectivityConnection(hotelCode, tenantId);
     if (!result.ok) {
       return NextResponse.json(
         {

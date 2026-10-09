@@ -33,9 +33,24 @@
 #      los otros (con verificación SHA-256) y su cron cada 15 minutos
 #      (/etc/cron.d/vigilar-mcp) se asegura aquí de forma idempotente.
 #
+# ── Gate de build (paso 1) ─────────────────────────────────────
+# El stage `builder` del Dockerfile hace `COPY . .`: sin gate, un commit que
+# solo toca documentación o workflows invalida la capa y cuesta 10-20 minutos
+# de build para producir una imagen que se comporta igual — y como el pipeline
+# acaba en `service update --force`, además reinicia producción a cambio de
+# nada. `deploy-vps/decidir-build.sh` compara el árbol actual contra el último
+# despliegue (marcador `deploy-vps/.ultimo-deploy`) y, si lo único que cambió
+# es documentación/workflows/tests, el pipeline PARA y sale 0 sin construir ni
+# tocar el VPS. Ante cualquier duda (sin baseline, árbol sucio, cambios en
+# `.env*`, baseline que no es ancestro) construye: el gate solo se equivoca
+# hacia el lado caro.
+#
 # Uso (desde el repo, puede pedir sudo para docker):
 #   bash deploy-vps/deploy-local.sh
 #   bash deploy-vps/deploy-local.sh --skip-build     # solo re-exporta y despliega
+#   bash deploy-vps/deploy-local.sh --force-build    # construye siempre (ignora el gate)
+#   bash deploy-vps/deploy-local.sh --force-deploy   # si el gate dice «nada que construir», re-sube la imagen igual
+#   bash deploy-vps/deploy-local.sh --since <ref>    # baseline explícito para el gate (auditoría de un rango)
 #   bash deploy-vps/deploy-local.sh --skip-migrator  # no construye/subé migrator (sin cambios de BD)
 #   bash deploy-vps/deploy-local.sh --skip-smoke     # no ejecuta el smoke del clasificador
 #   bash deploy-vps/deploy-local.sh --skip-smoke-mcp # no ejecuta el smoke MCP (/mcp + Server Card)
@@ -103,9 +118,16 @@ SKIP_SMOKE=0
 SKIP_SMOKE_MCP=0
 E2E_MCP=0
 E2E_FLUJO=0
+FORCE_BUILD=0
+FORCE_DEPLOY=0
+SINCE_REF=""
+# Se pone a 1 solo si este pipeline llegó a construir la imagen: es la
+# condición para refrescar el marcador del gate (ver final del script).
+CONSTRUIDO=0
 
-for a in "$@"; do
-  case "$a" in
+# while+shift en vez de `for a in "$@"`: --since consume su valor.
+while [ $# -gt 0 ]; do
+  case "$1" in
     --skip-build) SKIP_BUILD=1 ;;
     --skip-migrator) SKIP_MIGRATOR=1 ;;
     --skip-smoke) SKIP_SMOKE=1 ;;
@@ -114,7 +136,19 @@ for a in "$@"; do
     --e2e-flujo) E2E_FLUJO=1; E2E_MCP=1 ;;   # el flujo corre además del circuito (5c)
     --keep-tarballs) KEEP_LOCAL=1 ;;
     --keep) KEEP_REMOTE="--keep" ;;
+    --force-build) FORCE_BUILD=1 ;;
+    --force-deploy) FORCE_DEPLOY=1 ;;
+    --since)
+      if [ $# -lt 2 ]; then
+        echo "✗ --since necesita una referencia (commit, rama o tag)." >&2
+        exit 2
+      fi
+      SINCE_REF="$2"
+      shift
+      ;;
+    --since=*) SINCE_REF="${1#--since=}" ;;
   esac
+  shift
 done
 
 # ── Wrapper docker: usa sudo si el usuario no tiene acceso al daemon ──
@@ -134,24 +168,67 @@ if [ "$SKIP_BUILD" = "1" ]; then
   echo "→ [1/5] Build: omitido (--skip-build). Usando imágenes ya construidas."
 else
   echo ""
-  # Ojo con `${SKIP_MIGRATOR:+…}`: la variable es 0/1, así que con "0" (el
-  # migrator SÍ se construye) la expansión también imprimía «sin migrator» y la
-  # línea mentía sobre lo que se iba a construir. Se decide por valor, no por
-  # estar definida.
-  if [ "$SKIP_MIGRATOR" = "1" ]; then
-    MIGRATOR_SUFIJO=" (sin migrator)"
+
+  # ── Gate: ¿hace falta reconstruir? ────────────────────────────
+  # decidir-build.sh contesta 1 = «nada que construir» si desde el último
+  # despliegue solo cambió documentación/workflows/tests. Cualquier otro código
+  # (incluido el 2 = «indeciso») se trata como «construir».
+  GATE_RC=0
+  if [ "$FORCE_BUILD" = "1" ]; then
+    echo "→ [1/5] Gate de build: omitido (--force-build). Se construye siempre."
   else
-    MIGRATOR_SUFIJO=" (con migrator)"
+    GATE_ARGS=()
+    if [ -n "$SINCE_REF" ]; then GATE_ARGS+=(--since "$SINCE_REF"); fi
+    bash deploy-vps/decidir-build.sh ${GATE_ARGS[@]+"${GATE_ARGS[@]}"} || GATE_RC=$?
+    if [ "$GATE_RC" != "1" ]; then GATE_RC=0; fi
   fi
-  echo "→ [1/5] Build de volkern-erp:latest${MIGRATOR_SUFIJO} (puede tardar 10-20 min) ..."
-  if ! docker_cmd version >/dev/null 2>&1; then
-    echo "✗ docker no accesible ni con sudo. Revisa el daemon." >&2
-    exit 1
+
+  # Un «saltar» solo vale si la imagen que se reutilizaría existe de verdad:
+  # tras un `docker image prune` a mano, saltar el build dejaría al pipeline sin
+  # imagen y reventaría más tarde, en el `docker save`.
+  if [ "$GATE_RC" = "1" ] && ! docker_cmd image inspect volkern-erp:latest >/dev/null 2>&1; then
+    echo "   ⚠️  La imagen local volkern-erp:latest no existe: se construye igual."
+    GATE_RC=0
   fi
-  if [ "$SKIP_MIGRATOR" = "1" ]; then
-    bash deploy-vps/build-imagen.sh --skip-migrator
-  else
-    bash deploy-vps/build-imagen.sh
+
+  if [ "$GATE_RC" = "1" ] && [ "$FORCE_DEPLOY" = "0" ]; then
+    echo ""
+    echo "=== Nada que desplegar: no se construye ni se toca el VPS ==="
+    echo "La imagen local ya corresponde al árbol actual (solo cambió"
+    echo "documentación/workflows/tests). Usa --force-build para construir igual,"
+    echo "o --force-deploy para re-subir la imagen existente."
+    avisar_telegram "Deploy Volkern: omitido" "Solo cambió documentación/workflows desde el último despliegue: la imagen desplegada ya corresponde y no se reinicia producción. · $(date -Is)" info
+    exit 0
+  fi
+
+  if [ "$GATE_RC" = "1" ]; then
+    echo "   · --force-deploy: se reutiliza la imagen ya construida (build omitido)."
+    SKIP_BUILD=1
+  fi
+
+  if [ "$SKIP_BUILD" = "0" ]; then
+    # Ojo con `${SKIP_MIGRATOR:+…}`: la variable es 0/1, así que con "0" (el
+    # migrator SÍ se construye) la expansión también imprimía «sin migrator» y la
+    # línea mentía sobre lo que se iba a construir. Se decide por valor, no por
+    # estar definida.
+    if [ "$SKIP_MIGRATOR" = "1" ]; then
+      MIGRATOR_SUFIJO=" (sin migrator)"
+    else
+      MIGRATOR_SUFIJO=" (con migrator)"
+    fi
+    echo "→ [1/5] Build de volkern-erp:latest${MIGRATOR_SUFIJO} (puede tardar 10-20 min) ..."
+    if ! docker_cmd version >/dev/null 2>&1; then
+      echo "✗ docker no accesible ni con sudo. Revisa el daemon." >&2
+      exit 1
+    fi
+    if [ "$SKIP_MIGRATOR" = "1" ]; then
+      bash deploy-vps/build-imagen.sh --skip-migrator
+    else
+      bash deploy-vps/build-imagen.sh
+    fi
+    # La imagen se construyó en ESTE pipeline: es lo que autoriza a refrescar
+    # el marcador del gate al terminar.
+    CONSTRUIDO=1
   fi
 fi
 
@@ -327,6 +404,18 @@ if [ "$SMOKE_RC" -ne 0 ] || [ "$SMOKE_MCP_RC" -ne 0 ] || [ "$E2E_MCP_RC" -ne 0 ]
   for rc in "$SMOKE_RC" "$SMOKE_MCP_RC" "$E2E_MCP_RC" "$E2E_FLUJO_RC"; do
     if [ "$rc" -ne 0 ]; then exit "$rc"; fi
   done
+fi
+
+# ── Marcador del gate de build ──────────────────────────────────
+# Se refresca solo si ESTE pipeline construyó la imagen y todo terminó bien (un
+# smoke fallido sale antes, con exit). Es lo que autoriza a `decidir-build.sh` a
+# afirmar «la imagen corresponde a este árbol»; escribirlo tras un despliegue
+# que NO construyó (--skip-build pedido a mano sobre un árbol cambiado) sería
+# mentir y haría saltar el siguiente build, que sí hace falta.
+if [ "$CONSTRUIDO" = "1" ]; then
+  bash deploy-vps/decidir-build.sh --marcar
+else
+  echo "→ Marcador de build: sin cambios (este pipeline no construyó la imagen)."
 fi
 
 echo ""

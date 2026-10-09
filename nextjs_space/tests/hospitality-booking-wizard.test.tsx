@@ -222,10 +222,16 @@ describe('El modal del registro muestra lo elegido (foto + fechas en claro)', ()
     // Las fechas en formato legible (mes en palabras) y la ISO cruda FUERA:
     // «2026-09-19» se puede leer al revés (9 de julio) y eso es un error del
     // huésped esperando a ocurrir.
+    //
+    // El mes NO se fija a propósito: el asistente ofrece las fechas de hoy en
+    // adelante, así que clavar «septiembre» convertía esta comprobación en una
+    // bomba de relojería que estalla sola al cambiar de mes.
     expect(within(dialogo).getAllByText(/→/).length).toBeGreaterThan(0);
     const texto = dialogo.textContent || '';
-    expect(texto).not.toMatch(/2026-09-19 \u2192 2026-09-21/);
-    expect(texto).toMatch(/septiembre|September/);
+    expect(texto).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+    expect(texto).toMatch(
+      /enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre/
+    );
     // Noches y total del servidor en el mismo resumen.
     expect(texto).toMatch(/2 /);
     expect(texto).toMatch(/2,400\.00/);
@@ -250,7 +256,9 @@ describe('El modal del registro muestra lo elegido (foto + fechas en claro)', ()
 
     const dialogo = await screen.findByRole('dialog');
     expect(within(dialogo).queryByRole('img')).toBeNull();
-    // Las fechas siguen en claro sin foto.
-    expect((dialogo.textContent || '')).toMatch(/septiembre|September/);
+    // Las fechas siguen en claro sin foto (mes en palabras, ISO fuera).
+    expect((dialogo.textContent || '')).toMatch(
+      /enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre/
+    );
   });
 });

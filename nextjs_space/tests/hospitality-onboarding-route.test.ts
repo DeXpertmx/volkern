@@ -7,6 +7,9 @@ const mocks = vi.hoisted(() => ({
   hospitalityProperty: { findFirst: vi.fn(), findMany: vi.fn(), update: vi.fn() },
   hospitalityUnit: { findMany: vi.fn() },
   connectivityProvider: { findUnique: vi.fn() },
+  // ID de socio del cliente (conectividad por tenant): sin fila, el paso usa el
+  // de plataforma, que es el escenario de estos casos.
+  hospitalityConnectivityConfig: { findUnique: vi.fn() },
   connectivityMapping: { findFirst: vi.fn(), findMany: vi.fn(), upsert: vi.fn(), update: vi.fn() },
   hospitalitySyncLog: { findMany: vi.fn(), create: vi.fn() },
   contact: { findFirst: vi.fn(), delete: vi.fn() },
@@ -70,6 +73,8 @@ beforeEach(() => {
     estado: 'conectado',
   });
   mocks.connectivityMapping.findFirst.mockResolvedValue({ externalPropertyId: 'sandbox-pms' });
+  // El hotel no tiene ID de socio propio: la capa usa el de plataforma.
+  mocks.hospitalityConnectivityConfig.findUnique.mockResolvedValue(null);
   // El código encadena .catch() a la auditoría: el mock debe ser una promesa.
   mocks.logAuditAction.mockResolvedValue(undefined);
   mocks.hospitalitySyncLog.findMany.mockResolvedValue([

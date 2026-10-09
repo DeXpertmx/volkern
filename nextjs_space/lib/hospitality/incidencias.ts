@@ -1212,7 +1212,7 @@ export async function proponerVinculacion(input: {
   if (cacheado !== undefined) {
     catalogo = cacheado;
   } else {
-    const respuesta = await testConnectivityConnection(hotelCode);
+    const respuesta = await testConnectivityConnection(hotelCode, tenantId);
     catalogo =
       respuesta.ok && respuesta.property
         ? new Map(

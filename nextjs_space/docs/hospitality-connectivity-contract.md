@@ -123,6 +123,40 @@ vincular (paso 5 del wizard).
 Procedimiento completo, canal por canal, en
 [`hospitality-conexion-otas-activacion.md`](./hospitality-conexion-otas-activacion.md).
 
+## Credenciales: quién es el `{pms}` de cada hotel (ID de socio por cliente)
+
+El `{pms}` de las rutas (`/update/{pms}`, `/update-rates/{pms}`, `/data/{pms}`) y
+el `?partnerId=` de `property_details` son el **ID de socio (partner id)** que el
+proveedor emite al registrarse cada hotel. Por eso **lo registra cada cliente**:
+
+- **Dónde**: dashboard del cliente → *Conectividad*
+  (`/dashboard/hospitality/conectividad`), servido por
+  `GET/PUT/POST /api/hospitality/conectividad` (capacidades `integraciones.ver`
+y `integraciones.gestionar`). Se guarda cifrado en
+  `hospitality_connectivity_config` (una fila por tenant, `tenantId` único).
+- **El usuario y la contraseña NO son del hotel**: siguen siendo el par Basic de
+  plataforma que administra Volkern en *Administración → Conectividad*.
+- **Respaldo**: un hotel sin ID propio (o con el suyo desactivado) usa el de
+  plataforma, que es el comportamiento anterior a existir esta columna.
+- **El ID de plataforma es opcional**: el respaldo puede no existir (Volkern deja
+  el campo vacío y todos los hoteles registran el suyo). En ese estado nada de
+  plataforma se rompe: el webhook **entrante** autentica con el par Basic —el ID
+  de socio no participa en una llamada entrante, el hotel sale del mapeo
+  `hotelCode`/`roomCode` → propiedad— y la sonda de plataforma (health-check
+  diario y botón «Probar» de *Administración → Conectividad*) lo informa como
+  **no aplica** (`aplica: false`) en vez de marcar la capa en error: sin ID de
+  socio de plataforma la prueba de plataforma no tiene a qué hotel sondear, y
+  cada hotel comprueba el suyo desde su Conectividad.
+- **Sin ID de socio no hay catálogo**: el proveedor responde 403 «partner
+  desconocido» y el hotel no ve sus propiedades. La pantalla del cliente trae una
+  comprobación (`POST {accion:'probar', hotelCode}`) para descubrirlo antes de
+  vincular unidades, y el paso 4 del wizard de onboarding da por configurada la
+  conectividad con el ID del cliente o, en su defecto, con el de plataforma.
+- **Validación**: el ID pasa por el mismo preflight que el de plataforma (sin
+  espacios, sin invisibles, sin comillas pegadas de un PDF) y, al leerlo, se
+  vuelve a validar: un valor ilegible cae al de plataforma en vez de condenar al
+  hotel a un 403 mudo.
+
 ## Endpoints (PMS → proveedor)
 
 | Endpoint | Método | URL | Propósito |

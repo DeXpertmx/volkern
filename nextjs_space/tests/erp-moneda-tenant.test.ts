@@ -30,6 +30,28 @@ vi.mock('@/lib/skills', () => ({
   skills: { create_expense: (...args: any[]) => createExpenseMock(...args) },
 }));
 
+/**
+ * La conciliación con el pedido de compra tiene sus PROPIAS pruebas
+ * (`compras-conciliacion*.test.ts`) y toca modelos que este test no declara
+ * (`compra`, `compraItem`, `supplier`…). Aquí se mide la DIVISA con la que se
+ * escribe el gasto: sin mockear el servicio, la ruta moría en el paso de la
+ * conciliación (500) y nunca llegaba al skill, así que la comprobación no
+ * llegaba a ejercerse.
+ *
+ * El resultado es «ningún pedido candidato»: el camino que sigue al skill.
+ */
+vi.mock('@/lib/compras/service', () => ({
+  ErrorCompra: class ErrorCompra extends Error {
+    codigo = 'OTRO' as const;
+  },
+  statusDeErrorCompra: () => 400,
+  conciliarFacturaConCompra: vi.fn(),
+  sugerirConciliacionParaFactura: vi.fn().mockResolvedValue({
+    emparejamiento: { estado: 'ninguna' },
+    candidatos: [],
+  }),
+}));
+
 vi.mock('@/lib/api-key-auth', () => ({
   withTenantAuth: (handler: any) => async (request: Request) =>
     handler(request, {

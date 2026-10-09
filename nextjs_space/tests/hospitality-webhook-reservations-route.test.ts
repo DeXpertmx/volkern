@@ -6,20 +6,26 @@
  * entrante»): qué código y qué body recibe el proveedor en cada caso, y la
  * regla de no-409 — la idempotencia se responde 200, nunca conflicto.
  *
+ * La autenticación es el par Basic de plataforma: el ID de socio es de cada
+ * hotel y aquí no participa (el hotel se resuelve por el mapeo), así que quitarlo
+ * del panel de plataforma no puede dejar el webhook sin credenciales.
+ *
  * El 401 se comprueba además por su **diagnóstico**: motivo, esquema y huellas
  * de lo recibido — comparable entre las dos partes y sin transportar el valor.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
 
 const mocks = vi.hoisted(() => ({
-  getConnectivityCredentials: vi.fn(),
+  getConnectivityBasicAuth: vi.fn(),
   updateConnectivityStatus: vi.fn(),
   processReservationWebhook: vi.fn(),
 }));
 
 vi.mock('@/lib/hospitality/connectivity', () => ({
-  getConnectivityCredentials: mocks.getConnectivityCredentials,
+  getConnectivityBasicAuth: mocks.getConnectivityBasicAuth,
   updateConnectivityStatus: mocks.updateConnectivityStatus,
   getConnectivityPublic: vi.fn().mockResolvedValue({ estado: 'conectado' }),
 }));
@@ -54,13 +60,13 @@ const payloadOk = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.getConnectivityCredentials.mockResolvedValue(CREDS);
+  mocks.getConnectivityBasicAuth.mockResolvedValue(CREDS);
   mocks.updateConnectivityStatus.mockResolvedValue(undefined);
 });
 
 describe('POST /api/hospitality/webhook/reservations — contrato HTTP', () => {
-  it('sin credenciales configuradas → 503 (el proveedor reintenta con backoff)', async () => {
-    mocks.getConnectivityCredentials.mockResolvedValue(null);
+  it('sin par Basic configurado → 503 (el proveedor reintenta con backoff)', async () => {
+    mocks.getConnectivityBasicAuth.mockResolvedValue(null);
     const req = new Request('https://x', { method: 'POST' }) as any;
     const res = await POST(req);
     expect(res.status).toBe(503);
@@ -302,5 +308,36 @@ describe('POST /api/hospitality/webhook/reservations — contrato HTTP', () => {
     const body = await res.json();
     expect(body.endpoint).toBe('webhook-reservas');
     expect(JSON.stringify(body)).not.toContain('secreto');
+  });
+
+  it('el par Basic basta aunque la plataforma NO tenga ID de socio propio (el hotel sale del mapeo)', async () => {
+    // El ID de socio es de cada hotel: la plataforma puede no tener el suyo y
+    // aun así el webhook tiene que funcionar. Antes, exigir el ID de socio para
+    // autenticar dejaba en 503 las reservas de TODOS los hoteles.
+    mocks.getConnectivityBasicAuth.mockResolvedValue({ username: 'pms', password: 'secreto' });
+    mocks.processReservationWebhook.mockResolvedValue({
+      ok: true,
+      status: 'creada',
+      reservationId: 'r9',
+      penalizacion: null,
+    });
+
+    const res = await POST(conCuerpo(basic(), payloadOk));
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).success).toBe(true);
+    expect(mocks.getConnectivityBasicAuth).toHaveBeenCalled();
+  });
+
+  it('la ruta autentica con el par Basic y NO con la puerta saliente (guardia de fuente)', () => {
+    // `getConnectivityCredentials` exige ID de socio (es la puerta de las
+    // llamadas SALIENTES). Usarla aquí volvería a acoplar el webhook entrante a
+    // un ID de socio de plataforma que puede no existir a propósito.
+    const fuente = fs.readFileSync(
+      path.resolve(__dirname, '..', 'app/api/hospitality/webhook/reservations/route.ts'),
+      'utf8'
+    );
+    expect(fuente).toContain('getConnectivityBasicAuth');
+    expect(fuente).not.toContain('getConnectivityCredentials');
   });
 });

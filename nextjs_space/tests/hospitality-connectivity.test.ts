@@ -25,6 +25,8 @@ vi.mock('@/lib/db', () => ({
 import {
   getConnectivityPublic,
   getConnectivityCredentials,
+  getConnectivityBasicAuth,
+  partnerIdEsDeCadaHotel,
   saveConnectivityConfig,
   CONNECTIVITY_PROVIDER_KEY,
   CONNECTIVITY_PROVIDER_NOMBRE,
@@ -282,5 +284,91 @@ describe('Hospitality — capa de conectividad', () => {
     // «configurado» solo refleja que hay fila de proveedor; el rigor de
     // «los tres secretos» lo aporta «completo».
     expect(pub.configurado).toBe(true);
+  });
+});
+
+/**
+ * El ID de socio es de cada hotel; el par Basic, de plataforma. Son dos puertas
+ * distintas y cada una exige lo suyo:
+ *   • Saliente (push, fetch, sonda) → par Basic + ID de socio.
+ *   • Entrante (webhook) → solo par Basic; el ID de socio no participa.
+ * Confundirlas dejaba el webhook en 503 en cuanto la plataforma no tenía ID de
+ * socio propio, que es el estado correcto cuando lo tiene cada hotel.
+ */
+describe('getConnectivityBasicAuth — el par Basic sin exigir ID de socio', () => {
+  it('devuelve el par AUNQUE la plataforma no tenga ID de socio', async () => {
+    hoisted.findUnique.mockResolvedValue({ ...filaConfigurada(), partnerIdEnc: null });
+
+    expect(await getConnectivityBasicAuth()).toEqual({
+      username: SECRETO_USER,
+      password: SECRETO_PASS,
+    });
+    // La puerta SALIENTE sigue exigiéndolo: sin ID de socio no se puede llamar.
+    expect(await getConnectivityCredentials()).toBeNull();
+  });
+
+  it('devuelve el par DESCIFRADO, nunca lo cifrado', async () => {
+    const fila = filaConfigurada();
+    hoisted.findUnique.mockResolvedValue(fila);
+
+    const par = await getConnectivityBasicAuth();
+
+    expect(par?.password).toBe(SECRETO_PASS);
+    expect(par?.password).not.toBe(fila.passwordEnc);
+  });
+
+  it('sin par guardado (o sin fila) devuelve null: no hay nada que comparar', async () => {
+    hoisted.findUnique.mockResolvedValue({ ...filaConfigurada(), usernameEnc: null });
+    expect(await getConnectivityBasicAuth()).toBeNull();
+
+    hoisted.findUnique.mockResolvedValue({ ...filaConfigurada(), passwordEnc: null });
+    expect(await getConnectivityBasicAuth()).toBeNull();
+
+    hoisted.findUnique.mockResolvedValue(null);
+    expect(await getConnectivityBasicAuth()).toBeNull();
+  });
+});
+
+describe('partnerIdEsDeCadaHotel — cuándo la sonda de plataforma no aplica', () => {
+  it('par Basic sin ID de socio de plataforma → true (es de cada hotel)', () => {
+    expect(
+      partnerIdEsDeCadaHotel({ partnerIdEnc: null, usernameEnc: 'x', passwordEnc: 'x' })
+    ).toBe(true);
+  });
+
+  it('con ID de socio de plataforma → false (la sonda de plataforma sí aplica)', () => {
+    expect(
+      partnerIdEsDeCadaHotel({ partnerIdEnc: 'x', usernameEnc: 'x', passwordEnc: 'x' })
+    ).toBe(false);
+  });
+
+  it('sin par Basic → false: eso es «sin configurar», no «ID de cada hotel»', async () => {
+    // Distinguirlos importa: sin nada guardado el panel debe seguir diciendo que
+    // falta configurar, no que el ID es de cada hotel.
+    expect(partnerIdEsDeCadaHotel({ partnerIdEnc: null, usernameEnc: null, passwordEnc: null })).toBe(
+      false
+    );
+    expect(partnerIdEsDeCadaHotel({ partnerIdEnc: null, usernameEnc: 'x', passwordEnc: null })).toBe(
+      false
+    );
+  });
+
+  it('sin fila de proveedor → false (nada configurado)', () => {
+    expect(partnerIdEsDeCadaHotel(null)).toBe(false);
+    expect(partnerIdEsDeCadaHotel(undefined)).toBe(false);
+  });
+
+  it('es coherente con las dos puertas: exactamente el estado «par sin ID»', async () => {
+    // Coherencia real contra la base (no solo con literales): con la fila que
+    // tiene par Basic y sin ID de socio, la lectura pública dice «tiene
+    // credenciales pero no completo» y la regla dice «es de cada hotel».
+    const fila = { ...filaConfigurada(), partnerIdEnc: null };
+    hoisted.findUnique.mockResolvedValue(fila);
+
+    const pub = await getConnectivityPublic();
+
+    expect(partnerIdEsDeCadaHotel(fila)).toBe(true);
+    expect(pub.tieneCredenciales).toBe(true);
+    expect(pub.completo).toBe(false);
   });
 });

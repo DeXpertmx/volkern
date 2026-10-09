@@ -21,6 +21,7 @@ import { verifyFinancialIntegrity } from '@/lib/security/integrity-service'
 import { ProductionService } from '@/lib/erp/production-service'
 import { projectFinancialForecast, taxProspector } from '@/lib/skills/financial-consolidation-skills'
 import { searchCatalog } from '@/lib/skills/catalog-skills'
+import { monedaEscritura } from '@/lib/moneda'
 import { getFiscalConfig } from '@/lib/fiscal-engine'
 import { ItemIntegrityService } from '@/lib/security/item-integrity'
 import { ComplianceGate } from '@/lib/compliance-gate'
@@ -291,7 +292,11 @@ export async function crearCatalogoItemMcp(input: any) {
       sku,
       tipo: input.tipo || 'servicio',
       precioBase: precio,
-      moneda: input.moneda || fiscalConfig?.currencyCode || 'EUR',
+      // La divisa sale del dato o de la configuración fiscal del tenant: un
+      // `'EUR'` escrito aquí encarecía en euros el catálogo de un tenant con la
+      // moneda en pesos. Sin dato, la red de seguridad la pone el módulo de
+      // dinero (el esquema exige un valor, no una opinión).
+      moneda: monedaEscritura(input.moneda, fiscalConfig?.currencyCode),
       categoriaFiscal: input.categoriaFiscal || 'general',
       tasaImpuestoId: input.tasaImpuestoId || null,
       duracionMinutos: input.duracionMinutos ? Number(input.duracionMinutos) : null,

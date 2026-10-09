@@ -6,6 +6,7 @@ import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/db';
 import {
   getConnectivityProvider,
+  partnerIdEsDeCadaHotel,
   testConnectivityConnection,
   updateConnectivityStatus,
   resolveProbeHotelCode,
@@ -29,11 +30,31 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({}));
+    const provider = await getConnectivityProvider();
     // Sin hotel indicado se sondea el de la sonda (el mismo del health-check
     // diario), no un sandbox fijo que puede no estar concedido al partner.
     const hotelCode = typeof body?.hotelCode === 'string' && body.hotelCode.trim()
       ? body.hotelCode.trim()
-      : resolveProbeHotelCode(await getConnectivityProvider());
+      : resolveProbeHotelCode(provider);
+
+    // El ID de socio puede ser de cada hotel, que es lo correcto: entonces la
+    // prueba de PLATAFORMA no aplica —no hay ID de socio con el que sondear la
+    // propiedad de nadie— y NO se marca la capa en error por eso. El estado se
+    // deja intacto y se dice dónde sí se puede comprobar: si el hotel ve sus
+    // propiedades es el hotel quien lo sabe. `aplica: false` es lo que le dice
+    // al panel que esto no es un fallo (nada de rojo ni de aviso al equipo).
+    if (partnerIdEsDeCadaHotel(provider)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          aplica: false,
+          hotelCode,
+          error:
+            'El ID de socio es de cada hotel: pruébalo desde Conectividad del hotel, con el código de una de sus propiedades.',
+        },
+        { status: 200 }
+      );
+    }
 
     const result = await testConnectivityConnection(hotelCode);
 

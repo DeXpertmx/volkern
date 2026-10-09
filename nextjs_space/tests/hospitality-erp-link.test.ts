@@ -53,6 +53,27 @@ vi.mock('@/lib/skills', () => ({
   skills: { create_expense: mocks.create_expense },
 }));
 
+/**
+ * La conciliación con el pedido de compra tiene sus PROPIAS pruebas
+ * (`compras-conciliacion*.test.ts`) y toca modelos que este test no declara
+ * (`compra`, `compraItem`…). Aquí se mide la imputación a la reserva de
+ * hospitality: sin mockear el servicio, la ruta moría en el paso de la
+ * conciliación (500) y no llegaba ni a validar la reserva.
+ *
+ * El resultado es «ningún pedido candidato»: el camino que sigue al skill.
+ */
+vi.mock('@/lib/compras/service', () => ({
+  ErrorCompra: class ErrorCompra extends Error {
+    codigo = 'OTRO' as const;
+  },
+  statusDeErrorCompra: () => 400,
+  conciliarFacturaConCompra: vi.fn(),
+  sugerirConciliacionParaFactura: vi.fn().mockResolvedValue({
+    emparejamiento: { estado: 'ninguna' },
+    candidatos: [],
+  }),
+}));
+
 import { GET, POST } from '@/app/api/hospitality/finanzas/route';
 import { POST as erpPOST, GET as erpGET } from '@/app/api/erp/expenses/route';
 import { calcularRentabilidad } from '@/lib/hospitality/finance';

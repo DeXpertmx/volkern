@@ -23,7 +23,7 @@ import {
   pushInventoryRestrictions,
   pushRateRestrictions,
   updateConnectivityStatus,
-  getConnectivityProvider,
+  getConnectivityCredentials,
 } from './connectivity';
 import type {
   RestrictionFields,
@@ -106,8 +106,13 @@ export async function dispatchConnectivityPush(
 ): Promise<SyncResult> {
   const dias = opts?.diasHorizonte ?? 90;
 
-  // Si la conectividad no está configurada, no hay nada que empujar.
-  const provider = await getConnectivityProvider();    if (!provider || !provider.partnerIdEnc || !provider.usernameEnc || !provider.passwordEnc) {
+  // Si no hay con qué llamar, no hay nada que empujar. El partner id puede ser
+  // el del cliente (su propia fila) o el de plataforma, y
+  // `getConnectivityCredentials` resuelve los dos: mirar solo la fila de
+  // plataforma dejaba parado —sin empujar nada— a un cliente que ya había
+  // registrado su ID de socio.
+  const creds = await getConnectivityCredentials(tenantId);
+  if (!creds) {
     const sinConfigurar = { ok: false, error: 'no_configurada' };
     return {
       ok: false,
@@ -215,7 +220,7 @@ export async function dispatchConnectivityPush(
     //    conteo para minimizar bloques (UPSERT por rango).
     const invUpdates = opts?.skipInventory ? [] : buildInventoryUpdates(byDay);
     if (invUpdates.length > 0) {
-      const result = await pushInventory(hotelCode, invUpdates);
+      const result = await pushInventory(hotelCode, invUpdates, tenantId);
       pushCount += 1;
       await recordSyncLog({
         tenantId,
@@ -242,7 +247,7 @@ export async function dispatchConnectivityPush(
       ? []
       : buildInventoryRestrictions(availabilityUnits, byDay);
     if (invRestrictionUpdates.length > 0) {
-      const result = await pushInventoryRestrictions(hotelCode, invRestrictionUpdates);
+      const result = await pushInventoryRestrictions(hotelCode, invRestrictionUpdates, tenantId);
       pushCount += 1;
       await recordSyncLog({
         tenantId,
@@ -267,7 +272,7 @@ export async function dispatchConnectivityPush(
     if (!opts?.skipRates) {
       const rateUpdates = buildRateUpdates(availabilityUnits, today, horizon);
       if (rateUpdates.length > 0) {
-        const result = await pushRates(hotelCode, rateUpdates);
+        const result = await pushRates(hotelCode, rateUpdates, tenantId);
         pushCount += 1;
         await recordSyncLog({
           tenantId,
@@ -292,7 +297,7 @@ export async function dispatchConnectivityPush(
       //    salida por día de la semana, por (roomCode, rateplanCode).
       const rateRestrictionUpdates = buildRateRestrictions(availabilityUnits, today, horizon);
       if (rateRestrictionUpdates.length > 0) {
-        const result = await pushRateRestrictions(hotelCode, rateRestrictionUpdates);
+        const result = await pushRateRestrictions(hotelCode, rateRestrictionUpdates, tenantId);
         pushCount += 1;
         await recordSyncLog({
           tenantId,

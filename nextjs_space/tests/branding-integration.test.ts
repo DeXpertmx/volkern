@@ -255,9 +255,13 @@ describe('Integración: Branding de Agencia (DB real)', () => {
       });
 
       const response = await GET(makeRequest('GET', agencyApiKey));
-
-      expect(response.status).toBe(200);
       const json = await response.json();
+
+      // El cuerpo del error va en el mensaje: cuando esta prueba cayó bajo la
+      // suite completa, el 401 a secas no decía POR QUÉ (la ruta responde
+      // `{ error }` en cada rama de autenticación) y hubo que reproducirla a
+      // ciegas. Con el cuerpo delante, la próxima vez se lee la causa.
+      expect(response.status, JSON.stringify(json)).toBe(200);
       expect(json.logoUrl).toBe('https://cdn.volkern.com/logos/get-test.png');
       expect(json.primaryColor).toBe('#3B82F6');
       expect(json.showPoweredBy).toBe(true);
@@ -267,9 +271,9 @@ describe('Integración: Branding de Agencia (DB real)', () => {
     it('debe devolver objeto vacío cuando no hay brandingConfig', async () => {
       // BUSINESS tenant no tiene branding
       const response = await GET(makeRequest('GET', businessApiKey));
-
-      expect(response.status).toBe(200);
       const json = await response.json();
+
+      expect(response.status, JSON.stringify(json)).toBe(200);
       expect(json).toEqual({});
     });
   });

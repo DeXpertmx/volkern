@@ -156,7 +156,7 @@ export default function ProveedoresComprasPage() {
               <div>
                 <p className="text-sm font-medium text-white/80 uppercase tracking-wider">Saldo acumulado</p>
                 <p className="text-2xl font-bold mt-1 tracking-tight truncate">
-                  {formatearImporte(stats.saldo, moneda || 'EUR')}
+                  {formatearImporte(stats.saldo, moneda)}
                 </p>
               </div>
               <div className="h-12 w-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">

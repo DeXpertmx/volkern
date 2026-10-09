@@ -95,7 +95,7 @@ export default function RecepcionesPage() {
               <div>
                 <p className="text-sm font-medium text-white/80 uppercase tracking-wider">Importe pendiente</p>
                 <p className="text-2xl font-bold mt-1 tracking-tight truncate">
-                  {formatearImporte(stats.importe, moneda || 'EUR')}
+                  {formatearImporte(stats.importe, moneda)}
                 </p>
               </div>
               <div className="h-12 w-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">

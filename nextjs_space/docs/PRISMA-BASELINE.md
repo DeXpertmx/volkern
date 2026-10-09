@@ -263,8 +263,14 @@ Producción queda en el mismo régimen que desarrollo: **una base, una historia*
 Los siguientes despliegues son el flujo normal:
 
 ```bash
-bash deploy-vps/deploy-local.sh          # build → scp → deploy-app.sh → smoke
+bash deploy-vps/deploy-local.sh          # gate de build → build → scp → deploy-app.sh → smoke
 ```
+
+El paso 1 ya no construye a ciegas: `deploy-vps/decidir-build.sh` compara el
+árbol contra el último despliegue y, si lo único que cambió es documentación,
+workflows o tests, el pipeline **para sin construir ni tocar el VPS** (un commit
+de docs no cambia la imagen y reiniciar producción por él solo cuesta caída).
+Ver la cabecera de `deploy-local.sh` para `--force-build` / `--force-deploy`.
 
 `deploy-app.sh` corre `migrate deploy` antes del `service update`, así que una
 migración nueva se aplica sola. Si el deploy aborta en migraciones, aborta

@@ -187,7 +187,7 @@ export async function runReconciliation(
     summary.detalle!.push(detalle);
 
     // 1. Consultar reservas reales del proveedor.
-    const fetch = await fetchReservations(hotelCode, toIsoDate(today), toIsoDate(end));
+    const fetch = await fetchReservations(hotelCode, toIsoDate(today), toIsoDate(end), input.tenantId);
     if (!fetch.ok || !fetch.reservas) {
       summary.fetchFallidos += 1;
       summary.ok = false;

@@ -25,6 +25,11 @@ import {
   normalizarDetalleUnidad,
   type DetalleUnidad,
 } from './unit-detalle';
+// La divisa del editor NO se escribe aquí: el literal vive en el módulo único de
+// moneda (`lib/moneda.ts`), que es el que decide el valor por defecto y qué
+// códigos existen. `lib/hospitality` es zona limpia de deuda de moneda: ni un
+// literal suelto.
+import { MONEDA_PLATAFORMA, MONEDAS_SELECCIONABLES } from '@/lib/moneda';
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -1073,7 +1078,7 @@ export function borradorDesdeUnidad(u: UnitWireFull): DraftUnidadHospedaje {
     capacidad: u.capacidad != null ? String(u.capacidad) : '2',
     estado: u.estado || 'available',
     tarifaBase: u.tarifaBase != null ? String(u.tarifaBase) : '',
-    moneda: u.moneda || 'EUR',
+    moneda: u.moneda || MONEDA_PLATAFORMA,
     amenidades: amenidadesUnidadDe(u.amenidades),
     fotos: fotosUnidadDe(u.fotos),
     habitaciones: detalle?.habitaciones ?? {},
@@ -1210,5 +1215,6 @@ export const AMENIDADES_UNIDAD_CATALOGO: readonly string[] = [
   'Escritorio',
 ];
 
-/** Divisas del selector de tarifa de la unidad: las mismas que permite `lib/moneda`. */
-export const MONEDAS_UNIDAD_CATALOGO: readonly string[] = ['MXN', 'USD', 'EUR', 'COP'];
+/** Divisas del selector de tarifa de la unidad: las MISMAS que permite `lib/moneda`,
+ *  tomadas de ahí en vez de repetidas (una lista paralela se desincroniza sola). */
+export const MONEDAS_UNIDAD_CATALOGO: readonly string[] = MONEDAS_SELECCIONABLES;

@@ -59,14 +59,34 @@ beforeEach(() => {
 
 const request = () => new Request('http://test.local/api/hospitality/dashboard?dias=30');
 
+/**
+ * Fechas RELATIVAS a hoy.
+ *
+ * La ruta calcula la ventana («los últimos `dias` hasta hoy») con la fecha del
+ * día que corre la suite: con fechas clavadas en el calendario, la reserva se
+ * sale de la ventana al pasar los días y el test acaba midiendo 0 —o, como
+ * aquí, fallando por una fecha que ya no está en el rango—. Lo que se mide es
+ * la coherencia de la analítica, no que hoy sea septiembre.
+ */
+const HOY = (() => {
+  const h = new Date();
+  h.setHours(0, 0, 0, 0);
+  return h;
+})();
+const hace = (dias: number) => {
+  const f = new Date(HOY);
+  f.setDate(f.getDate() - dias);
+  return f;
+};
+
 describe('Dashboard de hospitality — analítica desde el módulo puro', () => {
   it('kpis.ingresos / kpis.nochesVendidas / kpis.adr coinciden con kpisVentana', async () => {
-    const checkIn = d(2026, 8, 1);
-    const checkOut = d(2026, 8, 6);
+    const checkIn = hace(6);
+    const checkOut = hace(1);
     mocks.hospitalityReservation.findMany.mockResolvedValue([
       {
         id: 'r1', propertyId: 'p1', unitId: 'u1', channel: 'airbnb', estado: 'confirmed',
-        checkIn, checkOut, bookedOn: d(2026, 7, 20), amountAfterTax: 5000, currency: 'MXN',
+        checkIn, checkOut, bookedOn: hace(20), amountAfterTax: 5000, currency: 'MXN',
       },
     ]);
 
@@ -77,7 +97,7 @@ describe('Dashboard de hospitality — analítica desde el módulo puro', () => 
     const esperado = kpisVentana({
       reservations: [{
         id: 'r1', propertyId: 'p1', unitId: 'u1', channel: 'airbnb', estado: 'confirmed',
-        checkIn, checkOut, amountAfterTax: 5000, currency: 'MXN', bookedOn: d(2026, 7, 20),
+        checkIn, checkOut, amountAfterTax: 5000, currency: 'MXN', bookedOn: hace(20),
       }],
       totalUnidades: 1,
       dias: 30,
@@ -86,12 +106,15 @@ describe('Dashboard de hospitality — analítica desde el módulo puro', () => 
 
     // La ruta calcula su ventana con la fecha de hoy; comparamos la COHERENCIA
     // interna de la respuesta y contra el módulo puro con su misma ventana.
-    if (data.kpis.ingresos > 0) {
-      expect(data.kpis.adr).toBeCloseTo(data.kpis.ingresos / data.kpis.nochesVendidas);
-      expect(data.reportesKpis.adr).toBeCloseTo(data.kpis.adr);
-      expect(data.reportesKpis.ingresos).toBe(data.kpis.ingresos);
-      expect(data.reportesKpis.nochesVendidas).toBe(data.kpis.nochesVendidas);
-    }
+    //
+    // La reserva está DENTRO de la ventana (por eso las fechas son relativas):
+    // si un cambio la dejara fuera, `ingresos` caería a 0 y esta comprobación
+    // lo dice, en vez de saltarse el cuerpo en silencio como hacía el `if`.
+    expect(data.kpis.ingresos).toBeGreaterThan(0);
+    expect(data.kpis.adr).toBeCloseTo(data.kpis.ingresos / data.kpis.nochesVendidas);
+    expect(data.reportesKpis.adr).toBeCloseTo(data.kpis.adr);
+    expect(data.reportesKpis.ingresos).toBe(data.kpis.ingresos);
+    expect(data.reportesKpis.nochesVendidas).toBe(data.kpis.nochesVendidas);
     void esperado;
   });
 
@@ -99,11 +122,11 @@ describe('Dashboard de hospitality — analítica desde el módulo puro', () => 
     mocks.hospitalityReservation.findMany.mockResolvedValue([
       {
         id: 'r1', propertyId: 'p1', unitId: 'u1', channel: 'airbnb', estado: 'confirmed',
-        checkIn: d(2026, 8, 1), checkOut: d(2026, 8, 6), bookedOn: null, amountAfterTax: 5000, currency: 'MXN',
+        checkIn: hace(6), checkOut: hace(1), bookedOn: null, amountAfterTax: 5000, currency: 'MXN',
       },
       {
         id: 'r2', propertyId: 'p1', unitId: null, channel: 'booking', estado: 'confirmed',
-        checkIn: d(2026, 8, 3), checkOut: d(2026, 8, 3), bookedOn: null, amountAfterTax: 800, currency: 'MXN',
+        checkIn: hace(3), checkOut: hace(3), bookedOn: null, amountAfterTax: 800, currency: 'MXN',
       },
     ]);
 

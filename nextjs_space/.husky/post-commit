@@ -1,0 +1,24 @@
+#!/usr/bin/env sh
+# Aviso de commit huérfano.
+#
+# HEAD desacoplado + commit que no está en ninguna rama = commit que existe pero
+# no está en ningún sitio: `git commit` termina en verde, avanza cero referencias
+# y el reflog es lo único que lo sostiene. No es hipotético: pasó en este repo
+# (el checkout principal está desacoplado porque `master` está retirado en otro
+# worktree, así que un commit ahí no avanza ninguna rama).
+#
+# No bloquea nada (el commit ya está hecho) y no imprime nada si todo va bien.
+# La comprobación vive en scripts/comprobar-head-desacoplado.sh
+#
+# NOTA: mismo contenido que .husky/post-commit de la raíz. El repo tiene hooks
+# en los dos sitios (.husky/ en la raíz y este), así que el aviso se declara en
+# ambos para que funcione con cualquiera de los dos cableados de husky.
+# Los hooks de .git/hooks son del repositorio COMÚN (compartidos entre todos
+# los worktrees del clon), así que este hook puede ejecutarse en un worktree que
+# aún no tenga el script. Sin esta guarda, un worktree viejo escupiría un
+# «No such file or directory» en cada commit.
+RAIZ="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+[ -n "$RAIZ" ] || exit 0
+cd "$RAIZ/nextjs_space" 2>/dev/null || exit 0
+[ -f scripts/comprobar-head-desacoplado.sh ] || exit 0
+bash scripts/comprobar-head-desacoplado.sh --quiet || true

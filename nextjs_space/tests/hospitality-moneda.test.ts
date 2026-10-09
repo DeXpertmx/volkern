@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   esMonedaSoportada,
   formatearImporte,
+  formatearMedida,
   localeDeMoneda,
   monedaEfectiva,
   monedaEscritura,
@@ -176,5 +177,37 @@ describe('formatearImporte', () => {
 
   it('el cero sí es un importe válido', () => {
     expect(sinSeparadores(formatearImporte(0, 'EUR'))).toBe('0,00€');
+  });
+});
+
+describe('formatearMedida', () => {
+  it('escribe una medida sin ceros de relleno', () => {
+    // Una distancia declarada como «5 km» no se convierte en «5,0 km»: los
+    // decimales de una medida son opcionales, a diferencia de los de un importe.
+    expect(formatearMedida(5)).toBe('5');
+    expect(formatearMedida(12.5)).toBe('12,5');
+    expect(formatearMedida(0.4)).toBe('0,4');
+  });
+
+  it('limita los decimales al máximo indicado', () => {
+    expect(formatearMedida(1.234, 2)).toBe('1,23');
+    expect(formatearMedida(1.234, 1)).toBe('1,2');
+  });
+
+  it('cambia de convención con el idioma de quien lee', () => {
+    // La ficha pública del hotel existe en dos idiomas: la unidad cambia con él
+    // (`km`/`mi`) y el número tiene que cambiar igual.
+    expect(formatearMedida(12.5, 2, 'es-ES')).toBe('12,5');
+    expect(formatearMedida(12.5, 2, 'en-US')).toBe('12.5');
+  });
+
+  it('una medida ausente no se pinta como cero', () => {
+    expect(formatearMedida(null)).toBe('—');
+    expect(formatearMedida(undefined)).toBe('—');
+    expect(formatearMedida(Number.NaN)).toBe('—');
+  });
+
+  it('el cero sí es una medida válida', () => {
+    expect(formatearMedida(0)).toBe('0');
   });
 });

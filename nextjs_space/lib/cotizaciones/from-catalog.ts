@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db'
+import { monedaEscritura } from '@/lib/moneda'
 
 export interface CrearCotizacionDesdeCatalogoOptions {
   tenantId: string
@@ -79,8 +80,11 @@ export async function crearCotizacionDesdeCatalogo({
     }
   }
 
-  // Determinar moneda (de los items del catálogo o parámetro)
-  const monedaFinal = moneda || catalogoItems[0]?.moneda || 'EUR'
+  // Determinar moneda (de los items del catálogo o parámetro). La cotización se
+  // guarda con divisa sí o sí —el esquema no admite nulos—, así que la red de
+  // seguridad es la del módulo de dinero y no un `'EUR'` escrito a mano que
+  // guardaba en euros la cotización de un tenant que factura en pesos.
+  const monedaFinal = monedaEscritura(moneda, catalogoItems[0]?.moneda)
 
   // Procesar items y calcular totales
   const processedItems: any[] = []

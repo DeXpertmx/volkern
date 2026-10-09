@@ -24,6 +24,18 @@ vi.mock('@/lib/db', () => ({ prisma: __prisma }));
 
 vi.mock('@/lib/hospitality/connectivity', () => ({
   getConnectivityProvider: (...a: any[]) => __getProvider(...a),
+  // `dispatchConnectivityPush` resuelve las credenciales con
+  // `getConnectivityCredentials` (el ID de socio puede ser el del cliente, no
+  // solo el de plataforma). Se derivan del mismo `__getProvider` que ya gobierna
+  // cada escenario, así que «sin configurar» sigue siendo el mismo caso: sin los
+  // tres secretos no hay credenciales y no se empuja nada.
+  getConnectivityCredentials: async (...a: any[]) => {
+    const provider = await __getProvider(...a);
+    if (!provider || !provider.partnerIdEnc || !provider.usernameEnc || !provider.passwordEnc) {
+      return null;
+    }
+    return { partnerId: 'partner-test', username: 'usuario-test', password: 'clave-test' };
+  },
   updateConnectivityStatus: (...a: any[]) => __updateStatus(...a),
   pushInventory: (...a: any[]) => __pushInventory(...a),
   pushRates: (...a: any[]) => __pushRates(...a),

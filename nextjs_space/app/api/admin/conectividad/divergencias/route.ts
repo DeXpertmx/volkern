@@ -265,7 +265,8 @@ export async function POST(req: NextRequest) {
     const fetch = await fetchReservations(
       hotelCode,
       ci.toISOString().slice(0, 10),
-      co.toISOString().slice(0, 10)
+      co.toISOString().slice(0, 10),
+      log.tenantId
     );
 
     if (fetch.ok && fetch.reservas) {

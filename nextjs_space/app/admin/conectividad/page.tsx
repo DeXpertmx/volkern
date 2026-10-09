@@ -186,6 +186,8 @@ export default function AdminConectividad() {
   const [testResult, setTestResult] = useState<{
     ok: boolean;
     error?: string;
+    /** false = la prueba de plataforma no aplica (el ID de socio es de cada hotel). */
+    aplica?: boolean;
     property?: any;
     hotelCode?: string;
     respuestaExterna?: unknown;
@@ -331,7 +333,7 @@ export default function AdminConectividad() {
           toast.success('Credenciales completas guardadas. Ya puedes probar la conexión.');
         } else if (faltan.length === 1 && faltan[0] === 'ID de socio') {
           toast.success(
-            'Credenciales guardadas sin ID de socio. Guárdalo cuando el proveedor te lo asigne: sin él no se pueden hacer llamadas.'
+            'Credenciales guardadas sin ID de socio de plataforma. Es correcto si el ID es de cada hotel: cada uno registra el suyo en su Conectividad y la capa los usa en sus llamadas.'
           );
         } else {
           toast.warning('Guardado, pero falta completar: ' + faltan.join(', ') + '.');
@@ -464,6 +466,10 @@ export default function AdminConectividad() {
       setTestResult(data);
       if (data.ok) {
         toast.success('Conexión exitosa');
+      } else if (data.aplica === false) {
+        // No es un fallo: el ID de socio es de cada hotel y esta prueba es la
+        // de plataforma. Se cuenta como se cuenta, no con un error rojo.
+        toast.info(data.error || 'El ID de socio es de cada hotel');
       } else {
         toast.error(data.error || 'Error de conexión');
       }
@@ -575,12 +581,14 @@ export default function AdminConectividad() {
               <Button
                 variant="outline"
                 size="sm"
-                disabled={!estado?.tieneCredenciales || testing}
+                disabled={!estado?.tieneCredenciales || !estado?.partnerId || testing}
                 onClick={() => setTestDialogOpen(true)}
                 title={
-                  estado?.completo === false
-                    ? 'Falta el ID de socio (o algún secreto): la prueba necesita las credenciales completas'
-                    : 'Probar la conexión llamando al detalle de propiedad'
+                  !estado?.partnerId
+                    ? 'El ID de socio es de cada hotel: esta prueba es la de plataforma. Cada hotel prueba el suyo desde Conectividad'
+                    : estado?.completo === false
+                      ? 'Falta algún secreto: la prueba necesita las credenciales completas'
+                      : 'Probar la conexión llamando al detalle de propiedad'
                 }
               >
                 {testing ? (
@@ -670,8 +678,9 @@ export default function AdminConectividad() {
               />
               {renderAvisos(erroresPorCampo('partnerId'))}
               <p className="text-xs text-muted-foreground">
-                Opcional al guardar: puedes dejarlo vacío y añadirlo cuando el proveedor te lo asigne. Sin él no se
-                pueden hacer llamadas (las URLs del contrato lo llevan en la ruta).
+                Opcional y solo de respaldo: el ID de socio es de cada hotel —es lo que liga sus datos en el
+                proveedor— y cada hotel registra el suyo en su Conectividad. El de aquí se usa cuando un hotel aún no
+                tiene el propio y para la sonda de plataforma.
               </p>
             </div>
             <div className="space-y-2">
@@ -920,7 +929,10 @@ export default function AdminConectividad() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Button onClick={handleReconciliar} disabled={reconciliando || !estado?.completo}>
+          {/* La reconciliación resuelve las credenciales de CADA hotel con su
+              propio ID de socio: solo necesita el par Basic de plataforma, no un
+              ID de socio de plataforma que puede no existir a propósito. */}
+          <Button onClick={handleReconciliar} disabled={reconciliando || !estado?.username}>
             {reconciliando ? (
               <Loader2 className="h-4 w-4 animate-spin mr-2" />
             ) : (
@@ -1288,20 +1300,50 @@ export default function AdminConectividad() {
               </form>
 
               {testResult && (
-                <div className={`rounded-lg border p-4 ${testResult.ok ? 'border-green-200 bg-green-50 dark:bg-green-950' : 'border-red-200 bg-red-50 dark:bg-red-950'}`}>
+                // Tres estados, no dos: «no aplica» (el ID de socio es de cada
+                // hotel) no es un fallo y no puede pintarse en rojo.
+                <div
+                  className={`rounded-lg border p-4 ${
+                    testResult.ok
+                      ? 'border-green-200 bg-green-50 dark:bg-green-950'
+                      : testResult.aplica === false
+                        ? 'border-amber-300 bg-amber-50 dark:bg-amber-950'
+                        : 'border-red-200 bg-red-50 dark:bg-red-950'
+                  }`}
+                >
                   <div className="flex items-center gap-2 mb-2">
                     {testResult.ok ? (
                       <CheckCircle2 className="h-5 w-5 text-green-600" />
+                    ) : testResult.aplica === false ? (
+                      <AlertTriangle className="h-5 w-5 text-amber-600" />
                     ) : (
                       <XCircle className="h-5 w-5 text-red-600" />
                     )}
-                    <p className={`font-semibold ${testResult.ok ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>
-                      {testResult.ok ? 'Conexión exitosa' : 'Error de conexión'}
+                    <p
+                      className={`font-semibold ${
+                        testResult.ok
+                          ? 'text-green-700 dark:text-green-300'
+                          : testResult.aplica === false
+                            ? 'text-amber-700 dark:text-amber-300'
+                            : 'text-red-700 dark:text-red-300'
+                      }`}
+                    >
+                      {testResult.ok
+                        ? 'Conexión exitosa'
+                        : testResult.aplica === false
+                          ? 'Prueba de plataforma no aplicable'
+                          : 'Error de conexión'}
                     </p>
                   </div>
 
                   {testResult.error && (
-                    <p className="text-sm text-red-700 dark:text-red-300 mb-2">{testResult.error}</p>
+                    <p
+                      className={`text-sm mb-2 ${
+                        testResult.aplica === false ? 'text-amber-700 dark:text-amber-300' : 'text-red-700 dark:text-red-300'
+                      }`}
+                    >
+                      {testResult.error}
+                    </p>
                   )}
 
                   {testResult.ok && testResult.property && (
