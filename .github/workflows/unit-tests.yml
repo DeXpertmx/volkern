@@ -146,7 +146,12 @@ jobs:
         #     declara las contraseñas que el seed exige del entorno. El seed
         #     aborta si faltan, así que el job moría en el paso del seed por un
         #     defecto del workflow y se leía como si el código estuviera roto.
-        run: npx vitest run tests/comprobar-head-desacoplado-guard.test.ts tests/api-key-scopes.test.ts tests/outgoing-webhook-events-guard.test.ts tests/client-catalog-stubs-guard.test.ts tests/deploy-docker-templates-guard.test.ts tests/deploy-scripts-syntax-guard.test.ts tests/deploy-skip-build-guard.test.ts tests/deploy-skip-build-pipeline-guard.test.ts tests/intent-determinista-guard.test.ts tests/moneda-plataforma-guard.test.ts tests/guardia-base-datos-produccion.test.ts tests/hospitality-permissions-guard.test.ts tests/hospitality-ui-permissions-guard.test.ts tests/hospitality-acciones-ui.test.tsx tests/workflows-seed-env-guard.test.ts
+        #   - workflows-migrations-trigger: los disparadores del workflow de
+        #     Migrations existen en push y en pull_request, son idénticos y cubren
+        #     los cambios que ese job existe para comprobar. Un filtro estrecho no
+        #     pone nada rojo: simplemente no ejecuta el job y la garantía se queda
+        #     sin verificar sin que nada lo diga (pasó el 9-oct-2026).
+        run: npx vitest run tests/comprobar-head-desacoplado-guard.test.ts tests/api-key-scopes.test.ts tests/outgoing-webhook-events-guard.test.ts tests/client-catalog-stubs-guard.test.ts tests/deploy-docker-templates-guard.test.ts tests/deploy-scripts-syntax-guard.test.ts tests/deploy-skip-build-guard.test.ts tests/deploy-skip-build-pipeline-guard.test.ts tests/intent-determinista-guard.test.ts tests/moneda-plataforma-guard.test.ts tests/guardia-base-datos-produccion.test.ts tests/hospitality-permissions-guard.test.ts tests/hospitality-ui-permissions-guard.test.ts tests/hospitality-acciones-ui.test.tsx tests/workflows-seed-env-guard.test.ts tests/workflows-migrations-trigger-guard.test.ts
 
       - name: Run unit tests
         run: npx vitest run

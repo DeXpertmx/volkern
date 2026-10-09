@@ -20,20 +20,51 @@ name: Migrations (reproducible from zero)
 # Por qué un servicio efímero y no el shared de los otros workflows: este job
 # exige una base VERDE de cero — compartir base contaminada por el seed de
 # unit-tests escondería exactamente el fallo que buscamos.
+#
+# DISPARADORES (leer antes de tocar la lista)
+# -------------------------------------------
+# Un filtro de rutas demasiado estrecho no rompe nada: simplemente hace que este
+# job NO se ejecute y que la garantía se quede sin verificar **en silencio**
+# (verde en la lista de runs es indistinguible de «no hay run»). Pasó el
+# 9-oct-2026: los dos últimos pushes de master tocaron solo tests y un workflow,
+# no dispararon el job, y nada lo dijo. Por eso:
+#
+#   · `push` y `pull_request` llevan LA MISMA lista. Antes divergían (el push
+#     solo miraba `prisma/**` y este archivo), así que un push que cambiaba el
+#     schema o la guardia estática pasaba sin job mientras el mismo cambio en un
+#     PR sí lo ejecutaba: la garantía dependía de cómo llegara el cambio.
+#   · Cada ruta está porque su cambio puede invalidar la garantía —o esconderla—:
+#       - nextjs_space/prisma/**          la serie de migraciones y su schema
+#                                         (prisma/schema.prisma entra aquí)
+#       - nextjs_space/package.json       `npm ci` fija la versión del CLI de
+#       - nextjs_space/package-lock.json  prisma, que es parte del resultado
+#       - nextjs_space/tests/**           la guardia estática de la serie vive aquí
+#       - .github/workflows/**            un cambio de CI puede desactivar el job
+#                                         (p. ej. dejar de listar la guardia)
+#     Se retiró `nextjs_space/schema.prisma`, que no existe como tal (el schema
+#     real es `prisma/schema.prisma`, ya cubierto): un filtro fantasma no rompe
+#     nada, pero hace creer que cubre algo que no cubre.
+#   · La guardia tests/workflows-migrations-trigger-guard.test.ts congela lo
+#     anterior: exige que ambas listas existan, sean idénticas y cubran los casos
+#     que este job existe para comprobar.
 
 on:
   pull_request:
     branches: [master]
     paths:
       - 'nextjs_space/prisma/**'
-      - 'nextjs_space/schema.prisma'
-      - 'nextjs_space/tests/migraciones-serie.test.ts'
-      - '.github/workflows/migrations.yml'
+      - 'nextjs_space/package.json'
+      - 'nextjs_space/package-lock.json'
+      - 'nextjs_space/tests/**'
+      - '.github/workflows/**'
   push:
     branches: [master]
     paths:
       - 'nextjs_space/prisma/**'
-      - '.github/workflows/migrations.yml'
+      - 'nextjs_space/package.json'
+      - 'nextjs_space/package-lock.json'
+      - 'nextjs_space/tests/**'
+      - '.github/workflows/**'
   workflow_dispatch:
 
 concurrency:
