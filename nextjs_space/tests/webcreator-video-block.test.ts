@@ -36,6 +36,13 @@ setGlobal('HTMLIFrameElement', window.HTMLIFrameElement);
 setGlobal('CustomEvent', window.CustomEvent);
 setGlobal('MutationObserver', window.MutationObserver);
 setGlobal('getComputedStyle', window.getComputedStyle.bind(window));
+// codemirror, embebido en grapesjs, lee `navigator.userAgent` al cargar el
+// módulo. Node 20 (el del CI) NO expone `navigator` como global — llegó en
+// Node 21 —, así que el import reventaba con «ReferenceError: navigator is not
+// defined» solo en CI: en local pasaba por correr sobre Node 22. Se toma el de
+// jsdom para que el test no dependa de la versión de Node. En Node 21+ el
+// global es de solo lectura: la asignación falla y se conserva el nativo.
+setGlobal('navigator', window.navigator);
 setGlobal(
   'requestAnimationFrame',
   window.requestAnimationFrame?.bind(window) ?? ((cb: FrameRequestCallback) => setTimeout(() => cb(Date.now()), 16))
