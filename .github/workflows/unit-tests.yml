@@ -80,10 +80,18 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/volkern_test
 
+      # `scripts/seed.ts` lee las contraseñas de la semilla del entorno y aborta
+      # si faltan (ninguna contraseña real vive en el repo; ver
+      # scripts/bootstrap-admin.env.example). Los valores de aquí son de usar y
+      # tirar para CI: si se omiten, el seed muere con exit 1 y el job entero
+      # queda rojo por un problema del workflow, no del código.
       - name: Seed database (tenant, roles, test users)
         run: npx tsx scripts/seed.ts
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/volkern_test
+          SEED_TEST_USER_PASSWORD: ci-seed-test-user-password
+          SEED_ADMIN_PASSWORD: ci-seed-admin-password
+          SEED_SUPERADMIN_PASSWORD: ci-seed-superadmin-password
 
       - name: Backup .env files to prevent conflicts with CI env vars
         run: |
@@ -134,7 +142,11 @@ jobs:
         #     ninguna rama que lo contenga existe pero no está en ningún sitio
         #     (git no avisa, el commit sale en verde y solo lo sostiene el
         #     reflog). Ya pasó una vez en este repo.
-        run: npx vitest run tests/comprobar-head-desacoplado-guard.test.ts tests/api-key-scopes.test.ts tests/outgoing-webhook-events-guard.test.ts tests/client-catalog-stubs-guard.test.ts tests/deploy-docker-templates-guard.test.ts tests/deploy-scripts-syntax-guard.test.ts tests/deploy-skip-build-guard.test.ts tests/deploy-skip-build-pipeline-guard.test.ts tests/intent-determinista-guard.test.ts tests/moneda-plataforma-guard.test.ts tests/guardia-base-datos-produccion.test.ts tests/hospitality-permissions-guard.test.ts tests/hospitality-ui-permissions-guard.test.ts tests/hospitality-acciones-ui.test.tsx
+        #   - workflows-seed-env: todo workflow que ejecute scripts/seed.ts
+        #     declara las contraseñas que el seed exige del entorno. El seed
+        #     aborta si faltan, así que el job moría en el paso del seed por un
+        #     defecto del workflow y se leía como si el código estuviera roto.
+        run: npx vitest run tests/comprobar-head-desacoplado-guard.test.ts tests/api-key-scopes.test.ts tests/outgoing-webhook-events-guard.test.ts tests/client-catalog-stubs-guard.test.ts tests/deploy-docker-templates-guard.test.ts tests/deploy-scripts-syntax-guard.test.ts tests/deploy-skip-build-guard.test.ts tests/deploy-skip-build-pipeline-guard.test.ts tests/intent-determinista-guard.test.ts tests/moneda-plataforma-guard.test.ts tests/guardia-base-datos-produccion.test.ts tests/hospitality-permissions-guard.test.ts tests/hospitality-ui-permissions-guard.test.ts tests/hospitality-acciones-ui.test.tsx tests/workflows-seed-env-guard.test.ts
 
       - name: Run unit tests
         run: npx vitest run
