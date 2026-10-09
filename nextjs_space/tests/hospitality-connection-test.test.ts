@@ -101,13 +101,46 @@ describe('Hospitality — prueba de conexión (property details)', () => {
   it('devuelve error con el cuerpo de la respuesta externa cuando el servicio falla', async () => {
     hoisted.findUnique.mockResolvedValue({ ...creds, baseUrl: 'https://connect.example.internal' });
     hoisted.globalFetch.mockResolvedValue(
-      new Response(JSON.stringify({ success: false, message: 'Invalid partner id' }), { status: 401, headers: { 'Content-Type': 'application/json' } })
+      new Response(JSON.stringify({ success: false, message: 'Invalid credentials' }), { status: 401, headers: { 'Content-Type': 'application/json' } })
     );
 
     const result = await testConnectivityConnection();
 
     expect(result.ok).toBe(false);
     expect(result.error).toContain('401');
+    expect(result.respuestaExterna).toEqual({ success: false, message: 'Invalid credentials' });
+  });
+
+  it('un ID de socio deshabilitado se explica tal cual, no como un 400 seco', async () => {
+    // Texto documentado en el contrato: `400 {"success":false,"message":"Partner is disabled!"}`.
+    // El hotel (o quien opera) tiene que leer qué pasa al pulsar «Comprobar».
+    hoisted.findUnique.mockResolvedValue({ ...creds, baseUrl: 'https://connect.example.internal' });
+    hoisted.globalFetch.mockResolvedValue(
+      new Response(JSON.stringify({ success: false, message: 'Partner is disabled!' }), { status: 400, headers: { 'Content-Type': 'application/json' } })
+    );
+
+    const result = await testConnectivityConnection();
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/deshabilitado/i);
+    expect(result.error).toMatch(/habiliten/i);
+    // El cuerpo crudo sigue viajando para el diagnóstico (nada de tragárselo).
+    expect(result.respuestaExterna).toEqual({ success: false, message: 'Partner is disabled!' });
+  });
+
+  it('un ID de socio que el servicio no reconoce se explica y dice qué hacer', async () => {
+    hoisted.findUnique.mockResolvedValue({ ...creds, baseUrl: 'https://connect.example.internal' });
+    hoisted.globalFetch.mockResolvedValue(
+      new Response(JSON.stringify({ success: false, message: 'Invalid partner id' }), { status: 401, headers: { 'Content-Type': 'application/json' } })
+    );
+
+    const result = await testConnectivityConnection();
+
+    expect(result.ok).toBe(false);
+    // El mensaje nombra al socio: mandar a rotar credenciales aquí era el fallo.
+    expect(result.error).toMatch(/no reconoce el ID de socio/i);
+    expect(result.error).toMatch(/quítalo/i);
+    // El «401» no se pierde, pero ya no es lo único que se dice.
     expect(result.respuestaExterna).toEqual({ success: false, message: 'Invalid partner id' });
   });
 

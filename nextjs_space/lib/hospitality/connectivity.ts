@@ -1,6 +1,10 @@
 import { prisma } from '@/lib/db';
 import { encrypt, decrypt } from '@/lib/core/crypto';
-import { TIPOS_SYNC_CONECTIVIDAD, type FalloConectividad } from './conectividad-causa';
+import {
+  causaDeFalloConectividad,
+  TIPOS_SYNC_CONECTIVIDAD,
+  type FalloConectividad,
+} from './conectividad-causa';
 import { sanitizarRespuestaExterna } from './conectividad-secreto';
 // Último rechazo del webhook entrante (401): normalización pura para
 // persistirlo y para exponerlo ya legible al panel.
@@ -510,6 +514,17 @@ export function resolveProbeHotelCode(
   return desdeConfig || CONNECTIVITY_SANDBOX_HOTEL;
 }
 
+/**
+ * Mensaje que el proveedor pone en el cuerpo de una respuesta fallida
+ * (`{ success:false, message }`, contrato). Normalmente es la única parte útil
+ * del fallo; se devuelve tal cual, ya saneado.
+ */
+function mensajeDeRespuestaExterna(body: unknown): string | null {
+  if (!body || typeof body !== 'object') return null;
+  const posible = (body as Record<string, unknown>).message ?? (body as Record<string, unknown>).error;
+  return typeof posible === 'string' ? posible : null;
+}
+
 export interface PropertyDetailsRatePlan {
   rateplan_id: string;
   rateplan_name?: string | null;
@@ -626,9 +641,22 @@ export async function testConnectivityConnection(
   }
 
   if (!res.ok) {
+    // El mensaje del proveedor trae la causa cuando el problema es el ID de
+    // socio («Partner is disabled!» es 400 y «partner desconocido» es 403), y
+    // esa causa se arregla distinto que unas credenciales rechazadas. Al pulsar
+    // «Comprobar» el hotel tiene que leerlo tal cual: la regla vive en el módulo
+    // de causas — aquí no se duplican literales.
+    const causa = causaDeFalloConectividad({
+      httpStatus: res.status,
+      errorMensaje: mensajeDeRespuestaExterna(body),
+    });
+    const esProblemaDeIdSocio =
+      causa.clave === 'partner_deshabilitado' || causa.clave === 'partner_desconocido';
     return {
       ok: false,
-      error: `La conexión respondió con estado ${res.status}`,
+      error: esProblemaDeIdSocio
+        ? `${causa.texto}: ${causa.consejo}`
+        : `La conexión respondió con estado ${res.status}`,
       respuestaExterna: body,
       hotelCode: code,
     };

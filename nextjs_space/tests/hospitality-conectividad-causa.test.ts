@@ -21,6 +21,63 @@ function fallo(extra: Partial<FalloConectividad> = {}): FalloConectividad {
   };
 }
 
+describe('causaDeFalloConectividad — el ID de socio nombrado por el proveedor', () => {
+  it('«Partner is disabled!» (400) → «ID de socio deshabilitado», no un error genérico', () => {
+    const causa = causaDeFalloConectividad(
+      fallo({ httpStatus: 400, errorMensaje: 'Partner is disabled!' })
+    );
+    expect(causa.clave).toBe('partner_deshabilitado');
+    expect(causa.texto).toMatch(/deshabilitado/i);
+    // El arreglo es hablar con el proveedor, no rotar credenciales ni reintentar.
+    expect(causa.consejo).toMatch(/habiliten/i);
+    expect(causa.consejo.toLowerCase()).not.toContain('reintenta');
+  });
+
+  it('«partner desconocido» (403) → ID de socio desconocido, NO «credenciales rechazadas»', () => {
+    // Este era el fallo real: el 403 del contrato mandaba a rotar credenciales
+    // —que no tiene nada que ver— y el hotel no sabía que su ID estaba mal.
+    const causa = causaDeFalloConectividad(
+      fallo({ httpStatus: 403, errorMensaje: 'partner desconocido' })
+    );
+    expect(causa.clave).toBe('partner_desconocido');
+    expect(causa.texto).toMatch(/no reconoce/i);
+    expect(causa.consejo).toMatch(/quítalo|quitarlo/i);
+  });
+
+  it.each([
+    'Partner is disabled!',
+    'PARTNER IS DISABLED',
+    'partner disabled',
+  ])('el texto del proveedor se reconoce sin importar mayúsculas: «%s»', (mensaje) => {
+    expect(causaDeFalloConectividad(fallo({ httpStatus: 400, errorMensaje: mensaje })).clave).toBe(
+      'partner_deshabilitado'
+    );
+  });
+
+  it.each(['partner desconocido', 'Partner not found', 'unknown partner', 'invalid partner'])(
+    'las variantes de «no lo conozco» se reconocen: «%s»',
+    (mensaje) => {
+      expect(causaDeFalloConectividad(fallo({ httpStatus: 403, errorMensaje: mensaje })).clave).toBe(
+        'partner_desconocido'
+      );
+    }
+  );
+
+  it('un 401 normal sigue siendo «credenciales rechazadas» (la regla no se come la autenticación)', () => {
+    const causa = causaDeFalloConectividad(
+      fallo({ httpStatus: 401, errorMensaje: 'Usuario o contraseña inválidos' })
+    );
+    expect(causa.clave).toBe('credenciales_rechazadas');
+  });
+
+  it('un 400 de datos que NO menciona al socio sigue siendo «Error»', () => {
+    const causa = causaDeFalloConectividad(
+      fallo({ httpStatus: 400, errorMensaje: 'campo available inválido' })
+    );
+    expect(causa.clave).toBe('otro_error');
+  });
+});
+
 describe('causaDeFalloConectividad — credenciales rechazadas (401/403)', () => {
   it('401 → «Credenciales rechazadas»', () => {
     const causa = causaDeFalloConectividad(fallo({ httpStatus: 401, errorMensaje: 'HTTP 401 del proveedor' }));

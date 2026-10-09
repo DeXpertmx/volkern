@@ -39,11 +39,54 @@ export const TIPOS_SYNC_CONECTIVIDAD = [
 
 export interface CausaConectividad {
   /** Clave estable para tests y para elegir el estilo del badge. */
-  clave: 'credenciales_rechazadas' | 'sin_respuesta_servicio' | 'otro_error';
+  clave:
+    | 'credenciales_rechazadas'
+    | 'partner_deshabilitado'
+    | 'partner_desconocido'
+    | 'sin_respuesta_servicio'
+    | 'otro_error';
   /** Lo que se muestra al operador. */
   texto: string;
   /** Qué hacer, en una frase. */
   consejo: string;
+}
+
+/**
+ * Cómo nombra el proveedor al ID de socio en su respuesta. El contrato
+ * documenta los dos textos (docs/hospitality-connectivity-contract.md):
+ * `400 {"success":false,"message":"Partner is disabled!"}` cuando el ID existe
+ * pero está deshabilitado, y 403 «partner desconocido» cuando el que usamos no
+ * es el suyo. Son dos arreglos distintos —hablar con el proveedor o corregir el
+ * valor— y ninguno es «rotar credenciales», que es lo que decía el panel antes de
+ * distinguirlos.
+ */
+const INDICIOS_ID_SOCIO_DESHABILITADO = [
+  'partner is disabled',
+  'partner disabled',
+  'partner deshabilitad',
+];
+
+const INDICIOS_ID_SOCIO_DESCONOCIDO = [
+  'partner desconocido',
+  'partner not found',
+  'partner unknown',
+  'unknown partner',
+  'partner invalid',
+  'partner inválid',
+  'invalid partner',
+];
+
+/** Motivo del ID de socio que el proveedor nombra en su mensaje, si lo nombra. */
+function motivoDelIdSocio(mensaje?: string | null): 'deshabilitado' | 'desconocido' | null {
+  if (!mensaje) return null;
+  const texto = mensaje.toLowerCase();
+  if (INDICIOS_ID_SOCIO_DESHABILITADO.some((indicio) => texto.includes(indicio))) {
+    return 'deshabilitado';
+  }
+  if (INDICIOS_ID_SOCIO_DESCONOCIDO.some((indicio) => texto.includes(indicio))) {
+    return 'desconocido';
+  }
+  return null;
 }
 
 /**
@@ -79,6 +122,9 @@ function pareceErrorDeRed(mensaje?: string | null): boolean {
  * Deriva la causa del último fallo de conectividad.
  *
  * Regla:
+ * - El mensaje del proveedor nombra el ID de socio (deshabilitado o
+ *   desconocido) → esa es la causa, aunque el código sea 400 o 403: se arregla
+ *   hablando con el proveedor o corrigiendo el valor, no rotando credenciales.
  * - 401/403 → «Credenciales rechazadas»: el servicio respondió y dijo no.
  * - 5xx, o sin HTTP con indicio de red/timeout en el mensaje → «Sin respuesta
  *   del servicio»: el servicio no llegó a contestar con sentido.
@@ -96,6 +142,28 @@ export function causaDeFalloConectividad(fallo?: FalloConectividad | null): Caus
 
   const status = fallo.httpStatus ?? null;
   const mensaje = fallo.errorMensaje ?? null;
+
+  // El ID de socio, antes que nada: el proveedor lo nombra en el mensaje y ese
+  // caso gana al código HTTP (un «Partner is disabled!» llega como 400 y un
+  // «partner desconocido» como 403 — sin este paso, el segundo se diagnosticaba
+  // como credenciales rechazadas y el consejo mandaba a rotar credenciales).
+  const motivoIdSocio = motivoDelIdSocio(mensaje);
+  if (motivoIdSocio === 'deshabilitado') {
+    return {
+      clave: 'partner_deshabilitado',
+      texto: 'ID de socio deshabilitado',
+      consejo:
+        'El servicio reconoce el ID de socio del hotel pero lo tiene deshabilitado: pide que lo habiliten. Mientras tanto, si el hotel está registrado con el ID de la plataforma, quitar el suyo lo devuelve a funcionar.',
+    };
+  }
+  if (motivoIdSocio === 'desconocido') {
+    return {
+      clave: 'partner_desconocido',
+      texto: 'El servicio no reconoce el ID de socio',
+      consejo:
+        'El ID de socio guardado no es el que el servicio tiene para este hotel: revisa el que te dieron al registrar el hotel, o quítalo para usar el de la plataforma.',
+    };
+  }
 
   // Credenciales rechazadas: el servicio contestó y rechazó la autenticación.
   if (status === 401 || status === 403) {
