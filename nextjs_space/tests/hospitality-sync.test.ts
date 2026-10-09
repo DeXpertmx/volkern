@@ -270,6 +270,39 @@ describe('buildRateUpdates (contrato: /update-rates)', () => {
     const updates = buildRateUpdates(units, day('2026-09-10'), day('2026-09-11'));
     expect(updates[0].rates).toEqual([{ roomCode: 'executive', rateplanCode: 'executive', rate: 200 }]);
   });
+
+  /**
+   * Caso real (Ciudad Patio Cuarenta, hotel 75fdbbce2e, 9-oct 2026): la unidad
+   * aún no tenía planes de tarifa, así que el respaldo empujó la tarifa base
+   * bajo el ROOMCODE (`rateplanCode: "2b"`) y el proveedor la descartó con
+   * `INVALID_RATEPLAN_CODE : 2b` — sin que nada lo dijera. El roomCode no es un
+   * código de tarifa: si el hotel ya vinculó uno contra el catálogo, es ese.
+   */
+  it('sin planes, la tarifa base viaja bajo el código de tarifa VINCULADO (no bajo el roomCode)', () => {
+    const units = [
+      { id: 'u1', roomCode: '2b', tarifaBase: 120, rateplanCodeMapeado: '2b-d-ep' },
+    ];
+    const updates = buildRateUpdates(units, day('2026-10-09'), day('2026-10-11'));
+
+    expect(updates).toEqual([
+      { startDate: '2026-10-09', endDate: '2026-10-10', rates: [{ roomCode: '2b', rateplanCode: '2b-d-ep', rate: 120 }] },
+    ]);
+  });
+
+  it('un plan de tarifa propio sigue mandando sobre el código vinculado', () => {
+    const units = [
+      {
+        id: 'u1',
+        roomCode: '2b',
+        tarifaBase: 120,
+        rateplanCodeMapeado: '2b-d-ep',
+        ratePlans: [{ codigo: '2b-s-ep', tarifa: 99 }],
+      },
+    ];
+    const updates = buildRateUpdates(units, day('2026-10-09'), day('2026-10-11'));
+
+    expect(updates[0].rates).toEqual([{ roomCode: '2b', rateplanCode: '2b-s-ep', rate: 99 }]);
+  });
 });
 
 // ─── Restricciones de venta (§5): forma exacta del contrato ───────────────

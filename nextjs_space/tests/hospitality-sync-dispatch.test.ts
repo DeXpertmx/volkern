@@ -81,6 +81,32 @@ function unidadConPlan(overrides: Record<string, unknown> = {}) {
  * `select`. Así el test detecta un `select` incompleto (el bug que dejó el
  * push de tarifas muerto al filtrar por un campo no seleccionado).
  */
+function isoLocal(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Expande los tramos del push de inventario a un mapa fecha → disponible.
+ * Es lo que recibe de verdad el proveedor: los tramos son un detalle de
+ * transporte, lo que importa es el disponible de cada noche.
+ */
+function disponibilidadPorDia(
+  updates: Array<{ startDate: string; endDate: string; rooms: Array<{ roomCode: string; available: number }> }>
+) {
+  const porDia = new Map<string, number>();
+  for (const update of updates) {
+    for (const room of update.rooms) {
+      const cursor = new Date(`${update.startDate}T00:00:00`);
+      const fin = new Date(`${update.endDate}T00:00:00`);
+      while (cursor.getTime() <= fin.getTime()) {
+        porDia.set(isoLocal(cursor), room.available);
+        cursor.setDate(cursor.getDate() + 1);
+      }
+    }
+  }
+  return porDia;
+}
+
 function mockUnidades(units: Array<Record<string, any>>) {
   __prisma.hospitalityUnit.findMany.mockImplementation(async (args: any) => {
     const select = args?.include?.ratePlans?.select;
@@ -148,6 +174,29 @@ describe('dispatchConnectivityPush (plan §5 y §15.2)', () => {
     expect(hotelCode).toBe('HOTEL1');
     expect(rateUpdates.flatMap((u: any) => u.rates)).toEqual([
       { roomCode: 'SUITE', rateplanCode: 'SUITE-REST', rate: 1000 },
+    ]);
+  });
+
+  it('una unidad sin planes empuja su tarifa base bajo el código de tarifa VINCULADO', async () => {
+    // Caso real (hotel 75fdbbce2e, 9-oct 2026): sin planes de tarifa, la tarifa
+    // base viajaba bajo el roomCode (`rateplanCode: "2b"`) y el proveedor la
+    // descartaba con `INVALID_RATEPLAN_CODE`. El código vinculado de la unidad
+    // es el que el hotel validó contra su catálogo.
+    mockUnidades([
+      {
+        ...unidadConPlan(),
+        ratePlans: [],
+        tarifaBase: 120,
+        mappings: [{ unitId: 'u1', externalUnitCode: '2b', externalRatePlanCode: '2b-d-ep' }],
+      },
+    ]);
+    const { dispatchConnectivityPush } = await import('@/lib/hospitality/sync');
+
+    await dispatchConnectivityPush('t1', null, 'manual', { diasHorizonte: 5 });
+
+    const [, rateUpdates] = __pushRates.mock.calls[0];
+    expect(rateUpdates.flatMap((u: any) => u.rates)).toEqual([
+      { roomCode: '2b', rateplanCode: '2b-d-ep', rate: 120 },
     ]);
   });
 
@@ -221,6 +270,38 @@ describe('dispatchConnectivityPush (plan §5 y §15.2)', () => {
     expect(res.pushCount).toBe(2);
     expect(__pushRates).not.toHaveBeenCalled();
     expect(__pushRateRestrictions).not.toHaveBeenCalled();
+  });
+
+  it('reempujar tras borrar la reserva de prueba reabre las noches que cerró', async () => {
+    const { dispatchConnectivityPush } = await import('@/lib/hospitality/sync');
+
+    const hoy = new Date();
+    const llegada = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + 1);
+    const salida = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + 3);
+
+    // 1) La prueba de reserva entra (2 noches): su push cierra las dos noches en
+    //    el proveedor, que es de donde salen las «noches fantasma» cuando la
+    //    prueba luego se borra sin volver a empujar.
+    __prisma.hospitalityReservation.findMany.mockResolvedValue([
+      { unitId: 'u1', checkIn: llegada, checkOut: salida, estado: 'confirmed' },
+    ]);
+    await dispatchConnectivityPush('t1', 'p1', 'reserva_creada', {
+      diasHorizonte: 4,
+      skipRates: true,
+    });
+    const recienCreada = disponibilidadPorDia(__pushInventory.mock.calls[0][1]);
+    expect(recienCreada.get(isoLocal(llegada))).toBe(0);
+    expect(recienCreada.get(isoLocal(salida))).toBe(1);
+
+    // 2) La limpieza la borra del ERP y vuelve a empujar: la disponibilidad se
+    //    recalcula desde el estado interno, así que las noches se reabren.
+    __prisma.hospitalityReservation.findMany.mockResolvedValue([]);
+    await dispatchConnectivityPush('t1', 'p1', 'onboarding_limpieza', { diasHorizonte: 4 });
+
+    const trasLimpiar = disponibilidadPorDia(__pushInventory.mock.calls[1][1]);
+    expect(trasLimpiar.get(isoLocal(llegada))).toBe(1);
+    expect(trasLimpiar.get(isoLocal(salida))).toBe(1);
+    expect([...trasLimpiar.values()].every((v) => v === 1)).toBe(true);
   });
 
   it('registra el error del proveedor sin romper el flujo', async () => {

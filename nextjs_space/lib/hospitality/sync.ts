@@ -38,7 +38,25 @@ export type SyncOperacion =
   | 'unidad_cambiada'
   | 'manual'
   /** Pruebas del onboarding guiado de propiedad (§31). */
-  | 'onboarding';
+  | 'onboarding'
+  /**
+   * Reposición tras limpiar la reserva de prueba del onboarding (§31).
+   *
+   * Va aparte de `onboarding` a propósito: el wizard deriva los pasos 7 y 8 del
+   * ÚLTIMO registro `inventory`/`rates` con `operacion: 'onboarding'`, así que
+   * un push de limpieza marcado como `onboarding` cambiaría el estado de dos
+   * pasos que nadie acaba de ejecutar. El resultado de la reposición se le
+   * enseña al operador en la respuesta de la prueba, que es donde está mirando.
+   */
+  | 'onboarding_limpieza'
+  /**
+   * Push disparado por la reconciliación diaria cuando el barrido tocó algo
+   * (recuperó una reserva que el webhook nunca entregó, la actualizó o la
+   * canceló). Va aparte de las operaciones de reserva a propósito: el origen no
+   * es una reserva concreta sino el barrido, y así se distingue en
+   * `HospitalitySyncLog` de un push nacido de un webhook o del operador.
+   */
+  | 'reconciliacion';
 
 export interface SyncResult {
   ok: boolean;
@@ -198,6 +216,13 @@ export async function dispatchConnectivityPush(
       id: u.id,
       propertyId: u.propertyId,
       roomCode: u.mappings?.[0]?.externalUnitCode ?? null,
+      // Código de tarifa que el hotel validó contra el catálogo del proveedor
+      // al vincular la unidad. Es el respaldo bueno cuando la unidad todavía no
+      // tiene planes de tarifa: empujar la tarifa base bajo el ROOMCODE es un
+      // código de tarifa inexistente, y el proveedor lo descarta con
+      // `INVALID_RATEPLAN_CODE` (medido en producción el 9-oct 2026, hotel
+      // 75fdbbce2e).
+      rateplanCodeMapeado: u.mappings?.[0]?.externalRatePlanCode ?? null,
       estado: u.estado,
       tarifaBase: u.tarifaBase,
       ratePlans: (u.ratePlans || [])
@@ -405,7 +430,9 @@ function isNextDay(prev: string, next: string): boolean {
 /**
  * Construye los updates de tarifas: un bloque por (roomCode, rateplanCode)
  * con los rate plans ACTIVOS de la unidad. Si la unidad no tiene planes
- * configurados, cae a su tarifaBase (compatibilidad con datos existentes).
+ * configurados, cae a su tarifaBase (compatibilidad con datos existentes)
+ * bajo el código de tarifa que el hotel haya VINCULADO (`rateplanCodeMapeado`);
+ * sin vínculo se usa el roomCode, que es el respaldo histórico.
  * Sin tarifa ni plan no se empujan tarifas (no inventar precios).
  *
  * Estacionalidad: un plan con temporadas/fin de semana ya no viaja como un
@@ -427,6 +454,8 @@ export function buildRateUpdates(
     roomCode: string | null;
     tarifaBase: number | null;
     ratePlans?: Array<{ codigo: string; tarifa: number; temporadas?: unknown; finDeSemana?: unknown }>;
+    /** Código de tarifa vinculado de la unidad (catálogo del proveedor). */
+    rateplanCodeMapeado?: string | null;
   }>,
   start: Date,
   end: Date
@@ -461,11 +490,14 @@ export function buildRateUpdates(
       continue;
     }
 
-    // 2) Fallback: tarifa base de la unidad (un solo rateplan).
+    // 2) Fallback: tarifa base de la unidad (un solo rateplan), bajo el código
+    //    vinculado si lo hay. El roomCode solo como último recurso: no es un
+    //    código de tarifa, y un proveedor que lo valide contra su catálogo lo
+    //    descarta (la tarifa no llegaría sin que nada lo dijera).
     if (u.tarifaBase == null) continue;
     rates.push({
       roomCode: u.roomCode,
-      rateplanCode: u.roomCode,
+      rateplanCode: u.rateplanCodeMapeado || u.roomCode,
       rate: u.tarifaBase,
     });
   }

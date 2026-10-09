@@ -97,6 +97,26 @@ https://live.aiosell.com/api/v2/cm
 > sandbox: rooms `executive` y `suite`, con rateplans `*-s-ep`, `*-d-ep`,
 > `*-s-cp`, `*-d-cp`). Un partner deshabilitado responde
 > `400 {"success":false,"message":"Partner is disabled!"}`.
+>
+> **El sandbox NO sirve como sonda de una cuenta de producción.** Con el par
+> Basic y el ID de socio correctos, `property_details/sandbox-pms` responde a un
+> partner de producción `403 {"success":false,"message":"Access Denied -
+> sandbox-pms"}` (verificado el 2026-10-09), y no dice nada de la cuenta. Por eso
+> el hotel de la sonda —la del botón «Probar», la de la Conectividad del hotel y
+> la del health-check diario— se resuelve en este orden: `CONNECTIVITY_HEALTH_HOTEL`
+> (entorno) → `configuracion.healthHotelCode` de la fila del proveedor →
+> `hotelCode` de una propiedad **ya vinculada**
+> (`ConnectivityMapping.externalPropertyId`, el mismo con el que se empuja
+> inventario) → `sandbox-pms` solo como último recurso. `resolveProbeHotelCode`
+> es la regla pura y `resolverHotelDeSonda` la completa con los vínculos.
+> Guardia: `tests/hospitality-sonda-hotel-real.test.ts`.
+>
+> **Los dos 403 del proveedor no son lo mismo.** `403 {"success":false,
+> "message":"partner desconocido"}` es un ID de socio que no es el suyo;
+> `403 {"success":false,"message":"Access Denied - <hotelCode>"}` es un hotel que
+> la cuenta no tiene asignado (el ID de socio es correcto).
+> `lib/hospitality/conectividad-causa.ts` los diagnostica por separado, y ninguno
+> de los dos se lee como «credenciales rechazadas».
 
 ## Antes del catálogo: la activación en la OTA (pata ①)
 
@@ -167,9 +187,47 @@ y `integraciones.gestionar`). Se guarda cifrado en
 | Inventory Restrictions Push | POST | `/update/{pms}` | Restricciones a nivel de tipo de habitación (min stay, etc.). |
 | Rate Restrictions Push | POST | `/update-rates/{pms}` | Restricciones por (room, rateplan). |
 | Mark No Show | POST | `/marknoshow/{pms}` | Marcar no-show **en el canal** (solo booking.com y gommt). Saliente: no libera la unidad en el PMS por sí solo — eso lo hace marcar `no_show` aquí. |
-| Fetch Inventory | POST | `/data/{pms}` | Consultar inventario. `type` en el body decide el dataset. |
-| Fetch Rates | POST | `/data/{pms}` | Consultar tarifas (room, rateplan, date). |
-| Fetch Reservations | POST | `/data/{pms}` | Consultar reservas (mismo payload que el webhook Book). |
+| Fetch Inventory | POST | `/data/{pms}` | Consultar inventario. `type` en el body decide el dataset. **No implementado en el adapter.** |
+| Fetch Rates | POST | `/data/{pms}` | Consultar tarifas (room, rateplan, date). **No implementado en el adapter.** |
+| Fetch Reservations | POST | `/data/{pms}` | Consultar reservas (mismo payload que el webhook Book). `startDate`/`endDate` filtran por **fecha de reserva** (`bookedOn`), no por estancia — ver la nota de abajo. |
+
+> **Un 200 no siempre significa «aplicado»: mira `warnings`.** El proveedor puede
+> contestar `200 {"success": true, "message": "Request Received Successfully",
+> "warnings": ["INVALID_RATEPLAN_CODE : 2b"]}` — es decir, recibió la petición y
+> **descartó** la tarifa. Medido en producción el **9 oct 2026** (hotel
+> `75fdbbce2e`): el push de tarifas viajaba con `rateplanCode` igual al roomCode
+> (`2b`, porque la unidad no tenía planes de tarifa configurados) y no llegaba al
+> canal ni una tarifa, con el panel en verde. Desde ese día
+> `advertenciasDeRespuesta()` (`lib/hospitality/connectivity.ts`) convierte
+> cualquier advertencia en un push `ok: false` **conservando el HTTP real**: queda
+> en `HospitalitySyncLog` como fallo con el texto de la advertencia y el proveedor
+> pasa a estado `error`. El código de tarifa válido es el `rateplan_id` del
+> catálogo (`property_details`), nunca el `room_id`.
+
+> **Lo que el proveedor cree de nuestro inventario, sin poder preguntárselo.**
+> Solo pedimos reservas a `/data/{pms}`: los datasets de inventario y tarifas
+> del contrato no están implementados. Así que la única descripción honesta del
+> calendario que tiene el canal es **el último push de inventario que le envió
+> Volkern** (los tramos quedan en `HospitalitySyncLog.requestPayload` con
+> `tipo: 'inventory'`, y el proveedor hace UPSERT: el último rango que cubre una
+> fecha la sobrescribe). Sobre eso compara la **guardia de noches sin
+> justificar** (`lib/hospitality/inventario-divergencias.ts`, corre en la
+> reconciliación diaria, §29): una noche con `available` menor que la
+> disponibilidad interna está cerrada sin que nada la justifique —ventas
+> perdidas— y una con `available` mayor es riesgo de sobreventa. Cuando
+> `Fetch Inventory` esté implementado y verificado contra la cuenta real, su
+> respuesta será la fuente preferida y el replay quedará como respaldo.
+
+> **`startDate`/`endDate` son FECHAS DE RESERVA, no de estancia.** Medido contra
+> el servicio real el **9 oct 2026** con una reserva de booking.com hecha el 8 oct
+> para el 9-11 oct (hotel `75fdbbce2e`): `2026-10-08 → 2026-10-08` y
+> `2026-10-08 → 2026-11-08` **la devuelven**; `2026-10-09 → 2026-10-09` y
+> `2026-10-09 → 2026-11-08` devuelven `[]`. La consecuencia operativa es la que
+> importa: un barrido que empieza en el día de hoy solo puede ver reservas hechas
+> hoy —casi nunca ninguna— y deja fuera para siempre toda reserva cuyo push se
+> perdió o fue rechazado. `lib/hospitality/ventana-reservas.ts` es la única
+> fuente de la ventana (30 días atrás / 30 adelante por defecto) y la comparten
+> el barrido diario y la re-verificación de una divergencia.
 | Channel Multiplier | POST | `/channel_multiplier/{pms}` | Multiplicador de tarifas por canal (`1.2` = +20%). No implementado en V1. |
 
 ## Webhook de reservas (proveedor → PMS)

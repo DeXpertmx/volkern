@@ -552,26 +552,47 @@ export async function crearReservaDeBookingDirecto(input: {
   });
 }
 
+/**
+ * Divisa del hotel donde entra una reserva entrante.
+ *
+ * Es el respaldo cuando el canal NO manda la suya: el payload llega de fuera,
+ * pero quien lo procesa sí conoce el hotel. Caer al mínimo del esquema (MXN)
+ * metía reservas en pesos en hoteles que operan en euros —y con ellas, los
+ * informes financieros mezclando divisas—, así que el respaldo es la divisa de
+ * la cuenta, nunca el mínimo de la base de datos.
+ */
+async function monedaDelHotel(tenantId: string): Promise<string | null> {
+  try {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { moneda: true },
+    });
+    return tenant?.moneda ?? null;
+  } catch (e) {
+    console.error('[Hospitality] No se pudo leer la divisa del hotel:', e);
+    return null;
+  }
+}
+
 /** Extrae el importe del payload según el contrato. */
-function extractAmount(payload: WebhookReservationPayload) {
+function extractAmount(payload: WebhookReservationPayload, monedaRespaldo: string | null) {
   const a = payload.amount;
   if (!a) return {};
   return {
     amountAfterTax: a.amountAfterTax ?? null,
     amountBeforeTax: a.amountBeforeTax ?? null,
     tax: a.tax ?? null,
-    // Divisa que manda el canal. Si no la trae, el mínimo del esquema: aquí no
-    // hay tenant del que tirar (el payload llega de fuera).
-    currency: monedaEscritura(a.currency),
+    // Divisa que manda el canal y, si no la trae, la del hotel.
+    currency: monedaEscritura(a.currency, monedaRespaldo),
     commission: a.commission ?? null,
     tcs: a.tcs ?? null,
     tds: a.tds ?? null,
   };
 }
 
-function buildReservationData(tenantId: string, propertyId: string, unitId: string | null, contactId: string | null, payload: WebhookReservationPayload) {
+function buildReservationData(tenantId: string, propertyId: string, unitId: string | null, contactId: string | null, payload: WebhookReservationPayload, monedaRespaldo: string | null) {
   const room = firstRoom(payload);
-  const amount = extractAmount(payload);
+  const amount = extractAmount(payload, monedaRespaldo);
   return {
     tenantId,
     propertyId,
@@ -615,9 +636,13 @@ export async function processBook(tenantId: string, propertyId: string, unitId: 
   }
 
   const contactId = await upsertGuest(tenantId, payload);
+  // Divisa de respaldo: el canal puede no mandarla (el proveedor devuelve
+  // `amount.currency: null` en hoteles reales) y la reserva no puede quedar en
+  // el mínimo del esquema.
+  const monedaRespaldo = await monedaDelHotel(tenantId);
   const reservation = await prisma.hospitalityReservation.create({
     data: {
-      ...buildReservationData(tenantId, propertyId, unitId, contactId, payload),
+      ...buildReservationData(tenantId, propertyId, unitId, contactId, payload, monedaRespaldo),
       estado: 'confirmed',
     },
   });
@@ -667,10 +692,11 @@ export async function processModify(tenantId: string, propertyId: string, unitId
   const contactId = await upsertGuest(tenantId, payload);
 
   const eraHold = existing.estado === 'pending';
+  const monedaRespaldo = await monedaDelHotel(tenantId);
   const updated = await prisma.hospitalityReservation.update({
     where: { id: existing.id },
     data: {
-      ...buildReservationData(tenantId, propertyId, unitId, contactId, payload),
+      ...buildReservationData(tenantId, propertyId, unitId, contactId, payload, monedaRespaldo),
       // El estado no se revierte en modify: conserva checked_in/checked_out
       // si ya se operó. Solo se aplica si está en pending/confirmed.
       estado: ['pending', 'confirmed'].includes(existing.estado) ? 'confirmed' : existing.estado,

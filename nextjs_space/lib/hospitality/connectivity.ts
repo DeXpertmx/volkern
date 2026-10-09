@@ -491,19 +491,27 @@ export const CONNECTIVITY_SANDBOX_HOTEL = 'sandbox-pms';
  *
  * La sonda nació apuntando al hotel del sandbox del proveedor, pero un partner
  * de producción puede no tener concedido ese hotel de pruebas (Aiosell lo
- * retiró: `property_details/sandbox-pms` pasó de 200 a 403). Cuando eso ocurre
- * el panel quedaría en rojo aunque el tráfico real funcionase, así que el hotel
- * de la sonda es configurable, en este orden:
+ * retiró: `property_details/sandbox-pms` pasó de 200 a 403, y hoy responde
+ * `403 Access Denied - sandbox-pms`). Cuando eso ocurre el panel queda en rojo
+ * aunque el tráfico real funcione: el hotel de la sonda es configurable, en
+ * este orden:
  *
  *   1. `CONNECTIVITY_HEALTH_HOTEL` (entorno), p. ej. el hotel real del partner.
  *   2. `configuracion.healthHotelCode` de la fila del proveedor.
- *   3. `CONNECTIVITY_SANDBOX_HOTEL`, el sandbox documentado en el contrato.
+ *   3. `hotelVinculado`: el `hotelCode` de una propiedad YA vinculada
+ *      (`ConnectivityMapping.externalPropertyId`), que es el mismo código con
+ *      el que la capa empuja inventario y pide reservas — ver
+ *      `resolverHotelDeSonda`.
+ *   4. `CONNECTIVITY_SANDBOX_HOTEL`, el sandbox documentado en el contrato.
  *
- * Es una función pura sobre la fila ya leída: quien la llama no paga una
- * segunda consulta a la base de datos.
+ * Es una función pura sobre la fila ya leída y el vínculo ya resuelto: quien la
+ * llama no paga ninguna consulta a la base de datos. El vínculo entra como
+ * parámetro (no se consulta aquí) para que la regla viva en un solo sitio y
+ * siga siendo probable sin base de datos.
  */
 export function resolveProbeHotelCode(
   provider?: { configuracion?: unknown } | null,
+  hotelVinculado?: string | null,
 ): string {
   const desdeEntorno = (process.env.CONNECTIVITY_HEALTH_HOTEL || '').trim();
   if (desdeEntorno) return desdeEntorno;
@@ -511,7 +519,61 @@ export function resolveProbeHotelCode(
   const cfg = (provider?.configuracion ?? null) as Record<string, unknown> | null;
   const desdeConfig =
     typeof cfg?.healthHotelCode === 'string' ? cfg.healthHotelCode.trim() : '';
-  return desdeConfig || CONNECTIVITY_SANDBOX_HOTEL;
+  if (desdeConfig) return desdeConfig;
+
+  const vinculado = (hotelVinculado ?? '').trim();
+  return vinculado || CONNECTIVITY_SANDBOX_HOTEL;
+}
+
+/**
+ * `hotelCode` del proveedor de una propiedad YA vinculada, con el que sí se
+ * puede sondear la capa.
+ *
+ * Con `tenantId` devuelve el del primer vínculo activo de ESE cliente; sin él
+ * (sondas de plataforma: health-check, botón «Probar» del panel admin) el de
+ * cualquier cliente ya vinculado, que es un dato que la plataforma ya tiene y
+ * no un secreto de nadie.
+ *
+ * Por qué existe: sondear `sandbox-pms` dice muy poco —el sandbox es del
+ * contrato, no de la cuenta— y un partner de producción recibe `403 Access
+ * Denied` aunque su capa funcione. El código de un hotel real ya vinculado es
+ * la sonda que sí dice algo: es el mismo que viaja en cada push y cada fetch.
+ */
+export async function getHotelVinculadoParaSonda(
+  tenantId?: string | null,
+): Promise<string | null> {
+  const id = (tenantId ?? '').trim();
+  const mapping = await prisma.connectivityMapping.findFirst({
+    where: {
+      provider: CONNECTIVITY_PROVIDER_KEY,
+      estado: 'activo',
+      ...(id ? { tenantId: id } : {}),
+    },
+    orderBy: { fechaCreacion: 'asc' },
+    select: { externalPropertyId: true },
+  });
+  const code = (mapping?.externalPropertyId ?? '').trim();
+  return code || null;
+}
+
+/**
+ * Hotel con el que sondear la capa, resuelto de verdad: lo configurado
+ * (entorno → `configuracion.healthHotelCode`) y, si no hay nada configurado, el
+ * hotel REAL ya vinculado antes de caer al sandbox del contrato.
+ *
+ * Es la versión asíncrona de `resolveProbeHotelCode` —la que mira los vínculos
+ * en la base de datos— y la usan la misma sonda del botón «Probar» y el
+ * health-check diario, para que panel y cron no puedan discrepar.
+ */
+export async function resolverHotelDeSonda(
+  provider?: { configuracion?: unknown } | null,
+  tenantId?: string | null,
+): Promise<string> {
+  const configurado = resolveProbeHotelCode(provider);
+  if (configurado !== CONNECTIVITY_SANDBOX_HOTEL) return configurado;
+
+  const vinculado = await getHotelVinculadoParaSonda(tenantId);
+  return vinculado ?? CONNECTIVITY_SANDBOX_HOTEL;
 }
 
 /**
@@ -579,6 +641,11 @@ export interface TestConnectionResult {
  *
  * Con `tenantId` se usa el ID de socio de ESE cliente —es lo que le deja ver
  * sus propiedades—; sin él (panel admin, health-check) se usa el de plataforma.
+ *
+ * Sin `hotelCode` sondea el sandbox del contrato; quien llama decide el hotel
+ * por defecto con `resolverHotelDeSonda` (hotel real ya vinculado antes que
+ * sandbox), que es lo que hacen el botón «Probar», la Conectividad del hotel y
+ * el health-check.
  */
 export async function testConnectivityConnection(
   hotelCode?: string,
@@ -642,19 +709,22 @@ export async function testConnectivityConnection(
 
   if (!res.ok) {
     // El mensaje del proveedor trae la causa cuando el problema es el ID de
-    // socio («Partner is disabled!» es 400 y «partner desconocido» es 403), y
-    // esa causa se arregla distinto que unas credenciales rechazadas. Al pulsar
-    // «Comprobar» el hotel tiene que leerlo tal cual: la regla vive en el módulo
-    // de causas — aquí no se duplican literales.
+    // socio («Partner is disabled!» es 400 y «partner desconocido» es 403) o el
+    // hotel («Access Denied - <hotelCode>»), y esas causas se arreglan distinto
+    // que unas credenciales rechazadas. Al pulsar «Comprobar» el hotel tiene que
+    // leerlo tal cual: la regla vive en el módulo de causas — aquí no se
+    // duplican literales.
     const causa = causaDeFalloConectividad({
       httpStatus: res.status,
       errorMensaje: mensajeDeRespuestaExterna(body),
     });
-    const esProblemaDeIdSocio =
-      causa.clave === 'partner_deshabilitado' || causa.clave === 'partner_desconocido';
+    const esProblemaDeAccesoAlHotel =
+      causa.clave === 'partner_deshabilitado' ||
+      causa.clave === 'partner_desconocido' ||
+      causa.clave === 'hotel_sin_concesion';
     return {
       ok: false,
-      error: esProblemaDeIdSocio
+      error: esProblemaDeAccesoAlHotel
         ? `${causa.texto}: ${causa.consejo}`
         : `La conexión respondió con estado ${res.status}`,
       respuestaExterna: body,
@@ -810,8 +880,76 @@ async function readBody(res: Response): Promise<unknown> {
 }
 
 /**
+ * Advertencias que el proveedor adjunta a una respuesta `success: true`.
+ *
+ * No son cortesía: significan que la petición se recibió y ALGO SE DESCARTÓ
+ * (por ejemplo `INVALID_RATEPLAN_CODE : 2b` cuando el rateplanCode empujado no
+ * existe en su catálogo). Leer eso como éxito deja el calendario del canal sin
+ * lo que le mandamos y el panel en verde — el fallo más caro de diagnosticar,
+ * porque se ve desde fuera (el canal no cambia) y no desde dentro.
+ *
+ * Se normalizan a strings no vacíos: cualquier otra forma se ignora.
+ */
+export function advertenciasDeRespuesta(respuesta: unknown): string[] {
+  if (typeof respuesta !== 'object' || respuesta === null) return [];
+  const bruto = (respuesta as { warnings?: unknown }).warnings;
+  if (!Array.isArray(bruto)) return [];
+  return bruto
+    .map((w) => (typeof w === 'string' ? w.trim() : ''))
+    .filter((w) => w !== '');
+}
+
+/**
+ * Resultado único de un push. Solo `success: true` **sin advertencias** cuenta
+ * como éxito: si el proveedor avisa de que descartó algo, el push vuelve con
+ * `ok: false` (conservando el HTTP real en `httpStatus`) para que el llamador
+ * lo registre como lo que es —datos perdidos— y lo enseñe.
+ */
+function resultadoDePush(
+  tipo: PushResult['tipo'],
+  res: Response,
+  respuestaExterna: unknown,
+  duracionMs: number
+): PushResult {
+  const success =
+    typeof respuestaExterna === 'object' &&
+    respuestaExterna !== null &&
+    (respuestaExterna as { success?: unknown }).success === true;
+  const message = (respuestaExterna as { message?: string } | null)?.message;
+
+  if (!res.ok || !success) {
+    return {
+      ok: false,
+      tipo,
+      httpStatus: res.status,
+      message,
+      respuestaExterna,
+      error: message || `HTTP ${res.status}`,
+      duracionMs,
+    };
+  }
+
+  const advertencias = advertenciasDeRespuesta(respuestaExterna);
+  if (advertencias.length > 0) {
+    const error = `El proveedor aceptó la petición pero descartó datos: ${advertencias.join(' · ')}`;
+    return {
+      ok: false,
+      tipo,
+      httpStatus: res.status,
+      message,
+      respuestaExterna,
+      error,
+      duracionMs,
+    };
+  }
+
+  return { ok: true, tipo, httpStatus: res.status, message, respuestaExterna, duracionMs };
+}
+
+/**
  * Inventory Push — POST /update/{pms} (upsert por rango).
- * Verifica el campo `success` de la respuesta; expone `message` en fallos.
+ * Verifica el campo `success` de la respuesta (y sus `warnings`); expone
+ * `message` en fallos.
  */
 export async function pushInventory(
   hotelCode: string,
@@ -831,32 +969,7 @@ export async function pushInventory(
       creds
     );
     const respuestaExterna = await readBody(res);
-    const success =
-      typeof respuestaExterna === 'object' &&
-      respuestaExterna !== null &&
-      (respuestaExterna as any).success === true;
-
-    if (!res.ok || !success) {
-      const message =
-        (respuestaExterna as any)?.message || `HTTP ${res.status}`;
-      return {
-        ok: false,
-        tipo: 'inventory',
-        httpStatus: res.status,
-        message,
-        respuestaExterna,
-        error: message,
-        duracionMs,
-      };
-    }
-    return {
-      ok: true,
-      tipo: 'inventory',
-      httpStatus: res.status,
-      message: (respuestaExterna as any)?.message,
-      respuestaExterna,
-      duracionMs,
-    };
+    return resultadoDePush('inventory', res, respuestaExterna, duracionMs);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Error de red';
     return { ok: false, tipo: 'inventory', error: msg, duracionMs: Date.now() - started };
@@ -886,8 +999,14 @@ export interface FetchReservationsResult {
 
 /**
  * Fetch Reservations — POST /data/{pms} con `type: "reservation"`.
- * Consulta las reservas recibidas vía OTAs para un hotel y rango de fechas.
+ * Consulta las reservas recibidas vía OTAs para un hotel.
  * Se usa por la reconciliación (§14). NO hace retries ciegos.
+ *
+ * OJO con `startDate`/`endDate`: el proveedor filtra por FECHA DE RESERVA
+ * (`bookedOn`), NO por fechas de estancia — medido contra el servicio real, ver
+ * `lib/hospitality/ventana-reservas.ts`—. Quien pase un rango a mano tiene que
+ * pensar en «reservas hechas en ese rango», no en «estancias de ese rango»; el
+ * barrido usa `ventanaFetchReservas()` para no volver a equivocarse.
  */
 export async function fetchReservations(
   hotelCode: string,
@@ -967,31 +1086,7 @@ export async function pushRates(
       creds
     );
     const respuestaExterna = await readBody(res);
-    const success =
-      typeof respuestaExterna === 'object' &&
-      respuestaExterna !== null &&
-      (respuestaExterna as any).success === true;
-
-    if (!res.ok || !success) {
-      const message = (respuestaExterna as any)?.message || `HTTP ${res.status}`;
-      return {
-        ok: false,
-        tipo: 'rates',
-        httpStatus: res.status,
-        message,
-        respuestaExterna,
-        error: message,
-        duracionMs,
-      };
-    }
-    return {
-      ok: true,
-      tipo: 'rates',
-      httpStatus: res.status,
-      message: (respuestaExterna as any)?.message,
-      respuestaExterna,
-      duracionMs,
-    };
+    return resultadoDePush('rates', res, respuestaExterna, duracionMs);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Error de red';
     return { ok: false, tipo: 'rates', error: msg, duracionMs: Date.now() - started };
@@ -1022,31 +1117,7 @@ async function postConnectivityUpdate(
       creds
     );
     const respuestaExterna = await readBody(res);
-    const success =
-      typeof respuestaExterna === 'object' &&
-      respuestaExterna !== null &&
-      (respuestaExterna as any).success === true;
-
-    if (!res.ok || !success) {
-      const message = (respuestaExterna as any)?.message || `HTTP ${res.status}`;
-      return {
-        ok: false,
-        tipo,
-        httpStatus: res.status,
-        message,
-        respuestaExterna,
-        error: message,
-        duracionMs,
-      };
-    }
-    return {
-      ok: true,
-      tipo,
-      httpStatus: res.status,
-      message: (respuestaExterna as any)?.message,
-      respuestaExterna,
-      duracionMs,
-    };
+    return resultadoDePush(tipo, res, respuestaExterna, duracionMs);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Error de red';
     return { ok: false, tipo, error: msg, duracionMs: Date.now() - started };

@@ -35,6 +35,9 @@ const hoisted = vi.hoisted(() => ({
   user: {
     findMany: vi.fn(),
   },
+  tenant: {
+    findUnique: vi.fn(),
+  },
   testConnectivityConnection: vi.fn(),
   sendPushNotification: vi.fn(),
 }));
@@ -49,6 +52,7 @@ vi.mock('@/lib/db', () => ({
     hospitalityWebhookEvent: hoisted.hospitalityWebhookEvent,
     auditLog: hoisted.auditLog,
     user: hoisted.user,
+    tenant: hoisted.tenant,
   },
 }));
 
@@ -177,6 +181,65 @@ beforeEach(() => {
   ]);
   hoisted.sendPushNotification.mockResolvedValue({ success: true });
   hoisted.auditLog.create.mockResolvedValue({ id: 'audit_1' });
+  // Divisa del hotel: es el respaldo cuando el canal no manda la suya.
+  hoisted.tenant.findUnique.mockResolvedValue({ moneda: 'EUR' });
+});
+
+describe('Hospitality — divisa de la reserva entrante', () => {
+  /**
+   * El proveedor devuelve `amount.currency: null` en hoteles reales (medido el
+   * 9-oct 2026: dos reservas de booking.com sin divisa). Antes se caía al
+   * mínimo del esquema (MXN) y un hotel en euros veía sus reservas en pesos;
+   * ahora el respaldo es la divisa del hotel, que quien procesa el payload sí
+   * conoce. La del canal sigue ganando cuando viene.
+   */
+  async function crearConDivisa(divisa: string | null) {
+    hoisted.hospitalityReservation.findUnique.mockResolvedValue(null);
+    hoisted.contact.findFirst.mockResolvedValue(null);
+    hoisted.contact.create.mockResolvedValue({ id: 'contact_1' });
+
+    const base = payload();
+    const result = await processReservationWebhook(
+      payload({ amount: { ...base.amount, currency: divisa } })
+    );
+    return {
+      result,
+      created: hoisted.hospitalityReservation.create.mock.calls[0]?.[0]?.data,
+    };
+  }
+
+  it('sin divisa del canal, la reserva se guarda en la del hotel (no en el mínimo del esquema)', async () => {
+    const { result, created } = await crearConDivisa(null);
+
+    expect(result.ok).toBe(true);
+    expect(created.currency).toBe('EUR');
+  });
+
+  it('la divisa del canal gana cuando viene', async () => {
+    const { created } = await crearConDivisa('USD');
+
+    expect(created.currency).toBe('USD');
+  });
+
+  it('sin divisa del canal ni moneda legible del hotel, cae al mínimo del esquema (nunca se inventa una)', async () => {
+    hoisted.tenant.findUnique.mockResolvedValue(null);
+
+    const { result, created } = await crearConDivisa(null);
+
+    expect(result.ok).toBe(true);
+    expect(created.currency).toBe('MXN');
+  });
+
+  it('si leer la moneda del hotel falla, la reserva entra igual (no se pierde por la divisa)', async () => {
+    hoisted.tenant.findUnique.mockRejectedValue(new Error('BD caída'));
+    const silencio = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const { result, created } = await crearConDivisa(null);
+
+    silencio.mockRestore();
+    expect(result.ok).toBe(true);
+    expect(created.currency).toBe('MXN');
+  });
 });
 
 describe('Hospitality — Reservation Engine (webhook)', () => {
