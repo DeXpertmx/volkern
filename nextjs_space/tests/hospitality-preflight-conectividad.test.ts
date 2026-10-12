@@ -187,10 +187,17 @@ describe('preflight — Basic Auth', () => {
     expect(r.valores.password).toBe('S3 creto Largo');
   });
 
-  it('rechaza el mismo valor en dos campos (pegado apresurado)', () => {
+  it('rechaza el mismo valor en dos campos (pegado apresurado), salvo usuario==partnerId (esquema Aiosell)', () => {
+    // password == username sigue siendo error de pegado apresurado.
     expect(preflightConectividad({ ...COMPLETO, password: COMPLETO.username }).ok).toBe(false);
-    expect(preflightConectividad({ ...COMPLETO, username: COMPLETO.partnerId }).ok).toBe(false);
     expect(preflightConectividad({ ...COMPLETO, password: 'socio-1234' }).ok).toBe(false);
+    // username == partnerId YA NO bloquea: desde el 9-oct-2026 el proveedor
+    // (Aiosell) usa el ID de socio como usuario de Basic Auth por diseño
+    // (WhatsApp: «the partner id which is the username and used as partnerid
+    // in the endpoints as well»). Es un aviso, no un error.
+    const mismoUsuario = preflightConectividad({ ...COMPLETO, username: COMPLETO.partnerId });
+    expect(mismoUsuario.ok, 'usuario==partnerId es el esquema del proveedor').toBe(true);
+    expect(mismoUsuario.avisos.some((a) => a.campo === 'username' && a.gravedad === 'aviso')).toBe(true);
   });
 
   it('con exigirTodo un campo ausente es error; sin exigirTodo es «no se toca»', () => {

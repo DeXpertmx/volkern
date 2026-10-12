@@ -591,11 +591,15 @@ function revisarBasicAuth(
     });
   }
   if (username && partnerId && username === partnerId) {
+    // Aiosell asigna el usuario de Basic Auth IDÉNTICO al ID de socio
+    // («the partner id which is the username and used as partnerid in the
+    // endpoints as well», WhatsApp 9-oct-2026). Ya no es error: es el
+    // esquema real del proveedor — solo se apunta, no bloquea.
     avisos.push({
       campo: 'username',
-      gravedad: 'error',
-      mensaje: 'El usuario es igual que el ID de socio.',
-      arreglo: 'Cada campo lleva su valor: revisa la respuesta del proveedor.',
+      gravedad: 'aviso',
+      mensaje: 'El usuario es igual que el ID de socio (esquema Aiosell: son el mismo valor por diseño).',
+      arreglo: 'Nada: es lo esperado con este proveedor; el preflight solo lo anota.',
     });
   }
   if (password && partnerId && password === partnerId) {
