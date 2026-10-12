@@ -105,6 +105,31 @@ Fuente: [`hospitality-email-proveedor-resenas.md`](./hospitality-email-proveedor
 
 ---
 
+## Correo 6 — Proveedor (formal): hotelCode estable, nuestro webhook con spec, y rotación de la contraseña de WhatsApp
+
+Fuente: [`hospitality-email-proveedor-formal.md`](./hospitality-email-proveedor-formal.md)
+
+> **Es el correo formal que compendia los tres pendientes con el proveedor**: la
+> confirmación por escrito de que `hotelCode` `75fdbbce2e` es estable (hasta
+> ahora solo vivía en WhatsApp), la spec completa del webhook de reservas de
+> Volkern para su emisor (el punto 2 del correo 3 sigue abierto hasta que
+> apunten el emisor aquí) y la rotación de la contraseña compartida por
+> WhatsApp el 7-oct. Se envía **encima del mismo hilo** que el 1.2 y el 3; no
+> entra en conflicto con ninguno: el 3 cubre el 401 concreto, este cubre la
+> relación formal.
+
+| # | Acción | Estado |
+|---|--------|--------|
+| 6.1 | Abrir el documento y copiar el cuerpo (desde `**Subject:**` hasta «[role] · Volkern Hospitality», SIN el bloque interno de arriba) | ☐ |
+| 6.2 | Rellenar `NAME` (saludo) y la firma (`NAME — Volkern` + `[role]`) | ☐ |
+| 6.3 | **Adjuntar** `docs/hospitality-connectivity-contract-externo.md` (el mismo del correo 2, ya expurgado: el correo interno ya promete que la spec completa viaja adjunta). **NO adjuntar** el contrato interno ni la guía del emisor en español | ☐ |
+| 6.4 | Verificar que **no viaja ningún secreto**: no se cita ninguna contraseña, ni el par guardado, ni huellas de nuestro par (el correo habla de la rotación sin nombrar valores) | ☐ |
+| 6.5 | **Al enviar**: anotar fecha en §9 del runbook (`docs/hospitality-ruta-claves-reales.md`) | ☐ |
+| 6.6 | **Recordatorio** a los 5 días hábiles si no hay respuesta (plantilla del proveedor, citando los 3 puntos del resumen §4) | ☐ (fecha: ____ ) |
+| 6.7 | **Cuando respondan**: (a) confirmar el hotelCode por escrito en el contrato y revisar `resolverHotelDeSonda` si introducen matices; (b) señalar la fecha en que su emisor apunte al webhook y validarla contra un `book` real; (c) cerrar la rotación con el preflight antes de tocar el servidor `npx tsx scripts/preflight-conectividad.ts --pegado "URL \| ID \| usuario \| contraseña"` | ☐ |
+
+---
+
 ## Reglas transversales (de los bloques de preparación de cada email)
 
 - Las notas internas de cada documento **no se copian nunca** al correo.
