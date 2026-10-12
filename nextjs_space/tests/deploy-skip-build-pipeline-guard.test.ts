@@ -362,6 +362,32 @@ ${log}`).toContain(
     });
   });
 
+  it('solo cambios en prisma/: el pipeline construye SOLO el migrator y no reconstruye la app', () => {
+    conFixture((f) => {
+      ejecutar('bash', [join(f.ctx, SCRIPT_REL), '--marcar'], f.ctx, ENV_GIT);
+      f.escribirCtx('prisma/migrations/20261012000000_nueva/migration.sql', '-- sql aditivo\n');
+      f.commit('feat(hospitality): migración nueva (solo prisma)');
+
+      const r = f.deployLocal();
+      expect(r.codigo, `El flujo solo-migrator debe desplegar sin fallar:\n${r.salida}`).toBe(0);
+      expect(r.salida, 'Debe anunciar el flujo exclusivo de migrator').toContain('SOLO_MIGRATOR');
+      expect(r.salida, 'Debe decir que construye el migrator').toContain(
+        'build EXCLUSIVO del migrator'
+      );
+      expect(r.salida, 'Y completar el despliegue').toContain('Deploy completado');
+
+      const log = f.log();
+      // El runner NO se reconstruye: ni build-imagen.sh ni docker build. Lo que
+      // hay es un re-export de la imagen existente (docker save) que sí viaja
+      // al VPS — el service update no cambia nada, pero el flujo es uniforme.
+      expect(log, 'No debe pedir el build completo de la app').not.toContain('build-imagen');
+      expect(log, 'Debe re-exportar la imagen runner existente').toContain('save -o ');
+      expect(r.salida, 'Debe construir el migrator pero no la app').not.toContain(
+        'Build de volkern-erp:latest'
+      );
+    });
+  });
+
   it('--skip-build sigue funcionando y tampoco firma el marcador', () => {
     conFixture((f) => {
       f.escribirCtx('app/page.tsx', 'export default function P() { return 9 }\n');

@@ -190,8 +190,15 @@ Configurar todas las variables de entorno en el dashboard de Vercel.
 
 ### 3. Deploy Manual
 
-> ⚠️ **No hay auto-deploy desde GitHub** a día de hoy. Cada release requiere
-> ejecutar manualmente `vercel deploy --prod --yes` después del `git push`.
+> 🔴 **DEPRECADO (12-oct-2026): no despliegues a Vercel.** Producción es el
+> VPS: `bash deploy-vps/deploy-local.sh` (ver README §Deploy). El proyecto
+> de Vercel sigue enlazado pero ya no sirve `volkern.app`, y sus variables
+> de producción apuntan a la base antigua (Neon). Lo de abajo es referencia
+> histórica.
+>
+> ⚠️ **No hay auto-deploy desde GitHub** (política histórica). Cada release
+> requería ejecutar manualmente `vercel deploy --prod --yes` después del
+> `git push`.
 >
 > Ver [`DEPLOY.md`](DEPLOY.md) para el flujo completo paso a paso,
 > troubleshooting detallado (branch mismatch, cache invalidation, anti-SSRF),

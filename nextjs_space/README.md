@@ -62,7 +62,8 @@ Sistema completo de gestión inmobiliaria con:
 ### Requisitos
 
 - Node.js 20 LTS (`>=20.19.0 <21`, ver `.nvmrc` y `engines`; el setup lo comprueba y avisa)
-- PostgreSQL 15+ accesible (local o gestionado como Neon)
+- PostgreSQL 15+ accesible (local o el que apunte tu `DATABASE_URL`; en
+  producción es el Postgres del propio VPS)
 - Redis 7+ (para colas; lo necesita la app en marcha, no el setup)
 - Git
 - npm (gestor del proyecto: hay `package-lock.json`; Yarn no es necesario)
@@ -196,27 +197,26 @@ Cobertura: **98.3% Statements**
 
 ## 🚀 Deploy
 
-### Opción 1: VPS (Recomendado)
+### Producción: VPS (Docker Swarm) — el camino que sirve `volkern.app`
+
+> ⚠️ **No hay auto-deploy desde GitHub** a día de hoy. Cada release se
+> despliega a mano con el pipeline de `deploy-vps/`: build local de las
+> imágenes (app + migrator), migraciones contra el Postgres del VPS con capa
+> de seguridad (puerta destructiva + backup previo), `service update` y
+> smoke tests.
 
 ```bash
-yarn build
-yarn start  # Next.js en puerto 3000
-# Configurar Nginx + SSL + Systemd (ver docs/DEPLOY-GUIDE.md)
+bash deploy-vps/deploy-local.sh   # build → migraciones → VPS → smokes
 ```
 
-### Opción 2: Vercel (manual)
+> El pipeline salta el build si solo cambió documentación/workflows/tests,
+> y si solo cambiaron migraciones (`prisma/`) reconstruye solo el migrator
+> sin reiniciar la app.
 
-> ⚠️ **No hay auto-deploy desde GitHub** a día de hoy. Cada release
-> requiere ejecutar `vercel deploy --prod --yes` después del `git push`.
-> `git push origin master` solo sube el código al repo — no dispara build.
-
-```bash
-git push origin master                 # solo sube a GitHub
-vercel deploy --prod --yes            # deploy manual a volkern.app
-```
-
-> Limitaciones: Sin WebSocket nativo en serverless, Redis requiere Upstash,
-> límite de build 250MB.
+> ⚠️ **No uses `vercel deploy`**: el proyecto de Vercel sigue enlazado pero
+> ya no sirve el dominio, y sus variables de producción aún apuntan a la
+> base antigua (Neon). Desplegar ahí reabriría esa base sin querer
+> (ver docs/AUDITORIA-NEON-Y-DESPLIEGUES.md, hallazgo H1).
 
 📘 **Flujo detallado y troubleshooting:** [`docs/DEPLOY.md`](docs/DEPLOY.md)
 📘 Deploy self-hosted (VPS/Docker): [`docs/DEPLOY-GUIDE.md`](docs/DEPLOY-GUIDE.md)

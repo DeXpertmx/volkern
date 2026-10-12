@@ -1,8 +1,17 @@
 # DEPLOY — Manual Deploy a Vercel (Volkern ERP)
 
-> ⚠️ **Política actual (verificado el `8317134`): NO hay auto-deploy desde GitHub.**
+> 🔴 **DEPRECADO (12-oct-2026): NO despliegues a Vercel.** Producción es el
+> VPS (Docker Swarm) y se despliega con `bash deploy-vps/deploy-local.sh`
+> (ver README §Deploy y docs/DEPLOY-GUIDE.md). El proyecto de Vercel sigue
+> enlazado pero ya no sirve `volkern.app`, y sus variables de producción
+> apuntan a la base antigua (Neon): `vercel deploy` reabriría esa base sin
+> querer. Este documento se conserva solo como referencia histórica del flujo
+> que se usó antes de la migración al VPS.
+
+> ⚠️ **Política histórica: NO había auto-deploy desde GitHub.**
 > Cada push a `origin/master` sube código al repo; **no dispara build ni deploy**.
-> Cada release requiere ejecutar manualmente `vercel deploy --prod --yes` después del push.
+> Cada release requería ejecutar manualmente `vercel deploy --prod --yes` después del push
+> (flujo ya retirado: ver el aviso rojo de arriba).
 
 Documento complementario a [`DEPLOY-GUIDE.md`](DEPLOY-GUIDE.md) (VPS / Docker / self-hosted). Aquí cubrimos exclusivamente el flujo de **Vercel CLI manual**.
 

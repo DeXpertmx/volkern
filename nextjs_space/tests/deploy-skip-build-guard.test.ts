@@ -347,6 +347,53 @@ describe('Gate de build (decidir-build.sh): ¿hace falta reconstruir la imagen?'
     });
   });
 
+  it('cambios SOLO en prisma/migrations o schema.prisma → SOLO_MIGRATOR (rc 0, sin build de app)', () => {
+    for (const rel of [
+      'prisma/migrations/20261012000000_nueva/migration.sql',
+      'prisma/schema.prisma',
+    ]) {
+      conRepositorio((r) => {
+        r.escribirCtx(rel, '-- migración de prueba\n');
+        r.commit(`migraciones: ${rel}`);
+
+        const d = r.gate('--since', r.base);
+        expect(d.codigo, `Solo prisma/ no debe forzar el build completo:\n${d.salida}`).toBe(0);
+        expect(d.salida, `Debe anunciar SOLO_MIGRATOR para ${rel}:\n${d.salida}`).toContain(
+          'SOLO_MIGRATOR'
+        );
+        expect(d.salida, 'Debe exponer MIGRATOR_NEEDED=1 para el pipeline').toContain(
+          'MIGRATOR_NEEDED=1'
+        );
+        expect(d.salida, `No debe pedir CONSTRUIR para ${rel}`).not.toContain('DECISIÓN: CONSTRUIR');
+      });
+    }
+  });
+
+  it('mezcla de prisma/ y código real → CONSTRUYE (no solo-migrator)', () => {
+    conRepositorio((r) => {
+      r.escribirCtx('prisma/migrations/20261012000000_nueva/migration.sql', '-- sql\n');
+      r.escribirCtx('app/page.tsx', 'export default function P() { return 5 }\n');
+      r.commit('migración + código');
+
+      const d = r.gate('--since', r.base);
+      expect(d.codigo, d.salida).toBe(0);
+      expect(d.salida).toContain('DECISIÓN: CONSTRUIR');
+      expect(d.salida).not.toContain('SOLO_MIGRATOR');
+    });
+  });
+
+  it('cambio en deployment con árbol sucio (migración sin commitear) → CONSTRUYE, no solo-migrator', () => {
+    conRepositorio((r) => {
+      // Sin commit: el gate aborta antes de clasificar (árbol sucio) — es el
+      // caso real del 12-oct, que solo se comitea la migración a posteriori.
+      r.escribirCtx('prisma/migrations/20261013000000_amanana/migration.sql', '-- sql\n');
+
+      const d = r.gate('--since', r.base);
+      expect(d.codigo, d.salida).toBe(0);
+      expect(d.salida).toContain('sin commitear');
+    });
+  });
+
   it('un baseline que no es ancestro de HEAD → CONSTRUYE', () => {
     conRepositorio((r) => {
       // Historia nueva sin relación con `base` (simula un rebase o una rama aparte).

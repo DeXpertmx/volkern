@@ -3,7 +3,13 @@
 # decidir-build.sh — ¿hay que reconstruir la imagen volkern-erp?
 #
 # Contrato (código de salida):
-#   0 → CONSTRUIR   algún cambio afecta a lo que se hornea en la imagen
+#   0 → CONSTRUIR   algún cambio afecta a lo que se hornea en la imagen.
+#                   Sub-caso (desde 12-oct-2026): si TODO lo que afecta vive
+#                   bajo prisma/ (migraciones y/o schema), imprime además
+#                   «DECISION: SOLO_MIGRATOR» y «MIGRATOR_NEEDED=1»:
+#                   deploy-local.sh construye SOLO el migrator y no toca la
+#                   app (el entrypoint no lee migraciones en runtime). Con
+#                   --force-build se ignora y se construye todo.
 #   1 → SALTAR      desde el último despliegue solo cambió documentación,
 #                   workflows, tests o ficheros que ni entran en el contexto
 #   2 → INDECISO    sin baseline, sin git, baseline que no es ancestro de HEAD
@@ -11,7 +17,9 @@
 #
 # El gate se equivoca SIEMPRE hacia el lado caro: un `0` o un `2` de más solo
 # cuesta minutos de build, mientras que un `1` de más serviría en producción
-# una imagen vieja sin que nada lo delate.
+# una imagen vieja sin que nada lo delate. El sub-caso SOLO_MIGRATOR hereda
+# esa regla: se decide mirando lo que ya quedó clasificado como afecta; ante
+# cualquier duda (una sola ruta fuera de prisma/), CONSTRUIR.
 #
 # ────────────────────────────────────────────────────────────────────────────
 # POR QUÉ EXISTE
@@ -111,6 +119,21 @@ done
 decidir() {
   echo "→ Build necesario: $1"
   echo "DECISIÓN: CONSTRUIR"
+  exit 0
+}
+
+# Caso especial «solo la imagen migrator desfasa» (cambios SOLO en
+# prisma/migrations o prisma/schema.prisma): el runner de la app no cambia
+# en runtime (el entrypoint no ejecuta migraciones; las aplica el job
+# migrator ANTES del service update), así que reconstruir la app sería 10-20
+# min y un reinicio de producción a cambio de nada. En cambio, el migrator
+# SÍ debe reconstruirse: si su catálogo no lleva la migración nueva, el job
+# la vy a aplicar y tapa el drift con el workaround de hoy.
+# deploy-local.sh parsea esta línea para el flujo de solo-migrator.
+solo_migrator() {
+  echo "→ Solo cambia la imagen migrator (cambios en prisma/): $1"
+  echo "DECISION: SOLO_MIGRATOR"
+  echo "MIGRATOR_NEEDED=1"
   exit 0
 }
 
@@ -285,6 +308,21 @@ while IFS= read -r ruta; do
 done <<< "$CAMBIOS"
 
 if [ -n "$AFECTA" ]; then
+  # Sub-clasificación: si TODO lo que afecta vive bajo prisma/ (migraciones
+  # o schema), el runner no cambia — solo el migrator. Con el proveedor de
+  # migraciones en puerta (run-migrations.sh + filtrar-destructivas.sh,
+  # 12-oct-2026), el despliegue de una migración NO debería costar un build
+  # de 10-20 minutos ni un reinicio a cambio de nada.
+  SOLO_PRISMA=1
+  for ruta in $AFECTA; do
+    case "$ruta" in
+      prisma/*) : ;;
+      *) SOLO_PRISMA=0 ; break ;;
+    esac
+  done
+  if [ "$SOLO_PRISMA" = "1" ]; then
+    solo_migrator "hay cambios SOLO bajo prisma/:$AFECTA"
+  fi
   decidir "hay cambios que entran en la imagen:$AFECTA"
 fi
 

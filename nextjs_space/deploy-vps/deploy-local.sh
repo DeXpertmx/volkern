@@ -164,28 +164,50 @@ docker_cmd() {
 # ═══════════════════════════════════════════════════════════════
 # 1. BUILD
 # ═══════════════════════════════════════════════════════════════
+# Declaradas ANTES del bloque (con `set -u` activo, referenciarlas en la rama
+# --skip-build sería «variable sin asignar» si solo nacieran dentro del gate).
+SOLO_MIGRATOR=0
+SOLO_MIGRATOR_PIPELINE=0
+GATE_OUT=""
 if [ "$SKIP_BUILD" = "1" ]; then
   echo "→ [1/5] Build: omitido (--skip-build). Usando imágenes ya construidas."
 else
   echo ""
 
   # ── Gate: ¿hace falta reconstruir? ────────────────────────────
-  # decidir-build.sh contesta 1 = «nada que construir» si desde el último
-  # despliegue solo cambió documentación/workflows/tests. Cualquier otro código
-  # (incluido el 2 = «indeciso») se trata como «construir».
+  # decidir-build.sh puede responder tres cosas:
+  #   · DECISIÓN: SALTAR (rc 1)      → nada que construir
+  #   · DECISION: SOLO_MIGRATOR (rc 0) → solo cambió prisma/: se construye
+  #     únicamente el migrator (el runner no desfase: el entrypoint no lee
+  #     migraciones en runtime; las aplica el job migrator antes del update).
+  #     Ahorra el build de 10-20 min y el reinicio a cambio de nada.
+  #   · DECISIÓN: CONSTRUIR (rc 0/2) → build completo como siempre.
   GATE_RC=0
+  GATE_OUT=""
   if [ "$FORCE_BUILD" = "1" ]; then
     echo "→ [1/5] Gate de build: omitido (--force-build). Se construye siempre."
   else
     GATE_ARGS=()
     if [ -n "$SINCE_REF" ]; then GATE_ARGS+=(--since "$SINCE_REF"); fi
-    bash deploy-vps/decidir-build.sh ${GATE_ARGS[@]+"${GATE_ARGS[@]}"} || GATE_RC=$?
+    GATE_OUT=$(bash deploy-vps/decidir-build.sh ${GATE_ARGS[@]+"${GATE_ARGS[@]}"}) || GATE_RC=$?
+    echo "$GATE_OUT"
+    case "$GATE_OUT" in
+      *"DECISION: SOLO_MIGRATOR"*) SOLO_MIGRATOR=1; GATE_RC=0 ;;
+    esac
     if [ "$GATE_RC" != "1" ]; then GATE_RC=0; fi
   fi
 
   # Un «saltar» solo vale si la imagen que se reutilizaría existe de verdad:
   # tras un `docker image prune` a mano, saltar el build dejaría al pipeline sin
-  # imagen y reventaría más tarde, en el `docker save`.
+  # imagen y reventaría más tarde, en el `docker save`. En el flujo
+  # solo-migrator el requisito equivalente es que exista el runner (se reutiliza)
+  # y el migrator (se reconstruye).
+  if [ "$SOLO_MIGRATOR" = "1" ]; then
+    if ! docker_cmd image inspect volkern-erp:latest >/dev/null 2>&1 || ! docker_cmd image inspect volkern-erp:migrator >/dev/null 2>&1; then
+      echo "   ⚠️  Falta la imagen runner o migrator local: se construye todo."
+      SOLO_MIGRATOR=0
+    fi
+  fi
   if [ "$GATE_RC" = "1" ] && ! docker_cmd image inspect volkern-erp:latest >/dev/null 2>&1; then
     echo "   ⚠️  La imagen local volkern-erp:latest no existe: se construye igual."
     GATE_RC=0
@@ -206,7 +228,24 @@ else
     SKIP_BUILD=1
   fi
 
-  if [ "$SKIP_BUILD" = "0" ]; then
+  if [ "$SOLO_MIGRATOR" = "1" ]; then
+    # ── Flujo de solo-migrator: construir únicamente la imagen migrator ──
+    # (los cambios vivían solo bajo prisma/: el runner desplegado sigue
+    # siendo válido, así que NO se reconstruye ni se reinicia la app)
+    echo ""
+    echo "→ [1/5] Solo cambia prisma/: build EXCLUSIVO del migrator (sin reconstruir la app)..."
+    if ! docker_cmd version >/dev/null 2>&1; then
+      echo "✗ docker no accesible ni con sudo. Revisa el daemon." >&2
+      exit 1
+    fi
+    docker_cmd build --progress=plain --target migrator -t volkern-erp:migrator .
+    echo "   ✓ Migrator reconstruido: $(docker_cmd image inspect volkern-erp:migrator --format '{{.Size}} bytes')"
+    SKIP_MIGRATOR=0          # el migrator nuevo SÍ viaja al VPS
+    SOLO_MIGRATOR_PIPELINE=1 # para el marcador y mensajes de cierre
+    CONSTRUIDO=0             # el runner NO se construyó: marcador sin cambios
+  else
+    SOLO_MIGRATOR_PIPELINE=0
+    if [ "$SKIP_BUILD" = "0" ]; then
     # Ojo con `${SKIP_MIGRATOR:+…}`: la variable es 0/1, así que con "0" (el
     # migrator SÍ se construye) la expansión también imprimía «sin migrator» y la
     # línea mentía sobre lo que se iba a construir. Se decide por valor, no por
@@ -229,6 +268,7 @@ else
     # La imagen se construyó en ESTE pipeline: es lo que autoriza a refrescar
     # el marcador del gate al terminar.
     CONSTRUIDO=1
+    fi
   fi
 fi
 
@@ -259,8 +299,10 @@ echo ""
 echo "→ [3/5] Subiendo tarballs y scripts al VPS ..."
 $SSH "$VPS" "mkdir -p /root/deploy-vps" >/dev/null 2>&1 || true
 $SCP $TARBALLS "$VPS:/tmp/"
-# Los scripts del repo son la fuente de verdad; se sincronizan en cada deploy
-$SCP deploy-vps/deploy-app.sh deploy-vps/run-migrations.sh "$VPS:/root/deploy-vps/"
+# Los scripts del repo son la fuente de verdad; se sincronizan en cada deploy.
+# `filtrar-destructivas.sh` acompaña a run-migrations.sh: es la puerta que
+# este usa antes de `migrate deploy` (capa de seguridad del 12-oct-2026).
+$SCP deploy-vps/deploy-app.sh deploy-vps/run-migrations.sh deploy-vps/filtrar-destructivas.sh "$VPS:/root/deploy-vps/"
 # Los centinelas de seguridad del VPS se sincronizan (el repo manda sobre
 # la copia del VPS) y su identidad se verifica abajo, antes de tocar nada.
 for s in auditar-superficie.sh vigilar-crons-heredados.sh vigilar-mcp.sh; do
