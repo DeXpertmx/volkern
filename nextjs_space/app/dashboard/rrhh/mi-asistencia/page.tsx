@@ -32,7 +32,11 @@ export const metadata = {
 };
 
 // Versión actualmente vigente de la cláusula. Si cambia, los empleados deben re-firmar.
-const CURRENT_NOTICE_VERSION = 'v1-2026-gps-only';
+// v2 (12-oct-2026): encargados de infraestructura reales — VPS en lugar de
+// Vercel/Neon (ver docs/AUDITORIA-NEON-Y-DESPLIEGUES.md, H1 y H3). El formato
+// lo fija el regex del endpoint acknowledge-notice: v<n>-<año>-<slug>, sin
+// puntos.
+const CURRENT_NOTICE_VERSION = 'v2-2026-vps';
 
 interface PageProps {
   searchParams?: { [key: string]: string | string[] | undefined };
@@ -148,7 +152,7 @@ export default async function MiAsistenciaPage({ searchParams }: PageProps) {
       </section>
 
       <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400 text-center">
-        Cláusula versión <code>{CURRENT_NOTICE_VERSION}</code>. Última actualización: 2026-07-01.
+        Cláusula versión <code>{CURRENT_NOTICE_VERSION}</code>. Última actualización: 2026-10-12.
       </p>
     </div>
   );
@@ -209,7 +213,7 @@ function ClauseContent() {
     {
       title: '6. Encargados del tratamiento',
       paragraphs: [
-        'Volkern (Dimension eXpert LLC) actúa como encargado; los datos se alojan en infraestructura con SCCs firmadas: Vercel (hosting), Neon (Postgres cifrado), Resend (sólo notificaciones), Apprise/Push (sólo avisos sin payload GPS).',
+        'Volkern (Dimension eXpert LLC) actúa como encargado; los datos se alojan en infraestructura del propio responsable con SCCs firmadas: servidor dedicado VPS (hosting y PostgreSQL cifrado en reposo), Resend (sólo notificaciones), Apprise/Push (sólo avisos sin payload GPS). No se utiliza ninguna plataforma cloud de terceros para hosting ni para la base de datos.',
       ],
     },
     {

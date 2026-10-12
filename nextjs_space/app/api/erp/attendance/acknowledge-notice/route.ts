@@ -7,7 +7,7 @@
  *
  * Campos actualizados (Prisma modelo `Employee`):
  *   - `noticeAcknowledgedAt`   → DateTime UTC del momento exacto de la firma
- *   - `noticeVersionAccepted`  → Versión firmada (e.g. "v1-2026-gps-only")
+ *   - `noticeVersionAccepted`  → Versión firmada (e.g. "v2-2026-vps")
  *   - `acceptedPolicies`       → JSON array, append-only concat de versiones firmadas
  *
  * Seguridad:
@@ -39,7 +39,7 @@ const AcknowledgeSchema = z.object({
     .max(32)
     .regex(/^v\d+-\d{4}-[a-z0-9-]+$/, {
       message:
-        'noticeVersion debe tener formato v<n>-<año>-<slug>, p.ej. v1-2026-gps-only',
+        'noticeVersion debe tener formato v<n>-<año>-<slug>, p.ej. v2-2026-vps',
     }),
   // source cerrado a una whitelist: integridad del audit log y endurecimiento
   // contra inyección de metadatos no controlados por el cliente.

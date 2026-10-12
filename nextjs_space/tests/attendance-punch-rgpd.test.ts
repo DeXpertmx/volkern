@@ -85,8 +85,8 @@ function buildEmployee(overrides: Record<string, any> = {}) {
     isTeleworkAllowed: false,
     teleworkRadius: 100,
     noticeAcknowledgedAt: FIXED_NOW,
-    noticeVersionAccepted: 'v1-2026-gps-only',
-    acceptedPolicies: ['v1-2026-gps-only'],
+    noticeVersionAccepted: 'v2-2026-vps',
+    acceptedPolicies: ['v2-2026-vps'],
     ...overrides,
   };
 }
@@ -100,7 +100,7 @@ function buildRules(overrides: Record<string, any> = {}) {
     minPunchIntervalSec: 30,
     maxTravelKmh: 250,
     retentionDays: 1460,
-    noticeVersion: 'v1-2026-gps-only',
+    noticeVersion: 'v2-2026-vps',
     blockIfNotNoticed: false,
     ...overrides,
   };

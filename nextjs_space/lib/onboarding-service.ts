@@ -81,7 +81,10 @@ export async function activateIndustrialModules(tenantId: string) {
       antiSpoofingLevel: 'HIGH',
       minPunchIntervalSec: 30,
       retentionDays: 1460,
-      noticeVersion: 'v1-2026-gps-only',
+      // Debe coincidir con CURRENT_NOTICE_VERSION de mi-asistencia (v2-2026-vps,
+      // 12-oct-2026: encargados reales VPS). El onboarding crea las reglas con
+      // la versión vigente para que los empleados nuevos firmen la actual.
+      noticeVersion: 'v2-2026-vps',
     },
   });
 }
