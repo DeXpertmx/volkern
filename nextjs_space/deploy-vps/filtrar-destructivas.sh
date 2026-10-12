@@ -60,8 +60,14 @@ sql_es_destructivo() {
   sql=$(echo "$1" | normalizar_sql)
 
   # 1. DROP de cualquier cosa (tabla, índice, columna, constraint, esquema).
-  if echo "$sql" | grep -qiE '^(DROP (TABLE|INDEX|SCHEMA|VIEW|MATERIALIZED VIEW|FUNCTION|TRIGGER|SEQUENCE|DATABASE|TYPE|ROLE))|;[[:space:]]*(DROP (TABLE|INDEX|SCHEMA|VIEW|MATERIALIZED VIEW|FUNCTION|TRIGGER|SEQUENCE|DATABASE|TYPE|ROLE))|ALTER TABLE[^;]*DROP (COLUMN|CONSTRAINT|NOT NULL|DEFAULT)?'; then
-    echo "$sql" | grep -iE 'DROP (TABLE|INDEX|SCHEMA|VIEW|MATERIALIZED|FUNCTION|TRIGGER|SEQUENCE|DATABASE|TYPE|ROLE)|ALTER TABLE[^;]*DROP' | head -1
+  #    El patrón de ALTER DROP | debe APILAR la palabra DROP (COLUMN|CONSTRAINT)
+  #    en la MISMA línea: alternar con `?` opcional_documentada en un
+  #    `[^;]*` cruzaría saltos de línea (grep es línea a línea) y marcaba
+  #    como destructivo cualquier ALTER TABLE que preceda a un ALTER
+  #    ... DROP real en otra línea (falso positivo REAL en producción,
+  #    Primer uso de la capa, 12-oct-2026).
+  if echo "$sql" | grep -qiE '^(DROP (TABLE|INDEX|SCHEMA|VIEW|MATERIALIZED VIEW|FUNCTION|TRIGGER|SEQUENCE|DATABASE|TYPE|ROLE))|;[[:space:]]*(DROP (TABLE|INDEX|SCHEMA|VIEW|MATERIALIZED VIEW|FUNCTION|TRIGGER|SEQUENCE|DATABASE|TYPE|ROLE))'; then
+    echo "$sql" | grep -iE 'DROP (TABLE|INDEX|SCHEMA|VIEW|MATERIALIZED|FUNCTION|TRIGGER|SEQUENCE|DATABASE|TYPE|ROLE)|ALTER TABLE [^;]*DROP (COLUMN|CONSTRAINT)' | head -1
     return 0
   fi
 
@@ -72,22 +78,23 @@ sql_es_destructivo() {
   fi
 
   # 3. DELETE sin WHERE: busca "DELETE FROM <algo>;" sin cláusula WHERE entre medias.
-  if echo "$sql" | grep -qiE 'DELETE FROM'; then
+  #    El patrón exige DELETE como PRIMERA palabra de la línea: un
+  #    ON DELETE CASCADE o ON DELETE SET NULL que viaja en un ALTER ADD
+  #    CONSTRAINT no es un DELETE (falso positivo real, 12-oct-2026).
+  if echo "$sql" | grep -qiE '^[[:space:]]*DELETE[[:space:]]+FROM'; then
     if ! echo "$sql" | grep -qiE 'WHERE'; then
-      echo "$sql" | grep -iE 'DELETE FROM' | head -1
+      echo "$sql" | grep -iE '^[[:space:]]*DELETE[[:space:]]+FROM' | head -1
       return 0
     fi
   fi
 
   # 4. UPDATE sin WHERE.
-  if echo "$sql" | grep -qiE 'UPDATE[[:space:]]+[^;]+'; then
-    # `tr ';' '\n'` parte por sentencia: cada UPDATE se mira solo, así que
-    # un WHERE de OTRA sentencia no lo "salva". Una sentencia UPDATE sin
-    # WHERE es suficiente para marcar el SQL como destructivo.
-    if echo "$sql" | tr '\n' ' ' | tr ';' '\n' | grep -Ei 'UPDATE[[:space:]]+[^;]+' | grep -qviE 'WHERE'; then
-      echo "$sql" | grep -iE 'UPDATE[[:space:]]+' | head -1
-      return 0
-    fi
+  #    Misma lección: UPDATE debe ser la PRIMERA palabra de la sentencia.
+  #    `ON UPDATE CASCADE` (par que viaja en FOREIGN KEY) casaría con un
+  #    UPDATE[[:space:]]+ suelto → falso positivo real en producción.
+  if echo "$sql" | tr '\n' ' ' | tr ';' '\n' | grep -Ei '^[[:space:]]*UPDATE[[:space:]]+[^;]+' | grep -qviE 'WHERE'; then
+    echo "$sql" | grep -iE '(^|;)[[:space:]]*UPDATE[[:space:]]+' | head -1
+    return 0
   fi
   # 5. ALTER TABLE con cambio destructivo renombrar tabla/columna, cambiar
   #    tipo de columna (con pérdida potencial) o poner NOT NULL a un campo

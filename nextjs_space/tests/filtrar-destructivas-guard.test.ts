@@ -75,6 +75,10 @@ describe('función pura sql_es_destructivo (código real, vía wrapper bash)', (
 
   const SEGUROS: string[] = [
     'ALTER TABLE "hospitality_communication_templates" ADD COLUMN "diseno" JSONB;',
+    // Regresión del falso positivo REAL en producción (12-oct-2026): ADD
+    // CONSTRAINT con ON DELETE CASCADE / ON UPDATE CASCADE — los "DELETE" y
+    // "UPDATE" que viajan como opciones de la FK no son sentencias DML.
+    `ALTER TABLE "hospitality_canal_conversacion" ADD CONSTRAINT "fk_t" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;\nALTER TABLE "hospitality_canal_mensaje" ADD CONSTRAINT "fk_c" FOREIGN KEY ("conversacionId") REFERENCES "hospitality_canal_conversacion"("id") ON DELETE CASCADE;`,
     'CREATE TABLE "nueva_tabla" (id TEXT PRIMARY KEY);',
     'CREATE INDEX "idx_leads_email" ON "leads"("email");',
     'UPDATE "users" SET nombre = \'x\' WHERE id = 1;',
