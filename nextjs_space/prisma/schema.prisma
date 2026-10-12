@@ -8801,6 +8801,10 @@ model HospitalityCommunicationTemplate {
   // sale en el idioma en que reservó (guestData.idioma); "es" siempre responde
   // (incluidas OTA y reservas manuales sin idioma) — ver booking-i18n.ts.
   idioma        String   @default("es")
+  // Diseño visual del correo (editor de bloques): cabecera, secciones de
+  // etiqueta/valor, párrafos y botones. Solo aplica al canal email; WhatsApp
+  // sigue enviando `contenido`. Ver lib/hospitality/comunicaciones-email.ts.
+  diseno        Json?
   fechaCreacion DateTime @default(now())
   fechaEdicion  DateTime @updatedAt
   tenant        Tenant   @relation("HospitalityCommunicationTemplates", fields: [tenantId], references: [id], onDelete: Cascade)

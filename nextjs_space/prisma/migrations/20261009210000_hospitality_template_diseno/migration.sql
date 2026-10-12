@@ -1,0 +1,14 @@
+-- Editor visual de plantillas de comunicación: el diseño del correo.
+--
+-- Hasta ahora la plantilla de email era un texto con saltos de línea y el envío
+-- envolvía cada línea en un `<p>`: no había forma de componer el correo
+-- transaccional (cabecera, secciones de etiqueta/valor, botón) que el hotel
+-- quiere parecido al que genera su canal.
+--
+-- `diseno` guarda esa composición en JSON (cabecera, título, bloques y pie).
+-- Es aditiva y sin destructivos: las plantillas existentes quedan con `diseno`
+-- nulo y se siguen enviando con su texto de siempre; `contenido` no se toca y
+-- sigue siendo el cuerpo del canal WhatsApp y la parte de texto del correo.
+--
+-- AlterTable
+ALTER TABLE "hospitality_communication_templates" ADD COLUMN     "diseno" JSONB;
