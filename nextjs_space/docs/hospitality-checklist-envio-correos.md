@@ -1,4 +1,4 @@
-# Checklist de envío — los dos correos de Hospitality (pasos 1.1 y 1.2)
+# Checklist de envío — los correos de Hospitality (pasos 1.1 y 1.2, la incidencia del 401, los dos correos del 9-oct: mensajería y reseñas, y el formal de hotelCode/webhook/rotación)
 
 > Un solo sitio para ejecutar el envío HOY sin abrir el runbook. Los
 > recordatorios corren desde el día de envío. Al marcar cada casilla, anotar
@@ -33,6 +33,75 @@ Fuente: [`hospitality-email-proveedor-conectividad.md`](./hospitality-email-prov
 | 1.2.5 | **Al enviar**: marcar el paso 1.2 del runbook + fecha en §9 | ☐ |
 | 1.2.6 | **Recordatorio** a los 5 días hábiles citando SOLO las preguntas A y B (las bloqueantes) | ☐ (fecha: ____ ) |
 | 1.2.7 | **Cuando respondan**: pasar la respuesta por `npx tsx scripts/preflight-conectividad.ts --pegado "URL \| ID de socio \| usuario \| contraseña"` ANTES de tocar el servidor; con el resultado verde, configurar y avisar para el día H | ☐ |
+
+---
+
+## Correo 3 — Proveedor (incidencia, 9-oct): el emisor de su webhook entra con otro par Basic
+
+Fuente: [`hospitality-email-proveedor-401-emisor.md`](./hospitality-email-proveedor-401-emisor.md)
+
+> **No es un correo de la ruta original**: es el cierre de un defecto real del hotel en
+> producción (dos push de reserva rechazados con 401 el 8 y el 9 de octubre). Mismo
+> destinatario y mismo hilo que el 1.2; se puede responder **encima del hilo** del 1.2.
+
+| # | Acción | Estado |
+|---|--------|--------|
+| 3.1 | Abrir el documento y copiar el cuerpo (desde `**Subject:**` hasta «Thanks, [Name] — Volkern», SIN el bloque interno del encabezado) | ☐ |
+| 3.2 | Rellenar `[name]` (saludo) y `[name] — Volkern` (firma) | ☐ |
+| 3.3 | Verificar que **no** viaja ningún secreto: ni el par guardado, ni el ID de socio, ni huellas de NUESTRO par. Las huellas que cita (`79c4b7658cf0`/`fb41fd6bdba9`) son las del par **que llegó**, calculadas por nosotros sobre un valor que ellos ya tienen | ☐ |
+| 3.4 | **Sin adjuntos**: el hilo va en inglés y la guía del emisor está en español; todo lo que necesitan va en el cuerpo | ☐ |
+| 3.5 | **Ofrecer el reenvío del par** por el canal seguro si lo han perdido — nunca por correo (es el punto 1 de la sección 2 del documento). Si quieren el contrato completo en su idioma, se les puede señalar la tarjeta **«Cómo debe llamarnos el PMS»** de la propia pantalla de Conectividad (contrato sin secretos, en español) | ☐ |
+| 3.6 | **Al enviar**: marcar la incidencia en §9 del runbook + fecha (fila del 9-oct, «correo 3 enviado») | ☐ |
+| 3.7 | **Cuando respondan con sus dos huellas nuevas**: comparar en casa (panel de Conectividad / `ultimoRechazoWebhook`, sin imprimir el par; el script de recálculo está en el propio documento del correo) y contestar «coincide» o «no coincide». Si coincide, pedir un push de prueba y confirmar el 200 | ☐ |
+| 3.8 | **Recordatorio** a los 5 días hábiles si no hay respuesta ni push nuevo: una línea citando que siguen entrando 401 (si el bloque del último rechazo sigue con la fecha del 9-oct, no ha habido intento suyo nuevo) | ☐ (fecha: ____ ) |
+| 3.9 | **Cierre**: anotar en §9 la fecha del push que entró con 200. Señales de «arreglado»: el push responde 200, la reserva aparece en el ERP, el **estado** sale de error y **Errores registrados** vuelve a 0 (`resetErrores`). Ojo: **el bloque del último rechazo no se borra** al llegar un push correcto —solo lo pisa un rechazo nuevo—, así que se lee su **fecha**, no su existencia | ☐ |
+
+### Plan B mientras responden (no espera a nadie)
+
+- El barrido diario ya recupera las reservas por `POST /data/{partner-id}` con la ventana
+  de 30 días atrás: el negocio no se detiene, llega hasta ~24 h tarde.
+- Si el hotel reporta una reserva ausente antes del barrido: disparar la reconciliación
+  a mano (`POST /api/admin/conectividad/reconciliar` o la UI de Conectividad) y comprobar
+  el push de reposición; recordar que ahora el barrido importa **y empuja**.
+
+---
+
+## Correo 4 — Proveedor (mensajería, 9-oct): activar el Message Webhook
+
+Fuente: [`hospitality-email-proveedor-webhook-mensajes.md`](./hospitality-email-proveedor-webhook-mensajes.md)
+
+> **No bloquea nada del negocio**: la bandeja ya está implementada
+> (`docs/hospitality-mensajes-canal.md`) y solo le falta que el proveedor apunte
+> el webhook a nuestra URL. Mismo hilo y destinatario que el 1.2.
+
+| # | Acción | Estado |
+|---|--------|--------|
+| 4.1 | Abrir el documento y copiar el cuerpo (desde `**Subject:**` hasta «Thanks, [operador]», SIN el bloque interno del encabezado) | ☐ |
+| 4.2 | Rellenar `[name]` (saludo) y `[operador]` (firma) | ☐ |
+| 4.3 | Confirmar en el cuerpo la URL `https://volkern.app/api/hospitality/webhook/messages` y que el Basic es **el mismo** del webhook de reservas. **No escribir el par** | ☐ |
+| 4.4 | **Sin adjuntos**. Al enviar, anotar fecha en §9 del runbook (fila del 9-oct, «correo 4 enviado») | ☐ |
+| 4.5 | **Cuando confirmen**: pedir un mensaje de prueba desde la extranet de cualquier canal. Señales de «funcionando»: el endpoint devuelve `200 {success:true, estado:"recibido"}` y el hilo aparece en Hospitality → Mensajes. Un segundo envío del mismo mensaje debe responder `duplicado` | ☐ |
+| 4.6 | **Recordatorio** a los 5 días hábiles si no hay confirmación ni mensaje de prueba | ☐ (fecha: ____ ) |
+
+---
+
+## Correo 5 — Proveedor (reseñas, 9-oct): pedir un endpoint de reseñas
+
+Fuente: [`hospitality-email-proveedor-resenas.md`](./hospitality-email-proveedor-resenas.md)
+
+> Es una **petición de producto**, no una incidencia: hoy no existe endpoint de
+> reseñas (medido en su documentación) y el histórico entra por CSV. Se puede
+> enviar en el mismo hilo que el 4 o como correo aparte; conviene no mezclarlo
+> con el cierre del 401.
+
+| # | Acción | Estado |
+|---|--------|--------|
+| 5.1 | Abrir el documento y copiar el cuerpo (desde `**Subject:**` hasta «Best regards», SIN el bloque interno del encabezado) | ☐ |
+| 5.2 | Rellenar `[name]` (saludo) y `[operador]` (firma); ajustar la pregunta 1 si ya se sabe qué canales releen | ☐ |
+| 5.3 | **Sin adjuntos** (el contrato propuesto va en el cuerpo). Al enviar, anotar fecha en §9 del runbook (fila del 9-oct, «correo 5 enviado») | ☐ |
+| 5.4 | **Si responden que sí lo añaden**: anotar aquí su forma real (ruta, campos, si el rango es por fecha de reseña o de estancia) y abrir la implementación del fetch; el contrato interno se actualiza entonces | ☐ (respuesta: ____ ) |
+| 5.5 | **Si responden que no**: decidir entre agregador de reputación y dejar el CSV como está — decisión del operador, no del desarrollo | ☐ |
+| 5.6 | **Recordatorio** a los 10 días hábiles: es una petición de producto, no bloquea la operación | ☐ (fecha: ____ ) |
 
 ---
 
