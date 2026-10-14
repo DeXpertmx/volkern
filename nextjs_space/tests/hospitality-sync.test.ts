@@ -503,4 +503,37 @@ describe('buildRateRestrictions (Rate Restrictions POST)', () => {
     const units = [{ roomCode: 'SUITE', ratePlans: [] }];
     expect(buildRateRestrictions(units, day('2026-09-10'), day('2026-09-11'))).toEqual([]);
   });
+
+  it('un plan con el MISMO código que el vínculo viaja una sola vez, y viaja también en restricciones', () => {
+    // Es la forma real de las cuatro unidades de Ciudad Patio Cuarenta: cada una
+    // con su plan, y el código del plan ES el código de tarifa vinculado
+    // (`1a-d-ep`). Empuja un solo par de tarifa —el plan manda sobre el respaldo
+    // del vínculo, no se suman— y con él viajan las restricciones de esa unidad:
+    // una unidad sin plan se quedaba fuera del push de restricciones.
+    const units = [
+      {
+        id: 'u1',
+        roomCode: '1a',
+        tarifaBase: 120,
+        rateplanCodeMapeado: '1a-d-ep',
+        ratePlans: [{ codigo: '1a-d-ep', tarifa: 120 }],
+      },
+    ];
+    expect(buildRateUpdates(units, day('2026-10-14'), day('2026-10-16'))).toEqual([
+      {
+        startDate: '2026-10-14',
+        endDate: '2026-10-15',
+        rates: [{ roomCode: '1a', rateplanCode: '1a-d-ep', rate: 120 }],
+      },
+    ]);
+
+    const restricciones = buildRateRestrictions(
+      [{ roomCode: '1a', ratePlans: [{ codigo: '1a-d-ep', minNoches: 2 }] }],
+      day('2026-10-14'),
+      day('2026-10-16')
+    );
+    const pares = restricciones.flatMap((u) => u.rates.map((r) => `${r.roomCode}/${r.rateplanCode}`));
+    expect(new Set(pares)).toEqual(new Set(['1a/1a-d-ep']));
+    expect(restricciones[0].rates[0].restrictions.minimumStay).toBe(2);
+  });
 });
