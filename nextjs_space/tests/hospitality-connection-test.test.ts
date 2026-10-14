@@ -144,6 +144,23 @@ describe('Hospitality — prueba de conexión (property details)', () => {
     expect(result.respuestaExterna).toEqual({ success: false, message: 'Invalid partner id' });
   });
 
+  it('un 403 «Access Denied - <hotelCode>» se explica como hotel sin conceder, no como un 403 seco', async () => {
+    // Verificado contra el servicio (2026-10-09): con el par Basic y el ID de
+    // socio correctos, un hotel no asignado a la cuenta responde esto. El hotel
+    // que pulsa «Comprobar» tiene que leer qué falta y a quién pedirlo.
+    hoisted.findUnique.mockResolvedValue({ ...creds, baseUrl: 'https://connect.example.internal' });
+    hoisted.globalFetch.mockResolvedValue(
+      new Response(JSON.stringify({ success: false, message: 'Access Denied - 75fdbbce2e' }), { status: 403, headers: { 'Content-Type': 'application/json' } })
+    );
+
+    const result = await testConnectivityConnection('75fdbbce2e');
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/no está concedido/i);
+    expect(result.error).not.toContain('estado 403');
+    expect(result.respuestaExterna).toEqual({ success: false, message: 'Access Denied - 75fdbbce2e' });
+  });
+
   it('devuelve error claro si no hay credenciales configuradas', async () => {
     hoisted.findUnique.mockResolvedValue(null);
 

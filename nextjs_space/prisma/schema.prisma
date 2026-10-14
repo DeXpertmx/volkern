@@ -535,6 +535,9 @@ model Tenant {
   hospitalityGuestRegistry      HospitalityGuestRegistryCommunication[] @relation("HospitalityGuestRegistry")
   hospitalityCheckinPreguntas   HospitalityCheckinPregunta[]      @relation("HospitalityCheckinPreguntas")
   hospitalityReviews            HospitalityReview[]               @relation("HospitalityReviews")
+  // Mensajería del canal (OTAs): hilos con el huésped y sus mensajes.
+  hospitalityCanalConversaciones HospitalityCanalConversacion[]   @relation("HospitalityCanalConversaciones")
+  hospitalityCanalMensajes       HospitalityCanalMensaje[]       @relation("HospitalityCanalMensajes")
   automationActionExecutions    AutomationActionExecution[]        @relation("AutomationActionExecutions")
 }
 
@@ -8313,6 +8316,8 @@ model HospitalityProperty {
   codigoEstablecimientoMIR String?
 
   reviews HospitalityReview[] @relation("HospitalityReviews")
+  // Hilos de mensajería del canal de esta propiedad.
+  canalConversaciones HospitalityCanalConversacion[] @relation("HospitalityCanalConversacionesProperty")
 
   @@index([tenantId])
   @@map("hospitality_properties")
@@ -8533,6 +8538,8 @@ model HospitalityReservation {
   guestRegistryCommunications HospitalityGuestRegistryCommunication[]
   // La reseña de esta estancia (una sola por reserva, la moderación decide).
   review                HospitalityReview? @relation("HospitalityReviews")
+  // Hilos de mensajería del canal colgados de esta reserva.
+  canalConversaciones   HospitalityCanalConversacion[] @relation("HospitalityCanalConversacionesReservation")
 
   @@unique([tenantId, channel, externalBookingId])
   @@index([tenantId])
@@ -8557,6 +8564,14 @@ model HospitalityWebhookEvent {
   estado          String    @default("recibido") // recibido|procesado|duplicado|error|sin_mapping
   errorMensaje    String?
   payload         Json?
+  // Entregas acumuladas de ESTA fila. En las reservas vale 1 (una fila por
+  // evento); en los mensajes sin mapping la fila es única por hotel+canal y
+  // aquí se cuenta cada reintento del proveedor: «este código lleva 40 intentos
+  // desde el 9-oct» es la información que hace falta para actuar, y 40 filas
+  // idénticas no la dan mejor.
+  intentos        Int       @default(1)
+  // Momento del último reintento (null en las filas históricas de reservas).
+  ultimoIntentoEn DateTime?
   fechaCreacion   DateTime  @default(now())
   tenant          Tenant?   @relation("HospitalityWebhookEvents", fields: [tenantId], references: [id], onDelete: Cascade)
   reservation     HospitalityReservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
@@ -8905,6 +8920,90 @@ model HospitalityReview {
   // migración `20260922110000_review_canal` y el esquema no lo declaraba.
   @@index([canal])
   @@map("hospitality_review")
+}
+
+// Conversación de mensajería con el huésped EN EL CANAL (OTA), tal y como la
+// entrega el webhook de mensajes del proveedor. Una fila por hilo: la clave es
+// la del proveedor (`channel` + `conversation_id`), porque el hilo es del
+// huésped y de la reserva, no de un usuario de Volkern.
+//
+// La propiedad se resuelve por mapping (`hotel_id` → ConnectivityMapping) y el
+// tenant sale de ahí: sin mapping activo la conversación NO se guarda —el
+// webhook responde 404 y el proveedor reintenta—, igual que una reserva sin
+// mapping. Un mensaje sin propiedad no tiene a quién entregarse.
+model HospitalityCanalConversacion {
+  id             String    @id @default(cuid())
+  tenantId       String
+  propertyId     String?
+  // Reserva interna del mismo hilo, si el proveedor manda `booking_id` y hay
+  // reserva con ese `externalBookingId`. Null = la conversación es anterior a
+  // que la reserva exista aquí (una consulta que aún no es reserva).
+  reservationId  String?
+  // Canal de la OTA en minúsculas (`booking.com`, `expedia`…).
+  canal          String
+  // `hotel_id`: cómo identifica el proveedor esta propiedad en el canal.
+  hotelCode      String
+  // `conversation_id` del proveedor: la clave del hilo en sus APIs.
+  conversacionId String
+  bookingExterno String?
+  huespedNombre  String?
+  huespedEmail   String?
+  huespedTelefono String?
+  ultimoMensajeEn DateTime
+  // Entrantes sin leer. El panel los cuenta; abrir un hilo no los marca leídos
+  // (eso es una acción explícita del operador, como el resto del módulo).
+  sinLeer        Int       @default(0)
+  fechaCreacion  DateTime  @default(now())
+  fechaEdicion   DateTime  @updatedAt
+  tenant         Tenant                  @relation("HospitalityCanalConversaciones", fields: [tenantId], references: [id], onDelete: Cascade)
+  property       HospitalityProperty?    @relation("HospitalityCanalConversacionesProperty", fields: [propertyId], references: [id], onDelete: SetNull)
+  reservation    HospitalityReservation? @relation("HospitalityCanalConversacionesReservation", fields: [reservationId], references: [id], onDelete: SetNull)
+  mensajes       HospitalityCanalMensaje[] @relation("HospitalityCanalMensajesConversacion")
+
+  // Un hilo por canal y conversación dentro del tenant: la entrega repetida del
+  // mismo mensaje no abre una segunda conversación.
+  @@unique([tenantId, canal, conversacionId])
+  // La bandeja ordena por el último mensaje.
+  @@index([tenantId, ultimoMensajeEn])
+  @@index([propertyId])
+  @@map("hospitality_canal_conversacion")
+}
+
+// Un mensaje del hilo, en cualquiera de las dos direcciones. Lo que el huésped
+// escribió no se edita ni se borra: se guarda tal cual llegó (y si un día se
+// corrige algo, será otra fila con su motivo). Una respuesta que no llegó al
+// canal se queda aquí como `error` con el texto del proveedor: el hotel tiene
+// que ver que NO salió, no un hilo que parece contestado.
+model HospitalityCanalMensaje {
+  id               String    @id @default(cuid())
+  tenantId         String
+  conversacionId   String
+  // `message_id` del proveedor: dedupe de entregas repetidas. Null en los
+  // nuestros (al enviar, el proveedor no nos devuelve uno).
+  mensajeExternoId String?
+  // entrante (lo escribió el huésped) | saliente (lo escribió el hotel)
+  direccion        String
+  // `sender_type` del proveedor, o `hotel` en los que escribimos nosotros.
+  emisor           String
+  contenido        String
+  tipo             String    @default("text")
+  // `time_sent` del proveedor. Null si vino ilegible: el hilo se ordena por
+  // `fechaCreacion` y nunca inventa la hora del huésped.
+  enviadoEn        DateTime?
+  adjuntos         Json?
+  // recibido | enviado | error
+  estado           String    @default("recibido")
+  error            String?
+  fechaCreacion    DateTime  @default(now())
+  fechaEdicion     DateTime  @updatedAt
+  tenant           Tenant                       @relation("HospitalityCanalMensajes", fields: [tenantId], references: [id], onDelete: Cascade)
+  conversacion     HospitalityCanalConversacion  @relation("HospitalityCanalMensajesConversacion", fields: [conversacionId], references: [id], onDelete: Cascade)
+
+  // Dedupe por mensaje del proveedor dentro del hilo.
+  @@unique([conversacionId, mensajeExternoId])
+  @@index([tenantId, fechaCreacion])
+  @@index([conversacionId, fechaCreacion])
+  @@map("hospitality_canal_mensaje")
 }
 
 model HospitalityCheckinPregunta {

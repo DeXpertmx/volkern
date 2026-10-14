@@ -346,7 +346,7 @@ ${figura('04-dashboard', 'Vista de entrada del módulo: el dashboard operativo d
       <tr><td>Conectividad</td><td><code>sync</code> (push manual), <code>webhook/reservations</code></td></tr>
       <tr><td>Admin de conectividad</td><td><code>/api/admin/conectividad</code> (+ <code>test</code>, <code>propiedades</code>, <code>reconciliar</code>, <code>sync-logs</code>)</td></tr>
       <tr><td>Crons</td><td><code>hospitality-checkin-due</code>, <code>hospitality-reconcile</code>, <code>hospitality-review-request</code></td></tr>
-      <tr><td>Público</td><td><code>/api/public/viajeros/[token]</code>, <code>/api/public/booking/[slug]</code> (+ <code>cotizar</code>, <code>reservar</code>)</td></tr>
+      <tr><td>Público</td><td><code>/api/public/viajeros/[token]</code>, <code>/api/public/booking/[slug]/cotizar</code> y <code>/api/public/booking/[slug]/reservar</code></td></tr>
     </tbody>
   </table>
 

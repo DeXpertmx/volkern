@@ -34,7 +34,12 @@ import {
   resolveMappingDetailed,
   type WebhookReservationPayload,
 } from '@/lib/hospitality/reservations';
-import { cargarHotelCodesDelTenant, leerHabitacion, vinculoParaRoomCode } from '@/lib/hospitality/incidencias';
+import {
+  ACCIONES_RESERVA,
+  cargarHotelCodesDelTenant,
+  leerHabitacion,
+  vinculoParaRoomCode,
+} from '@/lib/hospitality/incidencias';
 
 /** Eventos que se reenvían en una sola petición. */
 const MAX_REINTENTOS = 20;
@@ -72,8 +77,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Solo eventos de RESERVA: la tabla la comparten los mensajes del canal
+    // (`action: 'message'`), que comparten estado `sin_mapping` pero no se
+    // reenvían al motor de reservas.
     const eventos = await prisma.hospitalityWebhookEvent.findMany({
-      where: { id: { in: eventoIds }, estado: 'sin_mapping' },
+      where: {
+        id: { in: eventoIds },
+        action: { in: [...ACCIONES_RESERVA] },
+        estado: 'sin_mapping',
+      },
       orderBy: { fechaCreacion: 'desc' },
       select: {
         id: true,

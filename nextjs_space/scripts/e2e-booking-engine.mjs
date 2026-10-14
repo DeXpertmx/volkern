@@ -4,11 +4,13 @@
  * + Payments). Recorre el flujo completo contra un servidor de desarrollo:
  *
  *   1. Publica una propiedad de prueba VÍA LAS APIs reales de gestión
- *      (propiedades → unidades → tarifas → estado «conectada»), con una API key
- *      temporal creada y eliminada por el propio script.
- *   2. Comprueba la puerta de publicación: sin «conectada» la propiedad no se
- *      puede vender (404 en la API pública); con ella, sí.
- *   3. Reserva por la API pública (la misma que usa la página /booking/[slug]):
+ *      (propiedades → unidades → tarifas), con una API key temporal creada y
+ *      eliminada por el propio script, y la publica en la lista
+ *      `propiedadesPublicadas` de la configuración del Booking Engine (el ÚNICO
+ *      criterio de publicación desde que la página pública es una sola).
+ *   2. Comprueba la puerta de publicación: fuera de la lista la página no expone
+ *      la propiedad (404/409 en la API pública); dentro de ella, sí.
+ *   3. Reserva por la API pública (la misma que usa la página /reservar/<slug>):
  *      catálogo, cotización con el motor central, restricción de estancia
  *      mínima, creación de la reserva e idempotencia (el mismo intento no
  *      duplica) y overbooking (el solape devuelve 409).
@@ -284,6 +286,19 @@ const MIR_VIAJERO = {
 /** Mock levantado por el ensayo (se cierra al terminar, pase lo que pase). */
 let MIR_MOCK = null;
 
+// ─── La página pública: UNA puerta y UN criterio ──────────────────────────
+// Desde la unificación hay una sola página (`/reservar/<slug>`) y una sola API
+// pública (`/api/public/booking/<slug>/cotizar|reservar`), y el único criterio
+// de publicación es la lista `propiedadesPublicadas` de la configuración del
+// tenant. El ensayo publica por la API real (la misma que usa el panel) y
+// DEVUELVE la configuración a como estaba al terminar: la propiedad «conectada»
+// ya no publica nada por sí sola.
+let SLUG_PUBLICO = null;
+let PROP_ID = null;
+let TENANT_ID = null;
+let CONFIG_BOOKING_PREVIA = null;
+let CONFIG_CREADA_POR_ENSAYO = false;
+
 // ─── Salida ─────────────────────────────────────────────────────────────────
 const verde = (s) => `\x1b[32m${s}\x1b[0m`;
 const rojo = (s) => `\x1b[31m${s}\x1b[0m`;
@@ -361,6 +376,106 @@ async function peticion(ruta, { metodo = 'GET', cuerpo, apiKey, cabeceras } = {}
 }
 
 // ─── Prisma (solo semilla y limpieza: el flujo va por HTTP) ─────────────────
+// ─── La puerta pública (adaptadores) ───────────────────────────────────────
+// Las comprobaciones del ensayo se escribieron contra la API pública anterior.
+// En vez de reescribir cada una, estos dos adaptadores hablan con la puerta
+// ÚNICA y devuelven la forma que el ensayo ya sabe leer. Lo que NO se adapta es
+// la disponibilidad: el motor nuevo responde con las unidades que SÍ se pueden
+// vender (o con el motivo por el que no), así que las comprobaciones de
+// disponibilidad y de restricciones del plan preguntan por la unidad concreta.
+
+/** Fecha ISO, venga como `Date` (los bloques del ensayo) o ya como texto. */
+function aIso(valor) {
+  return typeof valor === 'string' ? valor : iso(valor);
+}
+
+/**
+ * Cotiza por la puerta pública. Con `unitId`, la respuesta habla de ESA unidad:
+ * es como el ensayo pregunta «¿se puede vender esta?» y lee el motivo cuando no.
+ */
+async function cotizarPublico({ checkIn: desde, checkOut: hasta, unitId, adultos = 2 } = {}) {
+  return peticion(`/api/public/booking/${SLUG_PUBLICO}/cotizar`, {
+    metodo: 'POST',
+    cuerpo: {
+      propertyId: PROP_ID,
+      checkIn: aIso(desde),
+      checkOut: aIso(hasta),
+      adultos,
+      ninos: 0,
+      ...(unitId ? { unitId } : {}),
+    },
+  });
+}
+
+/**
+ * Reserva por la puerta pública. Acepta los nombres que ya usaba el ensayo
+ * (`huespedNombre`, `idempotencyKey`…) y los traduce al contrato nuevo.
+ *
+ * La `solicitudId` es la clave de idempotencia, y de ella el motor deriva la
+ * `referencia` recortando a 16 caracteres: se manda un identificador estable y
+ * sin colisiones entre intentos distintos (`ensayo-be-…` y `ensayo-be-…-solape`
+ * darían la MISMA referencia y el solape se leería como un reintento).
+ */
+async function reservarPublico({
+  unitId,
+  checkIn: desde,
+  checkOut: hasta,
+  huespedNombre,
+  huespedEmail,
+  huespedTelefono,
+  notas,
+  idempotencyKey,
+  lang,
+  extras,
+  documento,
+  adultos = 2,
+}) {
+  const solicitudId = `be-${createHash('sha1').update(String(idempotencyKey)).digest('hex').slice(0, 20)}`;
+  const res = await peticion(`/api/public/booking/${SLUG_PUBLICO}/reservar`, {
+    metodo: 'POST',
+    cuerpo: {
+      propertyId: PROP_ID,
+      unitId,
+      checkIn: aIso(desde),
+      checkOut: aIso(hasta),
+      adultos,
+      ninos: 0,
+      solicitudId,
+      nombre: huespedNombre,
+      email: huespedEmail,
+      telefono: huespedTelefono,
+      notas,
+      lang,
+      extras,
+      documento,
+    },
+  });
+
+  // El `id` de la reserva lo resuelve la referencia, que es lo que hace la
+  // confirmación del huésped: es el que el ensayo necesita para consultarla luego
+  // por la API interna. `duplicada` es el reintento del mismo formulario (el
+  // motor devuelve la reserva que ya existía en vez de crear otra) y `paymentUrl`
+  // es el nombre que el ensayo ya usaba para el enlace de pago.
+  const referencia = res.json?.referencia || null;
+  const reservaId = referencia
+    ? (
+        await prisma.hospitalityReservation.findFirst({
+          where: { tenantId: TENANT_ID, channel: 'Directa', externalBookingId: referencia },
+          select: { id: true },
+        })
+      )?.id || null
+    : null;
+  return {
+    status: res.status,
+    json: {
+      ...res.json,
+      reservationId: reservaId,
+      duplicada: res.status === 200,
+      paymentUrl: res.json?.pagoUrl ?? null,
+    },
+  };
+}
+
 const prisma = new PrismaClient();
 
 // ─── Contexto y render de plantillas (§21) ──────────────────────────────────
@@ -730,6 +845,63 @@ async function limpiar(tenantId) {
   return propiedades.length;
 }
 
+/**
+ * Devuelve la configuración del Booking Engine a como estaba antes del ensayo.
+ *
+ * El ensayo publica su propiedad en la lista `propiedadesPublicadas` y desactiva
+ * el cobro en línea: sin devolverla, la página real del tenant se quedaría con
+ * una propiedad de ensayo entre las suyas (y sin poder cobrar). Si el tenant no
+ * tenía configuración, la que creó el ensayo se retira.
+ *
+ * En una limpieza SUELTA (`--cleanup` de una corrida anterior con `--keep`) no se
+ * sabe cómo era la configuración antes, así que solo se retiran de la lista los
+ * ids de propiedades que ya no existen: nada más se toca.
+ */
+async function restaurarConfigBooking() {
+  const tenantId =
+    TENANT_ID ||
+    (await prisma.user.findFirst({ where: { email: EMAIL_USUARIO }, select: { tenantId: true } }))
+      ?.tenantId;
+  if (!tenantId) return;
+
+  const actual = await prisma.hospitalityBookingConfig.findUnique({ where: { tenantId } });
+  if (!actual) return;
+
+  if (CONFIG_BOOKING_PREVIA) {
+    await prisma.hospitalityBookingConfig.update({
+      where: { tenantId },
+      data: {
+        slug: CONFIG_BOOKING_PREVIA.slug,
+        activo: CONFIG_BOOKING_PREVIA.activo,
+        propiedadesPublicadas: CONFIG_BOOKING_PREVIA.propiedadesPublicadas,
+        requierePagoOnline: CONFIG_BOOKING_PREVIA.requierePagoOnline,
+      },
+    });
+    ok('Configuración del Booking Engine devuelta a como estaba', `/${CONFIG_BOOKING_PREVIA.slug}`);
+    return;
+  }
+
+  if (CONFIG_CREADA_POR_ENSAYO) {
+    await prisma.hospitalityBookingConfig.delete({ where: { tenantId } }).catch(() => null);
+    ok('Configuración del Booking Engine creada por el ensayo retirada');
+    return;
+  }
+
+  const vivas = await prisma.hospitalityProperty.findMany({
+    where: { tenantId, id: { in: actual.propiedadesPublicadas } },
+    select: { id: true },
+  });
+  const idsVivos = new Set(vivas.map((p) => p.id));
+  const limpias = actual.propiedadesPublicadas.filter((id) => idsVivos.has(id));
+  if (limpias.length !== actual.propiedadesPublicadas.length) {
+    await prisma.hospitalityBookingConfig.update({
+      where: { tenantId },
+      data: { propiedadesPublicadas: limpias },
+    });
+    ok('Limpieza suelta: propiedades inexistentes retiradas de la página', `${limpias.length} publicada(s)`);
+  }
+}
+
 async function crearApiKeyTemporal(tenantId, userId) {
   const clave = `vk_prod_${randomBytes(32).toString('hex')}`;
   const keyHash = createHash('sha256').update(clave).digest('hex');
@@ -756,8 +928,11 @@ async function ensayar() {
 
   // 0. Servidor vivo y tenant/usuario del ensayo.
   console.log(titulo('0. Prerrequisitos'));
-  const sonda = await peticion('/api/public/booking/propiedad-inexistente');
-  if (sonda.status !== 404) {
+  // Sonda de vida: la API de gestión del Booking Engine existe y está montada
+  // (sin API key responde 401). Una ruta pública a la que ya no se llega no
+  // probaría nada: también daría 404 con el servidor apagado.
+  const sonda = await peticion('/api/hospitality/booking');
+  if (sonda.status !== 401) {
     throw new Error(
       `No hay servidor de desarrollo en ${BASE} (respuesta ${sonda.status}). ` +
         'Arráncalo con: npm run dev  ·  o usa scripts/run-e2e-booking-engine.sh'
@@ -854,85 +1029,120 @@ async function ensayar() {
     throw new Error('No se crearon las dos unidades del ensayo');
   }
 
-  // Puerta de publicación: sin «conectada» la API pública no la sirve.
-  const antesDePublicar = await peticion(`/api/public/booking/${propiedadId}`);
+  // La publicación: la lista `propiedadesPublicadas` de la configuración del
+  // tenant, por la API real que usa el panel. Se guarda la configuración previa
+  // para DEVOLVERLA al terminar: el ensayo no puede alterar la página real de
+  // nadie (ni su lista de propiedades, ni su cobro, ni su dirección).
+  const configPrevia = await prisma.hospitalityBookingConfig.findUnique({ where: { tenantId } });
+  CONFIG_BOOKING_PREVIA = configPrevia
+    ? {
+        slug: configPrevia.slug,
+        activo: configPrevia.activo,
+        propiedadesPublicadas: [...configPrevia.propiedadesPublicadas],
+        requierePagoOnline: configPrevia.requierePagoOnline,
+      }
+    : null;
+  CONFIG_CREADA_POR_ENSAYO = !configPrevia;
+  SLUG_PUBLICO = configPrevia?.slug || `ensayo-be-${tenantId.slice(-6).toLowerCase()}`;
+  PROP_ID = propiedadId;
+  TENANT_ID = tenantId;
+
+  // Sin estar en la lista, la página pública no expone la propiedad (404 si la
+  // página no existe todavía, 409 si el tenant la tiene desactivada).
+  const antesDePublicar = await cotizarPublico({ checkIn, checkOut });
   esperar(
-    antesDePublicar.status === 404,
-    'Sin publicar, la API pública no expone la propiedad',
-    `HTTP ${antesDePublicar.status}`
+    antesDePublicar.status === 404 || antesDePublicar.status === 409,
+    'Sin publicar, la página pública no expone la propiedad',
+    `HTTP ${antesDePublicar.status} · ${antesDePublicar.json?.error || ''}`
   );
 
-  const publicar = await peticion(`/api/hospitality/properties/${propiedadId}`, {
-    metodo: 'PATCH',
+  const publicar = await peticion('/api/hospitality/booking', {
+    metodo: 'PUT',
     apiKey,
-    cuerpo: { estado: 'conectada' },
+    cuerpo: {
+      slug: SLUG_PUBLICO,
+      activo: true,
+      // El ensayo no puede cobrar en línea (no hay cuenta conectada): su reserva
+      // directa nace confirmada. Se devuelve el valor del tenant al terminar.
+      requierePagoOnline: false,
+      // SUMA su propiedad a las que ya estuvieran publicadas: el ensayo no
+      // despublica la página del tenant mientras corre.
+      propiedadesPublicadas: [
+        ...new Set([...(configPrevia?.propiedadesPublicadas || []), propiedadId]),
+      ],
+    },
   });
   esperar(
-    publicar.status === 200 && publicar.json?.property?.estado === 'conectada',
-    'Propiedad publicada (estado «conectada»)',
-    `HTTP ${publicar.status}`
+    publicar.status === 200 && (publicar.json?.config?.propiedadesPublicadas || []).includes(propiedadId),
+    'Propiedad publicada en `propiedadesPublicadas` (el único criterio)',
+    `HTTP ${publicar.status} · /${publicar.json?.config?.slug || SLUG_PUBLICO}`
   );
 
-  // 2. La API pública que consume la página /booking/[slug].
+  // 2. La API pública que consume la página /reservar/<slug>.
   console.log(titulo('2. Página pública: catálogo y cotización'));
 
-  const catalogo = await peticion(`/api/public/booking/${propiedadId}`);
-  const unidadesCatalogo = catalogo.json?.unidades || [];
-  esperar(
-    catalogo.status === 200 && unidadesCatalogo.length === 2,
-    'Catálogo público con las dos unidades',
-    `HTTP ${catalogo.status} · ${unidadesCatalogo.length} unidad(es)`
-  );
-  const catalogoA = unidadesCatalogo.find((u) => u.id === unidadA.id);
-  esperar(
-    catalogoA?.tarifaNoche === unidadA.tarifa,
-    'El catálogo publica la tarifa del rate plan (no la tarifa base)',
-    `catálogo ${catalogoA?.tarifaNoche} vs tarifa base ${unidadA.tarifaBase}`
-  );
-
-  const cotizacion = await peticion(
-    `/api/public/booking/${propiedadId}?checkIn=${iso(checkIn)}&checkOut=${iso(checkOut)}`
-  );
-  const lineas = cotizacion.json?.cotizacion?.unidades || [];
+  // Una sola llamada da catálogo, precio y disponibilidad: el motor cotiza con
+  // el Availability Engine central y solo devuelve lo que SE PUEDE vender.
+  const cotizacion = await cotizarPublico({ checkIn, checkOut });
+  const lineas = cotizacion.json?.unidades || [];
   const lineaA = lineas.find((l) => l.unitId === unidadA.id);
   const lineaB = lineas.find((l) => l.unitId === unidadB.id);
   esperar(
-    cotizacion.status === 200 && cotizacion.json?.cotizacion?.noches === noches,
+    cotizacion.status === 200 && cotizacion.json?.noches === noches,
     `Cotización de ${noches} noches (${iso(checkIn)} → ${iso(checkOut)})`,
     `HTTP ${cotizacion.status}`
   );
   esperar(
-    lineaA?.disponible === true && lineaA?.precioTotal === unidadA.tarifa * noches,
-    'Precio de la Suite Volcán = noches × tarifa',
-    `${lineaA?.precioTotal} MXN (${noches} × ${unidadA.tarifa})`
+    lineas.length === 2,
+    'Catálogo público con las dos unidades',
+    `${lineas.length} unidad(es)`
   );
   esperar(
-    lineaB?.disponible === true && lineaB?.precioTotal === unidadB.tarifa * noches,
+    lineaA?.tarifaPorNoche === unidadA.tarifa,
+    'El catálogo publica la tarifa del rate plan (no la tarifa base)',
+    `catálogo ${lineaA?.tarifaPorNoche} vs tarifa base ${unidadA.tarifaBase}`
+  );
+  esperar(
+    lineaA?.desglose?.total === unidadA.tarifa * noches,
+    'Precio de la Suite Volcán = noches × tarifa',
+    `${lineaA?.desglose?.total} MXN (${noches} × ${unidadA.tarifa})`
+  );
+  esperar(
+    lineaB?.desglose?.total === unidadB.tarifa * noches,
     'Precio del Loft Bosque = noches × tarifa',
-    `${lineaB?.precioTotal} MXN (${noches} × ${unidadB.tarifa})`
+    `${lineaB?.desglose?.total} MXN (${noches} × ${unidadB.tarifa})`
   );
   // La ficha de la página muestra la tarifa por noche junto al total: sin este
   // campo la página pinta 0.00/noche.
   esperar(
-    lineaA?.tarifaNoche === unidadA.tarifa && lineaB?.tarifaNoche === unidadB.tarifa,
+    lineaA?.tarifaPorNoche === unidadA.tarifa && lineaB?.tarifaPorNoche === unidadB.tarifa,
     'La cotización expone la tarifa por noche de cada unidad',
-    `${lineaA?.tarifaNoche} / ${lineaB?.tarifaNoche} MXN por noche`
+    `${lineaA?.tarifaPorNoche} / ${lineaB?.tarifaPorNoche} MXN por noche`
   );
 
-  // Restricción de venta del rate plan: la Suite exige 2 noches.
-  const corta = await peticion(
-    `/api/public/booking/${propiedadId}?checkIn=${iso(checkInUnaNoche)}&checkOut=${iso(checkOutUnaNoche)}`
-  );
-  const lineaCorta = (corta.json?.cotizacion?.unidades || []).find((l) => l.unitId === unidadA.id);
+  // Restricción de venta del rate plan: la Suite exige 2 noches. Se pregunta por
+  // ESA unidad: el motor nuevo responde «no vendible» con el motivo, y la
+  // cotización general simplemente no la ofrece.
+  const corta = await cotizarPublico({
+    checkIn: checkInUnaNoche,
+    checkOut: checkOutUnaNoche,
+    unitId: unidadA.id,
+  });
   esperar(
-    lineaCorta?.disponible === false && lineaCorta?.motivo === 'min_noches',
+    corta.json?.ok === false && corta.json?.motivo === 'min_noches',
     'La estancia mínima del rate plan se respeta en la cotización',
-    `motivo: ${lineaCorta?.motivo}`
+    `motivo: ${corta.json?.motivo}`
+  );
+  const cortaGeneral = await cotizarPublico({ checkIn: checkInUnaNoche, checkOut: checkOutUnaNoche });
+  const unidadesCorta = cortaGeneral.json?.unidades || [];
+  esperar(
+    !unidadesCorta.some((u) => u.unitId === unidadA.id) &&
+      unidadesCorta.some((u) => u.unitId === unidadB.id),
+    'Y no aparece entre las ofrecidas para una sola noche (el Loft sí)',
+    `${unidadesCorta.length} unidad(es) ofrecida(s)`
   );
 
-  const fechasInvertidas = await peticion(
-    `/api/public/booking/${propiedadId}?checkIn=${iso(checkOut)}&checkOut=${iso(checkIn)}`
-  );
+  const fechasInvertidas = await cotizarPublico({ checkIn: checkOut, checkOut: checkIn });
   esperar(
     fechasInvertidas.status === 400,
     'Fechas invertidas rechazadas con un error de petición',
@@ -953,10 +1163,7 @@ async function ensayar() {
     idempotencyKey: CLAVE_IDEMPOTENCIA,
   };
 
-  const reserva = await peticion(`/api/public/booking/${propiedadId}`, {
-    metodo: 'POST',
-    cuerpo: cuerpoReserva,
-  });
+  const reserva = await reservarPublico(cuerpoReserva);
   const reservaId = reserva.json?.reservationId;
   esperar(
     reserva.status === 201 && !!reservaId,
@@ -970,15 +1177,44 @@ async function ensayar() {
   );
   esperar(
     reserva.json?.paymentUrl === null,
-    'Sin cuenta Stripe Connect activa, la reserva se crea sin pago en línea',
+    'Con el cobro en línea desactivado, la reserva se crea sin abrir ningún pago',
     `paymentUrl: ${JSON.stringify(reserva.json?.paymentUrl)}`
   );
 
+  // Y la otra mitad del cobro: si el alojamiento EXIGE pago en línea y su cuenta
+  // no está habilitada, la puerta pública se niega antes de escribir nada. Una
+  // reserva pendiente que nadie puede pagar es peor que no aceptarla. Solo se
+  // comprueba donde no hay cobro disponible (el caso del ensayo); con una cuenta
+  // conectada el desenlace es otro y se omite.
+  const cobroDelTenant = await peticion('/api/hospitality/booking', { apiKey });
+  if (cobroDelTenant.json?.cobro?.disponible === false) {
+    await peticion('/api/hospitality/booking', {
+      metodo: 'PUT',
+      apiKey,
+      cuerpo: { slug: SLUG_PUBLICO, requierePagoOnline: true },
+    });
+    const sinCuenta = await reservarPublico({
+      ...cuerpoReserva,
+      unitId: unidadB.id,
+      huespedEmail: `${EMAIL_PREFIJO}sin-cobro@ensayo.test`,
+      idempotencyKey: `${CLAVE_IDEMPOTENCIA}-sin-cobro`,
+    });
+    esperar(
+      sinCuenta.status === 503 && sinCuenta.json?.ok === false,
+      'Con cobro exigido y sin cuenta habilitada, la reserva se rechaza antes de crearse',
+      `HTTP ${sinCuenta.status} · ${sinCuenta.json?.error || ''}`
+    );
+    await peticion('/api/hospitality/booking', {
+      metodo: 'PUT',
+      apiKey,
+      cuerpo: { slug: SLUG_PUBLICO, requierePagoOnline: false },
+    });
+  } else {
+    info('Cobro en línea disponible en este entorno: se omite la comprobación del rechazo sin cuenta');
+  }
+
   // Idempotencia: reintentar el MISMO intento no duplica la reserva.
-  const reintento = await peticion(`/api/public/booking/${propiedadId}`, {
-    metodo: 'POST',
-    cuerpo: cuerpoReserva,
-  });
+  const reintento = await reservarPublico(cuerpoReserva);
   esperar(
     reintento.json?.duplicada === true && reintento.json?.reservationId === reservaId,
     'Reintentar el mismo intento no duplica la reserva',
@@ -986,13 +1222,10 @@ async function ensayar() {
   );
 
   // Overbooking: el solape en la misma unidad se rechaza con 409.
-  const solape = await peticion(`/api/public/booking/${propiedadId}`, {
-    metodo: 'POST',
-    cuerpo: {
-      ...cuerpoReserva,
-      huespedEmail: `${EMAIL_PREFIJO}solape@ensayo.test`,
-      idempotencyKey: `${CLAVE_IDEMPOTENCIA}-solape`,
-    },
+  const solape = await reservarPublico({
+    ...cuerpoReserva,
+    huespedEmail: `${EMAIL_PREFIJO}solape@ensayo.test`,
+    idempotencyKey: `${CLAVE_IDEMPOTENCIA}-solape`,
   });
   esperar(
     solape.status === 409,
@@ -1038,28 +1271,24 @@ async function ensayar() {
   );
 
   // Mientras el hold vive, la página pública no la ofrece y no se puede vender.
-  const cotizacionBloqueada = await peticion(
-    `/api/public/booking/${propiedadId}?checkIn=${iso(holdCheckIn)}&checkOut=${iso(holdCheckOut)}`
-  );
-  const lineaBloqueada = (cotizacionBloqueada.json?.cotizacion?.unidades || []).find(
-    (l) => l.unitId === unidadB.id
-  );
+  const cotizacionBloqueada = await cotizarPublico({
+    checkIn: holdCheckIn,
+    checkOut: holdCheckOut,
+    unitId: unidadB.id,
+  });
   esperar(
-    lineaBloqueada?.disponible === false && lineaBloqueada?.motivo === 'ocupada',
+    cotizacionBloqueada.json?.ok === false && cotizacionBloqueada.json?.motivo === 'no_disponible',
     'Con el hold vivo, la página pública no ofrece la unidad',
-    `motivo: ${lineaBloqueada?.motivo}`
+    `motivo: ${cotizacionBloqueada.json?.motivo}`
   );
 
-  const ventaBloqueada = await peticion(`/api/public/booking/${propiedadId}`, {
-    metodo: 'POST',
-    cuerpo: {
-      unitId: unidadB.id,
-      checkIn: iso(holdCheckIn),
-      checkOut: iso(holdCheckOut),
-      huespedNombre: 'Huésped Bloqueado',
-      huespedEmail: EMAIL_HOLD_BLOQUEADO,
-      idempotencyKey: `ensayo-hold-bloqueado-${iso(holdCheckIn)}`,
-    },
+  const ventaBloqueada = await reservarPublico({
+    unitId: unidadB.id,
+    checkIn: holdCheckIn,
+    checkOut: holdCheckOut,
+    huespedNombre: 'Huésped Bloqueado',
+    huespedEmail: EMAIL_HOLD_BLOQUEADO,
+    idempotencyKey: `ensayo-hold-bloqueado-${iso(holdCheckIn)}`,
   });
   esperar(
     ventaBloqueada.status === 409,
@@ -1184,28 +1413,25 @@ async function ensayar() {
   );
 
   // Y lo que le importa al hotel: las noches liberadas VUELVEN a venderse.
-  const cotizacionLiberada = await peticion(
-    `/api/public/booking/${propiedadId}?checkIn=${iso(holdCheckIn)}&checkOut=${iso(holdCheckOut)}`
-  );
-  const lineaLiberada = (cotizacionLiberada.json?.cotizacion?.unidades || []).find(
-    (l) => l.unitId === unidadB.id
-  );
+  const cotizacionLiberada = await cotizarPublico({
+    checkIn: holdCheckIn,
+    checkOut: holdCheckOut,
+    unitId: unidadB.id,
+  });
+  const lineaLiberada = (cotizacionLiberada.json?.unidades || []).find((l) => l.unitId === unidadB.id);
   esperar(
-    lineaLiberada?.disponible === true && lineaLiberada?.precioTotal === unidadB.tarifa,
+    lineaLiberada?.desglose?.total === unidadB.tarifa,
     'La página pública vuelve a ofrecer la unidad liberada',
-    `${lineaLiberada?.precioTotal} MXN (${unidadB.tarifa} × 1 noche)`
+    `${lineaLiberada?.desglose?.total} MXN (${unidadB.tarifa} × 1 noche)`
   );
 
-  const reventa = await peticion(`/api/public/booking/${propiedadId}`, {
-    metodo: 'POST',
-    cuerpo: {
-      unitId: unidadB.id,
-      checkIn: iso(holdCheckIn),
-      checkOut: iso(holdCheckOut),
-      huespedNombre: 'Huésped de la Reventa',
-      huespedEmail: EMAIL_HOLD_REVENTA,
-      idempotencyKey: `ensayo-hold-reventa-${iso(holdCheckIn)}`,
-    },
+  const reventa = await reservarPublico({
+    unitId: unidadB.id,
+    checkIn: holdCheckIn,
+    checkOut: holdCheckOut,
+    huespedNombre: 'Huésped de la Reventa',
+    huespedEmail: EMAIL_HOLD_REVENTA,
+    idempotencyKey: `ensayo-hold-reventa-${iso(holdCheckIn)}`,
   });
   esperar(
     reventa.status === 201 && !!reventa.json?.reservationId,
@@ -1277,17 +1503,14 @@ async function ensayar() {
   const checkInEn = sumarDias(checkOutUnaNoche, 1);
   const checkOutEn = sumarDias(checkInEn, 1);
   const emailEn = `${EMAIL_PREFIJO}en@ensayo.test`;
-  const reservaEn = await peticion(`/api/public/booking/${propiedadId}`, {
-    metodo: 'POST',
-    cuerpo: {
-      unitId: unidadB.id,
-      checkIn: iso(checkInEn),
-      checkOut: iso(checkOutEn),
-      huespedNombre: 'English Speaking Guest',
-      huespedEmail: emailEn,
-      idempotencyKey: `${CLAVE_IDEMPOTENCIA}-en`,
-      lang: 'en',
-    },
+  const reservaEn = await reservarPublico({
+    unitId: unidadB.id,
+    checkIn: checkInEn,
+    checkOut: checkOutEn,
+    huespedNombre: 'English Speaking Guest',
+    huespedEmail: emailEn,
+    idempotencyKey: `${CLAVE_IDEMPOTENCIA}-en`,
+    lang: 'en',
   });
   const reservaEnId = reservaEn.json?.reservationId;
   esperar(
@@ -1327,16 +1550,13 @@ async function ensayar() {
   );
 
   // Contraprueba: sin lang la reserva nace en español (defecto del motor).
-  const reservaEs = await peticion(`/api/public/booking/${propiedadId}`, {
-    metodo: 'POST',
-    cuerpo: {
-      unitId: unidadB.id,
-      checkIn: iso(sumarDias(checkOutEn, 1)),
-      checkOut: iso(sumarDias(checkOutEn, 2)),
-      huespedNombre: 'Huésped en Español',
-      huespedEmail: `${EMAIL_PREFIJO}es@ensayo.test`,
-      idempotencyKey: `${CLAVE_IDEMPOTENCIA}-es`,
-    },
+  const reservaEs = await reservarPublico({
+    unitId: unidadB.id,
+    checkIn: sumarDias(checkOutEn, 1),
+    checkOut: sumarDias(checkOutEn, 2),
+    huespedNombre: 'Huésped en Español',
+    huespedEmail: `${EMAIL_PREFIJO}es@ensayo.test`,
+    idempotencyKey: `${CLAVE_IDEMPOTENCIA}-es`,
   });
   esperar(reservaEs.status === 201, 'Reserva de contraprueba en español creada', `HTTP ${reservaEs.status}`);
   const detalleEs = await peticion(`/api/hospitality/reservations/${reservaEs.json?.reservationId}`, { apiKey });
@@ -1426,17 +1646,14 @@ async function ensayar() {
     const checkInMir = sumarDias(holdPagosCheckOut, 3);
     const checkOutMir = sumarDias(checkInMir, 1);
     const emailMir = `${EMAIL_PREFIJO_MIR}${iso(checkInMir)}@ensayo.test`;
-    const reservaMir = await peticion(`/api/public/booking/${propiedadId}`, {
-      metodo: 'POST',
-      cuerpo: {
-        unitId: unidadB.id,
-        checkIn: iso(checkInMir),
-        checkOut: iso(checkOutMir),
-        huespedNombre: 'Ana Ruiz',
-        huespedEmail: emailMir,
-        huespedTelefono: '+34 666 666 666',
-        idempotencyKey: `ensayo-mir-${iso(checkInMir)}`,
-      },
+    const reservaMir = await reservarPublico({
+      unitId: unidadB.id,
+      checkIn: checkInMir,
+      checkOut: checkOutMir,
+      huespedNombre: 'Ana Ruiz',
+      huespedEmail: emailMir,
+      huespedTelefono: '+34 666 666 666',
+      idempotencyKey: `ensayo-mir-${iso(checkInMir)}`,
     });
     const reservaMirId = reservaMir.json?.reservationId;
     const referenciaMir = reservaMir.json?.referencia;
@@ -1662,17 +1879,14 @@ async function ensayar() {
     const checkInRechazo = sumarDias(checkOutMir, 10);
     const checkOutRechazo = sumarDias(checkInRechazo, 1);
     const emailRechazo = `${EMAIL_PREFIJO_MIR}rechazo+${iso(checkInRechazo)}@ensayo.test`;
-    const reservaRechazo = await peticion(`/api/public/booking/${propiedadId}`, {
-      metodo: 'POST',
-      cuerpo: {
-        unitId: unidadB.id,
-        checkIn: iso(checkInRechazo),
-        checkOut: iso(checkOutRechazo),
-        huespedNombre: 'Rechazo Del Valle',
-        huespedEmail: emailRechazo,
-        huespedTelefono: '+34 666 666 667',
-        idempotencyKey: `ensayo-mir-rechazo-${iso(checkInRechazo)}`,
-      },
+    const reservaRechazo = await reservarPublico({
+      unitId: unidadB.id,
+      checkIn: checkInRechazo,
+      checkOut: checkOutRechazo,
+      huespedNombre: 'Rechazo Del Valle',
+      huespedEmail: emailRechazo,
+      huespedTelefono: '+34 666 666 667',
+      idempotencyKey: `ensayo-mir-rechazo-${iso(checkInRechazo)}`,
     });
     const reservaRechazoId = reservaRechazo.json?.reservationId;
     const referenciaRechazo = reservaRechazo.json?.referencia;
@@ -1925,17 +2139,14 @@ async function ensayar() {
     const checkInCaida = sumarDias(checkOutRechazo, 10);
     const checkOutCaida = sumarDias(checkInCaida, 1);
     const emailCaida = `${EMAIL_PREFIJO_MIR}caida+${iso(checkInCaida)}@ensayo.test`;
-    const reservaCaida = await peticion(`/api/public/booking/${propiedadId}`, {
-      metodo: 'POST',
-      cuerpo: {
-        unitId: unidadB.id,
-        checkIn: iso(checkInCaida),
-        checkOut: iso(checkOutCaida),
-        huespedNombre: 'Caída Del Servicio',
-        huespedEmail: emailCaida,
-        huespedTelefono: '+34 666 666 668',
-        idempotencyKey: `ensayo-mir-caida-${iso(checkInCaida)}`,
-      },
+    const reservaCaida = await reservarPublico({
+      unitId: unidadB.id,
+      checkIn: checkInCaida,
+      checkOut: checkOutCaida,
+      huespedNombre: 'Caída Del Servicio',
+      huespedEmail: emailCaida,
+      huespedTelefono: '+34 666 666 668',
+      idempotencyKey: `ensayo-mir-caida-${iso(checkInCaida)}`,
     });
     const reservaCaidaId = reservaCaida.json?.reservationId;
     const referenciaCaida = reservaCaida.json?.referencia;
@@ -2153,17 +2364,15 @@ async function ensayar() {
   const checkInPreguntas = sumarDias(holdPagosCheckOut, 120);
   const checkOutPreguntas = sumarDias(checkInPreguntas, 1);
   const emailPreguntas = `${EMAIL_PREFIJO_PREGUNTAS}${iso(checkInPreguntas)}@ensayo.test`;
-  const reservaPreguntas = await peticion(`/api/public/booking/${propiedadId}?lang=en`, {
-    metodo: 'POST',
-    cuerpo: {
-      unitId: unidadB.id,
-      checkIn: iso(checkInPreguntas),
-      checkOut: iso(checkOutPreguntas),
-      huespedNombre: 'Preguntas Del Hotel',
-      huespedEmail: emailPreguntas,
-      huespedTelefono: '+34 666 666 669',
-      idempotencyKey: `ensayo-preguntas-${iso(checkInPreguntas)}`,
-    },
+  const reservaPreguntas = await reservarPublico({
+    unitId: unidadB.id,
+    checkIn: checkInPreguntas,
+    checkOut: checkOutPreguntas,
+    huespedNombre: 'Preguntas Del Hotel',
+    huespedEmail: emailPreguntas,
+    huespedTelefono: '+34 666 666 669',
+    idempotencyKey: `ensayo-preguntas-${iso(checkInPreguntas)}`,
+    lang: 'en',
   });
   const reservaPreguntasId = reservaPreguntas.json?.reservationId;
   esperar(
@@ -2387,16 +2596,13 @@ async function ensayar() {
     const checkOutPre = sumarDias(checkInPre, 1);
     const emailPre = `${EMAIL_PREFIJO_PREGUNTAS}prellegada@ensayo.test`;
     const emailPreEn = `${EMAIL_PREFIJO_PREGUNTAS}prellegada-en@ensayo.test`;
-    const reservaPre = await peticion(`/api/public/booking/${propiedadId}`, {
-      metodo: 'POST',
-      cuerpo: {
-        unitId: unidadB.id,
-        checkIn: iso(checkInPre),
-        checkOut: iso(checkOutPre),
-        huespedNombre: 'Pre Llegada Ensayo',
-        huespedEmail: emailPre,
-        idempotencyKey: `ensayo-prellegada-${iso(checkInPre)}`,
-      },
+    const reservaPre = await reservarPublico({
+      unitId: unidadB.id,
+      checkIn: checkInPre,
+      checkOut: checkOutPre,
+      huespedNombre: 'Pre Llegada Ensayo',
+      huespedEmail: emailPre,
+      idempotencyKey: `ensayo-prellegada-${iso(checkInPre)}`,
     });
     const reservaPreId = reservaPre.json?.reservationId;
     esperar(
@@ -2412,17 +2618,14 @@ async function ensayar() {
     // escribió el producto). Es la misma clase de manipulación con la que el
     // ensayo envejece holds: lo que se comprueba aquí es el idioma y el envío,
     // no la fecha, y el ?lang=en real es lo que deja el idioma en la reserva.
-    const reservaPreEn = await peticion(`/api/public/booking/${propiedadId}?lang=en`, {
-      metodo: 'POST',
-      cuerpo: {
-        unitId: unidadB.id,
-        checkIn: iso(sumarDias(checkOutPre, 1)),
-        checkOut: iso(sumarDias(checkOutPre, 2)),
-        huespedNombre: 'Pre Arrival Ensayo',
-        huespedEmail: emailPreEn,
-        idempotencyKey: 'ensayo-prellegada-EN',
-        lang: 'en',
-      },
+    const reservaPreEn = await reservarPublico({
+      unitId: unidadB.id,
+      checkIn: sumarDias(checkOutPre, 1),
+      checkOut: sumarDias(checkOutPre, 2),
+      huespedNombre: 'Pre Arrival Ensayo',
+      huespedEmail: emailPreEn,
+      idempotencyKey: 'ensayo-prellegada-EN',
+      lang: 'en',
     });
     const reservaPreEnId = reservaPreEn.json?.reservationId;
     esperar(
@@ -2599,7 +2802,8 @@ async function ensayar() {
   );
 
   console.log(titulo('6. URLs para revisarlo a mano'));
-  info(`Página pública:  ${BASE}/booking/${propiedadId}`);
+  info(`Página pública:  ${BASE}/reservar/${SLUG_PUBLICO}`);
+  info(`Enlace antiguo:  ${BASE}/booking/${propiedadId}   (redirige 308 a la página única)`);
   info(`Planning:        ${BASE}/dashboard/hospitality/calendar   (propiedad «${NOMBRE_PROPIEDAD}»)`);
   info(`Reservas:        ${BASE}/dashboard/hospitality/reservas    (buscar «${EMAIL_HUESPED}»)`);
   info(
@@ -2620,6 +2824,7 @@ async function principal() {
     console.log(titulo('Limpieza de los datos del ensayo'));
     const borradas = await limpiar(usuario.tenantId);
     ok('Datos del ensayo eliminados', `${borradas} propiedad(es)`);
+    await restaurarConfigBooking();
     return;
   }
 
@@ -2639,6 +2844,7 @@ async function principal() {
     } else {
       const borradas = await limpiar(usuario.tenantId);
       ok('Datos del ensayo eliminados', `${borradas} propiedad(es), contacto y API key temporal`);
+      await restaurarConfigBooking();
       info('Para conservar los datos en la próxima ejecución: --keep');
     }
   }

@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
 import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
 import { COMUNICACION_EVENTOS, IDIOMAS_COMUNICACION } from '@/lib/hospitality/comunicaciones';
+import { normalizarDiseno } from '@/lib/hospitality/comunicaciones-email';
 
 /**
  * Plantillas de comunicación automática (plan maestro §21).
@@ -16,6 +17,12 @@ import { COMUNICACION_EVENTOS, IDIOMAS_COMUNICACION } from '@/lib/hospitality/co
  * confirmacion|pre_llegada|check_in|post_salida|resena y `canal` es
  * whatsapp|email. Las variables {{nombre}}, {{checkIn}}, ... se reemplazan
  * al enviar (ver lib/hospitality/comunicaciones.ts).
+ *
+ * `diseno` es el diseño visual del correo (bloques: párrafos, secciones de
+ * etiqueta/valor y botones) que compone el editor visual. Es opcional y solo
+ * aplica al canal email: una plantilla de email puede venir con diseño y sin
+ * `contenido` (el texto del correo se genera a partir del diseño). WhatsApp
+ * sigue exigiendo `contenido`.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -57,7 +64,7 @@ export async function POST(req: NextRequest) {
 
     const tenantId = auth.tenant!.id;
     const body = await req.json().catch(() => ({}));
-    const { evento, canal, asunto, contenido, activo, idioma } = body;
+    const { evento, canal, asunto, contenido, activo, idioma, diseno } = body;
 
     if (!evento || !COMUNICACION_EVENTOS.includes(evento)) {
       return NextResponse.json(
@@ -74,11 +81,30 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    if (!contenido || !String(contenido).trim()) {
-      return NextResponse.json({ error: 'contenido es obligatorio' }, { status: 400 });
+    // El diseño visual se valida con las mismas reglas que lo lee el envío: si
+    // entra, se guarda normalizado (sin bloques vacíos, con los techos puestos).
+    let disenoNormalizado: unknown;
+    if (diseno !== undefined && diseno !== null) {
+      const validado = normalizarDiseno(diseno);
+      if (!validado.ok) {
+        return NextResponse.json({ error: validado.error }, { status: 400 });
+      }
+      disenoNormalizado = validado.diseno;
     }
-    if (canal === 'email' && !asunto) {
-      return NextResponse.json({ error: 'asunto es obligatorio para plantillas de email' }, { status: 400 });
+
+    const tieneContenido = !!contenido && !!String(contenido).trim();
+    if (canal === 'email') {
+      if (!tieneContenido && !disenoNormalizado) {
+        return NextResponse.json(
+          { error: 'contenido es obligatorio (o un diseño con bloques)' },
+          { status: 400 }
+        );
+      }
+      if (!asunto) {
+        return NextResponse.json({ error: 'asunto es obligatorio para plantillas de email' }, { status: 400 });
+      }
+    } else if (!tieneContenido) {
+      return NextResponse.json({ error: 'contenido es obligatorio' }, { status: 400 });
     }
 
     const plantilla = await prisma.hospitalityCommunicationTemplate.create({
@@ -87,9 +113,10 @@ export async function POST(req: NextRequest) {
         evento,
         canal,
         asunto: asunto ? String(asunto).trim() : null,
-        contenido: String(contenido).trim(),
+        contenido: tieneContenido ? String(contenido).trim() : '',
         activo: activo !== false,
         idioma: IDIOMAS_COMUNICACION.includes(idioma) ? idioma : 'es',
+        ...(disenoNormalizado !== undefined ? { diseno: disenoNormalizado as object } : {}),
       },
     });
 

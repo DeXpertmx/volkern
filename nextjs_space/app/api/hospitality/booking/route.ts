@@ -99,25 +99,39 @@ export async function PUT(req: NextRequest) {
     // El dominio guardado hace falta para saber si cambió (y reverificar DNS).
     const configActual = await leerConfigBooking(tenantId);
 
+    // Solo lo que el cliente MANDA viaja a la configuración: lo ausente se queda
+    // como está. El panel guarda el aspecto (plantilla, colores, dominio) sin
+    // mandar el resto, y tratar lo ausente como un valor por defecto borraba el
+    // título, las políticas y las propiedades publicadas en cada guardado.
+    const cuerpo = body as Record<string, unknown>;
+    const presente = (clave: string) => Object.prototype.hasOwnProperty.call(cuerpo, clave);
+    const texto = (clave: string) =>
+      presente(clave) ? (cuerpo[clave] as string | undefined | null) : undefined;
+
     const resultado = await guardarConfigBooking(tenantId, auth.tenant!.moneda, {
-      slug: String((body as Record<string, unknown>).slug || ''),
-      titulo: (body as Record<string, unknown>).titulo as string | undefined,
-      descripcion: (body as Record<string, unknown>).descripcion as string | undefined,
-      emailContacto: (body as Record<string, unknown>).emailContacto as string | undefined,
-      telefonoContacto: (body as Record<string, unknown>).telefonoContacto as string | undefined,
-      moneda: (body as Record<string, unknown>).moneda as string | undefined,
-      politicaCancelacion: (body as Record<string, unknown>).politicaCancelacion as string | undefined,
-      anticipoPorcentaje: (body as Record<string, unknown>).anticipoPorcentaje,
-      tarifaLimpieza: (body as Record<string, unknown>).tarifaLimpieza,
-      requierePagoOnline: (body as Record<string, unknown>).requierePagoOnline === true,
-      propiedadesPublicadas: Array.isArray((body as Record<string, unknown>).propiedadesPublicadas)
-        ? ((body as Record<string, unknown>).propiedadesPublicadas as string[]).filter(
-            (id) => typeof id === 'string'
+      slug: String(cuerpo.slug || ''),
+      titulo: texto('titulo'),
+      descripcion: texto('descripcion'),
+      emailContacto: texto('emailContacto'),
+      telefonoContacto: texto('telefonoContacto'),
+      moneda: texto('moneda'),
+      politicaCancelacion: texto('politicaCancelacion'),
+      anticipoPorcentaje: presente('anticipoPorcentaje') ? cuerpo.anticipoPorcentaje : undefined,
+      tarifaLimpieza: presente('tarifaLimpieza') ? cuerpo.tarifaLimpieza : undefined,
+      requierePagoOnline: presente('requierePagoOnline')
+        ? cuerpo.requierePagoOnline === true
+        : undefined,
+      // Lista de publicadas: ausente = no tocar; presente pero sin forma de lista
+      // = no tocar tampoco (mandar basura no puede despublicar la página).
+      propiedadesPublicadas: Array.isArray(cuerpo.propiedadesPublicadas)
+        ? (cuerpo.propiedadesPublicadas as unknown[]).filter(
+            (id): id is string => typeof id === 'string'
           )
-        : [],
-      activo: (body as Record<string, unknown>).activo !== false,      plantilla: (body as Record<string, unknown>).plantilla,
-      personalizacion: (body as Record<string, unknown>).personalizacion,
-      dominio: (body as Record<string, unknown>).dominio,
+        : undefined,
+      activo: presente('activo') ? cuerpo.activo !== false : undefined,
+      plantilla: cuerpo.plantilla,
+      personalizacion: cuerpo.personalizacion,
+      dominio: cuerpo.dominio,
       dominioActual: configActual?.dominio ?? null,
     });
 

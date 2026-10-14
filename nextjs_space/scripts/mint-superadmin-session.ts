@@ -6,7 +6,8 @@
  *
  * Uso: npx tsx scripts/mint-superadmin-session.ts
  */
-import 'dotenv/config';
+import dotenv from 'dotenv';
+dotenv.config({ path: ['.env.local', '.env'] });
 import { prisma } from '../lib/db';
 import { encode } from 'next-auth/jwt';
 

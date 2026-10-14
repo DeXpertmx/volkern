@@ -27,7 +27,7 @@ let _prisma: PrismaClient | null = null;
 function getPrisma(): PrismaClient {
   if (!_prisma) {
     if (isRunDirectly) {
-      dotenv.config();
+      dotenv.config({ path: ['.env.local', '.env'] });
     }
     _prisma = new PrismaClient();
   }

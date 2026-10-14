@@ -86,7 +86,7 @@ el historial del shell.
 
 ```bash
 cd nextjs_space
-npx tsx --require dotenv/config scripts/bootstrap-admin.ts
+npx tsx --require ./scripts/cargar-entorno.cjs scripts/bootstrap-admin.ts
 ```
 
 El script hace `upsert` y re-hashea, así que las cuentas existentes se actualizan sin

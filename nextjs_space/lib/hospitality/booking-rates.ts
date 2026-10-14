@@ -11,7 +11,10 @@
  * nada a mano — dos sumas distintas es exactamente la discrepancia
  * página-vs-reserva que este sistema evita. El detalle noche a noche viaja en
  * `desgloseNoches`: la media del rango no es ningún precio real y nadie la paga.
- * Restricciones del plan: `minNoches`, `maxNoches` y días de llegada/salida.
+ * Restricciones del plan: `minNoches`, `maxNoches` y días de llegada/salida, más
+ * las reglas de cada temporada (`temporadas[].minNoches`, `.maxNoches`,
+ * `.checkInDias`, `.checkOutDias`), que se evalúan por la **fecha de llegada**
+ * (`reglasDeVentaDeLlegada`) y reemplazan campo a campo lo que diga el plan.
  *
  * Cada unidad cotiza con las restricciones de SU plan (`unidades[].ratePlan`),
  * porque la cotización pública evalúa varias unidades a la vez y cada una tiene
@@ -23,6 +26,7 @@
 
 import { unitAvailability, type ActiveReservationSpan, type ActiveUnitBlockSpan } from './availability';
 import { startOfDay, toIsoDate } from './calendar';
+import { reglasDeVentaDeLlegada } from './estacionalidad';
 import {
   cotizarEstancia as cotizarTarifa,
   type Cotizacion as CotizacionTarifa,
@@ -176,10 +180,18 @@ export function cotizarEstancia(input: CotizacionInput): Cotizacion {
   const unidades: CotizacionUnidad[] = input.unidades.map((u) => {
     // Restricciones del plan de esta unidad (o las del plan por defecto).
     const restricciones = restriccionesDeRatePlan(u.ratePlan ?? input.ratePlan);
-    const minNoches = restricciones?.minNoches ?? 1;
-    const maxNoches = restricciones?.maxNoches ?? null;
-    const checkInDias = restricciones?.checkInDias ?? null;
-    const checkOutDias = restricciones?.checkOutDias ?? null;
+    // Las reglas de venta se resuelven por la fecha de LLEGADA: la temporada que
+    // contiene el check-in reemplaza campo a campo lo que diga el plan (el mismo
+    // cálculo que hacen la reserva y el push al canal).
+    const reglas = reglasDeVentaDeLlegada({
+      fecha: inicio,
+      estacionalidad: u.estacionalidad,
+      plan: restricciones,
+    });
+    const minNoches = reglas.minNoches;
+    const maxNoches = reglas.maxNoches;
+    const checkInDias = reglas.checkInDias;
+    const checkOutDias = reglas.checkOutDias;
     // 1) Disponibilidad noche a noche — Availability Engine.
     const serie = unitAvailability(
       { id: u.id, propertyId: '', roomCode: null, estado: 'available' },

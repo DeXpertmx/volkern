@@ -136,7 +136,7 @@ pass "Servidor de desarrollo listo (${BASE})"
 header "Ensayo de punta a punta"
 export BASE_URL="${BASE}"
 if [ -n "${E2E_KEEP:-}" ]; then
-  node scripts/e2e-booking-engine.mjs --keep
+  node --require ./scripts/cargar-entorno.cjs scripts/e2e-booking-engine.mjs --keep
 else
-  node scripts/e2e-booking-engine.mjs
+  node --require ./scripts/cargar-entorno.cjs scripts/e2e-booking-engine.mjs
 fi

@@ -8,6 +8,9 @@ import {
   totalDeSerie,
   precioEstancia,
   hayPrecioPlan,
+  reglasDeVentaDeLlegada,
+  problemaEnTemporadas,
+  temporadaDeFecha,
 } from '../lib/hospitality/estacionalidad';
 
 /**
@@ -82,6 +85,161 @@ describe('normalizarEstacionalidad', () => {
     expect(tieneEstacionalidad({ finDeSemana: { dias: [6], porcentaje: 10 } })).toBe(true);
     expect(tieneEstacionalidad({ temporadas: [] })).toBe(false);
     expect(tieneEstacionalidad(null)).toBe(false);
+  });
+});
+
+describe('reglas de venta de temporada (se deciden por la fecha de LLEGADA)', () => {
+  it('normaliza las reglas válidas y descarta solo la inválida, SIN perder la temporada', () => {
+    // Perder una tarifa de temporada por una regla mal escrita sería un precio
+    // que el hotel sí configuró: se ignora la pieza mala, nunca el rango.
+    const c = normalizarEstacionalidad({
+      temporadas: [
+        {
+          desde: '2026-07-01',
+          hasta: '2026-07-31',
+          tarifa: 150,
+          minNoches: '3',
+          maxNoches: 7,
+          checkInDias: [6, 5, 6],
+          checkOutDias: ['0'],
+        },
+        { desde: '2026-08-01', hasta: '2026-08-31', tarifa: 180, minNoches: 'tres', maxNoches: 0, checkInDias: [9] },
+        // Máximo por debajo del mínimo: se descarta el máximo, no la temporada.
+        { desde: '2026-09-01', hasta: '2026-09-30', tarifa: 90, minNoches: 5, maxNoches: 2 },
+      ],
+    });
+    expect(c?.temporadas).toEqual([
+      {
+        desde: '2026-07-01',
+        hasta: '2026-07-31',
+        tarifa: 150,
+        minNoches: 3,
+        maxNoches: 7,
+        checkInDias: [5, 6],
+        checkOutDias: [0],
+      },
+      { desde: '2026-08-01', hasta: '2026-08-31', tarifa: 180 },
+      { desde: '2026-09-01', hasta: '2026-09-30', tarifa: 90, minNoches: 5 },
+    ]);
+  });
+
+  it('problemaEnTemporadas devuelve el primer problema real y calla ante «sin regla»', () => {
+    const fila = (extra: Record<string, unknown> = {}) => [
+      { desde: '2026-07-01', hasta: '2026-07-31', tarifa: 150, ...extra },
+    ];
+    // «Sin regla» no es un problema: no hay nada que reportar al hotel.
+    expect(problemaEnTemporadas(fila())).toBeNull();
+    expect(problemaEnTemporadas(fila({ minNoches: null, maxNoches: null }))).toBeNull();
+    expect(problemaEnTemporadas(fila({ minNoches: '', maxNoches: '' }))).toBeNull();
+    expect(problemaEnTemporadas(null)).toBeNull();
+    // Válidos (también los números que llegan como texto del UI).
+    expect(problemaEnTemporadas(fila({ minNoches: 3, maxNoches: 7, checkInDias: [5, 6] }))).toBeNull();
+    expect(problemaEnTemporadas(fila({ minNoches: '3', maxNoches: '7', checkOutDias: ['0'] }))).toBeNull();
+    // Inválidos: se avisa con el motivo en vez de descartarlos en silencio.
+    expect(problemaEnTemporadas(fila({ minNoches: 0 }))).toContain('mínimo de noches');
+    expect(problemaEnTemporadas(fila({ minNoches: 'tres' }))).toContain('mínimo de noches');
+    expect(problemaEnTemporadas(fila({ minNoches: 366 }))).toContain('mínimo de noches');
+    expect(problemaEnTemporadas(fila({ maxNoches: 0 }))).toContain('máximo de noches');
+    expect(problemaEnTemporadas(fila({ maxNoches: 2.5 }))).toContain('máximo de noches');
+    expect(problemaEnTemporadas(fila({ minNoches: 5, maxNoches: 2 }))).toContain('no puede ser menor');
+    expect(problemaEnTemporadas(fila({ checkInDias: [7] }))).toContain('entrada');
+    expect(problemaEnTemporadas(fila({ checkInDias: 'sábado' }))).toContain('entrada');
+    expect(problemaEnTemporadas(fila({ checkOutDias: [-1] }))).toContain('salida');
+  });
+
+  it('manda la temporada de la llegada, campo a campo; lo que no defina lo pone el plan', () => {
+    const verano = {
+      temporadas: [
+        {
+          desde: '2026-07-01',
+          hasta: '2026-07-31',
+          tarifa: 150,
+          minNoches: 3,
+          maxNoches: 7,
+          checkInDias: [6],
+          checkOutDias: [0],
+        },
+      ],
+    };
+    const plan = { minNoches: 2, maxNoches: 14, checkInDias: [1, 2, 3, 4, 5, 6, 0], checkOutDias: [] };
+
+    // Llegada en temporada: sus cuatro reglas reemplazan a las del plan.
+    expect(reglasDeVentaDeLlegada({ fecha: dia('2026-07-15'), estacionalidad: verano, plan })).toEqual({
+      minNoches: 3,
+      maxNoches: 7,
+      checkInDias: [6],
+      checkOutDias: [0],
+    });
+
+    // Llegada fuera de temporada: las del plan, tal cual.
+    expect(reglasDeVentaDeLlegada({ fecha: dia('2026-06-30'), estacionalidad: verano, plan })).toEqual({
+      minNoches: 2,
+      maxNoches: 14,
+      checkInDias: [0, 1, 2, 3, 4, 5, 6],
+      checkOutDias: null,
+    });
+
+    // La temporada reemplaza CAMPO A CAMPO: lo que no define lo pone el plan.
+    const soloMinimo = {
+      temporadas: [{ desde: '2026-07-01', hasta: '2026-07-31', tarifa: 150, minNoches: 5 }],
+    };
+    expect(reglasDeVentaDeLlegada({ fecha: dia('2026-07-15'), estacionalidad: soloMinimo, plan })).toEqual({
+      minNoches: 5,
+      maxNoches: 14,
+      checkInDias: [0, 1, 2, 3, 4, 5, 6],
+      checkOutDias: null,
+    });
+
+    // Una temporada también puede ser más permisiva que el plan: es la regla de
+    // SU fecha, igual que su tarifa es absoluta.
+    const permisiva = {
+      temporadas: [
+        { desde: '2026-07-01', hasta: '2026-07-31', tarifa: 150, minNoches: 1, maxNoches: 30, checkInDias: [6, 5, 4, 3, 2, 1, 0] },
+      ],
+    };
+    expect(reglasDeVentaDeLlegada({ fecha: dia('2026-07-15'), estacionalidad: permisiva, plan })).toEqual({
+      minNoches: 1,
+      maxNoches: 30,
+      checkInDias: [0, 1, 2, 3, 4, 5, 6],
+      checkOutDias: null,
+    });
+
+    // Sin plan y sin temporada: valores neutros (1, sin máximo, sin días).
+    expect(reglasDeVentaDeLlegada({ fecha: dia('2026-09-15'), estacionalidad: null, plan: null })).toEqual({
+      minNoches: 1,
+      maxNoches: null,
+      checkInDias: null,
+      checkOutDias: null,
+    });
+    // Un plan corrupto cae a los neutros, nunca a 0 ni a NaN.
+    expect(
+      reglasDeVentaDeLlegada({
+        fecha: dia('2026-09-15'),
+        estacionalidad: null,
+        plan: { minNoches: 0, maxNoches: -3 },
+      })
+    ).toEqual({ minNoches: 1, maxNoches: null, checkInDias: null, checkOutDias: null });
+  });
+
+  it('temporadaDeFecha es la única fuente de pertenencia (bordes inclusivos)', () => {
+    const config = normalizarEstacionalidad({
+      temporadas: [{ desde: '2026-07-01', hasta: '2026-07-31', tarifa: 150, minNoches: 3 }],
+    });
+    expect(temporadaDeFecha(config, dia('2026-07-01'))?.tarifa).toBe(150);
+    expect(temporadaDeFecha(config, dia('2026-07-31'))?.minNoches).toBe(3);
+    expect(temporadaDeFecha(config, dia('2026-06-30'))).toBeNull();
+    expect(temporadaDeFecha(config, dia('2026-08-01'))).toBeNull();
+    expect(temporadaDeFecha(null, dia('2026-07-15'))).toBeNull();
+  });
+
+  it('el mínimo de temporada no toca el precio de la noche', () => {
+    const plan = {
+      tarifa: 100,
+      estacionalidad: normalizarEstacionalidad({
+        temporadas: [{ desde: '2026-07-01', hasta: '2026-07-31', tarifa: 150, minNoches: 3 }],
+      }),
+    };
+    expect(tarifaPorNoche({ fecha: dia('2026-07-15'), tarifaBase: 100, plan })).toBe(150);
   });
 });
 

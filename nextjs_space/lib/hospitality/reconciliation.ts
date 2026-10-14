@@ -21,12 +21,35 @@
  *     registran como divergencia para revisión manual (puede activarse
  *     con `cancelarAusentes`).
  *   - Aislamiento multi-tenant: todo se filtra por tenantId.
+ *
+ * ── La ventana del fetch (por qué mira hacia atrás, y hasta dónde) ────────
+ * `startDate`/`endDate` del proveedor filtran por FECHA DE RESERVA (`bookedOn`),
+ * no por fechas de estancia: está medido y documentado en
+ * `lib/hospitality/ventana-reservas.ts`. El barrido que empezaba en HOY solo
+ * podía ver reservas hechas hoy —es decir, casi nunca ninguna— y dejaba fuera
+ * para siempre toda reserva cuyo push se perdió. Ahora mira el horizonte de
+ * venta de los canales (`diasAtras`, por defecto 730 días) y conserva `dias`
+ * de margen hacia adelante para las divergencias de disponibilidad.
+ *
+ * ── Por qué una estancia terminada hace meses NO entra (y se cuenta) ──────
+ * Mirar dos años atrás trae también la historia del hotel. Lo que decide si una
+ * reserva recién vista entra al ERP no es cuándo se reservó sino cuándo se
+ * queda: una estancia futura o en curso entra siempre, y una terminada entra
+ * solo si terminó hace menos de `DIAS_ESTANCIA_IMPORTABLE` días (factura, parte
+ * de viajeros, conciliación del mes). El resto se cuenta como `historicas` en
+ * el log —no desaparece en silencio— y no se escribe nada en la base.
  */
 
 import { prisma } from '@/lib/db';
 import type { Prisma } from '@prisma/client';
 import { fetchReservations, updateConnectivityStatus } from './connectivity';
 import { ESTADOS_RESERVA_VIVA } from './estados';
+import {
+  DIAS_BARRIDO_RESERVAS_ATRAS,
+  estanciaImportable,
+  toIsoFechaLocal,
+  ventanaFetchReservas,
+} from './ventana-reservas';
 import {
   processBook,
   processModify,
@@ -40,7 +63,13 @@ export interface ReconciliationInput {
   /** Si se omite, reconcilia todas las propiedades del tenant con mapping. */
   propertyId?: string;
   /** Días hacia adelante a consultar (default 30). */
-  dias?: number;
+  dias?: number
+  /**
+   * Días hacia atrás a consultar (default: el horizonte de venta, 730): el
+   * proveedor filtra por fecha de RESERVA, así que es lo que recupera los
+   * pushes perdidos — y una reserva viva pudo reservarse hace meses.
+   */
+  diasAtras?: number;
   /** Cancelar reservas internas activas ausentes del fetch (default false). */
   cancelarAusentes?: boolean;
 }
@@ -55,6 +84,13 @@ export interface ReconciliationSummary {
   canceladas: number;
   sinCambios: number;
   divergencias: number;
+  /**
+   * Reservas que el proveedor devuelve y NO se traen porque su estancia
+   * terminó hace más de `DIAS_ESTANCIA_IMPORTABLE` días: historia del hotel,
+   * no incidencias. Se cuentan para que la ventana profunda no parezca
+   * silenciosa.
+   */
+  historicas: number;
   errores: string[];
   detalle?: Array<{
     propertyId: string;
@@ -65,11 +101,18 @@ export interface ReconciliationSummary {
     canceladas: number;
     sinCambios: number;
     divergencias: number;
+    historicas: number;
     error?: string;
     /** Reservas internas activas que el proveedor ya no reporta
      *  (divergencias de disponibilidad). Vacío cuando no hubo ninguna;
      *  es la lista que revisa el operador en el panel de admin. */
     ausentes?: ReservaAusente[];
+    /**
+     * Resultado del push de disponibilidad que se dispara cuando el barrido
+     * tocó algo: recuperar una reserva sin reflejarla en el canal dejaría la
+     * unidad vendida aquí y abierta allí. Ausente = no hubo nada que empujar.
+     */
+    push?: { ok: boolean; pushCount: number; errores: number } | null;
   }>;
 }
 
@@ -83,14 +126,6 @@ export interface ReservaAusente {
   checkOut: string | null;
   unidad: string | null;
   huespedes: number;
-}
-
-/** Normaliza a YYYY-MM-DD en hora local. */
-function toIsoDate(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
 }
 
 function normalizePayload(item: Record<string, unknown>): WebhookReservationPayload | null {
@@ -135,6 +170,7 @@ export async function runReconciliation(
   input: ReconciliationInput
 ): Promise<ReconciliationSummary> {
   const dias = input.dias ?? 30;
+  const diasAtras = input.diasAtras ?? DIAS_BARRIDO_RESERVAS_ATRAS;
   const summary: ReconciliationSummary = {
     ok: true,
     propiedades: 0,
@@ -145,6 +181,7 @@ export async function runReconciliation(
     canceladas: 0,
     sinCambios: 0,
     divergencias: 0,
+    historicas: 0,
     errores: [],
     detalle: [],
   };
@@ -168,6 +205,9 @@ export async function runReconciliation(
   today.setHours(0, 0, 0, 0);
   const end = new Date(today);
   end.setDate(today.getDate() + dias);
+  // La ventana que se le pide al proveedor: hacia atrás lo que se pudo perder
+  // (fecha de RESERVA) y hacia adelante el margen de las divergencias.
+  const ventana = ventanaFetchReservas(diasAtras, dias, today);
 
   for (const prop of propertyRows) {
     const hotelCode = prop.mappings?.[0]?.externalPropertyId;
@@ -183,11 +223,22 @@ export async function runReconciliation(
       canceladas: 0,
       sinCambios: 0,
       divergencias: 0,
+      historicas: 0,
     };
     summary.detalle!.push(detalle);
 
-    // 1. Consultar reservas reales del proveedor.
-    const fetch = await fetchReservations(hotelCode, toIsoDate(today), toIsoDate(end), input.tenantId);
+    // 1. Consultar reservas reales del proveedor (por fecha de RESERVA).
+    const fetch = await fetchReservations(
+      hotelCode,
+      ventana.startDate,
+      ventana.endDate,
+      input.tenantId
+    );
+    // Cuántas devolvió el fetch para ESTA propiedad: sin este número, un
+    // barrido con la ventana vacía y uno que lo trajo todo malformado se leen
+    // igual en el log («0 creadas, 0 divergencias»).
+    const devueltas = fetch.reservas?.length ?? 0;
+    let sinForma = 0;
     if (!fetch.ok || !fetch.reservas) {
       summary.fetchFallidos += 1;
       summary.ok = false;
@@ -207,7 +258,8 @@ export async function runReconciliation(
             httpStatus: fetch.httpStatus ?? null,
             requestPayload: {
               hotelCode,
-              rango: `${toIsoDate(today)} → ${toIsoDate(end)}`,
+              // El rango es el de FECHAS DE RESERVA consultado, no el de estancias.
+              rango: `${ventana.startDate} → ${ventana.endDate}`,
               cancelarAusentes: input.cancelarAusentes ?? false,
             },
             errorMensaje: detalle.error,
@@ -224,9 +276,27 @@ export async function runReconciliation(
 
     for (const item of fetch.reservas) {
       const payload = normalizePayload(item);
-      if (!payload) continue;
+      if (!payload) {
+        // El proveedor devolvió algo que no tiene la forma del contrato: no se
+        // puede ni comparar. Se cuenta en el log en vez de desaparecer.
+        sinForma += 1;
+        continue;
+      }
       const key = `${payload.channel}|${payload.bookingId}`;
       vistos.add(key);
+
+      // Estancia terminada hace más de `DIAS_ESTANCIA_IMPORTABLE` días: es
+      // historia del hotel, no una reserva que el hotel pueda operar (ni noches
+      // que vender, ni factura, ni parte que comunicar). Se cuenta —para que la
+      // ventana profunda no parezca silenciosa— y se descarta ANTES de resolver
+      // el vínculo y de tocar la base: el barrido pide dos años de reservas y no
+      // todas merecen una consulta. Las cancelaciones no pasan por aquí: una
+      // cancelación hay que aplicarla a lo que tengamos (ver más abajo).
+      if (payload.action !== 'cancel' && !estanciaImportable(payload.checkout, today)) {
+        detalle.historicas += 1;
+        summary.historicas += 1;
+        continue;
+      }
 
       const mapping = await resolveMapping(payload);
       // El hotelCode del item debe coincidir con esta propiedad.
@@ -242,8 +312,20 @@ export async function runReconciliation(
         if (result.status === 'cancelada') {
           detalle.canceladas += 1;
           summary.canceladas += 1;
-        } else if (result.status === 'no_encontrada') {
-          // Cancelación de algo que no tenemos: solo se registra.
+        } else if (result.status === 'duplicado') {
+          // Ya estaba cancelada aquí (misma cancelación ya aplicada): no hay
+          // cambio que empujar. Sin esta rama el barrido contaba «canceladas: 1»
+          // en CADA pasada por la misma cancelación vieja y disparaba con ella
+          // un push completo de inventario y tarifas al canal, dos veces al día.
+          detalle.sinCambios += 1;
+          summary.sinCambios += 1;
+        } else if (!estanciaImportable(payload.checkout, today)) {
+          // Cancelación de una estancia que ya terminó hace tiempo y que aquí no
+          // existe: no puede afectar a nada vivo. Se cuenta como histórica.
+          detalle.historicas += 1;
+          summary.historicas += 1;
+        } else {
+          // Cancelación de algo que no tenemos y que aún importa: se registra.
           detalle.divergencias += 1;
           summary.divergencias += 1;
         }
@@ -268,7 +350,8 @@ export async function runReconciliation(
           : 'confirmed';
 
       if (!existing) {
-        // Faltante: crear (book). Idempotente por bookingId.
+        // Faltante: crear (book). Idempotente por bookingId. (Lo que se
+        // descarta por histórico ya se filtró arriba, antes de tocar la base.)
         const result = await processBook(input.tenantId, prop.id, mapping.unit?.id ?? null, payload);
         if (result.status === 'creada') {
           detalle.creadas += 1;
@@ -353,8 +436,8 @@ export async function runReconciliation(
         externalBookingId: r.externalBookingId,
         channel: r.channel,
         estado: r.estado,
-        checkIn: r.checkIn ? toIsoDate(new Date(r.checkIn)) : null,
-        checkOut: r.checkOut ? toIsoDate(new Date(r.checkOut)) : null,
+        checkIn: r.checkIn ? toIsoFechaLocal(new Date(r.checkIn)) : null,
+        checkOut: r.checkOut ? toIsoFechaLocal(new Date(r.checkOut)) : null,
         unidad: r.unit?.nombre ?? null,
         huespedes: (r.occupancyAdults ?? 0) + (r.occupancyChildren ?? 0),
       });
@@ -362,6 +445,26 @@ export async function runReconciliation(
 
     // La lista viaja también en el resumen devuelto a la ruta/API.
     if (ausentes.length > 0) detalle.ausentes = ausentes;
+
+    // 3. Lo que se recuperó del proveedor tiene que llegar al CANAL. El camino
+    //    del webhook ya empuja tras cada reserva; una reserva recuperada por el
+    //    barrido (su push se perdió o llegó rechazado) se quedaba sin reflejar
+    //    en el calendario del canal: la unidad vendida aquí y abierta allí, que
+    //    es exactamente la sobreventa que la guardia de noches sin justificar
+    //    acaba de señalar en la misma corrida. Se re-empuja la disponibilidad
+    //    completa (la calcula el estado interno, ya con las reservas dentro) y
+    //    las noches se cierran/abren solas.
+    const cambios = detalle.creadas + detalle.actualizadas + detalle.canceladas;
+    if (cambios > 0) {
+      try {
+        const { dispatchConnectivityPush } = await import('./sync');
+        const push = await dispatchConnectivityPush(input.tenantId, prop.id, 'reconciliacion');
+        detalle.push = { ok: push.ok, pushCount: push.pushCount, errores: push.errores };
+      } catch (e) {
+        console.error('[Hospitality] Error empujando la disponibilidad tras la reconciliación:', e);
+        detalle.push = { ok: false, pushCount: 0, errores: 1 };
+      }
+    }
 
     // Log de auditoría por propiedad (motivo y fuente, §14/§29/§30).
     try {
@@ -374,20 +477,26 @@ export async function runReconciliation(
           estado: detalle.error ? 'error' : 'exito',
           requestPayload: {
             hotelCode,
-            rango: `${toIsoDate(today)} → ${toIsoDate(end)}`,
+            // El rango es el de FECHAS DE RESERVA consultado, no el de estancias.
+            rango: `${ventana.startDate} → ${ventana.endDate}`,
             cancelarAusentes: input.cancelarAusentes ?? false,
           },
           // La lista concreta de ausentes es lo que revisa el operador:
           // sin ella el log solo dice "hay N divergencias" pero no cuáles.
           responseBody: ((): Prisma.InputJsonValue => {
             const body: Record<string, Prisma.InputJsonValue> = {
+              // Lo que devolvió el proveedor y lo que traía forma de reserva.
+              reservasDevueltas: devueltas,
+              sinForma,
               creadas: detalle.creadas,
               actualizadas: detalle.actualizadas,
               canceladas: detalle.canceladas,
               sinCambios: detalle.sinCambios,
               divergencias: detalle.divergencias,
+              historicas: detalle.historicas,
             };
             if (ausentes.length > 0) body.ausentes = ausentes as unknown as Prisma.InputJsonValue;
+            if (detalle.push) body.push = detalle.push as unknown as Prisma.InputJsonValue;
             return body;
           })(),
           errorMensaje: detalle.error ?? null,

@@ -9,10 +9,11 @@
     "lint:docs": "bash scripts/check-docs-no-cjk.sh",
     "test:e2e:login": "node scripts/e2e-login-subdominio.mjs",
     "typecheck": "NODE_OPTIONS='--max-old-space-size=8192' npx tsc --noEmit --project tsconfig.check.json",
-    "db:setup": "tsx --require dotenv/config scripts/db-setup.ts",
-    "db:verify": "tsx --require dotenv/config scripts/db-setup.ts --check",
-    "db:reset": "tsx --require dotenv/config scripts/db-setup.ts --reset",
-    "setup": "tsx --require dotenv/config scripts/setup.ts",
+    "db:setup": "tsx --require ./scripts/cargar-entorno.cjs scripts/db-setup.ts",
+    "db:verify": "tsx --require ./scripts/cargar-entorno.cjs scripts/db-setup.ts --check",
+    "db:reset": "tsx --require ./scripts/cargar-entorno.cjs scripts/db-setup.ts --reset",
+    "db:prisma": "node --require ./scripts/cargar-entorno.cjs node_modules/prisma/build/index.js",
+    "setup": "tsx --require ./scripts/cargar-entorno.cjs scripts/setup.ts",
     "prebuild": "npm run openapi:generate",
     "prepare": "husky || true",
     "postinstall": "patch-package && node scripts/install-eslint-local-rules.js",
@@ -37,7 +38,7 @@
     "node": ">=20.19.0 <21"
   },
   "prisma": {
-    "seed": "tsx --require dotenv/config scripts/seed.ts"
+    "seed": "tsx --require ./scripts/cargar-entorno.cjs scripts/seed.ts"
   },
   "devDependencies": {
     "@next/bundle-analyzer": "^16.2.6",

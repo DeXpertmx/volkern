@@ -14,6 +14,7 @@ vi.mock('@/lib/db', () => ({ default: mocks, prisma: mocks }));
 vi.mock('@/lib/api-key-auth', () => ({ authenticateRequest: mocks.authenticateRequest }));
 
 const { GET } = await import('@/app/api/hospitality/incidencias/route');
+const { ACCIONES_RESERVA } = await import('@/lib/hospitality/incidencias');
 
 const PROPIEDAD = {
   id: 'p1',
@@ -63,6 +64,21 @@ describe('GET /api/hospitality/incidencias', () => {
     mocks.hospitalityProperty.findMany.mockResolvedValue([]);
     const res = await GET(req('https://volkern.app/api/hospitality/incidencias?propertyId=p9'));
     expect(res.status).toBe(404);
+  });
+
+  it('la consulta se limita a acciones de RESERVA (un mensaje del canal NO es una incidencia de reserva)', async () => {
+    // La tabla `hospitality_webhook_events` la comparten reservas y mensajes:
+    // los mensajes sin mapping se guardan con `action: 'message'`. Sin este
+    // filtro, un chat de huésped de un código del tenant saldría aquí como
+    // incidencia de reserva sin ninguna reserva.
+    mocks.hospitalityWebhookEvent.findMany.mockResolvedValue([evento()]);
+
+    await GET(req());
+
+    const where = mocks.hospitalityWebhookEvent.findMany.mock.calls[0][0].where;
+    expect(where.action.in).toEqual([...ACCIONES_RESERVA]);
+    expect(where.action.in).not.toContain('message');
+    expect(where.estado).toBe('sin_mapping');
   });
 
   it('agrupa por roomCode/rateplan aunque cambien mayúsculas y espacios', async () => {

@@ -30,6 +30,7 @@ import {
   ArrowRight,
   ArrowLeft,
   AlertCircle,
+  Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -67,12 +68,28 @@ export interface UnidadPublicaUI {
   fotos: string[];
 }
 
+/**
+ * Extra que el hotel vende en la web (desayuno, late check-out, traslados…).
+ * El asistente solo lo enseña y manda la CANTIDAD: el precio que se cobra lo
+ * resuelve el servidor contra el catálogo activo.
+ */
+export interface ExtraPublicoUI {
+  id: string;
+  nombre: string;
+  descripcion: string | null;
+  precio: number;
+  moneda: string;
+  precioPorNoche: boolean;
+}
+
 export interface PropiedadPublicaUI {
   id: string;
   nombre: string;
   ciudad: string | null;
   direccion: string | null;
   unidades: UnidadPublicaUI[];
+  /** Catálogo activo de extras de la propiedad, en el idioma del huésped. */
+  extras?: ExtraPublicoUI[];
 }
 
 export interface ConfigPublicaUI {
@@ -114,8 +131,23 @@ interface ResultadoReservaUI {
   total: number;
   noches: number;
   confirmacionUrl: string;
+  /** Enlace de check-in (registro de viajeros); null si no se pudo preparar. */
+  checkinUrl: string | null;
   avisoDePago: string | null;
 }
+
+/** Documento del titular que el huésped puede dejar ya al reservar. */
+interface DocumentoUI {
+  tipoDocumento: string;
+  numeroDocumento: string;
+  fechaNacimiento: string;
+}
+
+const DOCUMENTO_VACIO: DocumentoUI = {
+  tipoDocumento: '',
+  numeroDocumento: '',
+  fechaNacimiento: '',
+};
 
 /** Identificador de la solicitud: hace que reintentar el formulario no duplique. */
 function nuevoSolicitudId(): string {
@@ -180,8 +212,32 @@ export function BookingWizard({
   const [resultado, setResultado] = useState<ResultadoReservaUI | null>(null);
   // Modal del paso 3: abierto desde «Elegir» y cerrado al éxito/cancelación.
   const [modalAbierto, setModalAbierto] = useState(false);
+  // Extras elegidos (id → cantidad) y documento del titular: los dos bloques son
+  // opcionales y los dos viajan al servidor, que es quien resuelve el precio y
+  // valida el registro de viajeros.
+  const [extrasSeleccion, setExtrasSeleccion] = useState<Record<string, number>>({});
+  const [documento, setDocumento] = useState<DocumentoUI>(DOCUMENTO_VACIO);
 
   const caja = embebido ? 'w-full' : 'mx-auto w-full max-w-3xl';
+
+  // Extras de la propiedad elegida: el catálogo llegó con ella desde el servidor
+  // (ya filtrado a activos y en el idioma del huésped).
+  const extrasDisponibles = propiedades.find((p) => p.id === propertyId)?.extras ?? [];
+  const extrasElegidos = Object.entries(extrasSeleccion)
+    .filter(([, cantidad]) => cantidad > 0)
+    .map(([extraId, cantidad]) => ({ extraId, cantidad }));
+  // Estimación a la vista: el precio es del catálogo y el importe definitivo lo
+  // devuelve la reserva. El asistente no decide dinero, solo lo enseña.
+  const totalExtrasEstimado =
+    Math.round(
+      extrasDisponibles.reduce((acc, e) => {
+        const cantidad = extrasSeleccion[e.id] || 0;
+        return acc + e.precio * cantidad * (e.precioPorNoche ? Math.max(noches, 1) : 1);
+      }, 0) * 100
+    ) / 100;
+  const documentaLoAlgo = Boolean(
+    documento.tipoDocumento || documento.numeroDocumento || documento.fechaNacimiento
+  );
 
   async function cotizar() {
     setCargando(true);
@@ -232,6 +288,12 @@ export function BookingWizard({
           email,
           telefono,
           notas,
+          // Extras: viaja la SELECCIÓN (id y cantidad); el precio lo pone el
+          // catálogo activo del servidor.
+          extras: extrasElegidos,
+          // Documento del titular: si el huésped lo dejó, entra en el registro de
+          // viajeros; si no, lo completa desde el enlace de check-in.
+          documento: documentaLoAlgo ? documento : null,
           // El idioma en que reservó queda en la reserva: las comunicaciones
           // automáticas (confirmación, pre-llegada, reseña) salen en él.
           lang: idioma,
@@ -254,6 +316,7 @@ export function BookingWizard({
         total: datos.total,
         noches: datos.noches,
         confirmacionUrl: datos.confirmacionUrl,
+        checkinUrl: datos.checkinUrl ?? null,
         avisoDePago: datos.avisoDePago ?? null,
       });
       setPaso(4);
@@ -563,6 +626,12 @@ export function BookingWizard({
               setPaisTelefono={setPaisTelefono}
               notas={notas}
               setNotas={setNotas}
+              extras={extrasDisponibles}
+              extrasSeleccion={extrasSeleccion}
+              setExtrasSeleccion={setExtrasSeleccion}
+              documento={documento}
+              setDocumento={setDocumento}
+              totalExtrasEstimado={totalExtrasEstimado}
               cargando={cargando}
               reservar={reservar}
               cerrar={() => setModalAbierto(false)}
@@ -603,6 +672,12 @@ export function BookingWizard({
               setPaisTelefono={setPaisTelefono}
               notas={notas}
               setNotas={setNotas}
+              extras={extrasDisponibles}
+              extrasSeleccion={extrasSeleccion}
+              setExtrasSeleccion={setExtrasSeleccion}
+              documento={documento}
+              setDocumento={setDocumento}
+              totalExtrasEstimado={totalExtrasEstimado}
               cargando={cargando}
               reservar={reservar}
               cerrar={() => setPaso(2)}
@@ -631,6 +706,14 @@ export function BookingWizard({
             <Button asChild>
               <a href={resultado.confirmacionUrl}>{t.verDetalle}</a>
             </Button>
+            {/* Check-in online: el registro de viajeros se completa desde aquí, así
+                el parte sale sin que el hotel persiga a nadie. El enlace es del
+                huésped (su token); sin token no se enseña nada. */}
+            {resultado.checkinUrl ? (
+              <Button variant="outline" asChild>
+                <a href={resultado.checkinUrl}>{t.completarCheckin}</a>
+              </Button>
+            ) : null}
             <p className="text-xs text-muted-foreground">{t.guardaEnlace}</p>
           </CardContent>
         </Card>
@@ -666,6 +749,12 @@ function FormularioHuesped({
   setPaisTelefono,
   notas,
   setNotas,
+  extras,
+  extrasSeleccion,
+  setExtrasSeleccion,
+  documento,
+  setDocumento,
+  totalExtrasEstimado,
   cargando,
   reservar,
   cerrar,
@@ -684,6 +773,13 @@ function FormularioHuesped({
   setPaisTelefono: (v: string) => void;
   notas: string;
   setNotas: (v: string) => void;
+  /** Catálogo activo de extras de la propiedad elegida. */
+  extras: ExtraPublicoUI[];
+  extrasSeleccion: Record<string, number>;
+  setExtrasSeleccion: (v: Record<string, number>) => void;
+  documento: DocumentoUI;
+  setDocumento: (v: DocumentoUI) => void;
+  totalExtrasEstimado: number;
   cargando: boolean;
   reservar: () => void;
   cerrar: () => void;
@@ -714,6 +810,102 @@ function FormularioHuesped({
           <Textarea id="notas" value={notas} onChange={(e) => setNotas(e.target.value)} placeholder={t.peticionesPlaceholder} />
         </div>
       </div>
+      {/* Extras: se ofrecen en el paso de datos, cuando el huésped ya sabe dónde y
+          cuándo. La cantidad es la única decisión suya — el importe lo fija el
+          catálogo activo del servidor, así que lo que se enseña aquí es una
+          estimación y el total definitivo lo confirma la reserva. */}
+      {extras.length > 0 ? (
+        <div className="grid gap-3 rounded-md border p-3">
+          <div>
+            <p className="flex items-center gap-2 text-sm font-medium">
+              <Sparkles className="h-4 w-4 text-muted-foreground" aria-hidden />
+              {t.extrasTitulo}
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{t.extrasAyuda}</p>
+          </div>
+          {extras.map((e) => (
+            <div key={e.id} className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm">
+                  {e.nombre}{' '}
+                  <span className="text-xs text-muted-foreground">
+                    {formatearImporte(e.precio, moneda)}
+                    {e.precioPorNoche ? ` ${t.extraPorNoche}` : ''}
+                  </span>
+                </p>
+                {e.descripcion ? (
+                  <p className="text-xs text-muted-foreground">{e.descripcion}</p>
+                ) : null}
+              </div>
+              <select
+                className="h-9 w-16 shrink-0 rounded-md border bg-background text-sm"
+                aria-label={`${t.extrasCantidad} · ${e.nombre}`}
+                value={String(extrasSeleccion[e.id] || 0)}
+                onChange={(ev) =>
+                  setExtrasSeleccion({ ...extrasSeleccion, [e.id]: Number(ev.target.value) })
+                }
+              >
+                {[0, 1, 2, 3, 4, 5].map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ))}
+          {totalExtrasEstimado > 0 ? (
+            <div className="flex justify-between border-t pt-2 text-sm">
+              <span>{t.extrasTotal}</span>
+              <span className="font-medium">{formatearImporte(totalExtrasEstimado, moneda)}</span>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* Registro de viajeros (RD 933/2021): opcional y sin fricción — lo que no
+          se deje aquí se completa desde el enlace de check-in que llega al
+          confirmar. Solo se envía al servidor si el huésped escribió algo. */}
+      <div className="grid gap-3 rounded-md border p-3">
+        <div>
+          <p className="text-sm font-medium">{t.documentoTitulo}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{t.documentoAyuda}</p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-2">
+            <Label htmlFor="tipoDocumento">{t.documentoTipo}</Label>
+            <select
+              id="tipoDocumento"
+              className="h-10 rounded-md border bg-background px-3 text-sm"
+              value={documento.tipoDocumento}
+              onChange={(ev) => setDocumento({ ...documento, tipoDocumento: ev.target.value })}
+            >
+              <option value="">{t.documentoNinguno}</option>
+              <option value="dni">{t.documentoDni}</option>
+              <option value="nie">{t.documentoNie}</option>
+              <option value="pasaporte">{t.documentoPasaporte}</option>
+              <option value="otro">{t.documentoOtro}</option>
+            </select>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="numeroDocumento">{t.documentoNumero}</Label>
+            <Input
+              id="numeroDocumento"
+              value={documento.numeroDocumento}
+              onChange={(ev) => setDocumento({ ...documento, numeroDocumento: ev.target.value })}
+            />
+          </div>
+          <div className="grid gap-2 sm:col-span-2">
+            <Label htmlFor="fechaNacimiento">{t.documentoNacimiento}</Label>
+            <Input
+              id="fechaNacimiento"
+              type="date"
+              value={documento.fechaNacimiento}
+              onChange={(ev) => setDocumento({ ...documento, fechaNacimiento: ev.target.value })}
+            />
+          </div>
+        </div>
+      </div>
+
       <p className="text-xs text-muted-foreground">{t.dejaContacto}</p>
       {config.politicaCancelacion ? (
         <p className="rounded-md border p-3 text-xs text-muted-foreground">{config.politicaCancelacion}</p>

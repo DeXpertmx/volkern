@@ -1439,6 +1439,40 @@ describe('Hospitality — registro manual de reserva partida (multi-habitación)
     expect(hoisted.hospitalityReservation.updateMany).not.toHaveBeenCalled();
   });
 
+  it('el cancel REPETIDO de la misma reserva no reescribe ni re-emite: es un duplicado', async () => {
+    // El mismo hecho contado dos veces (reintento del proveedor, o el barrido
+    // mirando otra vez el mismo rango). Antes se aplicaba de nuevo: reescribía
+    // el payload, re-emitía `reservation.cancelled` —y con él las reglas de
+    // automatización— y disparaba un push al canal sin nada que empujar.
+    hoisted.hospitalityReservation.findUnique.mockResolvedValue(
+      reservationFila({ estado: 'cancelled', action: 'cancel' })
+    );
+
+    const result = await processCancel(TENANT_A, payload({ action: 'cancel' }));
+
+    expect(result.ok).toBe(true);
+    expect(result.status).toBe('duplicado');
+    expect(hoisted.hospitalityReservation.update).not.toHaveBeenCalled();
+  });
+
+  it('el cancel repetido de un booking partido ya cancelado también es duplicado', async () => {
+    hoisted.hospitalityReservation.findUnique.mockResolvedValue(null);
+    hoisted.hospitalityReservation.findMany.mockResolvedValue([
+      { id: 'res_p1', estado: 'cancelled', propertyId: PROPERTY_A, unitId: UNIT_U1.id, contactId: null, checkIn: new Date('2026-10-10'), checkOut: new Date('2026-10-15'), guestData: null },
+    ]);
+
+    const result = await processCancel(TENANT_A, {
+      action: 'cancel',
+      hotelCode: 'sandbox-pms',
+      channel: 'airbnb',
+      bookingId: 'BKG-MULTI',
+    } as WebhookReservationPayload);
+
+    expect(result.ok).toBe(true);
+    expect(result.status).toBe('duplicado');
+    expect(hoisted.hospitalityReservation.updateMany).not.toHaveBeenCalled();
+  });
+
   it('helpers: id derivado y sub-payload por habitación', () => {
     expect(externalIdDeParte('BKG-9', 0)).toBe('BKG-9#1');
     expect(externalIdDeParte('BKG-9', 2)).toBe('BKG-9#3');

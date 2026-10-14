@@ -1,11 +1,17 @@
 export const dynamic = 'force-dynamic';
 
-import { createHash } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   getConnectivityBasicAuth,
   updateConnectivityStatus,
 } from '@/lib/hospitality/connectivity';
+// La lectura de la cabecera Basic y su comparación viven en un módulo compartido
+// con el webhook de mensajes: mismo par, mismo diagnóstico del 401.
+import {
+  credencialesCoinciden,
+  huellaCredencial,
+  readBasicAuth,
+} from '@/lib/hospitality/webhook-basic-auth';
 import {
   processReservationWebhook,
   type WebhookReservationPayload,
@@ -30,57 +36,6 @@ import {
  */
 
 /**
- * Por qué un intento no llegó a compararse. Viaja en el 401
- * (`diagnostico.motivo`) y en el log del servidor.
- */
-type MotivoRechazo =
-  | 'sin_cabecera'
-  | 'esquema_no_basic'
-  | 'cabecera_malformada'
-  | 'encoding_no_utf8'
-  | 'sin_separador'
-  | 'credenciales_no_coinciden';
-
-type AuthAttempt =
-  | { ok: true; username: string; password: string }
-  | { ok: false; motivo: MotivoRechazo; esquema: string | null };
-
-/**
- * Huella no reversible (SHA-256 truncado) para comparar credenciales **sin
- * transportarlas**: quien las emite hashea las suyas y las coteja con la que
- * devolvemos en el 401. Nunca sale de aquí ni el valor recibido ni el guardado
- * (misma disciplina que `lib/hospitality/conectividad-secreto.ts`).
- */
-function huella(...partes: string[]): string {
-  return createHash('sha256').update(partes.join(':')).digest('hex').slice(0, 12);
-}
-
-function readBasicAuth(request: NextRequest): AuthAttempt {
-  const header = request.headers.get('authorization');
-  if (!header) return { ok: false, motivo: 'sin_cabecera', esquema: null };
-  // RFC 7235: el nombre del esquema es insensible a mayúsculas y admite más de
-  // un espacio detrás. Exigir `Basic ` literal convertía un `basic` válido en
-  // el mismo 401 que unas credenciales equivocadas.
-  const partes = /^\s*([^\s]+)\s*(.*)$/.exec(header);
-  if (!partes) return { ok: false, motivo: 'cabecera_malformada', esquema: null };
-  const esquema = partes[1].toLowerCase();
-  if (esquema !== 'basic') return { ok: false, motivo: 'esquema_no_basic', esquema };
-  // Los emisores descuidados parten el base64 en varias líneas: se unen.
-  const payload = partes[2].replace(/\s+/g, '');
-  if (!payload) return { ok: false, motivo: 'cabecera_malformada', esquema };
-  const decoded = Buffer.from(payload, 'base64').toString('utf8');
-  // U+FFFD = la credencial traía bytes que no son UTF-8 (p. ej. latin-1).
-  if (decoded.includes('\uFFFD')) return { ok: false, motivo: 'encoding_no_utf8', esquema };
-  const idx = decoded.indexOf(':');
-  if (idx < 0) return { ok: false, motivo: 'sin_separador', esquema };
-  return {
-    ok: true,
-    username: decoded.slice(0, idx),
-    password: decoded.slice(idx + 1),
-  };
-}
-
-/**
  * 401 del contrato con diagnóstico adjunto. `diagnostico.huella` es el SHA-256
  * truncado de `usuario:contraseña` **tal como llegaron**: el emisor hashea su
  * par y sabe al instante si su configuración es otra o si algo la alteró por el
@@ -92,15 +47,6 @@ function rechazoNoAutorizado(diagnostico: Record<string, unknown>) {
     { success: false, error: 'No autorizado', diagnostico },
     { status: 401 }
   );
-}
-
-function safeCompare(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) {
-    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  return diff === 0;
 }
 
 export async function POST(request: NextRequest) {
@@ -135,16 +81,16 @@ export async function POST(request: NextRequest) {
       return rechazoNoAutorizado(diagnostico);
     }
     if (
-      !safeCompare(auth.username, creds.username) ||
-      !safeCompare(auth.password, creds.password)
+      !credencialesCoinciden(auth.username, creds.username) ||
+      !credencialesCoinciden(auth.password, creds.password)
     ) {
       const diagnostico = {
         motivo: 'credenciales_no_coinciden' as const,
         esquema: 'basic',
         usuarioLen: auth.username.length,
         passwordLen: auth.password.length,
-        usuarioHuella: huella(auth.username),
-        huella: huella(auth.username, auth.password),
+        usuarioHuella: huellaCredencial(auth.username),
+        huella: huellaCredencial(auth.username, auth.password),
       };
       await updateConnectivityStatus({
         estado: 'error',

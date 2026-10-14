@@ -8,8 +8,15 @@ import {
   buildContextoPlantilla,
   renderPlantilla,
   enviarComunicacion,
+  leerDiseno,
 } from '@/lib/hospitality/comunicaciones';
+import { renderDisenoEmail } from '@/lib/hospitality/comunicaciones-email';
 import { formatearImporte } from '@/lib/moneda';
+
+/** Origen público para los enlaces de ejemplo de la vista previa. */
+function appUrl(): string {
+  return (process.env.NEXT_PUBLIC_APP_URL || 'https://volkern.app').replace(/\/+$/, '');
+}
 
 /**
  * POST /api/hospitality/comunicaciones/[id]/enviar-prueba
@@ -69,19 +76,41 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           // huésped, no como lo escribiría quien probó en otro país.
           importe: formatearImporte(6900, auth.tenant!.moneda || '', 0),
           estado: 'confirmed',
+          // Los enlaces y textos que llevan los botones del editor visual: sin
+          // ellos la vista previa de una plantilla nueva enseñaría un botón
+          // sin destino y no lo que verá el huésped.
+          enlace_checkin: `${appUrl()}/checkin/ejemplo?lang=es`,
+          enlace_resena: `${appUrl()}/review/ejemplo?lang=es`,
+          indicaciones: 'Cómo llegar: ejemplo de indicaciones del hotel.',
+          preguntas_pendientes: 'ejemplo de pregunta pendiente',
         };
 
-    const contenido = renderPlantilla(plantilla.contenido, contexto);
+    // La prueba se compila con el mismo camino que el envío real: diseño visual
+    // a HTML y texto del cuerpo; si la plantilla no tiene diseño, el texto de
+    // siempre. Lo que se prueba es lo que sale.
+    const diseno = plantilla.canal === 'email' ? leerDiseno(plantilla.diseno) : null;
+    const render = diseno ? renderDisenoEmail(diseno, contexto) : null;
+    const textoGuardado = String(plantilla.contenido ?? '');
+    const contenido = textoGuardado.trim()
+      ? renderPlantilla(textoGuardado, contexto)
+      : render?.text ?? '';
 
     const resultado = await enviarComunicacion({
       tenantId,
       canal: plantilla.canal,
-      asunto: plantilla.asunto,
+      asunto: plantilla.asunto ? renderPlantilla(plantilla.asunto, contexto) : plantilla.asunto,
       contenido,
       destinatario,
+      html: render?.html ?? null,
     });
 
-    return NextResponse.json({ ok: resultado.ok, resultado, contexto, contenidoPreview: contenido });
+    return NextResponse.json({
+      ok: resultado.ok,
+      resultado,
+      contexto,
+      contenidoPreview: contenido,
+      htmlPreview: render?.html ?? null,
+    });
   } catch (error) {
     console.error('Error enviando prueba de plantilla:', error);
     return NextResponse.json({ error: 'Error al enviar la plantilla de prueba' }, { status: 500 });

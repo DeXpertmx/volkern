@@ -24,6 +24,9 @@ import { Button } from '@/components/ui/button';
 import { AccionHospitality } from '@/components/hospitality/AccionHospitality';
 import { MONEDAS_SELECCIONABLES, formatearImporte, monedaEfectiva } from '@/lib/moneda';
 import { useMonedaTenant } from '@/lib/use-moneda-tenant';
+// Módulo puro (sin BD ni red): trae la forma del informe de descartes del canal
+// para pintar las unidades rechazadas, no para reimplementar la regla.
+import type { RechazoDeCanal } from '@/lib/hospitality/rechazo-canal';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SelectorPais } from '@/components/paises-municipios/selectores';
@@ -307,8 +310,12 @@ export default function HospitalityOnboardingPage() {
   // Paso 6 — asignaciones por unidad
   const [asignaciones, setAsignaciones] = useState<Record<string, { roomCode: string; rateplanCode: string }>>({});
 
-  // Resultado detallado de la última prueba por paso
-  const [resultados, setResultados] = useState<Record<string, { ok: boolean; texto: string }>>({});
+  // Resultado detallado de la última prueba por paso. `unidades` solo llega
+  // cuando el canal descartó parte del envío: es la lista de lo que hay que
+  // arreglar, con el nombre de la unidad del hotel.
+  const [resultados, setResultados] = useState<
+    Record<string, { ok: boolean; texto: string; unidades?: RechazoDeCanal['descartadas'] }>
+  >({});
 
   // Incidencias de conectividad (reservas rechazadas por falta de vínculo)
   const [incidencias, setIncidencias] = useState<IncidenciaConectividad[] | null>(null);
@@ -797,15 +804,30 @@ export default function HospitalityOnboardingPage() {
       });
       const data = await res.json();
       const detalle = data.detalle || {};
+      // La reserva de prueba se borra y se vuelve a empujar la disponibilidad. Si
+      // esa reposición falla, el proveedor se queda esas noches cerradas: el paso
+      // sigue siendo válido (la reserva llegó) pero hay que decirlo, no callarlo.
+      const reposicion = (detalle.reposicion || null) as { ok?: boolean } | null;
+      // El aviso del servidor es la fuente: cubre también el push que no manda
+      // nada (respuesta OK con 0 envíos, que deja igualmente las noches cerradas).
+      const reposicionSuspendida =
+        prueba === 'reserva' && !!data.ok && (!!data.aviso || reposicion?.ok === false);
       const texto = data.ok
         ? prueba === 'reserva'
-          ? `Reserva recibida y eliminada · ${detalle.unidad || ''} ${detalle.roomCode || ''}`
+          ? `${reposicionSuspendida ? 'Reserva recibida y eliminada · disponibilidad NO repuesta' : 'Reserva recibida, eliminada y disponibilidad repuesta'} · ${detalle.unidad || ''} ${detalle.roomCode || ''}`
           : `${detalle.pushCount ?? 0} envío(s) aceptados por el proveedor`
         : data.error || 'La prueba falló';
+      // Unidades que el canal descartó: se pintan una a una debajo del resultado,
+      // porque un aviso que se va con el toast se pierde.
+      const unidades = (detalle.rechazo?.descartadas ?? []) as RechazoDeCanal['descartadas'];
 
-      setResultados((r) => ({ ...r, [prueba]: { ok: !!data.ok, texto } }));
-      if (data.ok) toast.success(prueba === 'reserva' ? 'Reserva de prueba verificada' : 'Prueba superada');
-      else toast.error(texto);
+      setResultados((r) => ({
+        ...r,
+        [prueba]: { ok: !!data.ok, texto, ...(unidades.length > 0 ? { unidades } : {}) },
+      }));
+      if (!data.ok) toast.error(texto);
+      else if (data.aviso) toast.error(String(data.aviso));
+      else toast.success(prueba === 'reserva' ? 'Reserva de prueba verificada' : 'Prueba superada');
       await cargar(snapshot.propiedad.id);
     } catch (e) {
       const texto = e instanceof Error ? e.message : 'Error ejecutando la prueba';
@@ -1969,7 +1991,7 @@ function PruebaBloque({
   boton: string;
   enCurso: boolean;
   deshabilitado: boolean;
-  resultado?: { ok: boolean; texto: string };
+  resultado?: { ok: boolean; texto: string; unidades?: RechazoDeCanal['descartadas'] };
   onEjecutar: () => void;
 }) {
   return (
@@ -1981,13 +2003,27 @@ function PruebaBloque({
       </Button>
       {resultado && (
         <Alert variant={resultado.ok ? 'default' : 'destructive'}>
-          <AlertDescription className="flex items-center gap-2">
+          <AlertDescription className="flex items-start gap-2">
             {resultado.ok ? (
-              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+              <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-600" />
             ) : (
-              <AlertTriangle className="h-4 w-4 text-red-600" />
+              <AlertTriangle className="mt-0.5 h-4 w-4 text-red-600" />
             )}
-            {resultado.texto}
+            <div className="space-y-2">
+              <p>{resultado.texto}</p>
+              {resultado.unidades && resultado.unidades.length > 0 && (
+                <ul className="space-y-1 text-xs">
+                  {resultado.unidades.map((u) => (
+                    <li key={u.unitId}>
+                      <span className="font-medium">{u.nombre}</span>
+                      {u.roomCode ? ` · habitación ${u.roomCode}` : ''}
+                      {u.codigosTarifa.length > 0 ? ` · tarifa ${u.codigosTarifa.join(', ')}` : ''}
+                      {u.motivos[0] ? ` — ${u.motivos[0]}` : ''}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </AlertDescription>
         </Alert>
       )}

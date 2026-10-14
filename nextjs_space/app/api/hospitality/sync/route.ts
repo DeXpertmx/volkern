@@ -4,7 +4,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
 import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
-import { dispatchConnectivityPush } from '@/lib/hospitality/sync';
+import { dispatchConnectivityPush, type SyncResult } from '@/lib/hospitality/sync';
+
+/**
+ * Primer mensaje de error de los cuatro pushes, en el orden del envío. Es el
+ * respaldo cuando el fallo no es un descarte atribuible (red, HTTP, catálogo):
+ * sin esto el panel solo podía decir «revisa los sync-logs», que es lo mismo que
+ * no decir nada.
+ */
+function primerErrorDePush(result: SyncResult): string | undefined {
+  return [result.inventory, result.inventoryRestrictions, result.rates, result.rateRestrictions]
+    .find((r) => !r.ok && r.error)?.error;
+}
 
 /**
  * POST /api/hospitality/sync — sincronización manual de inventario y tarifas
@@ -54,6 +65,12 @@ export async function POST(req: NextRequest) {
       rates: result.rates,
       inventoryRestrictions: result.inventoryRestrictions,
       rateRestrictions: result.rateRestrictions,
+      // Qué descartó el canal, con el NOMBRE de las unidades del hotel: el
+      // código del proveedor («INVALID_ROOM_CODE : 1a») no dice qué arreglar.
+      rechazo: result.rechazo,
+      ...(result.ok
+        ? {}
+        : { error: result.rechazo.mensaje || primerErrorDePush(result) }),
     });
   } catch (error) {
     console.error('Error en sincronización manual:', error);

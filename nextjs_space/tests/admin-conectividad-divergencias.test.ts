@@ -51,6 +51,23 @@ const AUSENTE = {
   huespedes: 2,
 };
 
+function logInventario(
+  id: string,
+  body: Record<string, unknown>,
+  propertyId: string | null = 'p1'
+) {
+  return {
+    id,
+    tenantId: 't1',
+    propertyId,
+    tipo: 'divergencias_inventario',
+    fechaCreacion: new Date('2026-10-09T04:15:00Z'),
+    tenant: { id: 't1', nombre: 'Hotel Demo' },
+    property: { id: propertyId, nombre: 'Villa Mar Azul' },
+    responseBody: body,
+  };
+}
+
 function logConAusentes(id: string, ausentes: unknown[], propertyId: string | null = 'p1') {
   return {
     id,
@@ -132,6 +149,77 @@ describe('GET /api/admin/conectividad/divergencias', () => {
     expect(mocks.hospitalityReservation.findMany).not.toHaveBeenCalled();
   });
 
+  it('devuelve el último barrido de noches sin justificar por propiedad', async () => {
+    mocks.hospitalitySyncLog.findMany.mockResolvedValue([
+      logInventario('inv2', {
+        cerradasSinJustificar: 2,
+        abiertasSinJustificar: 0,
+        comparadas: 30,
+        sinDato: 26,
+        cerradas: [
+          { roomCode: '2b', fecha: '2026-10-10', proveedor: 0, interno: 1, empujadoEn: null },
+          { roomCode: '2b', fecha: '2026-10-11', proveedor: 0, interno: 1, empujadoEn: null },
+        ],
+        abiertas: [],
+      }),
+      // Barrido anterior de la MISMA propiedad: no debe duplicar la fila.
+      logInventario('inv1', {
+        cerradasSinJustificar: 0,
+        abiertasSinJustificar: 0,
+        comparadas: 30,
+        sinDato: 30,
+        cerradas: [],
+        abiertas: [],
+      }),
+      logConAusentes('log1', [AUSENTE]),
+    ]);
+    mocks.hospitalityReservation.findMany.mockResolvedValue([{ id: 'r1', estado: 'confirmed' }]);
+
+    const res = await GET();
+    const data = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(data.inventario).toHaveLength(1);
+    const i = data.inventario[0];
+    expect(i.syncLogId).toBe('inv2');
+    expect(i.propertyNombre).toBe('Villa Mar Azul');
+    expect(i.cerradasSinJustificar).toBe(2);
+    expect(i.sinDato).toBe(26);
+    expect(i.cerradas).toHaveLength(2);
+    expect(i.cerradas[0]).toMatchObject({ roomCode: '2b', proveedor: 0, interno: 1 });
+  });
+
+  it('lista el barrido aunque no haya reservas divergentes (y viceversa)', async () => {
+    mocks.hospitalitySyncLog.findMany.mockResolvedValue([
+      logInventario('inv1', {
+        cerradasSinJustificar: 1,
+        abiertasSinJustificar: 1,
+        comparadas: 30,
+        sinDato: 28,
+        cerradas: [],
+        abiertas: [],
+      }),
+    ]);
+
+    const res = await GET();
+    const data = await res.json();
+
+    expect(data.divergencias).toEqual([]);
+    expect(data.inventario).toHaveLength(1);
+    expect(data.inventario[0].abiertasSinJustificar).toBe(1);
+  });
+
+  it('un log de reconciliación sin contadores no se interpreta como barrido', async () => {
+    mocks.hospitalitySyncLog.findMany.mockResolvedValue([logConAusentes('log1', [AUSENTE])]);
+    mocks.hospitalityReservation.findMany.mockResolvedValue([{ id: 'r1', estado: 'confirmed' }]);
+
+    const res = await GET();
+    const data = await res.json();
+
+    expect(data.divergencias).toHaveLength(1);
+    expect(data.inventario).toEqual([]);
+  });
+
   it('ignora entradas de ausentes malformadas en el log', async () => {
     mocks.hospitalitySyncLog.findMany.mockResolvedValue([
       logConAusentes('log1', [{ reservationId: 'solo-id' }, null, 'texto', AUSENTE]),
@@ -161,8 +249,11 @@ describe('POST /api/admin/conectividad/divergencias (cancelar reserva revisada)'
     mocks.hospitalityReservation.findFirst.mockResolvedValue({
       id: 'r1',
       estado: 'confirmed',
-      checkIn: new Date('2026-09-20T15:00:00Z'),
-      checkOut: new Date('2026-09-24T11:00:00Z'),
+      // Reserva hecha en enero para una estancia de septiembre: la ventana de
+      // re-verificación tiene que cubrir CUÁNDO SE HIZO, no cuándo es. Fechas
+      // locales (no UTC) para que el cálculo no dependa de la zona horaria.
+      bookedOn: new Date(2026, 0, 15, 10, 0, 0),
+      fechaCreacion: new Date(2026, 0, 15, 10, 0, 1),
       channel: 'airbnb',
       externalBookingId: 'BKG-77',
     });
@@ -238,17 +329,29 @@ describe('POST /api/admin/conectividad/divergencias (cancelar reserva revisada)'
   });
 
   it('camino feliz: re-verifica, cancela con el tenant del log, audita y notifica', async () => {
-    const res = await POST(reqPost({ reservationId: 'r1', syncLogId: 'log1' }));
+    // Reloj fijo: la ventana se calcula con el día de hoy.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 9, 12, 0, 0));
+    let res: any;
+    try {
+      res = await POST(reqPost({ reservationId: 'r1', syncLogId: 'log1' }));
+    } finally {
+      vi.useRealTimers();
+    }
     const data = await res.json();
 
     expect(res.status).toBe(200);
     expect(data.ok).toBe(true);
     expect(data.estado).toBe('cancelled');
 
-    // Re-verificación contra el proveedor con el rango de la reserva. El tenant
-    // viaja en la llamada porque el ID de socio con el que se consulta puede ser
-    // el del cliente, no el de plataforma.
-    expect(mocks.fetchReservations).toHaveBeenCalledWith('HOTEL-1', '2026-09-20', '2026-09-24', 't1');
+    // Re-verificación con la ventana de FECHAS DE RESERVA que cubre el
+    // `bookedOn` de esta reserva, no con su rango de estancia: el proveedor
+    // filtra por fecha de reserva. Y el barrido ya mira el horizonte de venta
+    // (730 días), que es más profundo que ese `bookedOn` (15 ene 2026): manda el
+    // más ancho de los dos, así que la ventana empieza el 9 oct 2024 y no el 14
+    // ene 2026. El tenant viaja en la llamada porque el ID de socio con el que
+    // se consulta puede ser el del cliente, no el de plataforma.
+    expect(mocks.fetchReservations).toHaveBeenCalledWith('HOTEL-1', '2024-10-09', '2026-11-08', 't1');
     // La cancelación usa el tenant del LOG, no un tenant del cliente.
     expect(mocks.processCancel).toHaveBeenCalledWith(
       't1',

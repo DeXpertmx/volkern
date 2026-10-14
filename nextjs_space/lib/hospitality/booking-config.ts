@@ -176,21 +176,12 @@ export function propiedadesPublicables(
   return Array.from(new Set(idsSolicitados.filter((id) => propias.has(id))));
 }
 
-/** URL pública de la página de reserva del tenant. */
-export function urlPublicaBooking(appUrl: string, slug: string): string {
-  return `${appUrl.replace(/\/+$/, '')}/reservar/${slug}`;
-}
-
-/** URL del widget embebible (para la web del tenant). */
-export function urlEmbedBooking(appUrl: string, slug: string): string {
-  return `${appUrl.replace(/\/+$/, '')}/embed/reservar/${slug}`;
-}
-
-/** Fragmento de iframe que el tenant pega en su web. */
-export function codigoEmbedBooking(appUrl: string, slug: string, titulo?: string | null): string {
-  const etiqueta = (titulo || 'Reserva').replace(/"/g, '');
-  return `<iframe src="${urlEmbedBooking(appUrl, slug)}" title="${etiqueta}" style="width:100%;min-height:720px;border:0" loading="lazy"></iframe>`;
-}
+/**
+ * Las URLs públicas del motor viven en un módulo puro (`booking-urls`) porque
+ * las usa también el panel del hotel, que es de cliente: se reexportan para que
+ * el resto del producto siga importándolas desde aquí, sin dos verdades.
+ */
+export { urlPublicaBooking, urlEmbedBooking, codigoEmbedBooking } from './booking-urls';
 
 /**
  * Lee la configuración del tenant, o null si nunca la abrió.
@@ -253,7 +244,14 @@ export async function guardarConfigBooking(
     select: { id: true },
   });
 
-  const publicadas = propiedadesPublicables(entrada.propiedadesPublicadas || [], propiedades);
+  // AUSENTE en el body = sin cambio, igual que plantilla/personalización/dominio.
+  // El panel guarda el aspecto sin mandar la lista: tomarla por vacía dejaba la
+  // página pública sin una sola propiedad —y el motor, sin nada que enseñar—
+  // cada vez que el hotel tocaba sus colores.
+  const publicadas =
+    entrada.propiedadesPublicadas === undefined
+      ? undefined
+      : propiedadesPublicables(entrada.propiedadesPublicadas, propiedades);
 
   // La divisa publicada es una decisión del tenant; si no la elige, se guarda nula
   // y la página publica en la moneda del tenant. La del esquema no entra aquí.
@@ -277,19 +275,33 @@ export async function guardarConfigBooking(
     entrada.personalizacion === undefined ? undefined : normalizarPersonalizacion(entrada.personalizacion);
   const dominioValor = entrada.dominio === undefined ? undefined : dominioNormalizado;
 
+  // Cada campo entra SOLO si venía en el body: escribir el valor por defecto de
+  // lo que nadie mandó convertía cada guardado en un borrado —título, políticas
+  // y propiedades publicadas desaparecían al guardar los colores—. En el alta
+  // los omitidos los pone el esquema (sus defaults), que es lo que deben ser.
   const datos = {
     slug: slug.slug,
-    titulo: entrada.titulo?.trim() || null,
-    descripcion: entrada.descripcion?.trim() || null,
-    emailContacto: entrada.emailContacto?.trim() || null,
-    telefonoContacto: entrada.telefonoContacto?.trim() || null,
-    moneda,
-    politicaCancelacion: entrada.politicaCancelacion?.trim() || null,
-    anticipoPorcentaje: normalizarAnticipo(entrada.anticipoPorcentaje),
-    tarifaLimpieza: normalizarTarifaLimpieza(entrada.tarifaLimpieza),
-    requierePagoOnline: entrada.requierePagoOnline === true,
-    propiedadesPublicadas: publicadas,
-    activo: entrada.activo !== false,
+    ...(entrada.titulo !== undefined ? { titulo: entrada.titulo?.trim() || null } : {}),
+    ...(entrada.descripcion !== undefined ? { descripcion: entrada.descripcion?.trim() || null } : {}),
+    ...(entrada.emailContacto !== undefined ? { emailContacto: entrada.emailContacto?.trim() || null } : {}),
+    ...(entrada.telefonoContacto !== undefined
+      ? { telefonoContacto: entrada.telefonoContacto?.trim() || null }
+      : {}),
+    ...(entrada.moneda !== undefined ? { moneda } : {}),
+    ...(entrada.politicaCancelacion !== undefined
+      ? { politicaCancelacion: entrada.politicaCancelacion?.trim() || null }
+      : {}),
+    ...(entrada.anticipoPorcentaje !== undefined
+      ? { anticipoPorcentaje: normalizarAnticipo(entrada.anticipoPorcentaje) }
+      : {}),
+    ...(entrada.tarifaLimpieza !== undefined
+      ? { tarifaLimpieza: normalizarTarifaLimpieza(entrada.tarifaLimpieza) }
+      : {}),
+    ...(entrada.requierePagoOnline !== undefined
+      ? { requierePagoOnline: entrada.requierePagoOnline === true }
+      : {}),
+    ...(publicadas !== undefined ? { propiedadesPublicadas: publicadas } : {}),
+    ...(entrada.activo !== undefined ? { activo: entrada.activo !== false } : {}),
   };
 
   try {

@@ -8,21 +8,36 @@
  * La personalización viaja como CSS custom properties (`--booking-*`) que el
  * wizard ya consume para botón, tarjeta y texto; lo inválido ya cayó a defaults
  * en el servidor.
+ *
+ * Las fotos publicadas del alojamiento también cambian con la plantilla, igual
+ * que el marco: la clásica las enseña en la galería de arriba (lo que promete su
+ * descripción), la moderna en su cabecera y la minimal no las pinta —es su
+ * promesa—. Sin fotos publicadas no se pinta galería: el hueco lo cubre el marco
+ * de relleno de `GaleriaPropiedad`, nunca una imagen rota.
  */
 
 import type { ReactNode } from 'react';
+import { GaleriaPropiedad } from './FichaPropiedad';
+import type { Idioma } from '@/lib/hospitality/booking-i18n';
 import type { PlantillaBooking, PersonalizacionBooking } from '@/lib/hospitality/booking-plantillas';
 
 export interface DatosPlantilla {
   plantilla: PlantillaBooking;
   personalizacion: PersonalizacionBooking;
+  /** Idioma de la página: lo usa la galería (avisos, visor, textos). */
+  idioma: Idioma;
   /** Logo del hotel (URL pública normalizada); null = cabecera sin logo. */
   logo: string | null;
   /** Título de la página (config.titulo) o el nombre del alojamiento. */
   titulo: string;
   descripcion: string | null;
   ciudad: string | null;
-  /** Foto destacada (primera disponible de cualquier unidad/propiedad). */
+  /**
+   * Fotos publicadas, con la portada delante. La galería las enseña arriba
+   * (clásica) y la moderna usa la primera como cabecera.
+   */
+  fotos: string[];
+  /** Foto destacada (la portada publicada; null = sin fotos). */
   fotoPortada: string | null;
   tarifaDesde: number | null;
   /** Moneda ya formateada en el servidor: la página no calcula dinero. */
@@ -146,7 +161,7 @@ export function PlantillaBookingPage({ plantilla, datos, wizard }: { plantilla: 
   }
 
   if (plantilla === 'minimal') {
-    // Minimal: sin imágenes, todo texto centrado y apretado.
+    // Minimal: sin imágenes (es su promesa), todo texto centrado y apretado.
     return (
       <div className="mx-auto max-w-md py-10">
         <Cabecera d={datos} />
@@ -165,9 +180,17 @@ export function PlantillaBookingPage({ plantilla, datos, wizard }: { plantilla: 
     );
   }
 
-  // Clásica (y desconocido): como siempre, el wizard centrado con su título.
+  // Clásica (y desconocido): la experiencia de siempre —la galería del
+  // alojamiento arriba, la cabecera con la marca y el wizard centrado—, que es
+  // justo lo que promete su descripción en el catálogo. Sin fotos publicadas no
+  // se pinta galería (no hay nada que enseñar) y la página vende igual.
   return (
     <div className="mx-auto max-w-3xl">
+      {datos.fotos.length > 0 ? (
+        <div className="mb-6">
+          <GaleriaPropiedad nombre={datos.titulo} fotos={datos.fotos} idioma={datos.idioma} />
+        </div>
+      ) : null}
       <Cabecera d={datos} />
       <div className="mt-6">{wizard}</div>
     </div>

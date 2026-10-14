@@ -17,11 +17,24 @@ export const dynamic = 'force-dynamic';
  * `ausentes`, y anota el estado ACTUAL de cada reserva en el PMS (una
  * cancelada en otra parte o ya cerrada no es una divergencia activa).
  *
+ * Devuelve además `inventario`: el último barrido de **noches sin justificar**
+ * por propiedad (`divergencias_inventario`, §29) — las noches que el proveedor
+ * no vende y aquí están libres, y las que vende sin que el estado interno las
+ * justifique. Es la otra mitad del mismo problema: la reconciliación mira las
+ * reservas, este mira el calendario que le enseñamos al canal (hoy no se le
+ * pide inventario al proveedor: `Fetch Inventory` sigue sin implementar).
+ *
  * POST body: { reservationId, syncLogId }
  *   Antes de cancelar re-verifica contra el proveedor (fetch de las reservas
- *   del rango de la reserva): si la reserva VUELVE a aparecer reportada, la
- *   divergencia era ruido transitorio del fetch — no se cancela y se pide
- *   re-ejecutar la reconciliación. Solo se cancela si sigue ausente.
+ *   hechas alrededor de la fecha de RESERVA — no del rango de estancia: el
+ *   proveedor filtra por `bookedOn`, ver lib/hospitality/ventana-reservas.ts).
+ *   Si la reserva VUELVE a aparecer reportada, la divergencia era ruido
+ *   transitorio del fetch — no se cancela y se pide re-ejecutar la
+ *   reconciliación. Solo se cancela si sigue ausente.
+ *
+ *   La ventana se abre hasta cubrir cuándo se hizo la reserva: con una ventana
+ *   fija de 30 días, una reserva de hace medio año no aparecería nunca y su
+ *   ausencia del fetch se leería como «el proveedor ya no la reporta».
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -29,10 +42,12 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { fetchReservations } from '@/lib/hospitality/connectivity';
+import { ventanaParaReserva } from '@/lib/hospitality/ventana-reservas';
 import { processCancel } from '@/lib/hospitality/reservations';
 import { esReservaViva } from '@/lib/hospitality/estados';
 import { logAuditAction } from '@/lib/permissions';
 import { notifyDeveloperSensitiveAction } from '@/lib/telegram/developer-notify';
+import { TIPO_LOG_DIVERGENCIAS_INVENTARIO } from '@/lib/hospitality/inventario-divergencias';
 
 async function requireSuperadmin() {
   const session = await getServerSession(authOptions);
@@ -51,6 +66,50 @@ async function requireSuperadmin() {
 
 /** Los logs de reconciliación que se revisan: hasta 90 días atrás. */
 const DIAS_LOGS = 90;
+/** Barridos de inventario que se miran: el último por propiedad basta. */
+const MAX_LOGS_INVENTARIO = 60;
+
+/** Una noche en la que lo que cree el proveedor no lo justifica el ERP. */
+interface NocheInventario {
+  roomCode: string;
+  fecha: string;
+  proveedor: number;
+  interno: number;
+  empujadoEn: string | null;
+}
+
+/** Último barrido de noches sin justificar de una propiedad. */
+interface InventarioDivergente {
+  syncLogId: string;
+  syncLogFecha: string;
+  tenantId: string;
+  tenantNombre: string | null;
+  propertyId: string | null;
+  propertyNombre: string | null;
+  /** El proveedor no vende noches que aquí sí son vendibles. */
+  cerradasSinJustificar: number;
+  /** El proveedor vende noches que el estado interno ya no justifica. */
+  abiertasSinJustificar: number;
+  comparadas: number;
+  sinDato: number;
+  cerradas: NocheInventario[];
+  abiertas: NocheInventario[];
+}
+
+function esNocheValida(n: unknown): n is NocheInventario {
+  if (typeof n !== 'object' || n === null) return false;
+  const noche = n as NocheInventario;
+  return (
+    typeof noche.roomCode === 'string' &&
+    typeof noche.fecha === 'string' &&
+    typeof noche.proveedor === 'number' &&
+    typeof noche.interno === 'number'
+  );
+}
+
+function nochesValidas(v: unknown): NocheInventario[] {
+  return Array.isArray(v) ? v.filter(esNocheValida) : [];
+}
 
 interface AusenteLog {
   reservationId?: unknown;
@@ -104,6 +163,59 @@ export async function GET() {
       take: 200,
     });
 
+    // ── Noches sin justificar en el proveedor (§29) ────────────────────────
+    // Un barrido por propiedad y día: el más reciente describe el presente.
+    // Consulta aparte de los logs de reconciliación para que el tope de uno no
+    // pueda dejar fuera al otro.
+    const logsInventario = await prisma.hospitalitySyncLog.findMany({
+      where: {
+        tipo: TIPO_LOG_DIVERGENCIAS_INVENTARIO,
+        estado: 'exito',
+        fechaCreacion: { gte: desde },
+      },
+      include: {
+        tenant: { select: { id: true, nombre: true } },
+        property: { select: { id: true, nombre: true } },
+      },
+      orderBy: { fechaCreacion: 'desc' },
+      take: MAX_LOGS_INVENTARIO,
+    });
+
+    const inventario: InventarioDivergente[] = [];
+    const propiedadesYaVistas = new Set<string>();
+    for (const log of logsInventario) {
+      const clave = `${log.tenantId}|${log.propertyId ?? '—'}`;
+      if (propiedadesYaVistas.has(clave)) continue; // solo el último barrido
+      propiedadesYaVistas.add(clave);
+
+      const body = log.responseBody as {
+        cerradasSinJustificar?: unknown;
+        abiertasSinJustificar?: unknown;
+        comparadas?: unknown;
+        sinDato?: unknown;
+        cerradas?: unknown;
+        abiertas?: unknown;
+      } | null;
+      const comparadas = aNumero(body?.comparadas);
+      // Sin contadores no es un barrido de inventario: no se interpreta.
+      if (comparadas === null) continue;
+
+      inventario.push({
+        syncLogId: log.id,
+        syncLogFecha: log.fechaCreacion.toISOString(),
+        tenantId: log.tenantId,
+        tenantNombre: log.tenant?.nombre ?? null,
+        propertyId: log.propertyId,
+        propertyNombre: log.property?.nombre ?? null,
+        cerradasSinJustificar: aNumero(body?.cerradasSinJustificar) ?? 0,
+        abiertasSinJustificar: aNumero(body?.abiertasSinJustificar) ?? 0,
+        comparadas,
+        sinDato: aNumero(body?.sinDato) ?? 0,
+        cerradas: nochesValidas(body?.cerradas),
+        abiertas: nochesValidas(body?.abiertas),
+      });
+    }
+
     type Acumulada = {
       syncLogId: string;
       syncLogFecha: string;
@@ -156,7 +268,7 @@ export async function GET() {
     }
 
     if (porReserva.size === 0) {
-      return NextResponse.json({ divergencias: [] });
+      return NextResponse.json({ divergencias: [], inventario });
     }
 
     const reservas = await prisma.hospitalityReservation.findMany({
@@ -172,7 +284,7 @@ export async function GET() {
       reservaExiste: estados.has(reservationId),
     }));
 
-    return NextResponse.json({ divergencias });
+    return NextResponse.json({ divergencias, inventario });
   } catch (error) {
     console.error('Error listando divergencias de reconciliación:', error);
     return NextResponse.json({ error: 'Error al listar divergencias' }, { status: 500 });
@@ -221,7 +333,14 @@ export async function POST(req: NextRequest) {
     // 2. La reserva debe seguir activa en el PMS.
     const reserva = await prisma.hospitalityReservation.findFirst({
       where: { id: reservationId, tenantId: log.tenantId },
-      select: { id: true, estado: true, checkIn: true, checkOut: true, channel: true, externalBookingId: true },
+      select: {
+        id: true,
+        estado: true,
+        bookedOn: true,
+        fechaCreacion: true,
+        channel: true,
+        externalBookingId: true,
+      },
     });
     if (!reserva) {
       return NextResponse.json({ error: 'Reserva no encontrada' }, { status: 404 });
@@ -257,15 +376,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const ci = reserva.checkIn ? new Date(reserva.checkIn) : null;
-    const co = reserva.checkOut ? new Date(reserva.checkOut) : null;
-    if (!ci || !co) {
-      return NextResponse.json({ error: 'La reserva no tiene fechas válidas.' }, { status: 409 });
-    }
+    // La ventana del proveedor son FECHAS DE RESERVA: se abre hasta cubrir el
+    // día en que esta reserva se hizo (y si no consta, hasta el día en que entró
+    // al sistema). Pedir el rango de estancia devolvía [] casi siempre y el
+    // «no reaparece» habría cancelado reservas que el proveedor sí reporta.
+    const ventana = ventanaParaReserva(reserva.bookedOn ?? reserva.fechaCreacion);
     const fetch = await fetchReservations(
       hotelCode,
-      ci.toISOString().slice(0, 10),
-      co.toISOString().slice(0, 10),
+      ventana.startDate,
+      ventana.endDate,
       log.tenantId
     );
 

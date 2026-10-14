@@ -1,21 +1,53 @@
 # Ensayo E2E del Booking Engine público
 
-**Fase**: 3.D del [plan de Booking Engine + Payments](./hospitality-booking-payments-plan.md) · **Última ejecución**: 21 de septiembre de 2026 (**160 comprobaciones en verde**, dos corridas consecutivas)
+**Fase**: 3.D del [plan de Booking Engine + Payments](./hospitality-booking-payments-plan.md) · **Última ejecución**: 9 de octubre de 2026 (**163 comprobaciones en verde**, dos corridas consecutivas)
 
 Este documento describe el ensayo de punta a punta del booking engine: qué
 comprueba, cómo se ejecuta y qué incidencias reales destapó en su primera
 ejecución (porque un ensayo que nunca falla no está ensayando nada).
+
+> **Estado (9 oct 2026) — el guion ya habla con la puerta única.** Al unificar
+> las dos páginas públicas en una sola (`/reservar/<slug>`, con el enlace antiguo
+> redirigiendo 308) se retiró la ruta `GET/POST /api/public/booking/<id>` y el
+> único criterio de publicación pasó a ser la lista `propiedadesPublicadas` de la
+> configuración del tenant. El ensayo publica por esa lista (y DEVUELVE la
+> configuración a como estaba al terminar) y reserva por
+> `POST /api/public/booking/<slug>/cotizar` y `/reservar`; la disponibilidad se
+> pregunta ahora por unidad (`unitId`), porque el motor responde con las unidades
+> que SÍ se pueden vender o con el motivo por el que no.
+>
+> Lo destapó esta migración: el enlace de check-in que la reserva devolvía al
+> huésped podía no ser el que quedaba guardado (la confirmación generaba otro
+> token a la vez), así que el enlace recién recibido no abría el formulario. Se
+> cerró en la causa —escritura condicional del token y enlace preparado ANTES de
+> disparar la comunicación— y hay guardia en
+> `tests/hospitality-checkin-token.test.ts`.
+>
+> No está en CI: es una puerta manual. El ensayo **no elige base por su cuenta**:
+> usa el `DATABASE_URL` que le llegue; si no le llega ninguno, lo toma de
+> `.env.local` —la BD de desarrollo antigua de Neon— por medio de
+> `scripts/cargar-entorno.cjs`, el mismo cargador que usan `npm run db:verify` y
+> el resto de scripts. Ojo con la elección: la base de producción vive en el
+> **Postgres del VPS** (`deploy-vps/.env.vps` →
+> `volkern-erp_postgres:5432/volkern_erp`; Neon fue solo el origen del volcado de
+> `setup-vps-db.sh`) y **no publica puerto ni es alcanzable desde local**, así que
+> "el VPS por túnel" no es una opción sin abrir algo allí. Además, la base de
+> Neon puede ir por detrás en migraciones (el 2026-10-10 le faltaba
+> `20261009210000_hospitality_template_diseno`, y eso deja en 500 los pasos de
+> plantillas de comunicación): para ensayar, una de usar y tirar es lo más
+> seguro.
 
 ## Qué es
 
 Un recorrido completo contra un **servidor de desarrollo real**, sin mocks:
 
 1. **Publica una propiedad de prueba** por las APIs de gestión que usa el
-   dashboard, en el orden real: propiedad → unidades → tarifas → estado
-   «conectada».
-2. **Reserva por la API pública**, la misma que consume `/booking/[slug]`:
-   catálogo, cotización con el Availability Engine central, restricciones de
-   venta, creación de la reserva e idempotencia.
+   dashboard, en el orden real: propiedad → unidades → tarifas.
+2. **Publica su página pública** (la lista `propiedadesPublicadas` de la
+   configuración: el único criterio) y **reserva por la API pública**, la misma
+   que consume `/reservar/<slug>`: catálogo, cotización con el Availability
+   Engine central, restricciones de venta, creación de la reserva e
+   idempotencia.
 3. **Deja vencer una retención**: crea un hold `pending` por la API real de
    gestión y comprueba que **bloquea** la venta pública (la página no ofrece la
    unidad y reservar esas fechas responde 409). Le envejece la fecha de creación,
@@ -77,12 +109,29 @@ E2E_MIR_PORT=4713 npm run test:e2e:booking   # fija el puerto del mock (por defe
 # (el ensayo no configura el arrendador ni llama al Ministerio sin esa señal).
 
 # Con un servidor ya levantado:
-BASE_URL=http://localhost:3000 node scripts/e2e-booking-engine.mjs --keep
-node scripts/e2e-booking-engine.mjs --cleanup   # borra lo que dejó un --keep
+# El cargador aporta el DATABASE_URL de .env.local (Prisma no lee ese fichero solo).
+BASE_URL=http://localhost:3000 node --require ./scripts/cargar-entorno.cjs scripts/e2e-booking-engine.mjs --keep
+node --require ./scripts/cargar-entorno.cjs scripts/e2e-booking-engine.mjs --cleanup   # borra lo que dejó un --keep
 ```
 
 El ensayo es idempotente: trabaja con los códigos `E2E-BE`, `E2E-BE-A` y
 `E2E-BE-B`, así que una ejecución limpia los restos de la anterior.
+
+Para no ensayar contra una base que no te toca (o para no tener que pensarlo), se
+levanta una de usar y tirar y se le pasa por entorno —el script respeta un
+`DATABASE_URL` que ya venga del proceso, así que los `.env*` del repo no entran—:
+
+```bash
+docker run -d --name volkern-e2e-db -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=volkern_e2e -p 55432:5432 postgres:15
+export DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:55432/volkern_e2e"
+npx prisma migrate deploy && npx tsx scripts/migrate-multi-tenancy.ts
+SEED_TEST_USER_PASSWORD=x SEED_ADMIN_PASSWORD=x SEED_SUPERADMIN_PASSWORD=x npx tsx scripts/seed.ts
+# El rol del tenant de la semilla no trae Hospitality: se le concede como lo haría
+# el Anfitrión (o, para un ensayo, con el wildcard que entiende `hasPermisoDeRol`).
+psql "$DATABASE_URL" -c "update \"Role\" set permisos = permisos || '{\"all\": true}'::jsonb where nombre='Admin';"
+DATABASE_URL="$DATABASE_URL" npm run test:e2e:booking
+```
 
 La API key que usan los pasos de gestión es **temporal**: el script la crea con
 permisos mínimos, caduca en una hora y la elimina al terminar (también en el
@@ -92,13 +141,13 @@ camino de error). No se guarda ni se imprime.
 
 | Bloque | Comprobaciones |
 |--------|----------------|
-| Publicación | La propiedad nace `activa`; sin publicar la API pública responde 404; publicada responde 200 |
+| Publicación | La propiedad nace `activa`; fuera de la lista `propiedadesPublicadas` la puerta pública responde 404 (o 409 si la página está desactivada) y al publicarla cotiza |
 | Catálogo | Solo las unidades vendibles; la tarifa publicada es la del rate plan (no la tarifa base) |
 | Cotización | Noches del rango §8; precio = noches × tarifa; tarifa por noche expuesta; estancia mínima del plan; fechas invertidas → 400 |
-| Reserva | 201 con referencia `BE-…`; total recalculado en el servidor; sin cuenta Stripe Connect se crea sin pago en línea |
-| Idempotencia | El mismo `idempotencyKey` devuelve la misma reserva sin duplicar |
+| Reserva | 201 con referencia `WEB-…`; total recalculado en el servidor; sin cobro en línea se crea sin abrir ningún pago. Y con el alojamiento exigiendo pago en línea y sin cuenta habilitada: 503 antes de escribir nada |
+| Idempotencia | La misma `solicitudId` devuelve la misma reserva sin duplicar |
 | Overbooking | El solape en la misma unidad responde 409 |
-| Hold que caduca solo | La ventana se configura por propiedad (1 h por la API real); con el hold vivo la cotización da `ocupada` y el POST responde 409; el barrido lo caduca; queda `cancelled` con su traza de auditoría; la cotización vuelve a ofrecer la unidad y una reserva pública nueva entra con 201; repetir el barrido no caduca nada más |
+| Hold que caduca solo | La ventana se configura por propiedad (1 h por la API real); con el hold vivo la cotización de esa unidad da `no_disponible` y el POST responde 409; el barrido lo caduca; queda `cancelled` con su traza de auditoría; la cotización vuelve a ofrecer la unidad y una reserva pública nueva entra con 201; repetir el barrido no caduca nada más |
 | Contrapruebas del barrido | Un hold **con pagos registrados** (envejecido de sobra) y otro **dentro de su ventana** siguen `pending`: el barrido no se lleva por delante una decisión humana ni una retención joven |
 | Planning | Las reservas del ensayo en la ventana del planning, canal «Directa», confirmadas, con la unidad, las fechas, el importe y el huésped correctos — incluida la línea de la reserva en inglés |
 | Ciclo en inglés | La página `?lang=en` muestra el motor en inglés: etiquetas, días de la semana, «Unit», importe en-US y CTA «View availability»; la reserva se envía como el navegador (sin `guestData` manual) y nace con `idioma: "en"` en `guestData` |
@@ -188,8 +237,9 @@ contando en la métrica de «holds abandonados» de Reportes.
 
 Con `--keep`, el script imprime al final:
 
-- **Página pública**: `/booking/{propertyId}` — el flujo fechas → disponibilidad
-  → datos → confirmación.
+- **Página pública**: `/reservar/{slug}` — el flujo fechas → disponibilidad →
+  datos → confirmación (el enlace antiguo `/booking/{propertyId}` redirige aquí
+  con un 308).
 - **Planning**: `/dashboard/hospitality/calendar` — la reserva aparece en la
   unidad reservada, dentro de la semana en curso.
 - **Reservas**: `/dashboard/hospitality/reservas` — búsqueda por el email del
@@ -235,14 +285,16 @@ test de API y de render para las dos cosas.
 
 ## Decisiones del entorno de ensayo
 
-- **La propiedad se publica poniendo el estado `conectada` directamente.** El
-  camino oficial (Puesta en marcha §31) exige un proveedor de conectividad
-  externo y sus tres pruebas en éxito; en local no hay PMS al que llamar. El
-  estado «conectada» es lo único que la API pública mira, así que el ensayo
-  publica por su API de propiedades y deja constancia aquí.
+- **La propiedad se publica por la lista `propiedadesPublicadas`** de la
+  configuración del Booking Engine (el único criterio desde que la página es
+  una sola), con la API real del panel. El ensayo SUMA su propiedad a las que ya
+  estuvieran publicadas —no despublica la página del tenant mientras corre— y al
+  terminar devuelve la configuración a como estaba (o retira la que creó).
 - **No hay pago en línea** porque el tenant de ensayo no tiene cuenta Stripe
-  Connect; el ensayo verifica precisamente que la venta no se rompe por eso
-  (`paymentUrl: null`). El cobro con Connect tiene sus propios tests con mocks
+  Connect; el ensayo verifica las dos caras de eso: la venta no se rompe cuando
+  el cobro está desactivado (`paymentUrl: null`) y, si el alojamiento EXIGE pago
+  en línea sin cuenta habilitada, la puerta rechaza la reserva (503) antes de
+  escribirla. El cobro con Connect tiene sus propios tests con mocks
   (`tests/hospitality-stripe-connect.test.ts`).
 - **Los datos del ensayo se conservan solo con `--keep`.** Por defecto se
   limpian: la propiedad arrastra unidades, tarifas, reservas, líneas y pagos por

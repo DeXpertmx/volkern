@@ -16,7 +16,12 @@
 
 import { prisma } from '@/lib/db';
 import { availabilityByRoomCode, loadAvailabilityContext } from './availability';
-import { normalizarEstacionalidad, serieDeTarifas } from './estacionalidad';
+import {
+  normalizarEstacionalidad,
+  serieDeTarifas,
+  temporadaDeFecha,
+  type ConfigEstacionalidad,
+} from './estacionalidad';
 import {
   pushInventory,
   pushRates,
@@ -24,12 +29,23 @@ import {
   pushRateRestrictions,
   updateConnectivityStatus,
   getConnectivityCredentials,
+  advertenciasDeRespuesta,
 } from './connectivity';
 import type {
   RestrictionFields,
   InventoryRestrictionsPushUpdate,
   RateRestrictionsPushUpdate,
 } from './connectivity';
+import {
+  rechazoDePush,
+  unidadesDelEnvio,
+  unidadesFueraDelEnvio,
+  type EnvioPush,
+  type RechazoDeCanal,
+  type UnidadDescartada,
+  type UnidadDelPush,
+  type UnidadNoEnviada,
+} from './rechazo-canal';
 
 export type SyncOperacion =
   | 'reserva_creada'
@@ -68,6 +84,103 @@ export interface SyncResult {
   rateRestrictions: { ok: boolean; error?: string };
   pushCount: number;
   errores: number;
+  /**
+   * Qué descartó el canal, atribuido a las UNIDADES del envío (ver
+   * `./rechazo-canal`). El código del proveedor («INVALID_ROOM_CODE : 1a») no le
+   * dice al hotel qué unidad arreglar; esto sí.
+   */
+  rechazo: RechazoDeCanal;
+}
+
+/** Rechazo vacío: sin descartes del canal no hay nada que atribuir. */
+const SIN_RECHAZO: RechazoDeCanal = {
+  noEnviadas: [],
+  huboDescartes: false,
+  descartadas: [],
+  aceptadas: [],
+  codigosSinUnidad: [],
+  mensaje: null,
+};
+
+/**
+ * Fusiona los rechazos de las propiedades de un mismo barrido en uno solo.
+ *
+ * `aceptadas` se recalcula: una unidad descartada en una propiedad no puede
+ * aparecer como aceptada porque otra propiedad no la nombrara. La frase de cada
+ * propiedad se conserva (lleva sus propios conteos) en vez de resumirlas en una
+ * que perdería cuál es cuál.
+ */
+function fusionarRechazos(rechazos: RechazoDeCanal[]): RechazoDeCanal {
+  const conDescarte = rechazos.filter((r) => r.huboDescartes);
+  if (conDescarte.length === 0) return SIN_RECHAZO;
+
+  const descartadas: UnidadDescartada[] = [];
+  const vistas = new Set<string>();
+  for (const r of conDescarte) {
+    for (const d of r.descartadas) {
+      if (vistas.has(d.unitId)) continue;
+      vistas.add(d.unitId);
+      descartadas.push(d);
+    }
+  }
+
+  const aceptadas = new Map<string, { unitId: string; nombre: string }>();
+  for (const r of conDescarte) {
+    for (const a of r.aceptadas) {
+      if (vistas.has(a.unitId)) continue;
+      aceptadas.set(a.unitId, a);
+    }
+  }
+
+  const codigosSinUnidad: string[] = [];
+  for (const r of conDescarte) {
+    for (const c of r.codigosSinUnidad) {
+      if (!codigosSinUnidad.includes(c)) codigosSinUnidad.push(c);
+    }
+  }
+
+  // Las que no viajaron también se fusionan: cada push de la propiedad las
+  // calcula por separado y la misma unidad puede quedarse fuera en varios.
+  const noEnviadas: UnidadNoEnviada[] = [];
+  const fueraVistas = new Set<string>();
+  for (const r of conDescarte) {
+    for (const n of r.noEnviadas) {
+      const clave = `${n.unitId}\u0000${n.motivo}`;
+      if (fueraVistas.has(clave)) continue;
+      fueraVistas.add(clave);
+      noEnviadas.push(n);
+    }
+  }
+
+  return {
+    huboDescartes: true,
+    descartadas,
+    aceptadas: [...aceptadas.values()],
+    codigosSinUnidad,
+    noEnviadas,
+    mensaje: conDescarte.map((r) => r.mensaje).filter(Boolean).join(' '),
+  };
+}
+
+/**
+ * Error de un push ya atribuido a unidades: si el canal descartó parte del
+ * envío, el operador tiene que leer el nombre de SUS unidades y qué hacer, no el
+ * código del proveedor. Un fallo que no sea un descarte conserva su mensaje.
+ */
+function errorAtribuido(
+  result: { error?: string; httpStatus?: number; respuestaExterna?: unknown },
+  unidades: UnidadDelPush[],
+  noEnviadas: UnidadNoEnviada[] = []
+): { error: string; rechazo: RechazoDeCanal } {
+  const rechazo = rechazoDePush({
+    warnings: advertenciasDeRespuesta(result.respuestaExterna),
+    unidades,
+    noEnviadas,
+  });
+  return {
+    error: rechazo.mensaje ?? result.error ?? `HTTP ${result.httpStatus ?? 'sin respuesta'}`,
+    rechazo,
+  };
 }
 
 /**
@@ -140,6 +253,7 @@ export async function dispatchConnectivityPush(
       rateRestrictions: sinConfigurar,
       pushCount: 0,
       errores: 0,
+      rechazo: SIN_RECHAZO,
     };
   }
 
@@ -170,6 +284,8 @@ export async function dispatchConnectivityPush(
   const rateResult: { ok: boolean; error?: string } = { ok: true };
   const invRestrictionResult: { ok: boolean; error?: string } = { ok: true };
   const rateRestrictionResult: { ok: boolean; error?: string } = { ok: true };
+  // Atribución de descartes del canal, una por push fallido con avisos.
+  const rechazos: RechazoDeCanal[] = [];
 
   for (const prop of propertyRows) {
     // hotelCode externo = mapping de propiedad activo.
@@ -214,6 +330,8 @@ export async function dispatchConnectivityPush(
 
     const availabilityUnits = unitRows.map((u: any) => ({
       id: u.id,
+      nombre: u.nombre,
+      codigo: u.codigo ?? null,
       propertyId: u.propertyId,
       roomCode: u.mappings?.[0]?.externalUnitCode ?? null,
       // Código de tarifa que el hotel validó contra el catálogo del proveedor
@@ -239,7 +357,25 @@ export async function dispatchConnectivityPush(
         })),
     }));
 
+    // Las MISMAS unidades, vistas por el canal: con su nombre y todos los
+    // códigos que viajan por ellas (habitación y tarifas), que es lo que hace
+    // falta para atribuir un descarte del proveedor a la unidad del hotel.
+    const unidadesCanal: UnidadDelPush[] = availabilityUnits.map((u) => ({
+      unitId: u.id,
+      nombre: u.nombre || u.codigo || u.id,
+      roomCode: u.roomCode,
+      rateplanCodes: [u.rateplanCodeMapeado, ...u.ratePlans.map((rp: any) => rp.codigo)],
+    }));
+
     const byDay = availabilityByRoomCode(availabilityUnits, today, horizon, reservations, blocks);
+
+    // Las unidades que viajan en CADA push, no todas las de la propiedad: el de
+    // restricciones de tarifa no lleva las que no tienen plan con código, y
+    // contarlas como enviadas sería decir lo contrario de lo que pasó.
+    const enviadasYFuera = (envio: EnvioPush) => ({
+      enviadas: unidadesDelEnvio(unidadesCanal, envio),
+      fuera: unidadesFueraDelEnvio(unidadesCanal, envio),
+    });
 
     // ── Inventory Push: agrupar días consecutivos por roomCode con el mismo
     //    conteo para minimizar bloques (UPSERT por rango).
@@ -247,6 +383,13 @@ export async function dispatchConnectivityPush(
     if (invUpdates.length > 0) {
       const result = await pushInventory(hotelCode, invUpdates, tenantId);
       pushCount += 1;
+      const envio = enviadasYFuera({
+        roomCodes: invUpdates.flatMap((u) => u.rooms.map((r) => r.roomCode)),
+      });
+      const { error, rechazo } = result.ok
+        ? { error: result.error, rechazo: SIN_RECHAZO }
+        : errorAtribuido(result, envio.enviadas, envio.fuera);
+      if (rechazo.huboDescartes) rechazos.push(rechazo);
       await recordSyncLog({
         tenantId,
         propertyId: prop.id,
@@ -256,13 +399,13 @@ export async function dispatchConnectivityPush(
         httpStatus: result.httpStatus,
         requestPayload: { hotelCode, updates: invUpdates },
         responseBody: result.respuestaExterna,
-        errorMensaje: result.error,
+        errorMensaje: error,
         duracionMs: result.duracionMs,
       });
       if (!result.ok) {
         errores += 1;
         invResult.ok = false;
-        invResult.error = result.error;
+        invResult.error = error;
       }
     }
 
@@ -274,6 +417,13 @@ export async function dispatchConnectivityPush(
     if (invRestrictionUpdates.length > 0) {
       const result = await pushInventoryRestrictions(hotelCode, invRestrictionUpdates, tenantId);
       pushCount += 1;
+      const envio = enviadasYFuera({
+        roomCodes: invRestrictionUpdates.flatMap((u) => u.rooms.map((r) => r.roomCode)),
+      });
+      const { error, rechazo } = result.ok
+        ? { error: result.error, rechazo: SIN_RECHAZO }
+        : errorAtribuido(result, envio.enviadas, envio.fuera);
+      if (rechazo.huboDescartes) rechazos.push(rechazo);
       await recordSyncLog({
         tenantId,
         propertyId: prop.id,
@@ -283,13 +433,13 @@ export async function dispatchConnectivityPush(
         httpStatus: result.httpStatus,
         requestPayload: { hotelCode, updates: invRestrictionUpdates },
         responseBody: result.respuestaExterna,
-        errorMensaje: result.error,
+        errorMensaje: error,
         duracionMs: result.duracionMs,
       });
       if (!result.ok) {
         errores += 1;
         invRestrictionResult.ok = false;
-        invRestrictionResult.error = result.error;
+        invRestrictionResult.error = error;
       }
     }
 
@@ -299,6 +449,16 @@ export async function dispatchConnectivityPush(
       if (rateUpdates.length > 0) {
         const result = await pushRates(hotelCode, rateUpdates, tenantId);
         pushCount += 1;
+        const envio = enviadasYFuera({
+          roomCodes: rateUpdates.flatMap((u) => u.rates.map((r) => r.roomCode)),
+          paresTarifa: rateUpdates.flatMap((u) =>
+            u.rates.map((r) => ({ roomCode: r.roomCode, rateplanCode: r.rateplanCode }))
+          ),
+        });
+        const { error, rechazo } = result.ok
+          ? { error: result.error, rechazo: SIN_RECHAZO }
+          : errorAtribuido(result, envio.enviadas, envio.fuera);
+        if (rechazo.huboDescartes) rechazos.push(rechazo);
         await recordSyncLog({
           tenantId,
           propertyId: prop.id,
@@ -308,13 +468,13 @@ export async function dispatchConnectivityPush(
           httpStatus: result.httpStatus,
           requestPayload: { hotelCode, updates: rateUpdates },
           responseBody: result.respuestaExterna,
-          errorMensaje: result.error,
+          errorMensaje: error,
           duracionMs: result.duracionMs,
         });
         if (!result.ok) {
           errores += 1;
           rateResult.ok = false;
-          rateResult.error = result.error;
+          rateResult.error = error;
         }
       }
 
@@ -324,6 +484,16 @@ export async function dispatchConnectivityPush(
       if (rateRestrictionUpdates.length > 0) {
         const result = await pushRateRestrictions(hotelCode, rateRestrictionUpdates, tenantId);
         pushCount += 1;
+        const envio = enviadasYFuera({
+          roomCodes: rateRestrictionUpdates.flatMap((u) => u.rates.map((r) => r.roomCode)),
+          paresTarifa: rateRestrictionUpdates.flatMap((u) =>
+            u.rates.map((r) => ({ roomCode: r.roomCode, rateplanCode: r.rateplanCode }))
+          ),
+        });
+        const { error, rechazo } = result.ok
+          ? { error: result.error, rechazo: SIN_RECHAZO }
+          : errorAtribuido(result, envio.enviadas, envio.fuera);
+        if (rechazo.huboDescartes) rechazos.push(rechazo);
         await recordSyncLog({
           tenantId,
           propertyId: prop.id,
@@ -333,13 +503,13 @@ export async function dispatchConnectivityPush(
           httpStatus: result.httpStatus,
           requestPayload: { hotelCode, updates: rateRestrictionUpdates },
           responseBody: result.respuestaExterna,
-          errorMensaje: result.error,
+          errorMensaje: error,
           duracionMs: result.duracionMs,
         });
         if (!result.ok) {
           errores += 1;
           rateRestrictionResult.ok = false;
-          rateRestrictionResult.error = result.error;
+          rateRestrictionResult.error = error;
         }
       }
     }
@@ -365,6 +535,7 @@ export async function dispatchConnectivityPush(
     rateRestrictions: rateRestrictionResult,
     pushCount,
     errores,
+    rechazo: fusionarRechazos(rechazos),
   };
 }
 
@@ -693,9 +864,19 @@ export function buildInventoryRestrictions(
  *
  * - `minimumStay` / `maximumStay` vienen del plan de tarifas (`minNoches`,
  *   `maxNoches`; sin máximo = `null`).
- * - `closeOnArrival` / `closeOnDeparture` se calculan por día según los días
- *   de la semana permitidos, y el rango se segmenta solo cuando el resultado
- *   cambia de un día a otro.
+ * - `minimumStayArrival` / `maximumStayArrival` son la estancia mínima y máxima
+ *   de la TEMPORADA que contiene cada fecha: aplican a las llegadas de ese día,
+ *   que es justo la semántica de esos campos. Fuera de temporada van `null` —
+ *   el `minimumStay` / `maximumStay` del plan siguen siendo la regla general y
+ *   no se duplican en dos campos. Es la misma regla que validan la web de
+ *   reservas y la reserva directa (`reglasDeVentaDeLlegada` y
+ *   `validarEstancia`), así que el canal no puede aceptar una estancia que el
+ *   motor interno rechaza.
+ * - `closeOnArrival` / `closeOnDeparture` se calculan por día con los días de la
+ *   semana EFECTIVOS de esa fecha de llegada (los de la temporada si los define,
+ *   y si no los del plan), y el rango se segmenta solo cuando el resultado
+ *   cambia de un día a otro (el mínimo de temporada, al variar por fecha, parte
+ *   el rango en sus propios bloques).
  * - Solo se empujan planes activos con código: sin plan no se inventan
  *   restricciones.
  */
@@ -708,6 +889,8 @@ export function buildRateRestrictions(
       maxNoches?: number | null;
       checkInDias?: unknown;
       checkOutDias?: unknown;
+      /** Estacionalidad del plan (Json crudo): su `minNoches` viaja como `minimumStayArrival`. */
+      temporadas?: unknown;
     }>;
   }>,
   start: Date,
@@ -720,6 +903,8 @@ export function buildRateRestrictions(
     maximumStay: number | null;
     checkInDias: unknown;
     checkOutDias: unknown;
+    /** Temporadas ya normalizadas: se consultan una vez por día, no por plan y día. */
+    estacionalidad: ConfigEstacionalidad | null;
   }> = [];
 
   for (const u of units) {
@@ -732,6 +917,7 @@ export function buildRateRestrictions(
         maximumStay: typeof p.maxNoches === 'number' && p.maxNoches > 0 ? p.maxNoches : null,
         checkInDias: p.checkInDias ?? null,
         checkOutDias: p.checkOutDias ?? null,
+        estacionalidad: normalizarEstacionalidad(p.temporadas),
       });
     }
   }
@@ -749,16 +935,25 @@ export function buildRateRestrictions(
   let segRates: RateRestrictionsPushUpdate['rates'] = [];
 
   while (cursor.getTime() < last.getTime()) {
-    const rates: RateRestrictionsPushUpdate['rates'] = plans.map((p) => ({
-      roomCode: p.roomCode,
-      rateplanCode: p.rateplanCode,
-      restrictions: restrictionFields({
-        minimumStay: p.minimumStay,
-        maximumStay: p.maximumStay,
-        closeOnArrival: !diaPermitido(p.checkInDias, cursor),
-        closeOnDeparture: !diaPermitido(p.checkOutDias, cursor),
-      }),
-    }));
+    const rates: RateRestrictionsPushUpdate['rates'] = plans.map((p) => {
+      // La temporada de esta FECHA DE LLEGADA (null fuera de temporada): sus
+      // reglas reemplazan campo a campo a las del plan, que es la misma decisión
+      // que toma el motor interno. Repetir aquí el mínimo o el máximo generales
+      // sería una restricción que el hotel no configuró.
+      const temporada = temporadaDeFecha(p.estacionalidad, cursor);
+      return {
+        roomCode: p.roomCode,
+        rateplanCode: p.rateplanCode,
+        restrictions: restrictionFields({
+          minimumStay: p.minimumStay,
+          minimumStayArrival: temporada?.minNoches ?? null,
+          maximumStay: p.maximumStay,
+          maximumStayArrival: temporada?.maxNoches ?? null,
+          closeOnArrival: !diaPermitido(temporada?.checkInDias ?? p.checkInDias, cursor),
+          closeOnDeparture: !diaPermitido(temporada?.checkOutDias ?? p.checkOutDias, cursor),
+        }),
+      };
+    });
     const fecha = toIsoLocal(cursor);
     const sig = JSON.stringify(rates);
 

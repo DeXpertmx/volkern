@@ -19,8 +19,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const __mockPrisma = vi.hoisted(() => ({
   // `findFirst` lo usa la ruta (búsqueda por token); `findUnique` lo usa el
-  // registro de viajeros por id al enviar el parte.
-  hospitalityReservation: { findFirst: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
+  // registro de viajeros por id al enviar el parte. El token se escribe con
+  // `updateMany` (escritura CONDICIONAL: gana quien llegue antes) y devuelve 1
+  // fila como haría la base cuando el token todavía era nulo.
+  hospitalityReservation: {
+    findFirst: vi.fn(),
+    findUnique: vi.fn(),
+    update: vi.fn(),
+    updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+  },
   hospitalityMirConfig: { findUnique: vi.fn(), findMany: vi.fn(), update: vi.fn(), upsert: vi.fn() },
   // Preguntas personalizadas del check-in: sin config, el bloque no aparece y
   // las respuestas no se guardan (el comportamiento histórico queda intacto).
@@ -183,7 +190,8 @@ describe('Enlace de check-in para el hotel', () => {
 
   it('se genera si la reserva no lo tenía y se conserva si ya existía', async () => {
     const primero = await enlaceCheckinDeReserva(TENANT, 'res-1');
-    const token = __mockPrisma.hospitalityReservation.update.mock.calls[0][0].data.tokenCheckin as string;
+    const token = __mockPrisma.hospitalityReservation.updateMany.mock.calls[0][0].data
+      .tokenCheckin as string;
     // El host sale de NEXT_PUBLIC_APP_URL (misma convención que el resto del
     // producto): la guardia fija el camino y el idioma, no el dominio.
     expect(primero?.token).toBe(token);
@@ -195,7 +203,7 @@ describe('Enlace de check-in para el hotel', () => {
     const segundo = await enlaceCheckinDeReserva(TENANT, 'res-1');
     expect(segundo?.token).toBe('YA-EXISTE');
     expect(segundo?.url).toContain('/checkin/YA-EXISTE?lang=es');
-    expect(__mockPrisma.hospitalityReservation.update).not.toHaveBeenCalled();
+    expect(__mockPrisma.hospitalityReservation.updateMany).not.toHaveBeenCalled();
   });
 
   it('el enlace va en el idioma del huésped y no existe para reservas cerradas', async () => {

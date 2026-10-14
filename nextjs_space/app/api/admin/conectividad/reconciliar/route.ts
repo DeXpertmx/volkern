@@ -67,11 +67,25 @@ export async function POST(req: NextRequest) {
     const totalActualizadas = resumenes.reduce((a, r) => a + r.actualizadas, 0);
     const totalCanceladas = resumenes.reduce((a, r) => a + r.canceladas, 0);
     const totalDivergencias = resumenes.reduce((a, r) => a + r.divergencias, 0);
+    // Cuánto se miró y cuánto devolvió el proveedor. Sin esto, «0 creadas» es
+    // ambiguo: no distingue «el proveedor no devolvió nada en el rango» de
+    // «devolvió N reservas y todas ya cuadraban». Son dos cosas muy distintas
+    // para quien opera la conectividad, y el módulo ya las calcula.
+    const totalPropiedades = resumenes.reduce((a, r) => a + r.propiedades, 0);
+    const totalFetch = resumenes.reduce((a, r) => a + r.totalFetch, 0);
+    const totalSinCambios = resumenes.reduce((a, r) => a + r.sinCambios, 0);
     const errores = resumenes.flatMap((r) => r.errores || []);
 
     return NextResponse.json({
       ok: errores.length === 0,
-      message: `Reconciliación completada: ${totalCreadas} creadas, ${totalActualizadas} actualizadas, ${totalCanceladas} canceladas, ${totalDivergencias} divergencias.`,
+      message:
+        `Reconciliación completada en ${totalPropiedades} propiedad(es): ` +
+        `${totalCreadas} creadas, ${totalActualizadas} actualizadas, ${totalCanceladas} canceladas, ` +
+        `${totalDivergencias} divergencias · el proveedor devolvió ${totalFetch} reservas en el rango ` +
+        `(${totalSinCambios} sin cambios).`,
+      totalPropiedades,
+      totalFetch,
+      totalSinCambios,
       totalCreadas,
       totalActualizadas,
       totalCanceladas,

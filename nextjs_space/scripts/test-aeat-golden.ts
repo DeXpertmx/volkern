@@ -3,7 +3,7 @@ import { AEATSigner } from '../lib/fiscal/aeat/signer';
 import { AEATClient } from '../lib/fiscal/aeat/client';
 import * as dotenv from 'dotenv';
 
-dotenv.config({ path: '.env.local' });
+dotenv.config({ path: ['.env.local', '.env'] });
 
 async function runGoldenTest() {
   console.log('🚀 INICIANDO GOLDEN TEST: ENVÍO A AEAT');

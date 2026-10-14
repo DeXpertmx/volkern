@@ -10,6 +10,7 @@ import {
   testConnectivityConnection,
   updateConnectivityStatus,
   resolveProbeHotelCode,
+  resolverHotelDeSonda,
 } from '@/lib/hospitality/connectivity';
 import { notifyDeveloperSensitiveAction } from '@/lib/telegram/developer-notify';
 
@@ -31,11 +32,8 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json().catch(() => ({}));
     const provider = await getConnectivityProvider();
-    // Sin hotel indicado se sondea el de la sonda (el mismo del health-check
-    // diario), no un sandbox fijo que puede no estar concedido al partner.
-    const hotelCode = typeof body?.hotelCode === 'string' && body.hotelCode.trim()
-      ? body.hotelCode.trim()
-      : resolveProbeHotelCode(provider);
+    const hotelCodePedido =
+      typeof body?.hotelCode === 'string' ? body.hotelCode.trim() : '';
 
     // El ID de socio puede ser de cada hotel, que es lo correcto: entonces la
     // prueba de PLATAFORMA no aplica —no hay ID de socio con el que sondear la
@@ -43,18 +41,27 @@ export async function POST(request: NextRequest) {
     // deja intacto y se dice dónde sí se puede comprobar: si el hotel ve sus
     // propiedades es el hotel quien lo sabe. `aplica: false` es lo que le dice
     // al panel que esto no es un fallo (nada de rojo ni de aviso al equipo).
+    //
+    // Va ANTES de resolver el hotel por defecto: cuando no aplica no se mira
+    // ningún vínculo en la base de datos ni se sondea nada.
     if (partnerIdEsDeCadaHotel(provider)) {
       return NextResponse.json(
         {
           ok: false,
           aplica: false,
-          hotelCode,
+          hotelCode: hotelCodePedido || resolveProbeHotelCode(provider),
           error:
             'El ID de socio es de cada hotel: pruébalo desde Conectividad del hotel, con el código de una de sus propiedades.',
         },
         { status: 200 }
       );
     }
+
+    // Sin hotel indicado se sondea el mismo que el health-check diario: lo
+    // configurado y, si no hay nada, el hotel REAL ya vinculado (el mismo código
+    // con el que se empuja inventario) antes que el sandbox del contrato, que un
+    // partner de producción no tiene concedido y devuelve 403.
+    const hotelCode = hotelCodePedido || (await resolverHotelDeSonda(provider));
 
     const result = await testConnectivityConnection(hotelCode);
 

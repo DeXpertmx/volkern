@@ -321,10 +321,12 @@ que la mayor parte de la rentabilidad es un **cálculo derivado**, no esquema nu
 
 ### FASE 3.D — Booking Engine (sección propia)
 - [x] Configuración: propiedades publicadas, moneda, política, anticipo.
-      (Publicación = estado "conectada" de Puesta en marcha; moneda y tarifa del rate plan de la unidad.)
+      (Publicación = lista `propiedadesPublicadas` de la configuración, con la propiedad "conectada"
+       de Puesta en marcha como requisito previo; moneda y tarifa del rate plan de la unidad.
+       Hoy es el ÚNICO criterio: la página es una (`/reservar/<slug>`) y el enlace antiguo redirige.)
 - [x] Previsualización de la experiencia de reserva.
 - [x] Reserva pública: fechas → huéspedes → disponibilidad (motor central) → precio → datos → pago.
-      (`lib/hospitality/booking-engine.ts` + `/api/public/booking/[slug]` + `/booking/[slug]`;
+      (`lib/hospitality/booking-engine.ts` + `/api/public/booking/[slug]/cotizar|reservar` + `/reservar/[slug]`;
        disponibilidad SIEMPRE del Availability Engine; pago Stripe Connect del tenant si está activo.)
 - [x] Enlaces públicos y embeds.
       (**ES/EN**: textos en `lib/hospitality/booking-i18n.ts` (18 sep 2026); la página pinta

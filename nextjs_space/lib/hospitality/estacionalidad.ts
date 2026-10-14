@@ -5,7 +5,24 @@
  * **tarifa base** con dos capas opcionales:
  *
  * - `temporadas`: rangos de fechas con su propia tarifa (julio 150, agosto 180).
+ * - `temporadas[].minNoches` / `.maxNoches`: estancia mínima y máxima para las
+ *   LLEGADAS dentro del rango (julio, de 3 a 7 noches).
+ * - `temporadas[].checkInDias` / `.checkOutDias`: días 0-6 en los que se puede
+ *   entrar o salir (julio, solo entradas de sábado).
  * - `finDeSemana`: recargo porcentual para noches de días concretos (vie/sáb +20%).
+ *
+ * Las reglas de venta de una temporada (mínimo, máximo, días de entrada y de
+ * salida) se deciden por la **fecha de llegada**: un check-in dentro del rango
+ * se juzga entero con la regla de esa temporada — no una noche con una y otra
+ * con otra. Es el estándar hotelero y es exactamente lo que el contrato de
+ * canales sabe expresar por fecha (`minimumStayArrival`, `maximumStayArrival`,
+ * `closeOnArrival`/`closeOnDeparture`), así que la misma regla vale para la web
+ * de reservas, la reserva y el push — un solo motor, ninguna discrepancia.
+ *
+ * La temporada **reemplaza campo a campo** lo que diga el plan: si define
+ * mínimo, máximo o días, son los suyos (igual que su tarifa es absoluta y no un
+ * ajuste); lo que no defina lo pone el plan, y sin plan quedan los valores
+ * neutros (mínimo 1, sin máximo, sin días cerrados).
  *
  * La regla central que decide el diseño: **el precio se aplica POR NOCHE** —
  * la noche del 15 de julio cuesta tarifa de julio aunque el check-in fuera en
@@ -36,6 +53,21 @@ export interface TemporadaTarifa {
   hasta: string;
   /** Precio por noche dentro del rango. 0 o negativo = rango inválido (se ignora). */
   tarifa: number;
+  /**
+   * Estancia mínima en noches para las LLEGADAS dentro del rango, evaluada por
+   * la fecha de entrada (semántica de `minimumStayArrival` en el contrato).
+   * Ausente = la temporada no impone mínimo propio y manda el del plan.
+   */
+  minNoches?: number;
+  /**
+   * Estancia máxima en noches para las LLEGADAS dentro del rango
+   * (`maximumStayArrival`). Ausente = manda el máximo del plan (o ninguno).
+   */
+  maxNoches?: number;
+  /** Días 0-6 en los que se permite entrar; ausente = los del plan. */
+  checkInDias?: number[];
+  /** Días 0-6 en los que se permite salir; ausente = los del plan. */
+  checkOutDias?: number[];
   /** Etiqueta opcional para el UI ("Verano", "Puente de diciembre"). */
   nombre?: string;
 }
@@ -58,6 +90,15 @@ export interface ConfigEstacionalidad {
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+/**
+ * Techo de las noches de una temporada (mínimo y máximo). No es una regla de
+ * negocio sino un tope de cordura: una estancia de más de un año no es una
+ * estancia, y sin límite un dedazo ("3650") dejaría la temporada invendible sin
+ * que nada lo dijera. Se exporta para que la API y el UI expliquen el mismo
+ * número.
+ */
+export const NOCHES_TEMPORADA_MAX = 365;
+
 function esDiaValido(d: unknown): d is number {
   return typeof d === 'number' && Number.isInteger(d) && d >= 0 && d <= 6;
 }
@@ -68,6 +109,35 @@ function fechaIsoValida(valor: unknown): valor is string {
 
 function tarifaValida(valor: unknown): valor is number {
   return typeof valor === 'number' && Number.isFinite(valor) && valor > 0;
+}
+
+/**
+ * Lee un límite de noches de una temporada (mínimo o máximo): entero 1-365;
+ * cualquier otra cosa (vacío, texto que no es número, decimal, 0, negativos) es
+ * «sin regla», no un error que descarte la temporada — perder una tarifa de
+ * temporada por un mínimo mal escrito sería un precio que el hotel sí
+ * configuró.
+ */
+function leerNoches(valor: unknown): number | null {
+  if (valor == null || valor === '') return null;
+  const n = typeof valor === 'number' ? valor : typeof valor === 'string' ? Number(valor) : NaN;
+  return Number.isInteger(n) && n >= 1 && n <= NOCHES_TEMPORADA_MAX ? n : null;
+}
+
+/**
+ * Lee los días de la semana permitidos de una temporada: enteros 0-6
+ * (0=domingo), sin duplicados y ordenados. Ausente o vacío = «sin regla» (manda
+ * lo que diga el plan). Un día inválido se descarta pieza a pieza, nunca la
+ * temporada: quedarse sin la tarifa de julio por un dedazo en un día sería
+ * perder un precio que el hotel sí configuró.
+ */
+function leerDiasDeSemana(valor: unknown): number[] | null {
+  if (!Array.isArray(valor)) return null;
+  const dias = valor
+    .map((d) => (typeof d === 'number' ? d : typeof d === 'string' && d.trim() !== '' ? Number(d) : NaN))
+    .filter((d): d is number => Number.isInteger(d) && d >= 0 && d <= 6);
+  const unicos = [...new Set(dias)].sort((a, b) => a - b);
+  return unicos.length ? unicos : null;
 }
 
 /**
@@ -101,10 +171,26 @@ export function normalizarEstacionalidad(valor: unknown): ConfigEstacionalidad |
       const tarifa = typeof f.tarifa === 'number' ? f.tarifa : typeof f.tarifa === 'string' ? Number(f.tarifa) : NaN;
       if (!fechaIsoValida(f.desde) || !fechaIsoValida(f.hasta) || !tarifaValida(tarifa)) continue;
       if (new Date(`${f.hasta}T00:00:00`).getTime() < new Date(`${f.desde}T00:00:00`).getTime()) continue;
+      const minNoches = leerNoches(f.minNoches);
+      const maxNochesCrudo = leerNoches(f.maxNoches);
+      // Un máximo por debajo del mínimo es una temporada invendible: se descarta
+      // el máximo (la pieza que contradice), nunca la temporada — el precio y el
+      // mínimo del hotel se conservan. La API responde 400 si el hotel acaba de
+      // enviar esa contradicción, así que este camino es el del Json ya guardado.
+      const maxNoches =
+        maxNochesCrudo != null && minNoches != null && maxNochesCrudo < minNoches
+          ? null
+          : maxNochesCrudo;
+      const checkInDias = leerDiasDeSemana(f.checkInDias);
+      const checkOutDias = leerDiasDeSemana(f.checkOutDias);
       limpias.push({
         desde: f.desde,
         hasta: f.hasta,
         tarifa: Math.round(tarifa * 100) / 100,
+        ...(minNoches != null ? { minNoches } : {}),
+        ...(maxNoches != null ? { maxNoches } : {}),
+        ...(checkInDias ? { checkInDias } : {}),
+        ...(checkOutDias ? { checkOutDias } : {}),
         ...(typeof f.nombre === 'string' && f.nombre.trim() ? { nombre: f.nombre.trim().slice(0, 60) } : {}),
       });
     }
@@ -135,12 +221,84 @@ export function ordenarTemporadas(temporadas: TemporadaTarifa[]): TemporadaTarif
   return [...temporadas].sort((a, b) => (a.desde < b.desde ? -1 : a.desde > b.desde ? 1 : 0));
 }
 
+/**
+ * Primer problema de las temporadas que se acaban de enviar, o null.
+ *
+ * El normalizador descarta en silencio la pieza mala a propósito: el Json de la
+ * base puede venir de cualquier época y un dato raro no puede tumbar una
+ * cotización. Pero cuando el hotel acaba de enviarlo, descartarlo sin decir
+ * nada sería una restricción que cree tener puesta y no existe — justo la clase
+ * de fallo silencioso que este sistema no admite en conectividad. Las rutas de
+ * escritura usan esto para responder 400 con el motivo exacto.
+ *
+ * Un campo ausente, `null` o cadena vacía NO es un problema: es «sin regla».
+ */
+export function problemaEnTemporadas(valor: unknown): string | null {
+  if (!Array.isArray(valor)) return null;
+  for (const fila of valor) {
+    if (!fila || typeof fila !== 'object' || Array.isArray(fila)) continue;
+    const f = fila as Record<string, unknown>;
+    const pedido = (campo: unknown) => campo != null && campo !== '';
+
+    const minNoches = pedido(f.minNoches) ? leerNoches(f.minNoches) : null;
+    if (pedido(f.minNoches) && minNoches === null) {
+      return `El mínimo de noches de una temporada debe ser un número entero entre 1 y ${NOCHES_TEMPORADA_MAX}`;
+    }
+    const maxNoches = pedido(f.maxNoches) ? leerNoches(f.maxNoches) : null;
+    if (pedido(f.maxNoches) && maxNoches === null) {
+      return `El máximo de noches de una temporada debe ser un número entero entre 1 y ${NOCHES_TEMPORADA_MAX}`;
+    }
+    if (minNoches != null && maxNoches != null && maxNoches < minNoches) {
+      return 'El máximo de noches de una temporada no puede ser menor que su mínimo';
+    }
+
+    for (const [campo, etiqueta] of [['checkInDias', 'entrada'], ['checkOutDias', 'salida']] as const) {
+      const dias = f[campo];
+      if (dias == null) continue;
+      if (!Array.isArray(dias)) {
+        return `Los días de ${etiqueta} de una temporada deben ser una lista de días 0 (domingo) a 6 (sábado)`;
+      }
+      const fuera = dias.some((d) => {
+        const n = typeof d === 'number' ? d : typeof d === 'string' && d.trim() !== '' ? Number(d) : NaN;
+        return !Number.isInteger(n) || n < 0 || n > 6;
+      });
+      if (fuera) {
+        return `Los días de ${etiqueta} de una temporada deben estar entre 0 (domingo) y 6 (sábado)`;
+      }
+    }
+  }
+  return null;
+}
+
 /** ¿El plan tiene alguna capa de estacionalidad utilizable? */
 export function tieneEstacionalidad(valor: unknown): boolean {
   return normalizarEstacionalidad(valor) !== null;
 }
 
 // ─── Cálculo: el precio de una NOCHE ─────────────────────────────────────
+
+/**
+ * Temporada que contiene una fecha (la noche), o null.
+ *
+ * Es la ÚNICA forma de decidir a qué temporada pertenece un día: la comparten
+ * el precio (`tarifaPorNoche`) y las reglas de venta
+ * (`reglasDeVentaDeLlegada`), para que no existan dos comparaciones de rango
+ * que puedan desincronizarse (una noche de temporada sin sus reglas sería un
+ * precio y unas condiciones que no se corresponden).
+ */
+export function temporadaDeFecha(
+  config: ConfigEstacionalidad | null,
+  fecha: Date
+): TemporadaTarifa | null {
+  if (!config?.temporadas?.length) return null;
+  return (
+    config.temporadas.find(
+      (t) =>
+        fecha.getTime() >= new Date(`${t.desde}T00:00:00`).getTime() &&
+        fecha.getTime() <= new Date(`${t.hasta}T00:00:00`).getTime()
+    ) ?? null
+  );
+}
 
 /**
  * Precio por noche de una fecha concreta bajo un plan.
@@ -164,11 +322,7 @@ export function tarifaPorNoche(params: {
 }): number | null {
   const config = normalizarEstacionalidad(params.plan?.estacionalidad);
 
-  const dentro = config?.temporadas?.find(
-    (t) =>
-      params.fecha.getTime() >= new Date(`${t.desde}T00:00:00`).getTime() &&
-      params.fecha.getTime() <= new Date(`${t.hasta}T00:00:00`).getTime()
-  );
+  const dentro = temporadaDeFecha(config, params.fecha);
   if (dentro) {
     return tarifaValida(dentro.tarifa) ? dentro.tarifa : null;
   }
@@ -190,6 +344,75 @@ export function tarifaPorNoche(params: {
     }
   }
   return tarifa;
+}
+
+/** Reglas de venta de una estancia, ya resueltas para su fecha de llegada. */
+export interface ReglasDeVenta {
+  /** Estancia mínima en noches. Siempre ≥ 1 (1 = sin mínimo real). */
+  minNoches: number;
+  /** Estancia máxima en noches; null = sin máximo. */
+  maxNoches: number | null;
+  /** Días 0-6 en los que se permite entrar; null = sin restricción. */
+  checkInDias: number[] | null;
+  /** Días 0-6 en los que se permite salir; null = sin restricción. */
+  checkOutDias: number[] | null;
+}
+
+/**
+ * Reglas de venta que aplican a una LLEGADA.
+ *
+ * Manda la temporada que contiene la fecha de entrada, **campo a campo**: su
+ * mínimo, su máximo y sus días de entrada y salida reemplazan a los del plan
+ * (igual que su tarifa es absoluta y no un ajuste). Lo que la temporada no
+ * defina lo pone el plan, y sin plan quedan los valores neutros (mínimo 1, sin
+ * máximo, sin días cerrados).
+ *
+ * Todo sale de la MISMA temporada —la de la llegada, no la de cada fecha por
+ * separado—: una estancia se juzga entera con la regla de donde empieza, que es
+ * lo que el canal sabe expresar por fecha (`minimumStayArrival`,
+ * `maximumStayArrival`, `closeOnArrival`/`closeOnDeparture`). Es el número que
+ * validan la web de reservas, la reserva directa y el push: una sola regla para
+ * los tres, y por eso el cálculo vive aquí y no en cada llamador.
+ */
+export function reglasDeVentaDeLlegada(params: {
+  /** Fecha de LLEGADA de la estancia. */
+  fecha: Date;
+  /** Estacionalidad del plan (Json crudo: `temporadas`). */
+  estacionalidad?: unknown;
+  /** Restricciones generales del plan (fila de Prisma: Json crudo incluido). */
+  plan?: {
+    minNoches?: number | null;
+    maxNoches?: number | null;
+    checkInDias?: unknown;
+    checkOutDias?: unknown;
+  } | null;
+}): ReglasDeVenta {
+  const planMin =
+    typeof params.plan?.minNoches === 'number' &&
+    Number.isInteger(params.plan.minNoches) &&
+    params.plan.minNoches >= 1
+      ? params.plan.minNoches
+      : 1;
+  const planMax =
+    typeof params.plan?.maxNoches === 'number' &&
+    Number.isInteger(params.plan.maxNoches) &&
+    params.plan.maxNoches >= 1
+      ? params.plan.maxNoches
+      : null;
+  const planCheckIn = leerDiasDeSemana(params.plan?.checkInDias);
+  const planCheckOut = leerDiasDeSemana(params.plan?.checkOutDias);
+
+  const temporada = temporadaDeFecha(
+    normalizarEstacionalidad(params.estacionalidad),
+    params.fecha
+  );
+
+  return {
+    minNoches: temporada?.minNoches ?? planMin,
+    maxNoches: temporada?.maxNoches ?? planMax,
+    checkInDias: temporada?.checkInDias ?? planCheckIn,
+    checkOutDias: temporada?.checkOutDias ?? planCheckOut,
+  };
 }
 
 /** El plan activo de una unidad o la tarifa base: ¿hay precio con que vender? */

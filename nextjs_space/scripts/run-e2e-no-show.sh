@@ -102,7 +102,7 @@ pass "Servidor de desarrollo listo (${BASE})"
 
 header "Ensayo de punta a punta"
 if [ -n "${E2E_KEEP:-}" ]; then
-  npx tsx --require dotenv/config scripts/e2e-no-show.ts --keep
+  npx tsx --require ./scripts/cargar-entorno.cjs scripts/e2e-no-show.ts --keep
 else
-  npx tsx --require dotenv/config scripts/e2e-no-show.ts
+  npx tsx --require ./scripts/cargar-entorno.cjs scripts/e2e-no-show.ts
 fi

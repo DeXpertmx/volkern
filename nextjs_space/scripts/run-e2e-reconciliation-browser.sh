@@ -56,7 +56,7 @@ header "Seed database"
 
 cd "$(dirname "$0")/.."
 info "Running seed script..."
-if npx tsx "$SEED_SCRIPT" 2>&1; then
+if npx tsx --require ./scripts/cargar-entorno.cjs "$SEED_SCRIPT" 2>&1; then
   pass "Database seeded successfully"
 else
   echo "  ${RED}✘${NC} Seed script failed"

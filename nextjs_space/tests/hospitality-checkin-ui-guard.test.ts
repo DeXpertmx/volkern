@@ -22,7 +22,10 @@ const raiz = path.resolve(__dirname, '..');
 const leer = (rel: string) => readFileSync(path.join(raiz, rel), 'utf8');
 
 const PAGINA_CHECKIN = 'app/checkin/[token]/page.tsx';
-const PAGINA_MOTOR = 'app/booking/[slug]/page.tsx';
+// El formulario de documento del titular vive en el ASISTENTE de la página
+// pública única: desde la unificación de las dos páginas ya no hay una pantalla
+// «vieja» que lo pida por su cuenta.
+const PAGINA_MOTOR = 'components/hospitality/booking/BookingWizard.tsx';
 const API_CHECKIN = 'app/api/public/checkin/[token]/route.ts';
 
 describe('check-in online (pantalla del huésped)', () => {
@@ -99,24 +102,31 @@ describe('API pública del check-in', () => {
 });
 
 describe('motor de reservas: datos del documento del titular', () => {
-  const page = leer(PAGINA_MOTOR);
-  const api = leer('app/api/public/booking/[slug]/route.ts');
+  const asistente = leer(PAGINA_MOTOR);
+  const ruta = leer('app/api/public/booking/[slug]/reservar/route.ts');
+  const motor = leer('lib/hospitality/booking-engine.ts');
 
   it('el formulario pide el documento y lo manda con la reserva', () => {
-    expect(page).toContain('t.documentoTitulo');
-    expect(page).toContain('documento');
-    expect(page).toContain('CHECKIN_TEXTOS[idioma].campos');
+    expect(asistente).toContain('t.documentoTitulo');
+    expect(asistente).toContain('documento');
+    // La ruta no interpreta el documento: lo pasa al motor, que es quien valida
+    // y guarda el registro de viajeros.
+    expect(ruta).toContain('documento:');
+    expect(ruta).not.toContain('normalizarViajero');
   });
 
   it('la confirmación muestra el enlace de check-in para el resto del grupo', () => {
-    expect(page).toContain('t.enlaceCheckinTitulo');
-    expect(page).toContain('confirmada.checkinUrl');
-    expect(api).toContain('checkinUrl');
-    expect(api).toContain('asegurarTokenCheckin');
+    expect(asistente).toContain('t.completarCheckin');
+    expect(asistente).toContain('resultado.checkinUrl');
+    expect(ruta).toContain('checkinUrl');
+    expect(motor).toContain('asegurarTokenCheckin');
   });
 
   it('sin datos de documento no se inventa un viajero (lo pide el check-in)', () => {
-    expect(api).toContain('documentaAlgo');
-    expect(api).toContain('normalizarViajero');
+    expect(motor).toContain('viajerosDelTitular');
+    expect(motor).toContain('normalizarViajero');
+    // Solo se guarda si hay documentación de verdad (el nombre suelto no es un
+    // parte): la decisión vive en el motor, no en la ruta.
+    expect(motor).toContain('documentaAlgo');
   });
 });

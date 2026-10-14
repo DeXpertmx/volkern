@@ -19,7 +19,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const prisma = vi.hoisted(() => ({
   hospitalityCommunicationTemplate: { findMany: vi.fn() },
-  hospitalityReservation: { findFirst: vi.fn(), update: vi.fn() },
+  // El token del enlace de check-in se escribe con `updateMany` (condicional:
+  // gana quien llegue antes) y devuelve 1 fila como la base cuando el token
+  // todavía era nulo.
+  hospitalityReservation: {
+    findFirst: vi.fn(),
+    update: vi.fn(),
+    updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+  },
 }));
 
 vi.mock('@/lib/db', () => ({ prisma }));
@@ -95,9 +102,19 @@ describe('plantillas sugeridas bilingües (módulo único)', () => {
   it('la página pública guarda el idioma en guestData y la comunicación lo lee', async () => {
     const fs = await import('node:fs');
     const path = await import('node:path');
-    const post = fs.readFileSync(path.resolve(__dirname, '../app/api/public/booking/[slug]/route.ts'), 'utf8');
-    expect(post).toContain('idiomaDeValor(lang)');
-    expect(post).toContain("evento: 'confirmacion'");
+    // La reserva pública es una sola: el idioma lo guarda el motor y la ruta
+    // pública solo lo transporta desde el formulario.
+    const ruta = fs.readFileSync(
+      path.resolve(__dirname, '../app/api/public/booking/[slug]/reservar/route.ts'),
+      'utf8'
+    );
+    expect(ruta).toContain('idioma: textoOpcional(cuerpo.lang');
+    const motor = fs.readFileSync(
+      path.resolve(__dirname, '../lib/hospitality/booking-engine.ts'),
+      'utf8'
+    );
+    expect(motor).toContain('idiomaDeValor(entrada.idioma)');
+    expect(motor).toContain("evento: 'confirmacion'");
     const mod = fs.readFileSync(path.resolve(__dirname, '../lib/hospitality/comunicaciones.ts'), 'utf8');
     expect(mod).toContain("guestData || {})?.idioma");
   });
@@ -129,7 +146,7 @@ describe('el enlace de check-in viaja en el mensaje (registro de viajeros)', () 
     });
 
     // El token se guarda en la reserva (una sola vez) y va en el enlace.
-    const actualizado = prisma.hospitalityReservation.update.mock.calls[0]?.[0];
+    const actualizado = prisma.hospitalityReservation.updateMany.mock.calls[0]?.[0];
     const token = actualizado?.data?.tokenCheckin as string;
     expect(token).toBeTruthy();
     expect(enviados[0]).toContain(`/checkin/${token}?lang=es`);

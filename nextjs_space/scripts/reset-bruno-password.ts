@@ -14,7 +14,7 @@ import bcrypt from 'bcryptjs'
 import * as dotenv from 'dotenv'
 
 // Cargar variables de entorno
-dotenv.config()
+dotenv.config({ path: ['.env.local', '.env'] });
 
 const prisma = new PrismaClient()
 

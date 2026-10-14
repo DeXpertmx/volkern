@@ -17,6 +17,21 @@ import { CAPACIDADES_HOSPITALITY } from './capacidades';
 import { hasPermisoDeRol } from '@/lib/permissions-core';
 import { MONEDA_MINIMA_ESQUEMA } from '@/lib/moneda';
 
+/**
+ * Acciones del webhook de RESERVAS, y solo esas.
+ *
+ * La tabla `hospitality_webhook_events` es COMPARTIDA: los mensajes del canal
+ * escriben ahí sus propias filas `sin_mapping` con `action: 'message'` (ver
+ * `mensajes-service.ts`), porque un mensaje de un `hotel_id` sin vínculo no
+ * tiene tenant y su incidencia vive donde vive la de la reserva que tampoco
+ * pudo entregarse. Consecuencia: TODO lector del lado de reservas filtra por
+ * esta lista. Sin el filtro, un mensaje de un código que fue del tenant
+ * aparecería como incidencia de reserva sin ninguna reserva (y su reenvío
+ * intentaría registrarlo como tal). Es la única definición: la usa también el
+ * dispatcher de reservas para validar la acción entrante.
+ */
+export const ACCIONES_RESERVA = ['book', 'modify', 'cancel', 'no_show'] as const;
+
 /** Vínculo activo que podría resolver una incidencia. */
 export interface VinculoActivo {
   externalUnitCode: string | null;
@@ -196,8 +211,14 @@ export async function listarIncidencias(
   };
   if (porHotelCode.size === 0) return { ok: true, incidencias: [], resumen: resumenVacio };
 
+  // `action` en la lista de reservas: los mensajes del canal comparten tabla y
+  // estado, pero su incidencia no es una reserva (ver `ACCIONES_RESERVA`).
   const eventos = await prisma.hospitalityWebhookEvent.findMany({
-    where: { estado: 'sin_mapping', hotelCode: { in: [...porHotelCode.keys()] } },
+    where: {
+      action: { in: [...ACCIONES_RESERVA] },
+      estado: 'sin_mapping',
+      hotelCode: { in: [...porHotelCode.keys()] },
+    },
     orderBy: { fechaCreacion: 'desc' },
     take: MAX_EVENTOS,
     select: {

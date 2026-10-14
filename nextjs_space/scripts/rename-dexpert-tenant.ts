@@ -16,7 +16,7 @@
  *
  * Idempotente: si ya está renombrado, no hace nada.
  *
- * USO: npx tsx -r dotenv/config scripts/rename-dexpert-tenant.ts
+ * USO: npx tsx -r ./scripts/cargar-entorno.cjs scripts/rename-dexpert-tenant.ts
  */
 import { prisma } from '../lib/db';
 

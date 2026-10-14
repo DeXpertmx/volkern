@@ -23,35 +23,50 @@ function leer(relativo: string): string {
 }
 
 const mocks = vi.hoisted(() => ({
-  hospitalityProperty: { findFirst: vi.fn() },
-  hospitalityUnit: { findMany: vi.fn() },
-  hospitalityReservation: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
-  hospitalityReservationItem: { create: vi.fn(), createMany: vi.fn() },
+  hospitalityUnit: { findFirst: vi.fn() },
+  hospitalityReservation: { findUnique: vi.fn(), create: vi.fn() },
+  hospitalityReservationItem: { createMany: vi.fn() },
   hospitalityExtra: { findMany: vi.fn() },
-  hospitalityReview: { findMany: vi.fn() },
-  contact: { findFirst: vi.fn(), create: vi.fn() },
+  queryRaw: vi.fn(),
   loadAvailabilityContext: vi.fn(),
-  crearCobroReserva: vi.fn(),
+  upsertGuest: vi.fn(),
+  emitReservationCreated: vi.fn(),
+  dispararComunicacionReserva: vi.fn(),
   dispatchConnectivityPush: vi.fn(),
+  asegurarTokenCheckin: vi.fn(),
 }));
 
 vi.mock('@/lib/db', () => ({
   prisma: {
-    hospitalityProperty: mocks.hospitalityProperty,
     hospitalityUnit: mocks.hospitalityUnit,
     hospitalityReservation: mocks.hospitalityReservation,
     hospitalityReservationItem: mocks.hospitalityReservationItem,
     hospitalityExtra: mocks.hospitalityExtra,
-    hospitalityReview: mocks.hospitalityReview,
-    contact: mocks.contact,
+    $queryRaw: mocks.queryRaw,
+    // La transacción del motor se ejecuta de verdad (con su contexto doblado):
+    // la comprobación bajo bloqueo es parte de lo que se vigila.
+    $transaction: async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        $queryRaw: mocks.queryRaw,
+        hospitalityReservation: mocks.hospitalityReservation,
+        hospitalityReservationItem: mocks.hospitalityReservationItem,
+      }),
   },
 }));
 vi.mock('@/lib/hospitality/availability', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/hospitality/availability')>()),
   loadAvailabilityContext: mocks.loadAvailabilityContext,
 }));
-vi.mock('@/lib/stripe/connect', () => ({ crearCobroReserva: mocks.crearCobroReserva }));
+vi.mock('@/lib/hospitality/reservations', () => ({ upsertGuest: mocks.upsertGuest }));
+vi.mock('@/lib/hospitality/events', () => ({ emitReservationCreated: mocks.emitReservationCreated }));
+vi.mock('@/lib/hospitality/comunicaciones', () => ({
+  dispararComunicacionReserva: mocks.dispararComunicacionReserva,
+}));
 vi.mock('@/lib/hospitality/sync', () => ({ dispatchConnectivityPush: mocks.dispatchConnectivityPush }));
+vi.mock('@/lib/hospitality/checkin-service', () => ({
+  asegurarTokenCheckin: mocks.asegurarTokenCheckin,
+  enlaceCheckin: (token: string, idioma?: string) => `https://app.test/checkin/${token}?lang=${idioma || 'es'}`,
+}));
 
 import {
   resolverExtras,
@@ -60,7 +75,7 @@ import {
   catalogoPublico,
   type ExtraCatalogo,
 } from '@/lib/hospitality/booking-extras';
-import { POST } from '@/app/api/public/booking/[slug]/route';
+import { crearReservaDirecta, type EntradaReservaDirecta } from '@/lib/hospitality/booking-engine';
 
 const desayuno: ExtraCatalogo = {
   id: 'extra_desayuno',
@@ -91,56 +106,93 @@ const traslado: ExtraCatalogo = {
 };
 const CATALOGO = [desayuno, lateCheckout, traslado];
 
-const propiedad = {
-  id: 'prop_a',
-  tenantId: 'tenant_a',
-  nombre: 'Hotel Centro',
-  estado: 'conectada',
-  fotos: [],
-  tenant: { id: 'tenant_a', nombre: 'Tenant A' },
-};
 const unidad = {
   id: 'unit_a',
   propertyId: 'prop_a',
   nombre: 'Suite 1',
   tipo: 'suite',
-  capacidad: 2,
+  capacidad: 4,
   descripcion: null,
   fotos: [],
   amenidades: [],
   estado: 'available',
   tarifaBase: null,
   moneda: 'MXN',
-  ratePlans: [{ tarifa: 1000, minNoches: 1, maxNoches: null, checkInDias: null, checkOutDias: null }],
+  ratePlans: [
+    {
+      tarifa: 1000,
+      minNoches: 1,
+      maxNoches: null,
+      checkInDias: null,
+      checkOutDias: null,
+      temporadas: null,
+      finDeSemana: null,
+      ajustes: null,
+    },
+  ],
 };
-const request = (method: string, body?: unknown, url = 'http://test.local/api/public/booking/prop_a') =>
-  new Request(url, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  });
-const ctx = { params: Promise.resolve({ slug: 'prop_a' }) };
+
+const config = {
+  id: 'cfg_1',
+  tenantId: 'tenant_a',
+  slug: 'mi-hotel',
+  titulo: null,
+  descripcion: null,
+  emailContacto: null,
+  telefonoContacto: null,
+  moneda: 'MXN',
+  politicaCancelacion: null,
+  anticipoPorcentaje: 0,
+  tarifaLimpieza: null,
+  requierePagoOnline: false,
+  propiedadesPublicadas: ['prop_a'],
+  activo: true,
+};
+
+/** Entrada de la reserva directa: el MISMO camino que usa la ruta pública. */
+function entrada(over: Partial<EntradaReservaDirecta> = {}): EntradaReservaDirecta {
+  return {
+    tenantId: 'tenant_a',
+    config: config as EntradaReservaDirecta['config'],
+    propertyId: 'prop_a',
+    unitId: 'unit_a',
+    // 1 → 4 de marzo de 2027: 3 noches a 1000. (Fechas futuras: una estancia
+    // pasada la rechaza el motor, como a cualquier reserva.)
+    checkIn: new Date(2027, 2, 1),
+    checkOut: new Date(2027, 2, 4),
+    adultos: 2,
+    ninos: 0,
+    moneda: 'MXN',
+    solicitudId: 'solicitud-de-prueba-1234',
+    idioma: 'es',
+    huesped: { nombre: 'Ana', email: 'ana@example.com', telefono: null },
+    ...over,
+  };
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.hospitalityProperty.findFirst.mockResolvedValue(propiedad);
-  mocks.hospitalityUnit.findMany.mockResolvedValue([unidad]);
+  mocks.hospitalityUnit.findFirst.mockResolvedValue(unidad);
   mocks.loadAvailabilityContext.mockResolvedValue({
     units: [{ id: 'unit_a', propertyId: 'prop_a', roomCode: null, estado: 'available' }],
     reservations: [],
     blocks: [],
   });
-  mocks.hospitalityReservation.findFirst.mockResolvedValue(null);
-  mocks.hospitalityReservation.create.mockResolvedValue({ id: 'res_a', externalBookingId: 'BE-TEST' });
-  mocks.hospitalityReservation.update.mockResolvedValue({ id: 'res_a' });
-  mocks.hospitalityReservationItem.create.mockResolvedValue({});
+  mocks.hospitalityReservation.findUnique.mockResolvedValue(null);
+  mocks.hospitalityReservation.create.mockResolvedValue({
+    id: 'res_a',
+    externalBookingId: 'WEB-TEST',
+    contactId: 'c1',
+    guestData: {},
+    tokenCheckin: null,
+  });
   mocks.hospitalityReservationItem.createMany.mockResolvedValue({ count: 2 });
   mocks.hospitalityExtra.findMany.mockResolvedValue(CATALOGO);
-  mocks.hospitalityReview.findMany.mockResolvedValue([]);
-  mocks.contact.findFirst.mockResolvedValue(null);
-  mocks.contact.create.mockResolvedValue({ id: 'c1' });
-  mocks.crearCobroReserva.mockResolvedValue({ url: 'https://pay.test/x' });
+  mocks.queryRaw.mockResolvedValue([]);
+  mocks.upsertGuest.mockResolvedValue('c1');
+  mocks.dispararComunicacionReserva.mockResolvedValue(undefined);
   mocks.dispatchConnectivityPush.mockResolvedValue({});
+  mocks.asegurarTokenCheckin.mockResolvedValue('tok_123');
 });
 
 describe('módulo puro — resolverExtras', () => {
@@ -230,84 +282,150 @@ describe('módulo puro — resolverExtras', () => {
   });
 });
 
-describe('POST público — la reserva nace con sus líneas de extras y el cobro del total', () => {
-  it('crea las líneas tipo extra y cobra alojamiento + extras (no solo el alojamiento)', async () => {
-    const res = await POST(
-      request('POST', {
-        unitId: 'unit_a',
-        checkIn: '2026-10-01',
-        checkOut: '2026-10-04',
-        huespedNombre: 'Ana',
-        huespedEmail: 'ana@example.com',
-        extras: [{ extraId: 'extra_desayuno', cantidad: 2 }],
-      }),
-      ctx
+describe('reserva directa — nace con sus líneas de extras y el precio del servidor', () => {
+  it('escribe la línea tipo extra y el total de la reserva incluye estancia + extras', async () => {
+    const res = await crearReservaDirecta(
+      entrada({ extras: [{ extraId: 'extra_desayuno', cantidad: 2 }] })
     );
-    const data = await res.json();
-    expect(data.ok !== false).toBe(true);
-    expect(data.totalExtras).toBe(500);
-    expect(data.total).toBe(3500); // 1000 × 3 noches + 500 de extras
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
 
-    expect(mocks.hospitalityReservationItem.createMany).toHaveBeenCalledTimes(1);
+    expect(res.totalExtras).toBe(500);
+    expect(res.total).toBe(3500); // 1000 × 3 noches + 500 de extras
+    expect(res.noches).toBe(3);
+
     const filas = mocks.hospitalityReservationItem.createMany.mock.calls[0][0].data;
-    expect(filas[0]).toMatchObject({ tipo: 'extra', importeTotal: 500, concepto: 'Desayuno buffet' });
+    expect(filas[0]).toMatchObject({ tipo: 'alojamiento', importeTotal: 3000 });
+    expect(filas.find((f: { tipo: string }) => f.tipo === 'extra')).toMatchObject({
+      tipo: 'extra',
+      concepto: 'Desayuno buffet',
+      importeTotal: 500,
+    });
+    // El importe que se guarda (y el que cobra Finanzas) los incluye.
+    const alta = mocks.hospitalityReservation.create.mock.calls[0][0].data;
+    expect(Number(alta.amountAfterTax)).toBe(3500);
+  });
 
-    // El cobro va por el TOTAL, no por el alojamiento.
-    expect(mocks.crearCobroReserva).toHaveBeenCalledWith(
-      expect.objectContaining({ importe: 3500 }),
+  it('el extra por noche multiplica por las NOCHES de la estancia', async () => {
+    const res = await crearReservaDirecta(
+      entrada({ extras: [{ extraId: 'extra_traslado', cantidad: 1 }] })
     );
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.totalExtras).toBe(150); // 50 × 3 noches
   });
 
   it('sin extras la reserva queda como siempre (una línea de alojamiento, cero extras)', async () => {
-    const res = await POST(
-      request('POST', {
-        unitId: 'unit_a',
-        checkIn: '2026-10-01',
-        checkOut: '2026-10-03',
-        huespedNombre: 'Ana',
-        huespedEmail: 'ana@example.com',
-      }),
-      ctx
+    const res = await crearReservaDirecta(entrada());
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.totalExtras).toBe(0);
+    expect(res.total).toBe(3000);
+    const filas = mocks.hospitalityReservationItem.createMany.mock.calls[0][0].data;
+    expect(filas.every((f: { tipo: string }) => f.tipo !== 'extra')).toBe(true);
+  });
+
+  it('un extra desactivado entre medias se ignora sin tumbar la venta', async () => {
+    const res = await crearReservaDirecta(
+      entrada({ extras: [{ extraId: 'extra_fantasma', cantidad: 1 }] })
     );
-    const data = await res.json();
-    expect(data.totalExtras).toBe(0);
-    expect(mocks.hospitalityReservationItem.createMany).not.toHaveBeenCalled();
-    expect(mocks.crearCobroReserva).toHaveBeenCalledWith(expect.objectContaining({ importe: 2000 }));
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.totalExtras).toBe(0);
+    expect(res.total).toBe(3000);
   });
 
   it('el catálogo consultado es el ACTIVO de la propiedad (el precio del servidor)', async () => {
-    await POST(
-      request('POST', {
-        unitId: 'unit_a',
-        checkIn: '2026-10-01',
-        checkOut: '2026-10-02',
-        huespedNombre: 'Ana',
-        huespedEmail: 'ana@example.com',
-        extras: [{ extraId: 'extra_desayuno', cantidad: 1 }],
-      }),
-      ctx
-    );
+    await crearReservaDirecta(entrada({ extras: [{ extraId: 'extra_desayuno', cantidad: 1 }] }));
     const where = mocks.hospitalityExtra.findMany.mock.calls[0][0].where;
     expect(where).toMatchObject({ propertyId: 'prop_a', activo: true });
+  });
+
+  it('el documento del titular entra en el registro de viajeros (y sin él no se inventa nada)', async () => {
+    const conDocumento = await crearReservaDirecta(
+      entrada({
+        huesped: {
+          nombre: 'Ana López',
+          email: 'ana@example.com',
+          telefono: null,
+          documento: {
+            tipoDocumento: 'dni',
+            numeroDocumento: '12345678Z',
+            fechaNacimiento: '1990-05-05',
+          },
+        },
+      })
+    );
+    expect(conDocumento.ok).toBe(true);
+    const viajeros = mocks.hospitalityReservation.create.mock.calls[0][0].data.guestData.viajeros;
+    expect(viajeros).toHaveLength(1);
+    expect(viajeros[0]).toMatchObject({
+      nombre: 'Ana López',
+      // El módulo normaliza los códigos del parte (el Ministerio los lee así).
+      tipoDocumento: 'DNI',
+      numeroDocumento: '12345678Z',
+    });
+
+    mocks.hospitalityReservation.create.mockClear();
+    await crearReservaDirecta(entrada());
+    expect(
+      mocks.hospitalityReservation.create.mock.calls[0][0].data.guestData.viajeros
+    ).toBeUndefined();
+  });
+
+  it('devuelve el enlace de check-in de la reserva (en el idioma del huésped)', async () => {
+    const res = await crearReservaDirecta(entrada({ idioma: 'en' }));
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(mocks.asegurarTokenCheckin).toHaveBeenCalled();
+    expect(res.checkinUrl).toBe('https://app.test/checkin/tok_123?lang=en');
+  });
+
+  it('un reintento del formulario devuelve la misma reserva con su enlace (sin crear otra)', async () => {
+    // El token se asegura, no se regenera: si la reserva ya lo tenía, es el suyo.
+    mocks.asegurarTokenCheckin.mockImplementation(async (r: { tokenCheckin?: string | null }) =>
+      r.tokenCheckin || 'tok_123'
+    );
+    mocks.hospitalityReservation.findUnique.mockResolvedValue({
+      id: 'res_previa',
+      externalBookingId: 'WEB-SOLICITUD',
+      estado: 'confirmed',
+      amountAfterTax: 3000,
+      currency: 'MXN',
+      checkIn: new Date(2027, 2, 1),
+      checkOut: new Date(2027, 2, 4),
+      tokenCheckin: 'tok_previo',
+    });
+    const res = await crearReservaDirecta(entrada());
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.yaExistia).toBe(true);
+    expect(res.reservaId).toBe('res_previa');
+    expect(mocks.hospitalityReservation.create).not.toHaveBeenCalled();
+    expect(res.checkinUrl).toBe('https://app.test/checkin/tok_previo?lang=es');
   });
 });
 
 describe('guardias de fuente — UI del selector y del panel', () => {
-  it('la página pública manda ids y cantidades, nunca precios ni importes de extras', () => {
-    const fuente = leer('app/booking/[slug]/page.tsx');
-    expect(fuente).toContain('extras: seleccionExtras');
-    expect(fuente).toContain('SelectorExtras');
-    // El selector no calcula ni muestra importes: el total real llega del servidor.
-    expect(fuente).not.toContain('precio *');
-    expect(fuente).not.toMatch(/totalExtras\s*=/);
+  it('el asistente manda ids y cantidades: el precio del extra nunca sale del navegador', () => {
+    const fuente = leer('components/hospitality/booking/BookingWizard.tsx');
+    expect(fuente).toContain('extras: extrasElegidos');
+    // La selección que viaja es `{ extraId, cantidad }`, sin importe.
+    expect(fuente).toMatch(/extraId,\s*cantidad/);
+    // Lo que se enseña es una ESTIMACIÓN y así se rotula; el importe definitivo
+    // lo devuelve la reserva, que lo ha resuelto contra el catálogo del servidor.
+    expect(fuente).toContain('totalExtrasEstimado');
+    expect(leer('app/api/public/booking/[slug]/reservar/route.ts')).toContain(
+      'totalExtras: resultado.totalExtras'
+    );
   });
 
   it('los textos del selector viven en el i18n bilingüe (nada suelto en el componente)', () => {
-    const fuente = leer('app/booking/[slug]/page.tsx');
+    const fuente = leer('components/hospitality/booking/BookingWizard.tsx');
     expect(fuente).toContain('t.extrasTitulo');
     const i18n = leer('lib/hospitality/booking-i18n.ts');
-    expect(i18n).toContain("extrasTitulo: 'Añade algo más a tu estancia'");
-    expect(i18n).toContain("extrasTitulo: 'Add something extra to your stay'");
+    expect(i18n).toContain("extrasTitulo: 'Extras para tu estancia'");
+    expect(i18n).toContain("extrasTitulo: 'Extras for your stay'");
   });
 
   it('el panel gestiona el catálogo vía su API y los extras desactivados no se borran', () => {

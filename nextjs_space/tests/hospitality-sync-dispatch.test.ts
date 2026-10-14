@@ -22,7 +22,10 @@ const __updateStatus = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/db', () => ({ prisma: __prisma }));
 
-vi.mock('@/lib/hospitality/connectivity', () => ({
+// Módulo real para lo que es puro (la lectura de `warnings` del proveedor: es la
+// regla que decide que un descarte no es un éxito) y mocks solo para la red.
+vi.mock('@/lib/hospitality/connectivity', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/hospitality/connectivity')>()),
   getConnectivityProvider: (...a: any[]) => __getProvider(...a),
   // `dispatchConnectivityPush` resuelve las credenciales con
   // `getConnectivityCredentials` (el ID de socio puede ser el del cliente, no
@@ -302,6 +305,126 @@ describe('dispatchConnectivityPush (plan §5 y §15.2)', () => {
     expect(trasLimpiar.get(isoLocal(llegada))).toBe(1);
     expect(trasLimpiar.get(isoLocal(salida))).toBe(1);
     expect([...trasLimpiar.values()].every((v) => v === 1)).toBe(true);
+  });
+
+  it('un descarte del canal se atribuye a las UNIDADES, no a códigos sueltos (caso 13-oct-2026)', async () => {
+    // El proveedor aceptó la petición y descartó la habitación de una de las dos
+    // unidades empujadas (`INVALID_ROOM_CODE`): antes solo llegaba el código y el
+    // envío entero se leía como fallido, sin decir qué unidad arreglar.
+    mockUnidades([
+      {
+        ...unidadConPlan(),
+        id: 'u1',
+        nombre: 'Apartamento 1A',
+        tarifaBase: 100,
+        ratePlans: [],
+        mappings: [{ unitId: 'u1', externalUnitCode: '1a', externalRatePlanCode: '1a-s-ep' }],
+      },
+      {
+        ...unidadConPlan(),
+        id: 'u2',
+        nombre: 'Apartamento 2B',
+        tarifaBase: 100,
+        ratePlans: [],
+        mappings: [{ unitId: 'u2', externalUnitCode: '2b', externalRatePlanCode: '2b-s-ep' }],
+      },
+    ]);
+    __pushInventory.mockResolvedValue({
+      ok: false,
+      tipo: 'inventory',
+      httpStatus: 200,
+      message: 'ok',
+      error: 'El proveedor aceptó la petición pero descartó datos: INVALID_ROOM_CODE : 1a',
+      respuestaExterna: { success: true, message: 'ok', warnings: ['INVALID_ROOM_CODE : 1a'] },
+      duracionMs: 5,
+    });
+
+    const { dispatchConnectivityPush } = await import('@/lib/hospitality/sync');
+    const res = await dispatchConnectivityPush('t1', null, 'manual', { diasHorizonte: 5 });
+
+    expect(res.ok).toBe(false);
+    // El error que se enseña nombra la unidad del hotel; el vocabulario del
+    // proveedor no vuelve a salir.
+    expect(res.inventory.error).toContain('«Apartamento 1A»');
+    expect(res.inventory.error).toContain('habitación 1a');
+    expect(res.inventory.error).not.toContain('INVALID_ROOM_CODE');
+    // El informe separa lo descartado de lo que sí se envió.
+    expect(res.rechazo.descartadas.map((d) => d.nombre)).toEqual(['Apartamento 1A']);
+    expect(res.rechazo.aceptadas.map((a) => a.nombre)).toEqual(['Apartamento 2B']);
+    expect(res.rechazo.mensaje).toContain('descartó 1 de 2');
+    // Y queda en el log con el nombre: es lo que leen el panel y el asistente.
+    const log = __prisma.hospitalitySyncLog.create.mock.calls
+      .map((c: any[]) => c[0].data)
+      .find((d: any) => d.tipo === 'inventory');
+    expect(log.errorMensaje).toContain('«Apartamento 1A»');
+  });
+
+  it('una unidad que NO viajó en el push no puede contarse como enviada (caso 13-oct-2026)', async () => {
+    // El push de restricciones de tarifa solo lleva unidades con plan CON código:
+    // la segunda unidad (con tarifa base y sin planes) viaja en inventario y en
+    // tarifas, pero no aquí. El informe se calcula sobre las que viajaron, y a la
+    // que se quedó fuera la nombra con su motivo en vez de llamarla «enviada».
+    mockUnidades([
+      {
+        ...unidadConPlan(),
+        id: 'u1',
+        nombre: 'Apartamento 1A',
+        mappings: [{ unitId: 'u1', externalUnitCode: '1a', externalRatePlanCode: '1a-s-ep' }],
+      },
+      {
+        ...unidadConPlan(),
+        id: 'u2',
+        nombre: 'Apartamento 2A',
+        tarifaBase: 80,
+        ratePlans: [],
+        mappings: [{ unitId: 'u2', externalUnitCode: '2a', externalRatePlanCode: '2a-s-ep' }],
+      },
+    ]);
+    __pushRateRestrictions.mockResolvedValue({
+      ok: false,
+      tipo: 'rates_restrictions',
+      httpStatus: 200,
+      error: 'descartó datos',
+      respuestaExterna: { success: true, warnings: ['INVALID_ROOM_CODE : 1a'] },
+      duracionMs: 5,
+    });
+
+    const { dispatchConnectivityPush } = await import('@/lib/hospitality/sync');
+    const res = await dispatchConnectivityPush('t1', null, 'manual', { diasHorizonte: 5 });
+
+    // El conteo es sobre el envío real (1 unidad), no sobre la propiedad (2).
+    expect(res.rateRestrictions.error).toContain('descartó 1 de 1 unidades');
+    expect(res.rateRestrictions.error).toContain('«Apartamento 1A»');
+    // Y la que no viajó se dice, con el motivo: ni enviada ni fallida.
+    expect(res.rateRestrictions.error).toContain('1 unidad no viajó en este envío');
+    expect(res.rateRestrictions.error).toContain('«Apartamento 2A»');
+    expect(res.rateRestrictions.error).toContain('no tiene plan de tarifa con código del proveedor');
+    expect(res.rateRestrictions.error).not.toContain('sí se enviaron');
+    expect(res.rechazo.noEnviadas.map((n) => n.nombre)).toEqual(['Apartamento 2A']);
+  });
+
+  it('un fallo que no es un descarte conserva el mensaje del proveedor y deja el informe vacío', async () => {
+    __pushInventory.mockResolvedValue({
+      ok: false,
+      tipo: 'inventory',
+      httpStatus: 404,
+      error: 'HTTP 404',
+      respuestaExterna: { success: false, message: 'hotel desconocido' },
+      duracionMs: 5,
+    });
+    const { dispatchConnectivityPush } = await import('@/lib/hospitality/sync');
+
+    const res = await dispatchConnectivityPush('t1', null, 'manual', { diasHorizonte: 5 });
+
+    expect(res.inventory.error).toBe('HTTP 404');
+    expect(res.rechazo).toEqual({
+      huboDescartes: false,
+      descartadas: [],
+      aceptadas: [],
+      codigosSinUnidad: [],
+      noEnviadas: [],
+      mensaje: null,
+    });
   });
 
   it('registra el error del proveedor sin romper el flujo', async () => {

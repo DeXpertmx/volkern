@@ -8,7 +8,8 @@
  * verifica la cuenta en la instancia real de Chatwoot, y luego limpia TODO:
  * tenant+user en la DB, cuenta de Chatwoot, y dominio en Resend.
  */
-import 'dotenv/config';
+import dotenv from 'dotenv';
+dotenv.config({ path: ['.env.local', '.env'] });
 import { prisma } from '../lib/db';
 import { provisionTenant } from '../lib/provisioning/tenant-provisioner';
 import { listDomains, deleteDomain } from '../lib/resend-domains';

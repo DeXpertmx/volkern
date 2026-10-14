@@ -78,6 +78,37 @@ describe('causaDeFalloConectividad — el ID de socio nombrado por el proveedor'
   });
 });
 
+describe('causaDeFalloConectividad — el hotel que no está concedido a ese ID de socio', () => {
+  it('403 «Access Denied - <hotelCode>» → hotel sin conceder, NO «credenciales rechazadas»', () => {
+    // Texto verificado contra el servicio: con el par Basic y el ID de socio
+    // CORRECTOS, un hotel que la cuenta no tiene asignado responde esto. Durante
+    // semanas se leyó como «credenciales rechazadas» y mandaba a rotar unas
+    // credenciales que funcionaban.
+    const causa = causaDeFalloConectividad(
+      fallo({ httpStatus: 403, errorMensaje: 'Access Denied - 75fdbbce2e' })
+    );
+    expect(causa.clave).toBe('hotel_sin_concesion');
+    expect(causa.texto).toMatch(/no está concedido/i);
+    expect(causa.consejo).toMatch(/asign/i);
+    expect(causa.consejo.toLowerCase()).not.toContain('rotar');
+  });
+
+  it.each(['Access Denied - sandbox-pms', 'ACCESS DENIED', 'hotel not granted'])(
+    'la variante «%s» se reconoce sin importar mayúsculas',
+    (mensaje) => {
+      expect(causaDeFalloConectividad(fallo({ httpStatus: 403, errorMensaje: mensaje })).clave).toBe(
+        'hotel_sin_concesion'
+      );
+    }
+  );
+
+  it('el ID de socio sigue ganando: un «partner desconocido» con 403 no es un hotel sin conceder', () => {
+    expect(
+      causaDeFalloConectividad(fallo({ httpStatus: 403, errorMensaje: 'partner desconocido' })).clave
+    ).toBe('partner_desconocido');
+  });
+});
+
 describe('causaDeFalloConectividad — credenciales rechazadas (401/403)', () => {
   it('401 → «Credenciales rechazadas»', () => {
     const causa = causaDeFalloConectividad(fallo({ httpStatus: 401, errorMensaje: 'HTTP 401 del proveedor' }));

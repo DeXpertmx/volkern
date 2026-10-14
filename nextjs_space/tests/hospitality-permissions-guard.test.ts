@@ -25,13 +25,21 @@ const RUTAS = 'app/api/hospitality';
 const EDITOR_ROLES = 'components/RoleManagement.tsx';
 
 /**
- * Webhook de reservas: lo llama el proveedor de conectividad con Basic Auth
- * contra las credenciales guardadas. No hay usuario de Volkern al que
+ * Webhooks del proveedor de conectividad (reservas y mensajes): los llama él con
+ * Basic Auth contra las credenciales guardadas. No hay usuario de Volkern al que
  * preguntarle por su rol, así que su control de acceso es la propia Basic Auth,
- * no los permisos por acción.
+ * no los permisos por acción — y de hecho protegerlos con sesión los dejaría
+ * inservibles (el emisor no tiene sesión).
+ *
+ * Quedan exentos de la guardia de CAPACIDAD, no de autenticación: cada uno la
+ * valida con `readBasicAuth` y tiene su guardia del 401
+ * (`tests/hospitality-webhook-reservations-route.test.ts` y
+ * `tests/hospitality-mensajes-webhook-route.test.ts`).
  */
 const EXENTAS: Record<string, string> = {
   'webhook/reservations/route.ts': 'Basic Auth del proveedor de conectividad',
+  'webhook/messages/route.ts':
+    'Basic Auth del proveedor de conectividad (el mismo par que el webhook de reservas)',
 };
 
 function listarRutas(dir: string): string[] {

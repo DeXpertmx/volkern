@@ -211,7 +211,10 @@ ventanas largas o muchos canales puede notarse. Medir con datos reales antes de 
 ### H4 · Cotización de la reserva directa ✅
 
 **Qué hace.** Cotiza una estancia: noches × tarifa del rate plan activo, con las
-restricciones del plan (mín/máx noches, días de llegada y salida).
+restricciones generales del plan (mín/máx noches, días de llegada y salida) más las
+**reglas de la temporada de la llegada** (`temporadas[].minNoches`, `.maxNoches`,
+`.checkInDias`, `.checkOutDias`), que se deciden por la fecha de entrada y reemplazan
+campo a campo a las generales del plan.
 
 **En qué beneficia.** Es el precio que el huésped ve antes de pagar. Si la página y la
 reserva cotizan distinto, el hotel discute con el cliente al confirmar. El módulo hace
@@ -222,14 +225,23 @@ que **si la página ofrece algo, la reserva pueda cumplirlo**.
 plan (la página evalúa varias a la vez); el `ratePlan` superior es el valor por defecto
 para quien cotiza una sola. No reimplementa ocupación: delega en H2.
 
-**Dónde.** `lib/hospitality/booking-engine.ts`; rutas públicas `app/api/public/booking/[slug]`.
+**Dónde.** `lib/hospitality/booking-engine.ts`; rutas públicas `app/api/public/booking/[slug]/cotizar`
+y `app/api/public/booking/[slug]/reservar` (una sola página pública: `/reservar/<slug>`, y el
+enlace antiguo `/booking/<id>` solo redirige).
 
-**Guardia.** `hospitality-booking-engine`, `hospitality-booking-api`, `hospitality-booking-page`.
+**Guardia.** `hospitality-booking-engine`, `hospitality-booking-guard`, `hospitality-booking-page`,
+`hospitality-reserva-directa-route`.
 
-**Investigar / mejorar.** Hoy el precio es lineal por noche; toda la riqueza (temporadas,
-estancia mínima por fecha, descuentos por antelación o por semana) obligaría a enriquecer
-`restriccionesDeRatePlan`. Antes de añadir, conviene instrumentar qué % de cotizaciones
-públicas se caen por cada restricción: eso dice qué restricción falta de verdad.
+**Investigar / mejorar.** La capa por fecha ya está: cada noche cuesta la tarifa de su
+fecha y las llegadas dentro de una temporada se juzgan con las reglas de esa temporada
+(mínimo, máximo y días de entrada y salida; la misma regla en la página, en la reserva y
+en el canal, vía `minimumStayArrival`, `maximumStayArrival` y
+`closeOnArrival`/`closeOnDeparture`). Lo que queda es de otra naturaleza: descuentos por
+antelación o por semana y —si algún día hace falta— evaluar los **días de salida** con
+la temporada que contiene la fecha de salida en vez de la de la llegada (hoy manda la
+llegada, a propósito: una estancia se juzga entera con la regla de donde empieza). Antes
+de añadir, conviene instrumentar qué % de cotizaciones públicas se caen por cada
+restricción: eso dice qué restricción falta de verdad.
 
 ---
 
@@ -680,10 +692,26 @@ hasta saberse en los dos idiomas. `COMUNICACION_EVENTOS_TRADUCIBLES`,
 `plantillaSugerida(evento, idioma)`, `fechaLarga`, `monedaFormateada`,
 `etiquetasDeCampos`.
 
-**Dónde.** `booking-i18n.ts`, `resenas-i18n.ts`; página pública, check-in, reseñas y
-comunicaciones.
+El correo del canal email, además, se **compone con bloques**: `DisenoEmail`
+(cabecera, título, párrafos, secciones de etiqueta/valor y botones), `normalizarDiseno`
+(valida y recorta; los techos se rechazan, no se recortan), `renderDisenoEmail` (compila a
+HTML de tabla con estilos en línea), `textoPlanoDiseno` (la parte `text` del correo) y
+`disenoSugerido(evento, idioma)` —una sola estructura para los dos idiomas, con las
+etiquetas cambiando: una sección nueva no puede existir solo en español—. Interpolación con
+escapado por tramos: lo que escribe el hotel lleva escapado y marcas, y lo que viene del
+contexto (el nombre del huésped) solo escapado, para que un huésped llamado `**Ana**` no se
+vuelva negrita ni un nombre con etiquetas inyecte HTML.
 
-**Guardia.** `hospitality-booking-i18n`, `hospitality-comunicaciones-i18n`.
+**Dónde.** `booking-i18n.ts`, `resenas-i18n.ts`; página pública, check-in, reseñas y
+comunicaciones. El editor visual: `lib/hospitality/comunicaciones-email.ts` (puro) y
+`components/hospitality/EditorPlantillaEmail.tsx`, con el diseño en
+`hospitality_communication_templates.diseno`.
+
+**Guardia.** `hospitality-booking-i18n`, `hospitality-comunicaciones-i18n`,
+`hospitality-comunicaciones-email` (validación, escapado, XSS en el nombre del huésped,
+`javascript:` en un enlace, marcas solo en lo que escribe el hotel, paridad es/en de los
+diseños sugeridos y que ninguna variable del diseño sea inventada: todas las resuelve
+`buildContextoPlantilla`).
 
 **Investigar / mejorar.** Decisión a revisar con datos: `monedaFormateada` existe, pero
 en la página pública el dinero sigue **la divisa y no el idioma** del visitante (decisión
@@ -733,11 +761,12 @@ el sistema **sabe qué falló y por qué**, en vez de fallar en silencio.
 | Pieza | Módulo | Regla |
 |---|---|---|
 | Dispatcher de push | `sync.ts` | Disponibilidad siempre desde estado interno; UPSERT por rango; **sin retries ciegos** (cada push fallido queda con su causa) |
-| Credenciales y sonda | `connectivity.ts` | Credenciales cifradas; `testConnectivityConnection` contra `property_details` con `CONNECTIVITY_SANDBOX_HOTEL = 'sandbox-pms'` (la misma sonda del botón «Probar» y del health-check) |
+| Credenciales y sonda | `connectivity.ts` | Credenciales cifradas; `testConnectivityConnection` contra `property_details` en el hotel de la sonda (`resolverHotelDeSonda`: entorno → config del proveedor → **hotel real ya vinculado** → `sandbox-pms`); la misma sonda del botón «Probar», de la Conectividad del hotel y del health-check |
 | Reconciliación | `reconciliation.ts` | Detecta faltantes (→ book), modificaciones (→ modify), cancelaciones (→ cancel) y divergencias de disponibilidad |
 | Incidencias | `incidencias.ts` | Resuelve `roomCode` del payload; vínculo manual/automático; caché de vinculación; multi-habitación (`esPayloadMultiHabitacion`); `EDAD_NINO_UMBRAL = 4` |
-| Causa del fallo | `conectividad-causa.ts` | 401/403 → «credenciales rechazadas»; 5xx/timeout → «sin respuesta del servicio»; otra → error |
+| Causa del fallo | `conectividad-causa.ts` | ID de socio deshabilitado/desconocido y **hotel sin conceder a ese ID** (por el texto del proveedor) ganan al código; 401/403 → «credenciales rechazadas»; 5xx/timeout → «sin respuesta del servicio»; otra → error |
 | Saneado | `conectividad-secreto.ts` | Oculta `Authorization` y API keys de los cuerpos de error (marcas `[oculto]`, `[truncado]`, `[circular]`), **en la fuente** |
+| Descarte del canal, por unidad | `rechazo-canal.ts` | Los `warnings` del proveedor (`INVALID_ROOM_CODE`, `INVALID_RATEPLAN_CODE`) se atribuyen a la unidad por su `roomId`/códigos de tarifa **del envío** (comparación exacta); `unidadesDelEnvio`/`unidadesFueraDelEnvio` deciden quién viajó en ESE push (el de restricciones de tarifa solo lleva unidades con plan con código) y las ausentes se nombran con su motivo; lo que no es de ninguna unidad se informa aparte; un 200 con advertencias sigue siendo `ok: false` |
 | Códigos externos | `codigos.ts` | `normalizeExternalCode` (trim + lowercase) |
 
 Crons: reconciliación, health-check diario (`0 5 * * *`) y recordatorio de vínculos
@@ -745,12 +774,12 @@ automáticos pendientes cada 3 días.
 
 **Dónde.** `lib/hospitality/*` citados y `lib/cron/hospitality-*.ts`.
 
-**Guardia.** 12 guardias: `hospitality-sync(-dispatch)`, `hospitality-connectivity`,
+**Guardia.** 13 guardias: `hospitality-sync(-dispatch)`, `hospitality-connectivity`,
 `hospitality-reconciliation`, `hospitality-incidencias-*` (3 rutas),
 `hospitality-conectividad-causa`, `hospitality-conectividad-secreto`,
 `hospitality-conectividad-panel`, `hospitality-connection-test`,
 `cron-hospitality-reconcile(-scan)`, `cron-hospitality-vinculos-pendientes`,
-`hospitality-connectivity-health`.
+`hospitality-connectivity-health`, `hospitality-rechazo-canal`.
 
 **Investigar / mejorar.** Es la zona con más superficie y más riesgo, y su investigación
 depende de terceros: hoy **toda la capa se prueba contra un proveedor de referencia**.

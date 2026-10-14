@@ -83,12 +83,23 @@ export async function asegurarTokenCheckin(reserva: {
   if (existente) return existente;
 
   const token = generarTokenCheckin();
-  await prisma.hospitalityReservation.update({
-    where: { id: reserva.id },
+  // Escritura CONDICIONAL: el token lo piden a la vez la confirmación de la
+  // reserva (que lo necesita para su enlace) y la preparación del enlace que la
+  // propia reserva devuelve. Con un `update` a secas ganaba el último y el
+  // huésped se quedaba con un enlace que no abre nada —el token que le llega no
+  // es el que quedó guardado—. Aquí gana el primero y el que pierde devuelve el
+  // que realmente está en la base.
+  const escritos = await prisma.hospitalityReservation.updateMany({
+    where: { id: reserva.id, tokenCheckin: null },
     data: { tokenCheckin: token },
-    select: { id: true },
   });
-  return token;
+  if (escritos.count === 1) return token;
+
+  const fila = await prisma.hospitalityReservation.findUnique({
+    where: { id: reserva.id },
+    select: { tokenCheckin: true },
+  });
+  return (fila?.tokenCheckin || '').trim() || token;
 }
 
 /** Datos de la reserva que necesita el formulario público (sin nada sensible). */

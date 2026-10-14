@@ -55,8 +55,8 @@ E2E_MOCK_PORT=4600 npm run test:e2e:noshow
 E2E_KEEP=1 npm run test:e2e:noshow # conserva los datos para mirarlos a mano
 
 # Con un servidor ya levantado (debe tener CONNECTIVITY_BASE_URL al mock):
-E2E_MOCK_PORT=4599 BASE_URL=http://localhost:3098 npx tsx --require dotenv/config scripts/e2e-no-show.ts --keep
-npx tsx --require dotenv/config scripts/e2e-no-show.ts --cleanup
+E2E_MOCK_PORT=4599 BASE_URL=http://localhost:3098 npx tsx --require ./scripts/cargar-entorno.cjs scripts/e2e-no-show.ts --keep
+npx tsx --require ./scripts/cargar-entorno.cjs scripts/e2e-no-show.ts --cleanup
 ```
 
 El ensayo es idempotente: usa los códigos `E2E-NS`, `E2E-NS-A`, `E2E-NS-B` y el

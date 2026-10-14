@@ -15,16 +15,26 @@ function leer(relativo: string): string {
 }
 
 describe('Página pública de reserva', () => {
-  const fuente = leer('app/booking/[slug]/page.tsx');
+  // El asistente es el motor de la página: la página única (`/reservar/<slug>`)
+  // monta la plantilla y él lleva el flujo. La antigua `/booking/<id>` solo
+  // redirige, así que aquí se vigila el asistente.
+  const fuente = leer('components/hospitality/booking/BookingWizard.tsx');
   const i18n = leer('lib/hospitality/booking-i18n.ts');
 
   it('implementa el flujo del plan: fechas → disponibilidad → datos → confirmación', () => {
-    // Los textos del flujo viven en el diccionario ES/EN, no en la página.
+    // Los textos del flujo viven en el diccionario ES/EN, no en el componente.
     for (const texto of ['verDisponibilidad', 'confirmarReserva', 'reservaConfirmada']) {
       expect(i18n).toContain(`${texto}:`);
       expect(fuente).toContain(`t.${texto}`);
     }
     expect(fuente).toContain("from '@/lib/hospitality/booking-i18n'");
+  });
+
+  it('el enlace antiguo de reserva ya no es una página: redirige a la única', () => {
+    const antiguo = leer('app/booking/[slug]/page.tsx');
+    expect(antiguo).toContain('permanentRedirect');
+    expect(antiguo).toContain('/reservar/');
+    expect(antiguo).not.toContain('BookingWizard');
   });
 
   it('i18n: los dos idiomas existen y el español es el defecto', () => {
@@ -39,16 +49,19 @@ describe('Página pública de reserva', () => {
     expect(fuente).not.toContain('/api/hospitality/');
   });
 
-  it('ofrece ir al pago cuando hay URL de pago (Stripe Connect)', () => {
-    expect(fuente).toContain('paymentUrl');
-    expect(i18n).toContain('irAlPago:');
-    expect(fuente).toContain('t.irAlPago');
+  it('lleva al pago cuando la reserva abre una sesión (Stripe Connect)', () => {
+    // El asistente no cobra: si la respuesta trae URL de pago, navega a la
+    // pasarela del hotel; si no, enseña la confirmación.
+    expect(fuente).toContain('pagoUrl');
+    expect(leer('app/api/public/booking/[slug]/reservar/route.ts')).toContain('crearSesionDePago');
   });
 
-  it('variante embed soportada por la misma página (iframe del dashboard)', () => {
+  it('la variante embed es una ruta propia del widget (iframe del dashboard)', () => {
     const config = leer('app/dashboard/hospitality/booking-engine/page.tsx');
-    expect(config).toContain('<iframe');
-    expect(config).toContain('?embed=1');
+    expect(config).toContain('codigoEmbedBooking');
+    // El módulo puro de URLs (sin BD: lo usa el panel, que es de cliente).
+    expect(leer('lib/hospitality/booking-urls.ts')).toContain('/embed/reservar/');
+    expect(fs.existsSync(path.join(RAIZ, 'app/embed/reservar/[slug]/page.tsx'))).toBe(true);
   });
 });
 
@@ -69,6 +82,16 @@ describe('Sección Booking Engine del dashboard', () => {
   it('ofrece el enlace público en inglés (?lang=en) además del español', () => {
     expect(fuente).toContain('enlacePublicoEn');
     expect(fuente).toContain('Enlace público de reserva (inglés)');
+  });
+
+  it('publica por la MISMA lista que lee la página (interruptor por propiedad)', () => {
+    // El enlace público sin publicar no sirve de nada: la publicación se manda
+    // como lista —la que consume `listarPropiedadesPublicables`— y el estado que
+    // el panel enseña sale de esa config, no del estado de la propiedad (dos
+    // criterios distintos de «publicada» es cómo se vaciaba la página pública).
+    expect(fuente).toContain('propiedadesPublicadas');
+    expect(fuente).toContain('onCheckedChange={(v) => publicar(');
+    expect(fuente).toContain('publicada: publicadasIds.includes');
   });
 });
 

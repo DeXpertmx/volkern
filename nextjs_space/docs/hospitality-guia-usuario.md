@@ -190,13 +190,22 @@ propiedad). Es un asistente de **10 pasos** que termina publicando la propiedad:
 7. **Probar disponibilidad** — consulta real al canal para validar el vínculo.
 8. **Probar tarifas** — empuja una tarifa y la valida en el canal.
 9. **Probar reserva** — registra una reserva de prueba **por el mismo camino que las
-   reales y la elimina después**.
+   reales y la elimina después**, devolviendo al canal las noches que ocupó: la prueba
+   no deja rastro ni en tus datos ni en el calendario del proveedor. Si la reposición
+   fallara, la prueba lo avisa —esas noches seguirían cerradas en los canales— y se
+   reabren volviendo a empujar la disponibilidad desde el panel de conectividad.
 10. **Activar** — si todo está cumplido, el botón **Activar propiedad** la marca como
     `Conectada`: ya recibe y sincroniza reservas. Y solo cuando una propiedad está
     `Conectada` se publica en el Booking Engine.
 
 Los pasos fallidos muestran el motivo exacto (p. ej. credenciales sin configurar) y cada
 prueba deja traza. Puedes repetir una prueba sin deshacer nada.
+
+Si el canal **descarta** alguna unidad (habitación o plan de tarifa que él todavía no
+tiene autorizado), la prueba de disponibilidad o de tarifas lo dice **unidad por
+unidad** —con el nombre de la tuya, no con el código del proveedor— y también qué
+unidades sí quedaron enviadas. El paso no se marca superado mientras quede alguna fuera:
+autoriza esas habitaciones en la extranet del canal y vuelve a probar.
 
 ---
 
@@ -241,17 +250,30 @@ añaden estacionalidad, ajustes y restricciones:
 1. **Nuevo Plan** (o **Editar** en un plan existente):
    - Propiedad y **unidad** del plan.
    - **Tarifa por noche** (con su moneda) y nombre/código del plan.
-   - **Temporadas** (estacionalidad): rangos de fechas con precio propio.
+   - **Temporadas** (estacionalidad): rangos de fechas con precio propio y, si hace
+     falta, sus propias **reglas de estancia**: mínimo y máximo de noches y días
+     permitidos de entrada y salida (julio, de 3 a 7 noches y solo entradas de sábado).
    - **Ajustes por demanda** y **recargos de fin de semana** (porcentaje extra).
    - **Restricciones**: **mínimo/máximo de noches** por estancia y **días permitidos de
-     check-in y check-out** (p. ej. «solo entradas de sábado»).
+     check-in y check-out** (p. ej. «solo entradas de sábado»). Son las reglas generales
+     del plan: valen fuera de temporada y donde la temporada no diga otra cosa.
 2. **Duplicar**: crea una copia del plan para editarla (útil entre temporadas).
 3. **Sincronizar tarifas**: empuja los cuatro conjuntos (inventario, restricciones,
-   tarifas y restricciones de tarifa) al canal externo, horizonte 180 días.
+   tarifas y restricciones de tarifa) al canal externo, horizonte 180 días. Si el canal
+   descarta alguna unidad, el aviso se queda en pantalla con el nombre de cada una y la
+   habitación o tarifa concreta: no hay que bucear en los registros de sincronización.
 4. Al guardar un plan, la sincronización a los canales se dispara sola.
 
 Las tarjetas de la lista resumen cada plan: precio/noche, rango de noches, nº de
-temporadas, recargo de fin de semana, nº de ajustes y días de entrada/salida.
+temporadas (con sus reglas de noches y de días cuando las hay), recargo de fin de
+semana, nº de ajustes y días de entrada/salida.
+
+Las **reglas de una temporada** (mínimo, máximo y días de entrada y salida) se deciden
+por la **fecha de llegada**: una estancia que empieza dentro del rango se juzga entera
+con la regla de esa temporada, y la temporada **reemplaza campo a campo** a las del plan
+— lo que dejes vacío lo pone el plan. Se aplican igual en tu web de reservas y en los
+canales: el canal recibe la regla por fecha (no hay una versión para tu web y otra para
+las OTAs).
 
 **Bloqueos de fechas**: desde el **Planning** (botón «Bloquear fechas» en la fila de la
 unidad) puedes cerrar un rango con motivo `Propietario`, `Mantenimiento` o
@@ -262,21 +284,30 @@ reserva, y se comunica al canal externo.
 
 ## 6. Booking Engine: reserva directa
 
-Pantalla: `Hospitality → Booking Engine`. Hay dos webs públicas para el huésped:
+Pantalla: `Hospitality → Booking Engine`. Hay **una sola web pública** para el huésped:
 
-- **`/reservar/<slug>`** — la página de reservas de tu cuenta (el `slug` es el de tu
-  tenant, se asignó al activar el módulo): enseña todas tus propiedades publicadas.
-- **`/booking/<id-propiedad>`** — la página de reserva de **una propiedad concreta**, la
-  que generan los enlaces de esta pantalla. También hay widget embebible (`/embed`).
+- **`/reservar/<slug>`** — tu página de reservas (el `slug` es el de tu cuenta y se
+  asignó al activar el módulo): enseña todas tus propiedades publicadas, con sus
+  extras y sus reseñas.
+- **Widget embebible** (`/embed/reservar/<slug>`) — el mismo motor, sin marco de
+  página, para pegarlo en tu web.
 
-Esta pantalla **lista las propiedades publicadas** (las `Conectadas` del onboarding) y,
-para cada una, da:
+El enlace antiguo por propiedad (`/booking/<id-propiedad>`) sigue funcionando, pero
+solo **redirige** a tu página: ya no existe una segunda página que publicar. Los
+enlaces que repartiste antes no se rompen.
+
+Esta pantalla **lista las propiedades con su interruptor de publicación** (hace falta que
+la propiedad esté `Conectada`) y, arriba, da los enlaces de **tu página**:
 
 - **Enlace público en español** y **en inglés** (`?lang=en`), con botones de copiar y
-  abrir. Los enlaces son por **propiedad** (`/booking/<id-propiedad>`).
+  abrir.
 - **Snippet de embed** (iframe) para pegar el motor en tu propia web.
-- **Extras comprables**: el catálogo de extras que el huésped puede añadir a su reserva.
+- **Extras comprables** por propiedad: el catálogo que el huésped puede añadir a su reserva.
 - Si la propiedad no está publicada: «Completa la Puesta en marcha de esta propiedad…».
+
+**Un solo criterio de publicación:** lo que se puede reservar en tu web es exactamente lo
+que tengas encendido en esta pantalla. La propiedad retirada deja de venderse en todos los
+enlaces, incluido el antiguo.
 
 ### Qué puede configurar el hotel
 
@@ -605,6 +636,33 @@ en el evento reseña) — y acciones: **Enviar prueba** (a un destinatario que e
 **Editar**, **Activar/Desactivar** y **Eliminar**. El botón **English** crea la versión
 en inglés con el texto sugerido si no existe.
 
+### 13.1 El correo, con editor visual (canal email)
+
+En el canal email la plantilla no se escribe a mano: se **compone con bloques** y a la
+derecha se ve el correo tal y como lo compila el envío.
+
+| Pieza | Qué es |
+| --- | --- |
+| **Cabecera** | El nombre del hotel, su logotipo (URL) y la etiqueta de la derecha («Reserva confirmada»). |
+| **Título** | El encabezado grande; por defecto `{{propiedad}}`. |
+| **Párrafo** | Texto libre. Reconoce `**negrita**`, `*cursiva*` y `[texto](https://…)`. |
+| **Sección de datos** | Como las del correo de tu canal: un título de sección y filas de **etiqueta / valor** (`Entrada` → `{{checkIn}}`). Se añaden y se quitan filas. |
+| **Botón** | Un botón con texto y destino. El destino puede ser una URL o una variable (`{{enlace_checkin}}`, `{{enlace_resena}}`). |
+| **Pie** | La nota final del correo. |
+
+Los bloques se reordenan con las flechas y se borran con la papelera. El botón
+**Variables** inserta una variable en el último campo que hayas tocado: el diseño guarda
+`{{checkIn}}`, no la fecha, así que cada huésped recibe lo suyo.
+
+Al pasar una plantilla a email, el correo arranca con la maqueta sugerida del evento
+(cabecera, detalles de la reserva, alojamiento, huésped, pago y el botón al registro de
+viajeros), y al cambiar de idioma la maqueta sugerida se traduce. En cuanto editas un
+bloque, tu diseño manda.
+
+El campo **Texto del correo (opcional)** es la versión de texto plano del mensaje: la
+leen los clientes que no muestran HTML y la miran los filtros de spam. Si lo dejas vacío,
+se genera a partir del diseño.
+
 Regla de envío: el mensaje sale en el idioma en que reservó el huésped (directa) y, si no
 hay plantilla en ese idioma, cae al español. El canal sale del canal activo de la plantilla.
 
@@ -715,7 +773,9 @@ tarifas lo fuerza a mano; la reconciliación tiene su consulta de lotes/divergen
 | Una reseña no sale en la web | Solo lo **publicado** sale (§15): revísala en Reseñas y publícala |
 | El Ministerio rechazó un parte | Lee el motivo en Reservas (§7), corrige el dato y reenvía; si agotó reintentos, el reenvío es manual |
 | Vendí dos veces lo mismo / 409 al reservar | No debería pasar: el motor revalida. Si ves 409 en la web, las fechas quedaron vendidas entre tu consulta y el envío — elige otras fechas o libera la unidad |
-| Cambié una tarifa y el canal no la recibió | Revisa el estado de sincronización (fallo registrado, sin reintento ciego) y fuerza **Sincronizar tarifas** (§5) |
+| Cambié una tarifa y el canal no la recibió | Revisa el estado de sincronización (fallo registrado, sin reintento ciego) y fuerza **Sincronizar tarifas** (§5). Si el aviso nombra unidades concretas, el canal las descartó: autoriza esa habitación o ese plan de tarifa en la extranet del canal y vuelve a sincronizar |
+| El canal descarta una unidad mía | El código existe en su catálogo (si no, no se habría dejado vincular), así que lo que falta es su autorización en la extranet del canal. Lo que sí se envió sigue publicado: el aviso separa las unidades descartadas de las enviadas |
+| El aviso dice que una unidad «no viajó» | Ese envío concreto no la llevaba: cada unidad sin plan de tarifa con código queda fuera del envío de restricciones (no tiene estancia mínima que anunciar) y las que no tienen vínculo con el proveedor no viajan en ninguno. Sí sale en los envíos de inventario y tarifas. El aviso lo dice unidad por unidad en vez de contarla como enviada |
 
 ---
 

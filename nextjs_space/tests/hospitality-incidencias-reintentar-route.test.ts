@@ -22,6 +22,7 @@ vi.mock('@/lib/hospitality/reservations', () => ({
   processCancel: mocks.processCancel,
 }));
 
+const { ACCIONES_RESERVA } = await import('@/lib/hospitality/incidencias');
 const { POST } = await import('@/app/api/hospitality/incidencias/reintentar/route');
 
 const PROPIEDAD = {
@@ -321,5 +322,30 @@ describe('POST /api/hospitality/incidencias/reintentar', () => {
     expect(body.reenviadas).toBe(1);
     expect(mocks.processReservationWebhook).toHaveBeenCalledTimes(1);
     expect(mocks.processReservationWebhook.mock.calls[0][0]).toMatchObject({ action: 'modify' });
+  });
+
+  it('la consulta se limita a acciones de RESERVA (la tabla la comparten los mensajes)', async () => {
+    await POST(reqConBody({ eventoIds: ['ev_1'] }));
+
+    const where = mocks.hospitalityWebhookEvent.findMany.mock.calls[0][0].where;
+    expect(where.action.in).toEqual([...ACCIONES_RESERVA]);
+    expect(where.action.in).not.toContain('message');
+    expect(where.estado).toBe('sin_mapping');
+  });
+
+  it('el evento de un MENSAJE sin mapping no se reenvía al motor de reservas', async () => {
+    // El evento existe, es del tenant y está sin resolver — pero es un mensaje
+    // del canal: reenviarlo crearía una reserva de un chat de huésped.
+    mocks.hospitalityWebhookEvent.findMany.mockImplementation(async (args: any) => {
+      const permitidas: string[] = args?.where?.action?.in ?? [];
+      return [evento({ id: 'ev_msg', action: 'message', bookingId: null, payload: null })].filter((e) =>
+        permitidas.includes(e.action)
+      );
+    });
+
+    const res = await POST(reqConBody({ eventoIds: ['ev_msg'] }));
+    expect(res.status).toBe(404);
+    expect(mocks.processReservationWebhook).not.toHaveBeenCalled();
+    expect(mocks.processCancel).not.toHaveBeenCalled();
   });
 });

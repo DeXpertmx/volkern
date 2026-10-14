@@ -368,6 +368,30 @@ export interface WizardTextos {
   referencia: string;
   verDetalle: string;
   guardaEnlace: string;
+  /**
+   * Extras comprables, en el paso de datos. La selección del huésped es una
+   * petición: el importe que se cobra lo pone el catálogo del servidor.
+   */
+  extrasTitulo: string;
+  extrasAyuda: string;
+  /** Sufijo del precio de un extra que se cobra cada noche («por noche»). */
+  extraPorNoche: string;
+  extrasCantidad: string;
+  /** Etiqueta de la línea de extras en los totales. */
+  extrasTotal: string;
+  /** Registro de viajeros (RD 933/2021): documentación opcional al reservar. */
+  documentoTitulo: string;
+  documentoAyuda: string;
+  documentoTipo: string;
+  documentoNinguno: string;
+  documentoDni: string;
+  documentoNie: string;
+  documentoPasaporte: string;
+  documentoOtro: string;
+  documentoNumero: string;
+  documentoNacimiento: string;
+  /** Paso 4: enlace para completar los documentos del grupo. */
+  completarCheckin: string;
 }
 
 export const WIZARD_TEXTOS: Record<Idioma, WizardTextos> = {
@@ -414,6 +438,23 @@ export const WIZARD_TEXTOS: Record<Idioma, WizardTextos> = {
     referencia: 'Referencia',
     verDetalle: 'Ver el detalle de mi reserva',
     guardaEnlace: 'Guarda ese enlace: es tu comprobante.',
+    extrasTitulo: 'Extras para tu estancia',
+    extrasAyuda: 'Se añaden al total de la reserva.',
+    extraPorNoche: 'por noche',
+    extrasCantidad: 'Cantidad',
+    extrasTotal: 'Extras',
+    documentoTitulo: 'Registro de viajeros (opcional)',
+    documentoAyuda:
+      'Si lo dejas ahora, agilizas tu llegada. También puedes completarlo después con el enlace de check-in.',
+    documentoTipo: 'Tipo de documento',
+    documentoNinguno: 'Sin documento',
+    documentoDni: 'DNI',
+    documentoNie: 'NIE',
+    documentoPasaporte: 'Pasaporte',
+    documentoOtro: 'Otro',
+    documentoNumero: 'Número de documento',
+    documentoNacimiento: 'Fecha de nacimiento',
+    completarCheckin: 'Completar los datos de mis acompañantes',
   },
   en: {
     pasoFechas: 'Dates',
@@ -459,6 +500,23 @@ export const WIZARD_TEXTOS: Record<Idioma, WizardTextos> = {
     referencia: 'Reference',
     verDetalle: 'View my booking details',
     guardaEnlace: 'Save that link: it is your receipt.',
+    extrasTitulo: 'Extras for your stay',
+    extrasAyuda: 'They are added to your booking total.',
+    extraPorNoche: 'per night',
+    extrasCantidad: 'Quantity',
+    extrasTotal: 'Extras',
+    documentoTitulo: 'Traveller registration (optional)',
+    documentoAyuda:
+      'Filling it in now speeds up your arrival. You can also complete it later with the check-in link.',
+    documentoTipo: 'Document type',
+    documentoNinguno: 'No document',
+    documentoDni: 'ID card',
+    documentoNie: 'Foreigner ID',
+    documentoPasaporte: 'Passport',
+    documentoOtro: 'Other',
+    documentoNumero: 'Document number',
+    documentoNacimiento: 'Date of birth',
+    completarCheckin: 'Complete my companions’ details',
   },
 };
 

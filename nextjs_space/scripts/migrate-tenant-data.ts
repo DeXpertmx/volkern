@@ -2,7 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import * as dotenv from 'dotenv';
 import { getTenantDb, globalPrisma } from '../lib/db';
 
-dotenv.config();
+dotenv.config({ path: ['.env.local', '.env'] });
 
 /**
  * Script de migración de datos para un tenant específico

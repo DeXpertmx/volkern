@@ -19,9 +19,11 @@ import {
   Tags,
   RefreshCcw,
   Scale,
+  CalendarClock,
   EyeOff,
   Info,
   Trash2,
+  MessageSquareWarning,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -109,6 +111,26 @@ interface EventoSync {
 }
 
 /** Reserva interna activa que el proveedor ya no reporta (divergencia). */
+/**
+ * `hotel_id` del canal mandando mensajes que no se pueden entregar (no hay
+ * mapping): la incidencia que deja el webhook de mensajes. Se ve aquí porque sin
+ * mapping no hay tenant al que mostrársela, y quien vincula el código es
+ * plataforma (o el hotel desde su onboarding).
+ */
+interface MensajeSinMapping {
+  id: string;
+  hotelCode: string;
+  canal: string | null;
+  bookingExterno: string | null;
+  /** Entregas acumuladas: cada reintento del proveedor suma uno. */
+  intentos: number;
+  primeraFecha: string;
+  ultimaFecha: string;
+  errorMensaje: string | null;
+  /** Lo que ya existe en Volkern para ese código (aunque esté inactivo). */
+  vinculos: Array<{ propertyId: string | null; property: string | null; tenantId: string; estado: string }>;
+}
+
 interface Divergencia {
   reservationId: string;
   syncLogId: string;
@@ -124,6 +146,29 @@ interface Divergencia {
   veces: number;
   estadoActual: string | null;
   reservaExiste: boolean;
+}
+
+/** Noche en la que lo que cree el proveedor no lo justifica el estado interno. */
+interface NocheInventario {
+  roomCode: string;
+  fecha: string;
+  proveedor: number;
+  interno: number;
+  empujadoEn: string | null;
+}
+
+/** Último barrido de noches sin justificar de una propiedad (§29). */
+interface InventarioDivergente {
+  syncLogId: string;
+  syncLogFecha: string;
+  tenantNombre: string | null;
+  propertyNombre: string | null;
+  cerradasSinJustificar: number;
+  abiertasSinJustificar: number;
+  comparadas: number;
+  sinDato: number;
+  cerradas: NocheInventario[];
+  abiertas: NocheInventario[];
 }
 
 interface EstadoPropiedad {
@@ -199,6 +244,11 @@ export default function AdminConectividad() {
   const [reconciliacionResult, setReconciliacionResult] = useState<{
     ok: boolean;
     message?: string;
+    totalPropiedades?: number;
+    /** Reservas que devolvió el proveedor en el rango (0 = no hay nada al otro lado). */
+    totalFetch?: number;
+    /** Reservas del proveedor que ya cuadraban con nuestro estado. */
+    totalSinCambios?: number;
     totalCreadas?: number;
     totalActualizadas?: number;
     totalCanceladas?: number;
@@ -206,15 +256,33 @@ export default function AdminConectividad() {
     errores?: string[];
   } | null>(null);
   const [divergencias, setDivergencias] = useState<Divergencia[]>([]);
+  const [inventario, setInventario] = useState<InventarioDivergente[]>([]);
   const [loadingDivergencias, setLoadingDivergencias] = useState(true);
   const [cancelando, setCancelando] = useState<string | null>(null);
   const [confirmarCancel, setConfirmarCancel] = useState<Divergencia | null>(null);
+  const [mensajesSinMapping, setMensajesSinMapping] = useState<MensajeSinMapping[]>([]);
+  const [loadingMensajes, setLoadingMensajes] = useState(true);
 
   useEffect(() => {
     loadEstado();
     loadPropiedades();
     loadDivergencias();
+    loadMensajesSinMapping();
   }, []);
+
+  const loadMensajesSinMapping = async () => {
+    try {
+      setLoadingMensajes(true);
+      const res = await fetch('/api/admin/conectividad/mensajes-sin-mapping');
+      if (!res.ok) return;
+      const data = await res.json();
+      setMensajesSinMapping(data.incidencias || []);
+    } catch {
+      // Informativa: un fallo aquí no rompe la pantalla.
+    } finally {
+      setLoadingMensajes(false);
+    }
+  };
 
   const loadDivergencias = async () => {
     try {
@@ -223,6 +291,7 @@ export default function AdminConectividad() {
       if (!res.ok) return;
       const data = await res.json();
       setDivergencias(data.divergencias || []);
+      setInventario(data.inventario || []);
     } catch {
       // Informativa: un fallo aquí no rompe la pantalla.
     } finally {
@@ -537,6 +606,17 @@ export default function AdminConectividad() {
   // 5xx/timeout → sin respuesta del servicio. Derivado del último fallo de la
   // capa (push/fetch), con la MISMA regla que la tabla por propiedad.
   const causaUltimoFallo = causaDeFalloConectividad(estado?.ultimoFallo ?? null);
+
+  // Noches sin justificar (último barrido por propiedad). Un barrido sin
+  // divergencias también se lista: dice que la comparación corrió y que cuadra.
+  const inventarioConDivergencias = inventario.filter(
+    (i) => i.cerradasSinJustificar > 0 || i.abiertasSinJustificar > 0
+  );
+  const nochesSinJustificar = inventario.reduce(
+    (a, i) => a + i.cerradasSinJustificar + i.abiertasSinJustificar,
+    0
+  );
+  const ultimoBarridoInventario = inventario[0]?.syncLogFecha ?? null;
 
   return (
     <div className="space-y-6">
@@ -925,7 +1005,9 @@ export default function AdminConectividad() {
             Reconciliación de Reservas
           </CardTitle>
           <CardDescription>
-            Consulta las reservas reales del proveedor de conectividad (últimos 30 días) y detecta reservas faltantes, modificaciones y cancelaciones no aplicadas. Los cambios se registran en el historial de sincronización.
+            Consulta las reservas reales del proveedor de conectividad desde hoy y 30 días vista
+            (el rango se puede ampliar en la API) y detecta reservas faltantes, modificaciones y
+            cancelaciones no aplicadas. Los cambios se registran en el historial de sincronización.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -954,6 +1036,16 @@ export default function AdminConectividad() {
                   <Badge variant={reconciliacionResult.totalDivergencias ? 'destructive' : 'outline'}>
                     Divergencias: {reconciliacionResult.totalDivergencias}
                   </Badge>
+                  {/* «0 creadas» a secas no dice si el proveedor no devolvió nada
+                      o si todo ya cuadraba: se enseña lo que devolvió el rango. */}
+                  {reconciliacionResult.totalFetch !== undefined && (
+                    <Badge variant="secondary">
+                      Reservas del proveedor: {reconciliacionResult.totalFetch}
+                    </Badge>
+                  )}
+                  {reconciliacionResult.totalSinCambios !== undefined && (
+                    <Badge variant="outline">Sin cambios: {reconciliacionResult.totalSinCambios}</Badge>
+                  )}
                 </div>
               )}
               {reconciliacionResult.errores && reconciliacionResult.errores.length > 0 && (
@@ -963,6 +1055,113 @@ export default function AdminConectividad() {
                   ))}
                 </ul>
               )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Mensajes del canal sin hotel vinculado (el webhook de mensajes los deja aquí) */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-rose-100 rounded-lg dark:bg-rose-950">
+                <MessageSquareWarning className="h-5 w-5 text-rose-600 dark:text-rose-400" />
+              </div>
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  Mensajes sin hotel vinculado
+                  {mensajesSinMapping.length > 0 && (
+                    <Badge variant="destructive">{mensajesSinMapping.length}</Badge>
+                  )}
+                </CardTitle>
+                <CardDescription>
+                  Un código de propiedad del canal está mandando mensajes de huésped y aquí no
+                  existe: sin vínculo no hay hotel al que entregarlos. El proveedor reintenta cada
+                  pocos minutos (recibe 404 con Retry-After), así que «Intentos» dice cuántas
+                  entregas se han quedado fuera. Se arregla vinculando el código al hotel
+                  (Onboarding → mapping) o reclamando la propiedad.
+                </CardDescription>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={loadMensajesSinMapping}
+              disabled={loadingMensajes}
+            >
+              {loadingMensajes ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+              Actualizar
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {loadingMensajes && mensajesSinMapping.length === 0 ? (
+            <div className="flex items-center justify-center py-6 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin mr-2" />
+              Cargando mensajes sin mapping...
+            </div>
+          ) : mensajesSinMapping.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">
+              Ningún mensaje rechazado por falta de vínculo. Si el emisor del proveedor apunta su
+              webhook de mensajes y llega un código desconocido, aparecerá aquí con su contador.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Código en el canal</TableHead>
+                    <TableHead>Canal</TableHead>
+                    <TableHead>Intentos</TableHead>
+                    <TableHead>Primero / último</TableHead>
+                    <TableHead>Motivo</TableHead>
+                    <TableHead>Qué ya existe aquí</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {mensajesSinMapping.map((m) => (
+                    <TableRow key={m.id}>
+                      <TableCell className="font-mono text-xs">{m.hotelCode || '—'}</TableCell>
+                      <TableCell className="text-sm">{m.canal || '—'}</TableCell>
+                      <TableCell className="text-sm font-medium">{m.intentos}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        <div>
+                          {formatDistanceToNow(new Date(m.primeraFecha), {
+                            addSuffix: true,
+                            locale: es,
+                          })}
+                        </div>
+                        <div>
+                          último:{' '}
+                          {formatDistanceToNow(new Date(m.ultimaFecha), {
+                            addSuffix: true,
+                            locale: es,
+                          })}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-xs">{m.errorMensaje || '—'}</TableCell>
+                      <TableCell className="text-xs">
+                        {m.vinculos.length === 0 ? (
+                          <span className="text-muted-foreground">
+                            Nada: el código no está vinculado
+                          </span>
+                        ) : (
+                          m.vinculos.map((v) => (
+                            <div key={`${v.tenantId}-${v.propertyId ?? 'sin-propiedad'}`}>
+                              {v.property || 'propiedad sin nombre'} · {v.estado}
+                            </div>
+                          ))
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           )}
         </CardContent>
@@ -1085,6 +1284,92 @@ export default function AdminConectividad() {
                   ))}
                 </TableBody>
               </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Noches sin justificar en el proveedor (§29) */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-orange-100 rounded-lg dark:bg-orange-950">
+                <CalendarClock className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+              </div>
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  Noches sin justificar en el proveedor
+                  {nochesSinJustificar > 0 && (
+                    <Badge variant="destructive">{nochesSinJustificar}</Badge>
+                  )}
+                </CardTitle>
+                <CardDescription>
+                  No se le pide inventario al proveedor: esto compara lo que le empujamos (el último push
+                  que cubre cada noche) con lo que justifica el estado interno. «No la vende y aquí está
+                  libre» son ventas perdidas; «la vende y aquí está ocupada» es riesgo de sobreventa. Se
+                  arregla volviendo a empujar la disponibilidad (botón de sincronización): nada se corrige solo.
+                </CardDescription>
+              </div>
+            </div>
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
+              {ultimoBarridoInventario
+                ? `Barrido ${hace(ultimoBarridoInventario)}`
+                : 'Sin barrido todavía'}
+            </span>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {inventarioConDivergencias.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">
+              {inventario.length === 0
+                ? 'Todavía no hay barrido: lo deja la reconciliación diaria (04:15) y el disparo de reconciliación.'
+                : 'El calendario que le enseñamos al canal cuadra con el estado interno.'}
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {inventarioConDivergencias.map((i) => (
+                <div key={i.syncLogId} className="rounded-lg border p-3">
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
+                    <span className="text-sm font-medium">{i.propertyNombre || 'Propiedad'}</span>
+                    {i.tenantNombre && (
+                      <span className="text-xs text-muted-foreground">{i.tenantNombre}</span>
+                    )}
+                    {i.cerradasSinJustificar > 0 && (
+                      <Badge variant="destructive">
+                        {i.cerradasSinJustificar} sin vender y libres aquí
+                      </Badge>
+                    )}
+                    {i.abiertasSinJustificar > 0 && (
+                      <Badge variant="destructive">
+                        {i.abiertasSinJustificar} vendibles y ocupadas aquí
+                      </Badge>
+                    )}
+                    <span className="text-xs text-muted-foreground ml-auto">
+                      {i.comparadas} noche(s) comparadas
+                      {i.sinDato > 0 ? ` · ${i.sinDato} sin dato (nunca se empujaron)` : ''}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {i.cerradas.map((n) => (
+                      <span
+                        key={`c-${n.roomCode}-${n.fecha}`}
+                        className="text-xs rounded border border-amber-200 bg-amber-50 px-2 py-1 dark:border-amber-900 dark:bg-amber-950"
+                      >
+                        {n.fecha} · {n.roomCode}: el canal no la vende y aquí está libre
+                      </span>
+                    ))}
+                    {i.abiertas.map((n) => (
+                      <span
+                        key={`a-${n.roomCode}-${n.fecha}`}
+                        className="text-xs rounded border border-red-200 bg-red-50 px-2 py-1 dark:border-red-900 dark:bg-red-950"
+                      >
+                        {n.fecha} · {n.roomCode}: el canal la vende y aquí está ocupada
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </CardContent>
@@ -1281,12 +1566,14 @@ export default function AdminConectividad() {
                   <Label htmlFor="test-hotel">Código de propiedad (hotelCode)</Label>
                   <Input
                     id="test-hotel"
-                    placeholder="sandbox-pms (prueba) o el código asignado a tu propiedad"
+                    placeholder="El código asignado a tu propiedad (p. ej. 75fdbbce2e)"
                     value={testHotel}
                     onChange={(e) => setTestHotel(e.target.value)}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Si se deja vacío se usa el hotel de la sonda (el configurado para el entorno; por defecto el sandbox del contrato).
+                    Si se deja vacío se sondea un hotel ya vinculado (o el configurado en el entorno del
+                    servidor). El hotel de pruebas del contrato ya no vale para una cuenta de producción:
+                    responde «Access Denied» aunque las credenciales sean correctas.
                   </p>
                 </div>
                 <Button type="submit" disabled={testing}>

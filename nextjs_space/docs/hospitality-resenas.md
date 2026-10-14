@@ -28,7 +28,7 @@ El ciclo completo, de la salida del huésped a la web pública:
      │  publica / rechaza / repone + respuesta pública opcional.
      │  La puntuación y el comentario del huésped NO se editan nunca.
      ▼
-[5] Web pública del motor      → GET /api/public/booking/[slug] → data.resenas
+[5] Web pública del motor      → /reservar/<slug> (datosPaginaPublica) → resenas
      · media de lo publicado, total y las últimas reseñas con su respuesta.
 ```
 
@@ -73,7 +73,7 @@ muestra como mes + año («septiembre 2026»): contexto sin fechar a nadie.
 | API pública GET/PUT por token | `app/api/public/reviews/[token]/route.ts` |
 | API del hotel: listar, media, moderar, responder | `app/api/hospitality/reviews/route.ts` |
 | Panel de moderación del hotel | `app/dashboard/hospitality/resenas/page.tsx` |
-| Sección pública en el motor (catálogo y cotización) | `app/booking/[slug]/page.tsx` + API del booking |
+| Sección pública en el motor | `components/hospitality/booking/SeccionResenas.tsx`, montada por `app/reservar/[slug]/page.tsx` |
 | Solicitud post-salida (§21) y `{{enlace_resena}}` | `lib/cron/hospitality-review-request.ts` + `lib/hospitality/comunicaciones.ts` |
 | Plantillas sugeridas ES/EN del evento `resena` | `lib/hospitality/booking-i18n.ts` |
 | Importación de histórico del canal (CSV) | `lib/hospitality/resenas-import.ts` + `app/api/hospitality/reviews/import/route.ts` |

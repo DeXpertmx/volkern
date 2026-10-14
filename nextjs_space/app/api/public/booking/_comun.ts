@@ -2,8 +2,8 @@
  * Piezas comunes de las rutas públicas del Booking Engine.
  *
  * Viven en una carpeta con guion bajo a propósito: Next.js no la convierte en
- * ruta, y así las tres rutas de reserva directa comparten la lectura del rango y
- * el formato del error en lugar de repetirlos.
+ * ruta, y así las dos rutas de la reserva directa (`cotizar` y `reservar`)
+ * comparten la lectura del rango y el formato del error en lugar de repetirlos.
  */
 
 import { NextResponse } from 'next/server';

@@ -43,6 +43,14 @@ import {
   idiomaDeValor,
   IDIOMAS,
 } from '@/lib/hospitality/booking-i18n';
+import {
+  contextoEjemplo,
+  disenoSugerido,
+  normalizarDiseno,
+  type DisenoEmail,
+} from '@/lib/hospitality/comunicaciones-email';
+import { EditorPlantillaEmail } from '@/components/hospitality/EditorPlantillaEmail';
+import { useMonedaTenant } from '@/lib/use-moneda-tenant';
 
 interface Plantilla {
   id: string;
@@ -52,6 +60,8 @@ interface Plantilla {
   idioma: string;
   asunto?: string | null;
   contenido: string;
+  /** Diseño visual del correo (bloques). Solo canal email. */
+  diseno?: unknown;
   activo: boolean;
   fechaCreacion: string;
 }
@@ -87,7 +97,14 @@ const EMPTY_FORM = {
   asunto: '',
   contenido: '',
   activo: true,
+  diseno: null as DisenoEmail | null,
 };
+
+/** Lee el diseño guardado sin fiarse del JSON: si no es válido, no hay diseño. */
+function disenoDe(plantilla: Plantilla): DisenoEmail | null {
+  const normalizado = normalizarDiseno(plantilla.diseno);
+  return normalizado.ok ? normalizado.diseno : null;
+}
 
 const IDIOMA_LABEL: Record<string, string> = { es: 'Español', en: 'English' };
 
@@ -103,6 +120,12 @@ export default function HospitalityComunicacionesPage() {
   // el hotel todavía): al cambiar el idioma se sustituye por la sugerida de
   // ese idioma. Si el hotel ya editó el texto, nunca se pisa.
   const [contenidoSugerido, setContenidoSugerido] = useState(false);
+  // Lo mismo para el diseño visual del correo: si nadie lo ha editado, cambiar
+  // el idioma vuelve a poner la maqueta sugerida en ese idioma.
+  const [disenoEsSugerido, setDisenoEsSugerido] = useState(false);
+  // La divisa del tenant para la vista previa: un importe de ejemplo se enseña
+  // con la moneda del hotel, no con la de quien está maquetando el correo.
+  const moneda = useMonedaTenant();
 
   const [deleteTarget, setDeleteTarget] = useState<Plantilla | null>(null);
   const [testTarget, setTestTarget] = useState<Plantilla | null>(null);
@@ -158,7 +181,23 @@ export default function HospitalityComunicacionesPage() {
       contenido: sugerida?.contenido || '',
     });
     setContenidoSugerido(!!sugerida);
+    setDisenoEsSugerido(false);
     setDialogOpen(true);
+  };
+
+  /**
+   * Al pasar a email el correo arranca con la maqueta sugerida del evento (una
+   * sola vez: si el hotel ya compuso su diseño, no se pisa).
+   */
+  const cambiarCanal = (canal: string) => {
+    setForm((f) => ({ ...f, canal }));
+    if (canal === 'email' && !form.diseno) {
+      const sugerido = disenoSugerido(form.evento, idiomaDeValor(form.idioma));
+      if (sugerido) {
+        setForm((f) => ({ ...f, diseno: sugerido }));
+        setDisenoEsSugerido(true);
+      }
+    }
   };
 
   const openEdit = (p: Plantilla) => {
@@ -170,10 +209,22 @@ export default function HospitalityComunicacionesPage() {
       asunto: p.asunto || '',
       contenido: p.contenido,
       activo: p.activo,
+      diseno: disenoDe(p),
     });
     setContenidoSugerido(false);
+    setDisenoEsSugerido(false);
     setDialogOpen(true);
   };
+
+  const contextoPreview = useMemo(
+    () =>
+      contextoEjemplo({
+        moneda,
+        idioma: form.idioma,
+        origen: typeof window !== 'undefined' ? window.location.origin : '',
+      }),
+    [moneda, form.idioma]
+  );
 
   /** Cambia el idioma del diálogo: si el contenido aún es la sugerida, la
    *  sustituye por la del idioma nuevo; si el hotel ya escribió la suya, no
@@ -188,17 +239,28 @@ export default function HospitalityComunicacionesPage() {
           siguiente.contenido = sugerida.contenido;
         }
       }
+      if (disenoEsSugerido) {
+        const sugerido = disenoSugerido(f.evento, idiomaDeValor(idioma));
+        if (sugerido) siguiente.diseno = sugerido;
+      }
       return siguiente;
     });
   };
 
   const save = async () => {
-    if (!form.contenido.trim()) {
+    const esEmail = form.canal === 'email';
+    const tieneContenido = !!form.contenido.trim();
+    if (!esEmail && !tieneContenido) {
       toast.error('El contenido es obligatorio');
       return;
     }
-    if (form.canal === 'email' && !form.asunto.trim()) {
+    if (esEmail && !form.asunto.trim()) {
       toast.error('El asunto es obligatorio para plantillas de email');
+      return;
+    }
+    // El correo lleva diseño o texto: sin ninguno de los dos saldría vacío.
+    if (esEmail && !tieneContenido && !form.diseno) {
+      toast.error('Añade el diseño del correo o un texto');
       return;
     }
     setSaving(true);
@@ -382,6 +444,7 @@ export default function HospitalityComunicacionesPage() {
                         <div className="flex items-center gap-2">
                           {canalBadge(p.canal)}
                           <Badge variant="outline" className="uppercase">{p.idioma || 'es'}</Badge>
+                          {disenoDe(p) && <Badge variant="outline">Diseño visual</Badge>}
                           <Badge variant={p.activo ? 'default' : 'secondary'}>
                             {p.activo ? 'Activa' : 'Inactiva'}
                           </Badge>
@@ -404,7 +467,7 @@ export default function HospitalityComunicacionesPage() {
                         </div>
                       </div>
                       <p className="text-xs text-muted-foreground line-clamp-2 whitespace-pre-line">
-                        {p.contenido}
+                        {p.contenido || (disenoDe(p) ? 'Correo compuesto con el editor visual' : '')}
                       </p>
                     </div>
                   ))
@@ -417,7 +480,7 @@ export default function HospitalityComunicacionesPage() {
 
       {/* Dialog crear/editar */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? 'Editar plantilla' : 'Nueva plantilla'}</DialogTitle>
             <DialogDescription>
@@ -439,7 +502,7 @@ export default function HospitalityComunicacionesPage() {
               </div>
               <div className="space-y-1">
                 <Label>Canal</Label>
-                <Select value={form.canal} onValueChange={(v) => setForm((f) => ({ ...f, canal: v }))}>
+                <Select value={form.canal} onValueChange={cambiarCanal}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="whatsapp">WhatsApp</SelectItem>
@@ -474,31 +537,57 @@ export default function HospitalityComunicacionesPage() {
               </div>
             )}
 
-            <div className="space-y-1">
-              <Label>Contenido <span className="text-destructive">*</span></Label>
-              <Textarea
-                value={form.contenido}
-                onChange={(e) => setForm((f) => ({ ...f, contenido: e.target.value }))}
-                rows={8}
-                placeholder="Escribe el mensaje usando variables como {{nombre}}, {{checkIn}}..."
-              />
-            </div>
-
-            <div className="rounded-lg border p-3">
-              <p className="text-xs font-medium mb-2">Variables disponibles</p>
-              <div className="flex flex-wrap gap-1.5">
-                {VARIABLES.map((x) => (
-                  <span
-                    key={x.v}
-                    className="cursor-pointer rounded bg-muted px-2 py-1 text-xs font-mono hover:bg-muted-foreground/20"
-                    title={x.d}
-                    onClick={() => setForm((f) => ({ ...f, contenido: f.contenido + x.v }))}
-                  >
-                    {x.v}
-                  </span>
-                ))}
+            {form.canal === 'email' ? (
+              <div className="space-y-4">
+                <EditorPlantillaEmail
+                  diseno={form.diseno}
+                  onChange={(d) => setForm((f) => ({ ...f, diseno: d }))}
+                  contexto={contextoPreview}
+                  variables={VARIABLES}
+                />
+                <div className="space-y-1">
+                  <Label>Texto del correo (opcional)</Label>
+                  <Textarea
+                    value={form.contenido}
+                    onChange={(e) => setForm((f) => ({ ...f, contenido: e.target.value }))}
+                    rows={4}
+                    placeholder="Si lo dejas vacío, el texto se genera a partir del diseño."
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Es la versión de texto plano del correo: la leen los clientes que no muestran HTML y la miran los
+                    filtros de spam. Con el diseño basta; esto solo afina ese texto.
+                  </p>
+                </div>
               </div>
-            </div>
+            ) : (
+              <>
+                <div className="space-y-1">
+                  <Label>Contenido <span className="text-destructive">*</span></Label>
+                  <Textarea
+                    value={form.contenido}
+                    onChange={(e) => setForm((f) => ({ ...f, contenido: e.target.value }))}
+                    rows={8}
+                    placeholder="Escribe el mensaje usando variables como {{nombre}}, {{checkIn}}..."
+                  />
+                </div>
+
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs font-medium mb-2">Variables disponibles</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {VARIABLES.map((x) => (
+                      <span
+                        key={x.v}
+                        className="cursor-pointer rounded bg-muted px-2 py-1 text-xs font-mono hover:bg-muted-foreground/20"
+                        title={x.d}
+                        onClick={() => setForm((f) => ({ ...f, contenido: f.contenido + x.v }))}
+                      >
+                        {x.v}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>

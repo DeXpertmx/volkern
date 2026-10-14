@@ -22,6 +22,12 @@ import {
   IDIOMA_POR_DEFECTO,
   IDIOMAS,
 } from '@/lib/hospitality/booking-i18n'
+import {
+  interpolarPlantilla,
+  normalizarDiseno,
+  renderDisenoEmail,
+  type DisenoEmail,
+} from '@/lib/hospitality/comunicaciones-email'
 
 /** Idiomas en los que existen plantillas de comunicación ("es"|"en"). */
 export const IDIOMAS_COMUNICACION = IDIOMAS
@@ -161,9 +167,18 @@ export function buildContextoPlantilla(params: {
 
 /** Reemplaza {{variable}} en el contenido con el contexto dado. */
 export function renderPlantilla(contenido: string, contexto: Record<string, string>): string {
-  return contenido.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (match, key: string) => {
-    return key in contexto && contexto[key] !== undefined ? contexto[key] : match
-  })
+  return interpolarPlantilla(contenido, contexto)
+}
+
+/**
+ * Lee el diseño visual de una plantilla persistida.
+ *
+ * Pasa por la misma validación que la API: un JSON corrupto o manipulado se
+ * ignora (el correo sale con el texto plano) en vez de romper el envío.
+ */
+export function leerDiseno(crudo: unknown): DisenoEmail | null {
+  const normalizado = normalizarDiseno(crudo)
+  return normalizado.ok ? normalizado.diseno : null
 }
 
 export type ResultadoComunicacion =
@@ -180,8 +195,13 @@ export async function enviarComunicacion(params: {
   asunto?: string | null
   contenido: string
   destinatario: string // email o teléfono
+  /**
+   * HTML del correo cuando la plantilla tiene diseño visual. Sin él se mantiene
+   * el comportamiento de siempre (cada línea del texto, un párrafo).
+   */
+  html?: string | null
 }): Promise<ResultadoComunicacion> {
-  const { tenantId, canal, asunto, contenido, destinatario } = params
+  const { tenantId, canal, asunto, contenido, destinatario, html } = params
 
   if (!destinatario) {
     return { ok: false, error: 'El huésped no tiene destinatario (email/teléfono) para este canal', canal, destinatario: '' }
@@ -192,7 +212,7 @@ export async function enviarComunicacion(params: {
       const res = await sendEmail({
         to: destinatario,
         subject: asunto || 'Comunicación de tu estancia',
-        html: contenido.split('\n').map((l) => `<p>${l}</p>`).join(''),
+        html: html || contenido.split('\n').map((l) => `<p>${l}</p>`).join(''),
         text: contenido,
         tenantId,
       })
@@ -385,7 +405,13 @@ export async function dispararComunicacionPorEvento(params: {
     const resultados: Array<{ templateId: string; evento: string; canal: string; ok: boolean; error?: string }> = []
 
     for (const t of plantillas) {
-      const contenido = renderPlantilla(t.contenido, contexto)
+      // La plantilla de email con diseño visual se compila a HTML de tabla; el
+      // texto plano queda como parte `text` del correo (y es lo que se envía si
+      // el diseño se ignora por estar corrupto).
+      const diseno = t.canal === 'email' ? leerDiseno((t as { diseno?: unknown }).diseno) : null
+      const render = diseno ? renderDisenoEmail(diseno, contexto) : null
+      const textoGuardado = String(t.contenido ?? '')
+      const contenido = textoGuardado.trim() ? renderPlantilla(textoGuardado, contexto) : render?.text ?? ''
       const asunto = t.asunto ? renderPlantilla(t.asunto, contexto) : t.asunto
       const gd = (reserva.guestData || {}) as any
       const destinatario = t.canal === 'email' ? guestEmail(gd) : guestTelefono(gd)
@@ -396,6 +422,7 @@ export async function dispararComunicacionPorEvento(params: {
         asunto,
         contenido,
         destinatario,
+        html: render?.html ?? null,
       })
 
       resultados.push({

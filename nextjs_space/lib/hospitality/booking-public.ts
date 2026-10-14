@@ -7,9 +7,13 @@
  * reservas, identificadores de los canales y cualquier dato interno).
  */
 
+import { prisma } from '@/lib/db';
 import { resolverPaginaPublica, type PropiedadPublica } from './booking-engine';
 import { estadoDeCobroDelTenant } from './booking-payments';
 import { logoCorporativoTenant } from './booking-config';
+import { catalogoPublico, type ExtraPublico, type ExtraCatalogo } from './booking-extras';
+import { resumenPublicoResenas, type ResenaPublica } from './resenas';
+import { IDIOMA_POR_DEFECTO, type Idioma } from './booking-i18n';
 import {
   plantillaDeValor,
   personalizacionDeValor,
@@ -30,12 +34,32 @@ export interface ConfigPaginaPublica {
   pagoOnlineDisponible: boolean;
 }
 
+export interface ResumenResenasPublico {
+  media: number | null;
+  total: number;
+  reseñas: ResenaPublica[];
+}
+
+/**
+ * Propiedad publicada tal como la consumen la página y el asistente: la ficha
+ * del motor más lo que se ofrece ALREDEDOR de la reserva —los extras que el
+ * hotel vende (con su catálogo en el idioma del huésped) y la prueba social de
+ * sus reseñas moderadas—.
+ *
+ * Los dos huecos vivían solo en la página antigua; al quedarse una única página
+ * pública, viajan con la propiedad para que no se pierda nada al unificarlas.
+ */
+export interface PropiedadPublicaPagina extends PropiedadPublica {
+  extras: ExtraPublico[];
+  resenas: ResumenResenasPublico | null;
+}
+
 export interface DatosPaginaPublica {
   slug: string;
   alojamiento: string;
   moneda: string;
   config: ConfigPaginaPublica;
-  propiedades: PropiedadPublica[];
+  propiedades: PropiedadPublicaPagina[];
   /** Plantilla visual elegida por el tenant (desconocido = clásica). */
   plantilla: PlantillaBooking;
   /** Colores/radios normalizados para inyectar como CSS custom properties. */
@@ -48,9 +72,64 @@ export type ResultadoDatosPagina =
   | { ok: true; datos: DatosPaginaPublica }
   | { ok: false; motivo: 'no_existe' | 'inactiva'; mensaje: string };
 
-export async function datosPaginaPublica(slug: string): Promise<ResultadoDatosPagina> {
+/**
+ * Catálogo activo de extras de una propiedad, en el idioma del huésped.
+ * Auxiliar: si falla, la página vende igual sin extras.
+ */
+async function extrasDePropiedad(propertyId: string, idioma: Idioma): Promise<ExtraPublico[]> {
+  try {
+    const extras = (await prisma.hospitalityExtra.findMany({
+      where: { propertyId, activo: true },
+      orderBy: [{ orden: 'asc' }, { nombre: 'asc' }],
+    })) as unknown as ExtraCatalogo[];
+    return catalogoPublico(extras, idioma);
+  } catch (e) {
+    console.error('[BookingEngine] No se pudo leer el catálogo de extras:', e);
+    return [];
+  }
+}
+
+/**
+ * Reseñas PUBLICADAS de una propiedad (solo lo moderado sale a la web), con su
+ * media. Auxiliar: sin reseñas la página vende igual.
+ */
+async function resenasDePropiedad(propertyId: string): Promise<ResumenResenasPublico | null> {
+  try {
+    const publicadas = await prisma.hospitalityReview.findMany({
+      where: { propertyId, estado: 'publicada' },
+      select: {
+        puntuacion: true,
+        comentario: true,
+        nombreHuesped: true,
+        respuestaHotel: true,
+        reservation: { select: { checkIn: true } },
+      },
+      take: 50,
+    });
+    return resumenPublicoResenas(publicadas);
+  } catch (e) {
+    console.error('[BookingEngine] No se pudieron leer las reseñas publicadas:', e);
+    return null;
+  }
+}
+
+export async function datosPaginaPublica(
+  slug: string,
+  idioma: Idioma = IDIOMA_POR_DEFECTO
+): Promise<ResultadoDatosPagina> {
   const pagina = await resolverPaginaPublica(slug);
   if (!pagina.ok) return { ok: false, motivo: pagina.motivo, mensaje: pagina.mensaje };
+
+  // Extras y reseñas viajan con cada propiedad publicada: el asistente ofrece
+  // los unos y la página enseña las otras. Ninguna de las dos lecturas puede
+  // tumbar la página (cada auxiliar cae a su vacío).
+  const propiedades = await Promise.all(
+    pagina.propiedades.map(async (propiedad) => ({
+      ...propiedad,
+      extras: await extrasDePropiedad(propiedad.id, idioma),
+      resenas: await resenasDePropiedad(propiedad.id),
+    }))
+  );
 
   const cobro = await estadoDeCobroDelTenant(pagina.config.tenantId);
   // La marca de la cabecera es la del ERP: el logo corporativo del tenant.
@@ -74,7 +153,7 @@ export async function datosPaginaPublica(slug: string): Promise<ResultadoDatosPa
         requierePagoOnline: pagina.config.requierePagoOnline,
         pagoOnlineDisponible: cobro.disponible,
       },
-      propiedades: pagina.propiedades,
+      propiedades,
       plantilla: plantillaDeValor(pagina.config.plantilla),
       personalizacion: personalizacionDeValor(pagina.config.personalizacion),
       logo,

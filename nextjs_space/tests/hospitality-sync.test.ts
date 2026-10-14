@@ -446,6 +446,59 @@ describe('buildRateRestrictions (Rate Restrictions POST)', () => {
     expect(updates[0].rates[0].restrictions).toMatchObject({ minimumStay: 2, maximumStay: 5 });
   });
 
+  it('reglas de temporada: mín/máx por fecha de llegada y días efectivos, sin duplicar las del plan', () => {
+    // Temporada el 11-12 sep: de 3 a 5 noches y solo entradas del sábado (6) y
+    // salidas del domingo (0). El plan no cierra ningún día.
+    const units = [
+      {
+        roomCode: 'SUITE',
+        ratePlans: [
+          {
+            codigo: 'SUITE-FLEX',
+            minNoches: 1,
+            maxNoches: null,
+            checkInDias: null,
+            checkOutDias: null,
+            temporadas: [
+              {
+                desde: '2026-09-11',
+                hasta: '2026-09-12',
+                tarifa: 200,
+                minNoches: 3,
+                maxNoches: 5,
+                checkInDias: [6],
+                checkOutDias: [0],
+              },
+            ],
+          },
+        ],
+      },
+    ];
+
+    // 2026-09-10 = jueves, 09-11 = viernes, 09-12 = sábado.
+    const updates = buildRateRestrictions(units, day('2026-09-10'), day('2026-09-13'));
+    expect(
+      updates.map((u) => [
+        u.startDate,
+        u.endDate,
+        u.rates[0].restrictions.minimumStayArrival,
+        u.rates[0].restrictions.maximumStayArrival,
+        u.rates[0].restrictions.closeOnArrival,
+        u.rates[0].restrictions.closeOnDeparture,
+      ])
+    ).toEqual([
+      ['2026-09-10', '2026-09-10', null, null, false, false],
+      ['2026-09-11', '2026-09-11', 3, 5, true, true],
+      ['2026-09-12', '2026-09-12', 3, 5, false, true],
+    ]);
+    // Las reglas generales del plan siguen viajando en SUS campos: no se
+    // duplican ni se sustituyen (fuera de temporada el canal no recibe un
+    // mínimo, un máximo ni un cierre que el hotel no configuró).
+    expect(updates[0].rates[0].restrictions.minimumStay).toBe(1);
+    expect(updates[1].rates[0].restrictions.minimumStay).toBe(1);
+    expect(updates[1].rates[0].restrictions.maximumStay).toBeNull();
+  });
+
   it('sin planes de tarifa no empuja restricciones (no inventar)', () => {
     const units = [{ roomCode: 'SUITE', ratePlans: [] }];
     expect(buildRateRestrictions(units, day('2026-09-10'), day('2026-09-11'))).toEqual([]);

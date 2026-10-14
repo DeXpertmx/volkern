@@ -69,7 +69,6 @@ import { buildContextoPlantilla, renderPlantilla } from '@/lib/hospitality/comun
 import { GET as GETToken, PUT as PUTToken } from '@/app/api/public/reviews/[token]/route';
 import { GET as GETPanel, POST as POSTPanel } from '@/app/api/hospitality/reviews/route';
 import { POST as POSTImport } from '@/app/api/hospitality/reviews/import/route';
-import { GET as GETBooking } from '@/app/api/public/booking/[slug]/route';
 
 const reserva = {
   id: 'res_a',
@@ -559,58 +558,26 @@ describe('métricas de reseñas (Reportes) — módulo puro', () => {
 });
 
 describe('motor público — solo reseñas moderadas', () => {
-  const propiedadPublica = {
-    id: 'prop_a',
-    tenantId: 't1',
-    nombre: 'Hotel Centro',
-    estado: 'conectada',
-    fotos: [],
-    tenant: { id: 't1', nombre: 'Tenant A' },
-  };
-  const unidadPublica = {
-    id: 'unit_a',
-    propertyId: 'prop_a',
-    nombre: 'Suite 1',
-    tipo: 'suite',
-    capacidad: 2,
-    descripcion: null,
-    fotos: [],
-    amenidades: [],
-    estado: 'available',
-    tarifaBase: null,
-    moneda: 'MXN',
-    ratePlans: [],
-  };
-
-  beforeEach(() => {
-    prisma.hospitalityProperty.findFirst.mockResolvedValue(propiedadPublica);
-    prisma.hospitalityUnit.findMany.mockResolvedValue([unidadPublica]);
+  it('la lectura pública pide SOLO las publicadas y resume con el módulo', () => {
+    // La regla de fondo: solo lo moderado sale a la web. La consulta del motor
+    // público filtra por estado y el resumen (media, total, últimas) lo compone
+    // el módulo puro — la página no calcula nada.
+    const publico = leer('lib/hospitality/booking-public.ts');
+    expect(publico).toContain("estado: 'publicada'");
+    expect(publico).toContain('resumenPublicoResenas');
+    // Auxiliar: si la consulta falla, la página vende igual (null, nunca error).
+    expect(publico).toContain('resenasDePropiedad');
   });
 
-  it('el catálogo público lleva las publicadas con su media (resumen del módulo)', async () => {
-    prisma.hospitalityReview.findMany.mockResolvedValue([
-      { puntuacion: 5, comentario: 'Genial', nombreHuesped: 'Luis', respuestaHotel: null, reservation: { checkIn: new Date('2026-09-05') } },
-    ]);
-    const res = await GETBooking(
-      new Request('http://test.local/api/public/booking/prop_a'),
-      { params: Promise.resolve({ slug: 'prop_a' }) } as any
-    );
-    const data = await res.json();
-    expect(data.resenas.total).toBe(1);
-    expect(data.resenas.media).toBe(5);
-    const llamada = prisma.hospitalityReview.findMany.mock.calls[0][0];
-    expect(llamada.where.estado).toBe('publicada');
-  });
-
-  it('si falla la consulta de reseñas, la página vende igual (resenas null)', async () => {
-    prisma.hospitalityReview.findMany.mockRejectedValue(new Error('boom'));
-    const res = await GETBooking(
-      new Request('http://test.local/api/public/booking/prop_a'),
-      { params: Promise.resolve({ slug: 'prop_a' }) } as any
-    );
-    const data = await res.json();
-    expect(data.propiedad).toBeTruthy();
-    expect(data.resenas).toBeNull();
+  it('la sección pública vive en su componente y la página solo la monta con reseñas', () => {
+    const seccion = leer('components/hospitality/booking/SeccionResenas.tsx');
+    expect(seccion).toContain('textosResena');
+    expect(seccion).toContain('respuestaHotel');
+    // Es la página ÚNICA la que la enseña: el enlace antiguo solo redirige.
+    const pagina = leer('app/reservar/[slug]/page.tsx');
+    expect(pagina).toContain('SeccionResenas');
+    expect(pagina).toContain('resenas.total > 0');
+    expect(leer('app/booking/[slug]/page.tsx')).not.toContain('SeccionResenas');
   });
 });
 
@@ -624,11 +591,12 @@ describe('guardias de UI — formulario, motor y moderación', () => {
     expect(fuente).not.toContain('¿Cómo fue tu estancia?');
   });
 
-  it('el motor pinta la sección SOLO con reseñas publicadas y consume la misma API del catálogo', () => {
-    const fuente = leer('app/booking/[slug]/page.tsx');
+  it('la página única pinta la sección SOLO con reseñas publicadas', () => {
+    const fuente = leer('app/reservar/[slug]/page.tsx');
     expect(fuente).toContain('SeccionResenas');
     expect(fuente).toContain('resenas.total > 0');
-    expect(fuente).toContain('textosResena');
+    // Los textos de la sección viven en su componente, con el i18n de reseñas.
+    expect(leer('components/hospitality/booking/SeccionResenas.tsx')).toContain('textosResena');
   });
 
   it('la moderación del panel no ofrece editar la palabra del huésped (solo publicar / rechazar / reponer y responder)', () => {

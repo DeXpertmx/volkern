@@ -3,7 +3,7 @@ import { execSync } from 'child_process';
 import * as dotenv from 'dotenv';
 import { Client } from 'pg';
 
-dotenv.config();
+dotenv.config({ path: ['.env.local', '.env'] });
 
 const globalPrisma = new PrismaClient();
 

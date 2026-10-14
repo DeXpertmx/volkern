@@ -171,6 +171,44 @@ describe('dispararComunicacionPorEvento', () => {
     expect(mockSendWhatsApp).not.toHaveBeenCalled();
   });
 
+  it('el email con diseño visual sale como HTML de tabla, con texto de respaldo', async () => {
+    mockSendEmail.mockResolvedValue({ success: true });
+    prisma.hospitalityCommunicationTemplate.findMany.mockResolvedValue([
+      {
+        id: 'ct3',
+        tenantId: 't1',
+        evento: 'confirmacion',
+        canal: 'email',
+        asunto: 'Tu reserva',
+        contenido: '',
+        idioma: 'es',
+        diseno: {
+          version: 1,
+          bloques: [{ tipo: 'datos', titulo: 'Detalles', filas: [{ etiqueta: 'Entrada', valor: '{{checkIn}}' }] }],
+        },
+        activo: true,
+      },
+    ]);
+
+    const res = await dispararComunicacionPorEvento({
+      tenantId: 't1',
+      evento: 'confirmacion',
+      reserva: {
+        id: 'r1',
+        checkIn: new Date('2026-10-16T00:00:00Z'),
+        checkOut: new Date('2026-10-18T00:00:00Z'),
+        guestData: { nombre: 'Ana', email: 'ana@x.com' },
+      },
+    });
+
+    expect(res[0].ok).toBe(true);
+    const enviado = mockSendEmail.mock.calls[0][0];
+    expect(enviado.html).toContain('<table');
+    expect(enviado.html).toContain('Detalles');
+    // El texto plano que acompaña al HTML sale del mismo diseño.
+    expect(enviado.text).toContain('Entrada');
+  });
+
   it('envía por email usando el asunto y el email del huésped', async () => {
     mockSendEmail.mockResolvedValue({ success: true });
     prisma.hospitalityCommunicationTemplate.findMany.mockResolvedValue([

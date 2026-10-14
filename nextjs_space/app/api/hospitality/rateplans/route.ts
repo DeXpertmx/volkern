@@ -7,7 +7,7 @@ import { authenticateRequest } from '@/lib/api-key-auth';
 
 import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
 import { primeraMoneda, monedaEscritura } from '@/lib/moneda';
-import { normalizarEstacionalidad } from '@/lib/hospitality/estacionalidad';
+import { normalizarEstacionalidad, problemaEnTemporadas } from '@/lib/hospitality/estacionalidad';
 import { normalizarAjustes, pidenAjustes } from '@/lib/hospitality/ajustes';
 /**
  * Planes de tarifa y restricciones de venta (plan maestro §6, §15).
@@ -96,6 +96,15 @@ export async function POST(req: NextRequest) {
         { error: 'El recargo de fin de semana es inválido (días 0-6, porcentaje > 0)' },
         { status: 400 }
       );
+    }
+    // Las reglas de venta de una temporada (mínimo, máximo, días de entrada y
+    // salida) no vacían el plan cuando son inválidas — se ignoran—, así que un
+    // 400 aquí es la única forma de que el hotel se entere de que la restricción
+    // que acaba de configurar no existe: callarlo sería una regla de venta que
+    // cree tener puesta.
+    const problemaTemporadas = problemaEnTemporadas(temporadas);
+    if (problemaTemporadas) {
+      return NextResponse.json({ error: problemaTemporadas }, { status: 400 });
     }
     // Capa 2: se normaliza aquí y se guarda canónica, igual que la capa 1. Un
     // tramo con datos imposibles descarta la regla entera; si el cliente pedía

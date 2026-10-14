@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   providerFindUnique: vi.fn(),
   providerUpdate: vi.fn(),
   auditLogCreate: vi.fn(),
+  mappingFindFirst: vi.fn(),
   testConnection: vi.fn(),
   updateStatus: vi.fn(),
 }));
@@ -21,6 +22,7 @@ vi.mock('@/lib/db', () => ({
       findUnique: mocks.providerFindUnique,
       update: mocks.providerUpdate,
     },
+    connectivityMapping: { findFirst: mocks.mappingFindFirst },
     auditLog: { create: mocks.auditLogCreate },
   },
 }));
@@ -73,6 +75,10 @@ beforeEach(() => {
   mocks.providerUpdate.mockResolvedValue({});
   mocks.auditLogCreate.mockResolvedValue({});
   mocks.updateStatus.mockResolvedValue({});
+  // Por defecto, ningún hotel vinculado: el health-check cae al sandbox del
+  // contrato, que es el comportamiento de siempre para una base sin vínculos.
+  mocks.mappingFindFirst.mockResolvedValue(null);
+  delete process.env.CONNECTIVITY_HEALTH_HOTEL;
 });
 
 describe('runConnectivityHealthCheck', () => {
@@ -87,6 +93,20 @@ describe('runConnectivityHealthCheck', () => {
     expect(r.ok).toBe(true);
     expect(r.ejecutado).toBe(true);
     expect(r.hotelCode).toBe(CONNECTIVITY_SANDBOX_HOTEL);
+  });
+
+  it('sin nada configurado sondea el hotel REAL ya vinculado, no el sandbox retirado', async () => {
+    // El sandbox del contrato está retirado para los partners de producción
+    // (403 Access Denied): con un hotel vinculado la sonda sí dice algo.
+    mocks.providerFindUnique.mockResolvedValue(filaConfigurada());
+    mocks.mappingFindFirst.mockResolvedValue({ externalPropertyId: '75fdbbce2e' });
+    mocks.testConnection.mockResolvedValue({ ok: true });
+
+    const r = await runConnectivityHealthCheck();
+
+    expect(mocks.testConnection).toHaveBeenCalledWith('75fdbbce2e');
+    expect(r.hotelCode).toBe('75fdbbce2e');
+    expect(mocks.auditLogCreate.mock.calls[0][0].data.metadata.hotelCode).toBe('75fdbbce2e');
   });
 
   it('si el proveedor configura `healthHotelCode`, la sonda usa ESE hotel (no el sandbox retirado)', async () => {
@@ -274,6 +294,14 @@ describe('resolveProbeHotelCode (hotel de la sonda)', () => {
     expect(resolveProbeHotelCode({ configuracion: { healthHotelCode: 42 } })).toBe(
       CONNECTIVITY_SANDBOX_HOTEL,
     );
+  });
+
+  it('el hotel vinculado del cliente gana al sandbox (pero pierde contra lo configurado)', () => {
+    expect(resolveProbeHotelCode(null, '75fdbbce2e')).toBe('75fdbbce2e');
+    expect(resolveProbeHotelCode({}, '75fdbbce2e')).toBe('75fdbbce2e');
+    expect(
+      resolveProbeHotelCode({ configuracion: { healthHotelCode: 'hotel-config' } }, '75fdbbce2e'),
+    ).toBe('hotel-config');
   });
 });
 

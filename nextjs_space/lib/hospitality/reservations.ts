@@ -3,6 +3,7 @@ import { Prisma, type HospitalityReservation } from '@prisma/client';
 import { monedaEscritura } from '@/lib/moneda';
 import { normalizeExternalCode } from '@/lib/hospitality/codigos';
 import {
+  ACCIONES_RESERVA,
   ocupacionDePayload,
   vincularHabitacionDesdeWebhook,
 } from '@/lib/hospitality/incidencias';
@@ -28,7 +29,12 @@ import { registrarHoldConfirmado } from '@/lib/hospitality/holds-audit';
  * - Aislamiento multi-tenant: las operaciones siempre filtran por tenantId.
  */
 
-export type WebhookAction = 'book' | 'modify' | 'cancel' | 'no_show';
+/**
+ * Acción del webhook de reservas. La lista vive en `incidencias.ts`
+ * (`ACCIONES_RESERVA`) porque es la misma que usan los lectores de incidencias
+ * para no confundir un mensaje del canal con una reserva: una sola definición.
+ */
+export type WebhookAction = (typeof ACCIONES_RESERVA)[number];
 
 export interface WebhookReservationPayload {
   action: WebhookAction;
@@ -506,53 +512,6 @@ export async function upsertGuest(
 }
 
 /**
- * Crea la reserva del Booking Engine público (canal «Directa»).
- *
- * Existe para que la ruta pública NO escriba la reserva por su cuenta: la
- * escritura vive en el Reservation Engine, el mismo que procesa el webhook de
- * la conectividad, así que una reserva del motor directo es indistinguible de
- * una de OTA (misma tabla, misma línea de desglose, mismos eventos). La ruta
- * calcula (huésped, disponibilidad, precio); aquí solo se persiste.
- */
-export async function crearReservaDeBookingDirecto(input: {
-  tenantId: string;
-  propertyId: string;
-  unitId: string;
-  contactId: string | null;
-  canal: string;
-  referencia: string;
-  checkIn: Date;
-  checkOut: Date;
-  notas: string | null;
-  precioTotal: number | null;
-  moneda: string;
-  guestData: Prisma.InputJsonValue;
-}): Promise<{ id: string; externalBookingId: string | null }> {
-  return prisma.hospitalityReservation.create({
-    data: {
-      tenantId: input.tenantId,
-      propertyId: input.propertyId,
-      unitId: input.unitId,
-      contactId: input.contactId,
-      channel: input.canal,
-      externalBookingId: input.referencia,
-      action: 'book',
-      estado: 'confirmed',
-      checkIn: input.checkIn,
-      checkOut: input.checkOut,
-      bookedOn: new Date(),
-      segment: 'Directa',
-      specialRequests: input.notas,
-      pah: false,
-      amountAfterTax: input.precioTotal,
-      currency: input.moneda,
-      guestData: input.guestData,
-    },
-    select: { id: true, externalBookingId: true },
-  });
-}
-
-/**
  * Divisa del hotel donde entra una reserva entrante.
  *
  * Es el respaldo cuando el canal NO manda la suya: el payload llega de fuera,
@@ -758,10 +717,10 @@ export async function processCancel(tenantId: string, payload: WebhookReservatio
         tenantId,
         channel: payload.channel,
         externalBookingId: { startsWith: `${payload.bookingId}#` },
-        estado: { notIn: ['cancelled'] },
       },
       select: {
         id: true,
+        estado: true,
         propertyId: true,
         unitId: true,
         contactId: true,
@@ -770,15 +729,18 @@ export async function processCancel(tenantId: string, payload: WebhookReservatio
         guestData: true,
       },
     });
-    if (partes.length > 0) {
+    // Solo las vivas se cancelan: repetir el evento no puede reescribir una
+    // cancelación ya aplicada (ver más abajo por qué importa).
+    const vivas = partes.filter((p) => p.estado !== 'cancelled');
+    if (vivas.length > 0) {
       await prisma.hospitalityReservation.updateMany({
         where: {
-          id: { in: partes.map((p) => p.id) },
+          id: { in: vivas.map((p) => p.id) },
           estado: { notIn: ['cancelled'] },
         },
         data: { estado: 'cancelled', action: 'cancel', payload: payload as Prisma.InputJsonValue },
       });
-      for (const parte of partes) {
+      for (const parte of vivas) {
         emitReservationCancelled({
           tenantId,
           reservationId: parte.id,
@@ -793,12 +755,29 @@ export async function processCancel(tenantId: string, payload: WebhookReservatio
           guestData: parte.guestData,
         });
       }
-      return { ok: true, status: 'cancelada', reservationId: partes[0].id };
+      return { ok: true, status: 'cancelada', reservationId: vivas[0].id };
+    }
+    // El booking partido existe pero todas sus partes ya estaban canceladas: la
+    // cancelación repetida no cambia nada. Sin esto, la segunda entrega del
+    // mismo evento —o el barrido mirando el mismo rango cada día— re-emitía
+    // `reservation.cancelled` (y con ella las reglas de automatización) y
+    // volvía a empujar inventario y tarifas sin que hubiera nada que empujar.
+    if (partes.length > 0) {
+      return { ok: true, status: 'duplicado', reservationId: partes[0].id };
     }
   }
 
   if (!existing) {
     return { ok: false, status: 'no_encontrada', error: 'Reserva no encontrada para cancelar' };
+  }
+
+  // Cancelación REPETIDA de la misma reserva: no es un cambio, es el mismo
+  // hecho contado dos veces (reintento del proveedor, o barrido que vuelve a
+  // ver el rango). Idempotente por estado: no se reescribe el payload, no se
+  // re-emite el evento y no hay nada que empujar al canal. `duplicado` es la
+  // respuesta honesta — el webhook la registra como tal y no reintenta.
+  if (existing.estado === 'cancelled') {
+    return { ok: true, status: 'duplicado', reservationId: existing.id };
   }
 
   const updated = await prisma.hospitalityReservation.update({
@@ -908,7 +887,7 @@ export async function processNoShow(tenantId: string, payload: WebhookReservatio
  */
 export async function processReservationWebhook(payload: WebhookReservationPayload): Promise<ProcessResult> {
   const action = payload.action;
-  if (!['book', 'modify', 'cancel', 'no_show'].includes(action)) {
+  if (!ACCIONES_RESERVA.includes(action)) {
     return { ok: false, status: 'error', error: `Acción no soportada: ${action}` };
   }
   if (!payload.hotelCode || !payload.bookingId || !payload.channel) {

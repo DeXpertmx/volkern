@@ -20,10 +20,13 @@ export const dynamic = 'force-dynamic';
  *   vacío lo borra y devuelve al hotel al ID de plataforma.
  *
  * POST /api/hospitality/conectividad
- *   { accion: 'probar', hotelCode }  comprueba contra el proveedor que ESE
+ *   { accion: 'probar', hotelCode? }  comprueba contra el proveedor que ESE
  *   código de propiedad se ve con el ID de socio del hotel. Es la única forma
  *   de saber que el ID es el correcto antes de vincular unidades: el proveedor
- *   responde 403 «partner desconocido» si no lo es.
+ *   responde 403 «partner desconocido» si no lo es, y 403 «Access Denied -
+ *   <hotelCode>» si el hotel no está asignado a la cuenta (que es otra cosa: el
+ *   ID de socio sí es válido). Sin `hotelCode` se usa el de la propiedad que el
+ *   hotel ya tenga vinculada.
  *
  * El usuario y la contraseña son de la plataforma y NO viajan por aquí: al
  * hotel solo le corresponde su ID de socio.
@@ -33,6 +36,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/api-key-auth';
 import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
 import {
+  getHotelVinculadoParaSonda,
   getTenantConnectivityPublic,
   saveTenantPartnerId,
   testConnectivityConnection,
@@ -106,9 +110,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Acción no válida. Usa 'probar'." }, { status: 400 });
     }
 
-    const hotelCode = typeof body.hotelCode === 'string' ? body.hotelCode.trim() : '';
+    const hotelCodePedido = typeof body.hotelCode === 'string' ? body.hotelCode.trim() : '';
+    // Sin código se usa el de la propiedad YA vinculada de este hotel: es el
+    // mismo que viaja en cada push y el único sondeo que dice algo de SU cuenta.
+    // El hotel de pruebas del contrato no sirve aquí: a un partner de producción
+    // el proveedor le responde `403 Access Denied - sandbox-pms`. Sin vínculo no
+    // se adivina: se pide el código.
+    const hotelCode = hotelCodePedido || (await getHotelVinculadoParaSonda(tenantId));
     if (!hotelCode) {
-      return NextResponse.json({ error: 'Indica el código de propiedad del proveedor' }, { status: 400 });
+      return NextResponse.json(
+        {
+          error:
+            'Indica el código de propiedad del proveedor, o vincula antes una propiedad para usar el suyo.',
+        },
+        { status: 400 }
+      );
     }
 
     // Siempre 200 con `ok` en el cuerpo: un 5xx lo reemplazaría el proxy por

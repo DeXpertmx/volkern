@@ -101,6 +101,70 @@ describe('Panel «Cómo debe llamarnos el PMS» — contrato del webhook sin sec
   });
 });
 
+describe('Panel de conectividad — noches sin justificar en el proveedor (§29)', () => {
+  const fuente = leer('app/admin/conectividad/page.tsx');
+
+  it('pinta el barrido que entrega la API de divergencias', () => {
+    expect(fuente).toContain('setInventario(data.inventario || [])');
+    expect(fuente).toContain('/api/admin/conectividad/divergencias');
+    expect(fuente).toContain('Noches sin justificar en el proveedor');
+  });
+
+  it('distingue los DOS sentidos: ventas perdidas y riesgo de sobreventa', () => {
+    // La parte de la guardia que más importa: no son la misma enfermedad.
+    expect(fuente).toContain('sin vender y libres aquí');
+    expect(fuente).toContain('vendibles y ocupadas aquí');
+  });
+
+  it('no promete cobertura completa: enseña lo comparado y lo que quedó sin dato', () => {
+    expect(fuente).toContain('noche(s) comparadas');
+    expect(fuente).toContain('sin dato (nunca se empujaron)');
+  });
+
+  it('dice que se arregla empujando, no que se arregle solo', () => {
+    expect(fuente).toContain('nada se corrige solo');
+  });
+
+  it('sin barrido distingue «todavía no corrió» de «cuadra»', () => {
+    expect(fuente).toContain('Sin barrido todavía');
+    expect(fuente).toContain('Todavía no hay barrido');
+    expect(fuente).toContain('cuadra con el estado interno');
+  });
+});
+
+describe('Panel de conectividad — mensajes de un hotel_id sin vínculo', () => {
+  const fuente = leer('app/admin/conectividad/page.tsx');
+
+  it('consume la API de incidencias de mensajes sin mapping', () => {
+    expect(fuente).toContain('/api/admin/conectividad/mensajes-sin-mapping');
+    expect(fuente).toContain('setMensajesSinMapping(data.incidencias || [])');
+  });
+
+  it('enseña el código, el canal y el contador de intentos', () => {
+    expect(fuente).toContain('Mensajes sin hotel vinculado');
+    expect(fuente).toContain('Código en el canal');
+    expect(fuente).toContain('Intentos');
+    expect(fuente).toContain('{m.hotelCode ||');
+    expect(fuente).toContain('{m.intentos}');
+  });
+
+  it('dice por qué se reintenta solo (404 con Retry-After) y cómo se arregla', () => {
+    expect(fuente).toContain('Retry-After');
+    expect(fuente).toContain('Onboarding → mapping');
+    expect(fuente).toContain('mensajes sin mapping');
+  });
+
+  it('avisa de lo que ya existe en Volkern para ese código (inactivo incluido)', () => {
+    expect(fuente).toContain('m.vinculos');
+    expect(fuente).toContain('el código no está vinculado');
+  });
+
+  it('un fallo de esta tarjeta no rompe la pantalla (es informativa)', () => {
+    expect(fuente).toContain('loadMensajesSinMapping');
+    expect(fuente).toContain("if (!res.ok) return;");
+  });
+});
+
 describe('getConnectivityPublic — la capa pública sigue sin exponer secretos', () => {
   it('la función que añade ultimoFallo es la misma de siempre (marcadores, no valores)', () => {
     const fuente = leer('lib/hospitality/connectivity.ts');

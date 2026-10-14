@@ -80,6 +80,15 @@ entrega al proveedor.
 - [ ] **2.2 Credenciales Basic Auth que Volkern emite** (usuario/contraseña).
       Se generan en el alta del proveedor y se entregan por canal seguro, no en
       la minuta. El `GET` informativo del webhook no filtra secretos.
+      **Lo que pasó después (9-oct 2026):** en producción, el emisor del
+      proveedor llamó con **otro par** y cada push de reserva murió en un 401
+      (`credenciales_no_coinciden`, 7/11 caracteres frente a los 19/8 del par
+      emitido). El cierre por escrito de esa incidencia —comparación por huella
+      del panel y qué tiene que tocar él— está en
+      [`hospitality-email-proveedor-401-emisor.md`](./hospitality-email-proveedor-401-emisor.md).
+      Moraleja para la reunión: **confirmar en la entrega que el par que pedimos
+      es el que queda configurado en su emisor**, no solo el que nosotros
+      guardamos.
 - [ ] **2.3 Acciones que su emisor enviará.** `book`/`modify`/`cancel` son
       obligatorias; preguntar explícitamente por **`no_show`**: si no lo emite,
       lo marca el operador con el `PATCH` del panel y queda documentado en el

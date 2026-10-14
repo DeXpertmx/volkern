@@ -9,7 +9,7 @@
  * ⚠️ NUNCA commitear contraseñas: la nueva contraseña se lee de
  * SUPERADMIN_TEMP_PASSWORD y el script aborta si no está definida.
  *
- * USO: SUPERADMIN_TEMP_PASSWORD='...' npx tsx -r dotenv/config scripts/reset-superadmin-password.ts
+ * USO: SUPERADMIN_TEMP_PASSWORD='...' npx tsx -r ./scripts/cargar-entorno.cjs scripts/reset-superadmin-password.ts
  */
 import { prisma } from '../lib/db';
 import bcrypt from 'bcryptjs';

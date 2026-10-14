@@ -5,7 +5,7 @@ set -euo pipefail
 # Levanta el producto (next dev) en un puerto aislado y ejecuta el ensayo contra
 # el SIMULADOR LOCAL del proveedor. Nada de esto habla con el proveedor real ni
 # con producción: el simulador es un servidor local y la base de datos es la de
-# DATABASE_URL (el `.env` del proyecto).
+# DATABASE_URL, que en local vive en `.env.local` (ver scripts/cargar-entorno.cjs).
 #
 #   npm run test:e2e:dia-h
 #   E2E_PORT=3097 npm run test:e2e:dia-h
@@ -68,7 +68,7 @@ for cmd in node npx curl; do
 done
 pass "Comandos disponibles (node, npx, curl)"
 if [ -z "${DATABASE_URL:-}" ]; then
-  info "DATABASE_URL no está en el entorno: se tomará del .env del proyecto (tsx --require dotenv/config)"
+  info "DATABASE_URL no está en el entorno: se tomará de .env.local (y si no, de .env) vía ./scripts/cargar-entorno.cjs"
 fi
 
 header "Puerto ${PORT} (producto)"
@@ -106,4 +106,4 @@ pass "Servidor de desarrollo listo (${BASE})"
 header "Ensayo del día H (el simulador del proveedor lo levanta el propio ensayo)"
 export E2E_DIA_H=1
 export BASE_URL="${BASE}"
-npx tsx --require dotenv/config scripts/e2e-dia-h-conectividad.ts "$@"
+npx tsx --require ./scripts/cargar-entorno.cjs scripts/e2e-dia-h-conectividad.ts "$@"

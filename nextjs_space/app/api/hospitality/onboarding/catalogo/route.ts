@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
         {
           ok: false,
           error:
-            'Ese código de propiedad ya está vinculado a otra cuenta. Revisa el código con el proveedor.',
+            'Ese código de propiedad ya está vinculado a otra cuenta. Si el hotel es tuyo y estaba en otra cuenta (una demo, una cuenta anterior), hay que liberar antes ese vínculo; si no reconoces el código, confírmalo con el proveedor.',
         },
         { status: 200 }
       );

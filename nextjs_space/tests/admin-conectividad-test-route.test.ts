@@ -23,6 +23,7 @@ import path from 'node:path';
 const mocks = vi.hoisted(() => ({
   userFindUnique: vi.fn(),
   providerFindUnique: vi.fn(),
+  mappingFindFirst: vi.fn(),
   testConnection: vi.fn(),
   updateStatus: vi.fn(),
   notify: vi.fn(),
@@ -32,10 +33,12 @@ vi.mock('@/lib/db', () => ({
   default: {
     user: { findUnique: mocks.userFindUnique },
     connectivityProvider: { findUnique: mocks.providerFindUnique },
+    connectivityMapping: { findFirst: mocks.mappingFindFirst },
   },
   prisma: {
     user: { findUnique: mocks.userFindUnique },
     connectivityProvider: { findUnique: mocks.providerFindUnique },
+    connectivityMapping: { findFirst: mocks.mappingFindFirst },
   },
 }));
 vi.mock('@/lib/auth', () => ({ authOptions: {} }));
@@ -95,6 +98,7 @@ describe('POST /api/admin/conectividad/test', () => {
     mocks.updateStatus.mockResolvedValue({});
     mocks.notify.mockResolvedValue(undefined);
     mocks.providerFindUnique.mockResolvedValue(filaProvider());
+    mocks.mappingFindFirst.mockResolvedValue(null);
   });
 
   it('sin sesión → 401 y no se sondea nada', async () => {
@@ -126,6 +130,32 @@ describe('POST /api/admin/conectividad/test', () => {
     // Ni estado tocado ni alarma al equipo: no es un fallo.
     expect(mocks.updateStatus).not.toHaveBeenCalled();
     expect(mocks.notify).not.toHaveBeenCalled();
+    // «No aplica» se resuelve ANTES de mirar vínculos: sin consulta inútil.
+    expect(mocks.mappingFindFirst).not.toHaveBeenCalled();
+  });
+
+  it('sin hotelCode sondea un hotel REAL ya vinculado, no el sandbox del contrato', async () => {
+    // El sandbox está retirado para los partners de producción (403 Access
+    // Denied): sondearlo dejaba el panel en rojo con la capa funcionando.
+    mocks.providerFindUnique.mockResolvedValue(filaProvider({ partnerIdEnc: 'x' }));
+    mocks.mappingFindFirst.mockResolvedValue({ externalPropertyId: '75fdbbce2e' });
+    mocks.testConnection.mockResolvedValue({ ok: true, hotelCode: '75fdbbce2e' });
+
+    const res = await POST(reqPost({}));
+    const body = await res.json();
+
+    expect(body.ok).toBe(true);
+    expect(mocks.testConnection).toHaveBeenCalledWith('75fdbbce2e');
+  });
+
+  it('el hotelCode indicado manda y no se consultan los vínculos', async () => {
+    mocks.providerFindUnique.mockResolvedValue(filaProvider({ partnerIdEnc: 'x' }));
+    mocks.testConnection.mockResolvedValue({ ok: true, hotelCode: 'HOTEL-9' });
+
+    await POST(reqPost({ hotelCode: 'HOTEL-9' }));
+
+    expect(mocks.testConnection).toHaveBeenCalledWith('HOTEL-9');
+    expect(mocks.mappingFindFirst).not.toHaveBeenCalled();
   });
 
   it('con ID de socio de plataforma la sonda SÍ corre y mueve el estado', async () => {

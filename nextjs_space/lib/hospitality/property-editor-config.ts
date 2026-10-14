@@ -471,6 +471,37 @@ export function portadaHospedaje(fotos: unknown): MiniaturaHospedaje | null {
 }
 
 /**
+ * URLs de las fotos, con la portada DELANTE.
+ *
+ * Es el lector de `fotos` de las superficies públicas (Booking Engine y su
+ * embed): el Json guarda la forma rica del editor —`{ url, titulo?, portada? }`,
+ * que es la que escribe `payloadDesdeBorradorHospedaje`— y las URLs sueltas de
+ * los clientes antiguos. Un lector que solo entienda strings deja la galería
+ * vacía con las fotos del editor dentro, que es exactamente cómo se quedó sin
+ * portada la página de reservas.
+ *
+ * Devuelve solo URLs (el título no viaja: la web pública no lo enseña) y en el
+ * orden en que se ven: primero la marcada como portada y, si no hay marca, la
+ * primera, el mismo criterio que `portadaHospedaje` usa en el panel. Así el
+ * `fotos[0]` que leen la galería y las tarjetas de unidad es de verdad la
+ * portada del hotel.
+ *
+ * Lo que no es una URL con contenido se cae —y se le quitan los espacios de los
+ * bordes, como en el alta de unidades—: un `null`, un objeto sin `url` o una URL
+ * en blanco no pueden llegar a un `src` y dejar la imagen rota delante del
+ * huésped.
+ */
+export function urlsFotosHospedaje(fotos: unknown): string[] {
+  const validas = fotosValidasHospedaje(fotos)
+    .map((f) => ({ ...f, url: f.url.trim() }))
+    .filter((f) => f.url.length > 0);
+  if (validas.length === 0) return [];
+  const portada = validas.find((f) => f.portada === true);
+  if (!portada) return validas.map((f) => f.url);
+  return [portada.url, ...validas.filter((f) => f !== portada).map((f) => f.url)];
+}
+
+/**
  * Reordena fotos moviendo la de `desde` a `hasta` (índices sobre el array
  * completo, incluida la portada). Índices inválidos o iguales: copia intacta.
  */

@@ -10,7 +10,7 @@
  *   - Pipelines: "Renta Vacacional (Airbnb/Booking)" y "Venta de Propiedades"
  *   - Leads, Contactos, Deals, Citas, Tareas y Notas de historial
  *
- * Uso:  npx tsx --require dotenv/config scripts/seed-demo-real-estate.ts
+ * Uso:  npx tsx --require ./scripts/cargar-entorno.cjs scripts/seed-demo-real-estate.ts
  * Idempotente: puede re-ejecutarse sin duplicar datos.
  *
  * ⚠️ NUNCA commitear contraseñas: la contraseña compartida de los usuarios

@@ -186,7 +186,11 @@ export function initCronJobs() {
   // reservas internas ausentes, solo las registra como divergencia.
   cron.schedule('15 4 * * *', runCronJob('hospitality-reconcile', 'Hospitality Reconciliación (diaria)', '15 4 * * *', async () => {
     const { runHospitalityReconcileScan } = await import('./hospitality-reconcile');
-    await runHospitalityReconcileScan();
+    const resumen = await runHospitalityReconcileScan();
+    // El mismo resumen y los mismos avisos —noches sin justificar en el
+    // proveedor— que el disparo por HTTP: el panel de estado no puede contar
+    // una cosa u otra según quién haya lanzado el job.
+    return { mensaje: resumen.message, avisos: resumen.avisos };
   }));
 
   console.log('✅ [Scheduler] Hospitality reconciliación programada (diaria 04:15)');

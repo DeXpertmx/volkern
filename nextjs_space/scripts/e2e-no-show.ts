@@ -52,7 +52,7 @@
  *      API key temporal).
  *
  * Uso:
- *   E2E_MOCK_PORT=4599 npx tsx --require dotenv/config scripts/e2e-no-show.ts
+ *   E2E_MOCK_PORT=4599 npx tsx --require ./scripts/cargar-entorno.cjs scripts/e2e-no-show.ts
  *   ... --keep       # conserva los datos para mirarlos en la UI
  *   ... --cleanup    # borra lo que dejó un --keep
  *
@@ -85,6 +85,8 @@ const CODIGO_PROPIEDAD = 'E2E-NS';
 const HOTEL_CODE = 'E2E-NS-HOTEL';
 const EMAIL_PREFIJO = 'ensayo-noshow+';
 const NOMBRE_API_KEY = 'Ensayo E2E no-show';
+/** Slug de la página pública que el ensayo publica (y borra en la limpieza). */
+const SLUG_BOOKING = 'e2e-noshow-ensayo';
 const NOMBRE_PROPIEDAD = 'Ensayo No-Show (Hotel Ceniza)';
 const PARTNER_ID = 'e2e-partner';
 
@@ -341,6 +343,9 @@ async function limpiar(tenantId: string, restaurarProveedor = true) {
   });
   await prisma.contact.deleteMany({ where: { tenantId, email: { startsWith: EMAIL_PREFIJO } } });
   await prisma.apiKey.deleteMany({ where: { tenantId, nombre: NOMBRE_API_KEY } });
+  // La página pública que el ensayo abre para poder reservar desde la web
+  // (criterio único de publicación: la lista del hotel). Solo su slug.
+  await prisma.hospitalityBookingConfig.deleteMany({ where: { tenantId, slug: SLUG_BOOKING } });
   if (restaurarProveedor) {
     // El ensayo configura la conectividad global; se devuelve a su estado previo.
     await prisma.connectivityProvider.deleteMany({ where: { providerKey: 'channel_connectivity' } });
@@ -794,21 +799,41 @@ async function ensayar(servidorMock: http.Server) {
 
   // 5. Re-reservar las mismas fechas (antes: 409 por el bloqueo fantasma).
   console.log(titulo('5. Volver a reservar las mismas fechas'));
+  // La página pública es UNA (`/reservar/<slug>`) y publica la lista que el
+  // hotel marca en su configuración: el ensayo abre la suya con la propiedad
+  // publicada (y la borra al limpiar). Antes bastaba con el estado de la
+  // propiedad; ahora el criterio es este.
+  const configBooking = await prisma.hospitalityBookingConfig.upsert({
+    where: { tenantId },
+    create: {
+      tenantId,
+      slug: SLUG_BOOKING,
+      activo: true,
+      propiedadesPublicadas: [propiedadId],
+    },
+    update: { activo: true, propiedadesPublicadas: [propiedadId] },
+    select: { slug: true },
+  });
+
   const pushesAntesRealojo = pesosDePush();
-  const reReserva = await peticion(`/api/public/booking/${propiedadId}`, {
+  const reReserva = await peticion(`/api/public/booking/${configBooking.slug}/reservar`, {
     metodo: 'POST',
     cuerpo: {
+      propertyId: propiedadId,
       unitId: unitA.id,
       checkIn: iso(checkIn),
       checkOut: iso(checkOut),
-      huespedNombre: 'Huésped Realojo',
-      huespedEmail: `${EMAIL_PREFIJO}realojo@ensayo.test`,
-      idempotencyKey: `ensayo-ns-${iso(checkIn)}`,
+      adultos: 2,
+      ninos: 0,
+      // La clave de idempotencia del formulario público.
+      solicitudId: `ensayo-ns-${iso(checkIn)}`,
+      nombre: 'Huésped Realojo',
+      email: `${EMAIL_PREFIJO}realojo@ensayo.test`,
     },
   });
   esperar(
-    reReserva.status === 201 && !!reReserva.json?.reservationId,
-    'La API pública acepta la reserva sobre las fechas del no-show',
+    reReserva.status === 201 && !!reReserva.json?.referencia,
+    'La página pública acepta la reserva sobre las fechas del no-show',
     `HTTP ${reReserva.status} · ${reReserva.json?.referencia || reReserva.json?.error || ''}`
   );
 
@@ -827,7 +852,9 @@ async function ensayar(servidorMock: http.Server) {
   const listado = await peticion(`/api/hospitality/reservations?propertyId=${propiedadId}`, { apiKey });
   const reservas = listado.json?.reservations || [];
   const noShowRow = reservas.find((r: any) => r.id === reservaId);
-  const realojoRow = reservas.find((r: any) => r.id === reReserva.json?.reservationId);
+  // La respuesta pública trae la REFERENCIA (la clave del canal directo), que es
+  // por donde se localiza la reserva en el listado: el id interno no se publica.
+  const realojoRow = reservas.find((r: any) => r.externalBookingId === reReserva.json?.referencia);
   esperar(
     noShowRow?.estado === 'no_show' && realojoRow?.estado === 'confirmed',
     'Conviven la reserva no-show (traza) y la nueva (confirmada)',
@@ -993,13 +1020,13 @@ async function ensayar(servidorMock: http.Server) {
   );
 
   const pushesAntes5c = pesosDePush();
-  const checkoutReal = await peticion(`/api/hospitality/reservations/${reReserva.json?.reservationId}/check`, {
+  const checkoutReal = await peticion(`/api/hospitality/reservations/${realojoRow?.id}/check`, {
     metodo: 'POST',
     apiKey,
     cuerpo: { operacion: 'checkout' },
   });
   const reservaReReserva = await prisma.hospitalityReservation.findFirst({
-    where: { id: reReserva.json?.reservationId },
+    where: { id: realojoRow?.id },
     select: { checkOut: true, checkOutReal: true, estado: true },
   });
   esperar(
@@ -1143,7 +1170,7 @@ async function ensayar(servidorMock: http.Server) {
     { apiKey }
   );
   const payloadReserva = (apiReservas.json?.reservations ?? []).find(
-    (r: any) => r.id === reReserva.json?.reservationId
+    (r: any) => r.id === realojoRow?.id
   );
   esperar(
     apiReservas.status === 200 && !!payloadReserva,
@@ -1257,7 +1284,7 @@ async function principal() {
   if (usuario?.tenantId) {
     console.log(titulo('7. Limpieza'));
     if (KEEP) {
-      info('Datos conservados (--keep). Para borrarlos: npx tsx --require dotenv/config scripts/e2e-no-show.ts --cleanup');
+      info('Datos conservados (--keep). Para borrarlos: npx tsx --require ./scripts/cargar-entorno.cjs scripts/e2e-no-show.ts --cleanup');
     } else {
       const borradas = await limpiar(usuario.tenantId, !yaExistiaProveedor);
       ok('Datos del ensayo eliminados', `${borradas} propiedad(es), mappings, logs, contacto y API key`);

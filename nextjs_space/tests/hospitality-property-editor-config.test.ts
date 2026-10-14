@@ -23,6 +23,7 @@ import {
   portadaHospedaje,
   reordenarFotosHospedaje,
   resumenFotosHospedaje,
+  urlsFotosHospedaje,
   SERVICIOS_GRUPOS_HOSPEDAJE,
   SERVICIOS_TODOS_HOSPEDAJE,
   infoServicioHospedaje,
@@ -439,6 +440,38 @@ describe('tarjeta de fotos de la Vista global', () => {
         { url: 'https://a/2.jpg', portada: true, titulo: 'Fachada' },
       ])
     ).toEqual({ url: 'https://a/2.jpg', titulo: 'Fachada' });
+  });
+
+  it('urlsFotosHospedaje lee las dos formas y deja la portada delante', () => {
+    // Sin fotos no hay URLs: la galería pública pinta su marco de relleno.
+    expect(urlsFotosHospedaje(null)).toEqual([]);
+    expect(urlsFotosHospedaje([])).toEqual([]);
+    expect(urlsFotosHospedaje(['', '   ', { titulo: 'sin url' }, { url: '' }, 42])).toEqual([]);
+
+    // La forma rica del editor es la que guarda el PATCH: si solo se leyeran
+    // strings, la página de reservas se quedaba sin portada.
+    expect(urlsFotosHospedaje([{ url: 'https://a/1.jpg', titulo: 'Fachada' }])).toEqual([
+      'https://a/1.jpg',
+    ]);
+    // Mezcla de objetos (editor) y URLs sueltas (clientes antiguos).
+    expect(
+      urlsFotosHospedaje(['https://a/1.jpg', { url: 'https://a/2.jpg', titulo: 'Salón' }])
+    ).toEqual(['https://a/1.jpg', 'https://a/2.jpg']);
+
+    // La marcada como portada va delante aunque no sea la primera: el `fotos[0]`
+    // que enseña la galería es la portada del hotel.
+    expect(
+      urlsFotosHospedaje([
+        'https://a/1.jpg',
+        { url: 'https://a/2.jpg' },
+        { url: 'https://a/3.jpg', portada: true },
+      ])
+    ).toEqual(['https://a/3.jpg', 'https://a/1.jpg', 'https://a/2.jpg']);
+    // Sin marca, el orden es el del editor (su primera foto es la portada).
+    expect(urlsFotosHospedaje([{ url: 'https://a/9.jpg' }, { url: 'https://a/8.jpg' }])).toEqual([
+      'https://a/9.jpg',
+      'https://a/8.jpg',
+    ]);
   });
 
   it('reordenarFotosHospedaje mueve elementos y protege índices inválidos', () => {

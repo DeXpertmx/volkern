@@ -138,6 +138,55 @@ describe('POST /api/hospitality/rateplans', () => {
     // Push disparado hacia la capa de conectividad
     expect(mockDispatch).toHaveBeenCalledWith('t1', 'p1', 'manual', { diasHorizonte: 180 });
   });
+
+  it('guarda las reglas de una temporada ya normalizadas (texto del UI incluido)', async () => {
+    const res = await POSTPlans(buildReq({
+      propertyId: 'p1', unitId: 'u1', nombre: 'Verano', tarifa: 100,
+      temporadas: [
+        {
+          desde: '2026-07-01', hasta: '2026-07-31', tarifa: 150,
+          minNoches: '3', maxNoches: '7', checkInDias: [6], checkOutDias: ['0'], nombre: 'Verano',
+        },
+        { desde: '2026-08-01', hasta: '2026-08-31', tarifa: 180 },
+      ],
+    }));
+    expect(res.status).toBe(201);
+    const createData = prisma.hospitalityRatePlan.create.mock.calls[0][0].data;
+    expect(createData.temporadas).toEqual([
+      {
+        desde: '2026-07-01', hasta: '2026-07-31', tarifa: 150,
+        minNoches: 3, maxNoches: 7, checkInDias: [6], checkOutDias: [0], nombre: 'Verano',
+      },
+      { desde: '2026-08-01', hasta: '2026-08-31', tarifa: 180 },
+    ]);
+  });
+
+  it('rechaza reglas inválidas de temporada en vez de descartarlas en silencio', async () => {
+    const conMinimo = await POSTPlans(buildReq({
+      propertyId: 'p1', unitId: 'u1', nombre: 'Verano', tarifa: 100,
+      temporadas: [{ desde: '2026-07-01', hasta: '2026-07-31', tarifa: 150, minNoches: 'tres' }],
+    }));
+    expect(conMinimo.status).toBe(400);
+    expect((await conMinimo.json()).error).toContain('mínimo de noches');
+
+    // Un máximo por debajo del mínimo es una temporada invendible: se avisa.
+    const imposible = await POSTPlans(buildReq({
+      propertyId: 'p1', unitId: 'u1', nombre: 'Verano', tarifa: 100,
+      temporadas: [{ desde: '2026-07-01', hasta: '2026-07-31', tarifa: 150, minNoches: 5, maxNoches: 2 }],
+    }));
+    expect(imposible.status).toBe(400);
+    expect((await imposible.json()).error).toContain('no puede ser menor');
+
+    // Y unos días fuera de 0-6, también.
+    const diasMalos = await POSTPlans(buildReq({
+      propertyId: 'p1', unitId: 'u1', nombre: 'Verano', tarifa: 100,
+      temporadas: [{ desde: '2026-07-01', hasta: '2026-07-31', tarifa: 150, checkInDias: [7] }],
+    }));
+    expect(diasMalos.status).toBe(400);
+    expect((await diasMalos.json()).error).toContain('entrada');
+
+    expect(prisma.hospitalityRatePlan.create).not.toHaveBeenCalled();
+  });
 });
 
 describe('PATCH /api/hospitality/rateplans/[id]', () => {
@@ -171,6 +220,59 @@ describe('PATCH /api/hospitality/rateplans/[id]', () => {
   it('rechaza tarifa inválida en PATCH', async () => {
     const res = await PATCHPlan(buildReq({ tarifa: 'abc' }), { params: Promise.resolve({ id: 'rp1' }) });
     expect(res.status).toBe(400);
+  });
+
+  it('rechaza reglas de temporada inválidas y no actualiza nada', async () => {
+    const minInvalido = await PATCHPlan(
+      buildReq({
+        temporadas: [{ desde: '2026-07-01', hasta: '2026-07-31', tarifa: 150, minNoches: 400 }],
+      }),
+      { params: Promise.resolve({ id: 'rp1' }) }
+    );
+    expect(minInvalido.status).toBe(400);
+
+    const maxSinSentido = await PATCHPlan(
+      buildReq({
+        temporadas: [{ desde: '2026-07-01', hasta: '2026-07-31', tarifa: 150, minNoches: 4, maxNoches: 3 }],
+      }),
+      { params: Promise.resolve({ id: 'rp1' }) }
+    );
+    expect(maxSinSentido.status).toBe(400);
+    expect((await maxSinSentido.json()).error).toContain('no puede ser menor');
+    expect(prisma.hospitalityRatePlan.update).not.toHaveBeenCalled();
+  });
+
+  it('guarda las reglas de temporada y limpia la capa con una lista vacía', async () => {
+    const conReglas = await PATCHPlan(
+      buildReq({
+        temporadas: [
+          {
+            desde: '2026-07-01', hasta: '2026-07-31', tarifa: 150,
+            minNoches: 3, maxNoches: 7, checkOutDias: [0],
+          },
+        ],
+      }),
+      { params: Promise.resolve({ id: 'rp1' }) }
+    );
+    expect(conReglas.status).toBe(200);
+    expect(prisma.hospitalityRatePlan.update.mock.calls[0][0].data.temporadas).toEqual([
+      {
+        desde: '2026-07-01', hasta: '2026-07-31', tarifa: 150,
+        minNoches: 3, maxNoches: 7, checkOutDias: [0],
+      },
+    ]);
+
+    vi.clearAllMocks();
+    mockAuth.mockResolvedValue(AUTH_OK);
+    prisma.hospitalityRatePlan.findFirst.mockResolvedValue({ id: 'rp1', propertyId: 'p1' });
+    prisma.hospitalityRatePlan.update.mockImplementation(({ data }: any) =>
+      Promise.resolve(makePlan({ ...data }))
+    );
+    const limpio = await PATCHPlan(buildReq({ temporadas: [] }), {
+      params: Promise.resolve({ id: 'rp1' }),
+    });
+    expect(limpio.status).toBe(200);
+    expect(prisma.hospitalityRatePlan.update.mock.calls[0][0].data.temporadas).toBeNull();
   });
 });
 

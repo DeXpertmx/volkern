@@ -6,7 +6,7 @@ import { authenticateRequest } from '@/lib/api-key-auth';
 
 import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
 import { monedaEscritura } from '@/lib/moneda';
-import { normalizarEstacionalidad } from '@/lib/hospitality/estacionalidad';
+import { normalizarEstacionalidad, problemaEnTemporadas } from '@/lib/hospitality/estacionalidad';
 import { normalizarAjustes, pidenAjustes } from '@/lib/hospitality/ajustes';
 /**
  * PATCH /api/hospitality/rateplans/[id] — editar tarifa/restricciones.
@@ -55,6 +55,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
     if (body.checkOutDias !== undefined) {
       data.checkOutDias = Array.isArray(body.checkOutDias) && body.checkOutDias.length ? body.checkOutDias : null;
+    }
+    // Una regla de temporada que se descarta en silencio es una restricción que
+    // el hotel cree tener puesta: si el cliente la acaba de enviar y no es
+    // válida, la respuesta es un 400, no un plan sin esa regla.
+    if (body.temporadas !== undefined) {
+      const problemaTemporadas = problemaEnTemporadas(body.temporadas);
+      if (problemaTemporadas) {
+        return NextResponse.json({ error: problemaTemporadas }, { status: 400 });
+      }
     }
     // Estacionalidad: los dos capas viajan juntas (el UI las edita en el mismo
     // formulario), se normalizan una vez y se guardan canónicas. Enviar un

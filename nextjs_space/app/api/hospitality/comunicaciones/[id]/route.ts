@@ -4,7 +4,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
 import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
-import { COMUNICACION_EVENTOS, IDIOMAS_COMUNICACION } from '@/lib/hospitality/comunicaciones';
+import { Prisma } from '@prisma/client';
+import { COMUNICACION_EVENTOS, IDIOMAS_COMUNICACION, leerDiseno } from '@/lib/hospitality/comunicaciones';
+import { normalizarDiseno } from '@/lib/hospitality/comunicaciones-email';
 
 /** PATCH /api/hospitality/comunicaciones/[id] — editar/activar/desactivar. */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -26,7 +28,25 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     const body = await req.json().catch(() => ({}));
-    const { evento, canal, asunto, contenido, activo, idioma } = body;
+    const { evento, canal, asunto, contenido, activo, idioma, diseno } = body;
+
+    // El diseño visual se valida con las mismas reglas que lo lee el envío. Un
+    // `diseno: null` explícito lo borra (vuelve al correo de texto).
+    let disenoParaGuardar: unknown;
+    let hayDisenoNuevo: boolean | undefined;
+    if (diseno !== undefined) {
+      if (diseno === null) {
+        disenoParaGuardar = Prisma.DbNull;
+        hayDisenoNuevo = false;
+      } else {
+        const validado = normalizarDiseno(diseno);
+        if (!validado.ok) {
+          return NextResponse.json({ error: validado.error }, { status: 400 });
+        }
+        disenoParaGuardar = validado.diseno;
+        hayDisenoNuevo = true;
+      }
+    }
 
     if (evento !== undefined && !COMUNICACION_EVENTOS.includes(evento)) {
       return NextResponse.json(
@@ -49,6 +69,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return NextResponse.json({ error: 'asunto es obligatorio para plantillas de email' }, { status: 400 });
     }
 
+    // Una plantilla de email tiene que llevar algo: texto o diseño. Quitarle el
+    // diseño a una plantilla que no tenía texto la dejaría enviando un correo
+    // vacío, así que se rechaza en el momento y no en el envío.
+    const contenidoFinal = contenido !== undefined ? String(contenido ?? '').trim() : String(existente.contenido ?? '').trim();
+    const disenoFinal = hayDisenoNuevo === undefined ? leerDiseno(existente.diseno) : hayDisenoNuevo;
+    if (canalFinal === 'email' && !contenidoFinal && !disenoFinal) {
+      return NextResponse.json(
+        { error: 'La plantilla de email necesita contenido o un diseño con bloques' },
+        { status: 400 }
+      );
+    }
+    if (canalFinal === 'whatsapp' && !contenidoFinal) {
+      return NextResponse.json({ error: 'contenido es obligatorio' }, { status: 400 });
+    }
+
     const plantilla = await prisma.hospitalityCommunicationTemplate.update({
       where: { id },
       data: {
@@ -58,6 +93,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         ...(contenido !== undefined ? { contenido: String(contenido).trim() } : {}),
         ...(idioma !== undefined ? { idioma } : {}),
         ...(activo !== undefined ? { activo: !!activo } : {}),
+        ...(diseno !== undefined ? { diseno: disenoParaGuardar as object } : {}),
       },
     });
 

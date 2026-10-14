@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { Prisma } from '@prisma/client';
 
 /**
  * Tests de plantillas de comunicación de Hospitality (plan maestro §21):
@@ -120,6 +121,52 @@ describe('POST /api/hospitality/comunicaciones', () => {
       expect.objectContaining({ data: expect.objectContaining({ tenantId: 't1', evento: 'confirmacion' }) })
     );
   });
+
+  it('un email con diseño visual no necesita contenido de texto', async () => {
+    prisma.hospitalityCommunicationTemplate.create.mockResolvedValue(makePlantilla({ canal: 'email' }));
+    const res = await POSTPlantillas(
+      buildReq({
+        evento: 'confirmacion',
+        canal: 'email',
+        asunto: 'Tu reserva',
+        contenido: '',
+        diseno: {
+          version: 1,
+          titulo: '{{propiedad}}',
+          bloques: [{ tipo: 'texto', texto: '  Hola {{nombre}}  ' }],
+        },
+      })
+    );
+    expect(res.status).toBe(201);
+    const datos = prisma.hospitalityCommunicationTemplate.create.mock.calls[0][0].data;
+    // El diseño entra normalizado (recortado) y el contenido queda vacío: el
+    // texto del correo se genera del diseño al enviar.
+    expect(datos.contenido).toBe('');
+    expect(datos.diseno.bloques[0]).toEqual({ tipo: 'texto', texto: 'Hola {{nombre}}' });
+  });
+
+  it('un email sin texto y sin diseño se rechaza (saldría vacío)', async () => {
+    const res = await POSTPlantillas(
+      buildReq({ evento: 'confirmacion', canal: 'email', asunto: 'Tu reserva', contenido: '', diseno: null })
+    );
+    expect(res.status).toBe(400);
+    expect(prisma.hospitalityCommunicationTemplate.create).not.toHaveBeenCalled();
+  });
+
+  it('un diseño inválido se rechaza con su motivo y no se guarda nada', async () => {
+    const res = await POSTPlantillas(
+      buildReq({
+        evento: 'confirmacion',
+        canal: 'email',
+        asunto: 'Tu reserva',
+        diseno: { bloques: [{ tipo: 'iframe', texto: 'x' }] },
+      })
+    );
+    expect(res.status).toBe(400);
+    const d = await res.json();
+    expect(d.error).toContain('Tipo de bloque inválido');
+    expect(prisma.hospitalityCommunicationTemplate.create).not.toHaveBeenCalled();
+  });
 });
 
 describe('PATCH/DELETE /api/hospitality/comunicaciones/[id]', () => {
@@ -151,6 +198,39 @@ describe('PATCH/DELETE /api/hospitality/comunicaciones/[id]', () => {
     prisma.hospitalityCommunicationTemplate.findFirst.mockResolvedValue(makePlantilla({ canal: 'email', asunto: null }));
     const res = await PATCHPlantilla(buildReq({ canal: 'email' }), { params: Promise.resolve({ id: 'ct1' }) });
     expect(res.status).toBe(400);
+  });
+
+  it('guarda el diseño visual y permite borrarlo', async () => {
+    prisma.hospitalityCommunicationTemplate.findFirst.mockResolvedValue(
+      makePlantilla({ canal: 'email', asunto: 'Tu reserva', contenido: 'Hola', diseno: null })
+    );
+    prisma.hospitalityCommunicationTemplate.update.mockResolvedValue(makePlantilla({ canal: 'email' }));
+
+    const res = await PATCHPlantilla(
+      buildReq({ diseno: { bloques: [{ tipo: 'boton', botonTexto: 'Ir', botonEnlace: '{{enlace_checkin}}' }] } }),
+      { params: Promise.resolve({ id: 'ct1' }) }
+    );
+    expect(res.status).toBe(200);
+    expect(prisma.hospitalityCommunicationTemplate.update.mock.calls[0][0].data.diseno.bloques[0].botonTexto).toBe('Ir');
+
+    // Borrar el diseño de una plantilla con texto vuelve al correo de texto.
+    const res2 = await PATCHPlantilla(buildReq({ diseno: null }), { params: Promise.resolve({ id: 'ct1' }) });
+    expect(res2.status).toBe(200);
+    expect(prisma.hospitalityCommunicationTemplate.update.mock.calls[1][0].data.diseno).toBe(Prisma.DbNull);
+  });
+
+  it('no deja una plantilla de email sin texto y sin diseño', async () => {
+    prisma.hospitalityCommunicationTemplate.findFirst.mockResolvedValue(
+      makePlantilla({
+        canal: 'email',
+        asunto: 'Tu reserva',
+        contenido: '',
+        diseno: { version: 1, bloques: [{ tipo: 'texto', texto: 'Hola' }] },
+      })
+    );
+    const res = await PATCHPlantilla(buildReq({ diseno: null }), { params: Promise.resolve({ id: 'ct1' }) });
+    expect(res.status).toBe(400);
+    expect(prisma.hospitalityCommunicationTemplate.update).not.toHaveBeenCalled();
   });
 
   it('elimina solo plantillas del tenant', async () => {
@@ -213,6 +293,37 @@ describe('POST /api/hospitality/comunicaciones/[id]/enviar-prueba', () => {
     expect(d.contexto.noches).toBe('3');
     expect(mockEnviarComunicacion).toHaveBeenCalledWith(
       expect.objectContaining({ contenido: expect.stringContaining('María García') })
+    );
+  });
+
+  it('compila el diseño visual y devuelve el HTML que se envió', async () => {
+    prisma.hospitalityCommunicationTemplate.findFirst.mockResolvedValue(
+      makePlantilla({
+        canal: 'email',
+        asunto: 'Tu reserva',
+        contenido: '',
+        diseno: {
+          version: 1,
+          cabecera: { etiqueta: 'Reserva confirmada' },
+          bloques: [{ tipo: 'texto', texto: 'Hola {{nombre}}' }],
+        },
+      })
+    );
+    prisma.hospitalityReservation.findFirst.mockResolvedValue(null);
+    mockEnviarComunicacion.mockResolvedValue({ ok: true, canal: 'email', destinatario: 'x@y.com' });
+
+    const res = await POSTPrueba(
+      buildReq({ destinatario: 'x@y.com' }, 'https://volkern.app/api/hospitality/comunicaciones/ct1/enviar-prueba'),
+      { params: Promise.resolve({ id: 'ct1' }) }
+    );
+    const d = await res.json();
+    expect(res.status).toBe(200);
+    expect(d.htmlPreview).toContain('<table');
+    expect(d.htmlPreview).toContain('Hola');
+    // El texto que acompaña al HTML se genera del diseño cuando no hay contenido.
+    expect(d.contenidoPreview).toContain('Hola');
+    expect(mockEnviarComunicacion).toHaveBeenCalledWith(
+      expect.objectContaining({ html: expect.stringContaining('<table') })
     );
   });
 });

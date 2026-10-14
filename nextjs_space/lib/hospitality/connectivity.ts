@@ -1151,3 +1151,89 @@ export async function pushRateRestrictions(
 ): Promise<PushResult> {
   return postConnectivityUpdate('/update-rates', hotelCode, updates, 'rates_restrictions', tenantId);
 }
+
+// ─── Mensajería del canal (respuesta al huésped) ──────────────────────────
+
+/**
+ * Resultado de enviar una respuesta de mensajería al canal.
+ *
+ * La regla de éxito es la INVERSA de un push, a propósito: aquí lo peligroso no
+ * es creer que se envió algo que no se aplicó, sino dar por fallida una
+ * respuesta que el huésped ya recibió (el hotel volvería a escribirle). El
+ * contrato devuelve `success: true`; un 2xx que no diga `success: false` cuenta
+ * como enviado, y solo las advertencias del proveedor —que aquí sí significan
+ * «algo se descartó»— lo bajan a fallo.
+ */
+export interface MensajeCanalResult {
+  ok: boolean;
+  httpStatus?: number;
+  message?: string;
+  respuestaExterna?: unknown;
+  error?: string;
+  duracionMs: number;
+}
+
+/**
+ * Message Reply — POST /message-reply/{pms}.
+ *
+ * El cuerpo lo construye y valida `construirRespuestaCanal`
+ * (`lib/hospitality/mensajes-canal.ts`): aquí solo viaja. NO hace retries
+ * ciegos: un fallo vuelve al llamador para que quede en el hilo del hotel como
+ * lo que es (una respuesta que NO salió) y este decida si la reescribe.
+ */
+export async function enviarMensajeCanal(
+  body: Record<string, unknown>,
+  tenantId?: string | null
+): Promise<MensajeCanalResult> {
+  const started = Date.now();
+  try {
+    const creds = await getConnectivityCredentials(tenantId);
+    if (!creds) {
+      return { ok: false, error: 'Conectividad no configurada.', duracionMs: 0 };
+    }
+    const { res, duracionMs } = await connectivityFetch(
+      `/message-reply/${encodeURIComponent(creds.partnerId)}`,
+      body,
+      creds
+    );
+    const respuestaExterna = await readBody(res);
+    const message = (respuestaExterna as { message?: string } | null)?.message;
+
+    if (!res.ok) {
+      return {
+        ok: false,
+        httpStatus: res.status,
+        message,
+        respuestaExterna,
+        error: message || `HTTP ${res.status}`,
+        duracionMs,
+      };
+    }
+    if ((respuestaExterna as { success?: unknown } | null)?.success === false) {
+      return {
+        ok: false,
+        httpStatus: res.status,
+        message,
+        respuestaExterna,
+        error: message || 'El canal rechazó la respuesta',
+        duracionMs,
+      };
+    }
+    const advertencias = advertenciasDeRespuesta(respuestaExterna);
+    if (advertencias.length > 0) {
+      return {
+        ok: false,
+        httpStatus: res.status,
+        message,
+        respuestaExterna,
+        error: `El canal aceptó la respuesta pero descartó datos: ${advertencias.join(' · ')}`,
+        duracionMs,
+      };
+    }
+
+    return { ok: true, httpStatus: res.status, message, respuestaExterna, duracionMs };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Error de red';
+    return { ok: false, error: msg, duracionMs: Date.now() - started };
+  }
+}

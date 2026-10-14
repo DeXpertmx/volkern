@@ -24,4 +24,4 @@ try {
 } catch (err: any) {
 }
 
-execSync("tsx --require dotenv/config scripts/seed.ts", { stdio: "inherit" });
+execSync("tsx --require ./scripts/cargar-entorno.cjs scripts/seed.ts", { stdio: "inherit" });

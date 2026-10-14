@@ -126,6 +126,107 @@ describe('cotizarEstancia — precio y restricciones del rate plan', () => {
     expect(c.unidades[0].motivo).toBe('min_noches');
   });
 
+  it('estancia mínima de temporada: manda sobre la del plan en las llegadas del rango', () => {
+    const estacionalidad = {
+      temporadas: [{ desde: '2026-09-01', hasta: '2026-09-30', tarifa: 180, minNoches: 3 }],
+    };
+    const unidad = [{ id: 'u1', tarifaNoche: 100, moneda: 'MXN', estacionalidad }];
+
+    // 2 noches con llegada en temporada: las rechaza el mínimo de la temporada,
+    // aunque el mínimo general del plan (1) las permitiría.
+    const corta = cotizarEstancia({
+      checkIn: '2026-09-10',
+      checkOut: '2026-09-12',
+      unidades: unidad,
+      reservas: [],
+      ratePlan: { minNoches: 1 },
+    });
+    expect(corta.unidades[0].disponible).toBe(false);
+    expect(corta.unidades[0].motivo).toBe('min_noches');
+
+    // 3 noches con la misma llegada: vendible, y con el precio de temporada.
+    const larga = cotizarEstancia({
+      checkIn: '2026-09-10',
+      checkOut: '2026-09-13',
+      unidades: unidad,
+      reservas: [],
+      ratePlan: { minNoches: 1 },
+    });
+    expect(larga.unidades[0].disponible).toBe(true);
+    expect(larga.unidades[0].precioTotal).toBe(540); // 3 × 180 de temporada
+  });
+
+  it('estancia máxima de temporada: rechaza la estancia larga que el plan sí permitiría', () => {
+    const estacionalidad = {
+      temporadas: [{ desde: '2026-09-01', hasta: '2026-09-30', tarifa: 180, maxNoches: 3 }],
+    };
+    const c = cotizarEstancia({
+      checkIn: '2026-09-10',
+      checkOut: '2026-09-15', // 5 noches
+      unidades: [{ id: 'u1', tarifaNoche: 100, moneda: 'MXN', estacionalidad }],
+      reservas: [],
+      ratePlan: { minNoches: 1, maxNoches: 30 },
+    });
+    expect(c.unidades[0].disponible).toBe(false);
+    expect(c.unidades[0].motivo).toBe('max_noches');
+  });
+
+  it('días de entrada de temporada: reemplazan a los del plan y solo valen en su rango', () => {
+    // La temporada solo admite entradas del sábado (6); el plan permitía todos
+    // los días. La regla de la llegada no es la del plan: es la de la temporada.
+    const estacionalidad = {
+      temporadas: [{ desde: '2026-09-01', hasta: '2026-09-30', tarifa: 180, checkInDias: [6] }],
+    };
+    const ratePlan = { minNoches: 1, checkInDias: [0, 1, 2, 3, 4, 5, 6] };
+    const unidad = [{ id: 'u1', tarifaNoche: 100, moneda: 'MXN', estacionalidad }];
+
+    // 2026-09-10 es jueves: la temporada lo cierra aunque el plan lo permita.
+    const jueves = cotizarEstancia({
+      checkIn: '2026-09-10',
+      checkOut: '2026-09-12',
+      unidades: unidad,
+      reservas: [],
+      ratePlan,
+    });
+    expect(jueves.unidades[0].disponible).toBe(false);
+    expect(jueves.unidades[0].motivo).toBe('dia_checkin');
+
+    // 2026-09-12 es sábado: la misma estancia, permitida.
+    const sabado = cotizarEstancia({
+      checkIn: '2026-09-12',
+      checkOut: '2026-09-14',
+      unidades: unidad,
+      reservas: [],
+      ratePlan,
+    });
+    expect(sabado.unidades[0].disponible).toBe(true);
+
+    // Fuera de la temporada vuelven a valer los días del plan: 2026-08-13 es
+    // jueves y el plan sí lo permite.
+    const fuera = cotizarEstancia({
+      checkIn: '2026-08-13',
+      checkOut: '2026-08-15',
+      unidades: unidad,
+      reservas: [],
+      ratePlan,
+    });
+    expect(fuera.unidades[0].disponible).toBe(true);
+  });
+
+  it('una llegada fuera de la temporada no arrastra su mínimo', () => {
+    const estacionalidad = {
+      temporadas: [{ desde: '2026-09-01', hasta: '2026-09-30', tarifa: 180, minNoches: 5 }],
+    };
+    const c = cotizarEstancia({
+      checkIn: '2026-08-30',
+      checkOut: '2026-09-01', // 2 noches: la llegada es de agosto
+      unidades: [{ id: 'u1', tarifaNoche: 100, moneda: 'MXN', estacionalidad }],
+      reservas: [],
+      ratePlan: { minNoches: 2 },
+    });
+    expect(c.unidades[0].disponible).toBe(true);
+  });
+
   it('maxNoches del rate plan', () => {
     const c = cotizarEstancia({
       checkIn: '2026-09-10',

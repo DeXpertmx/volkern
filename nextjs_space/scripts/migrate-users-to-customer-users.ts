@@ -7,7 +7,7 @@
  * iniciar sesión desde la app móvil sin depender del fallback.
  *
  * Uso:
- *   npx tsx --require dotenv/config scripts/migrate-users-to-customer-users.ts
+ *   npx tsx --require ./scripts/cargar-entorno.cjs scripts/migrate-users-to-customer-users.ts
  */
 import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'crypto';

@@ -1,6 +1,15 @@
 import { vi } from 'vitest';
-import 'dotenv/config';
+import path from 'node:path';
+import dotenv from 'dotenv';
 import { webcrypto } from 'node:crypto';
+
+// Los mismos ficheros y el mismo orden que `tests/global-setup.ts`: `.env.local`
+// —donde vive el `DATABASE_URL` de desarrollo, git ignorado— antes que `.env`.
+// `dotenv/config` solo lee `.env`, que ya no lleva la URL de la base de datos:
+// sin esto, cada worker se quedaría sin ella.
+for (const archivo of ['.env.local', '.env']) {
+  dotenv.config({ path: path.resolve(process.cwd(), archivo), override: false });
+}
 
 // Node 18 (entorno vitest 'node') NO expone `crypto` como global — pero
 // `hashApiKeyEdge` (Web Crypto) y el sliding-window limiter usan

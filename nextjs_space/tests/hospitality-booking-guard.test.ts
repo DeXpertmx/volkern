@@ -14,8 +14,11 @@ import path from 'node:path';
 const RAIZ = path.resolve(__dirname, '..');
 const leer = (relativo: string) => fs.readFileSync(path.join(RAIZ, relativo), 'utf8');
 
+// Solo las rutas del flujo VIGENTE: la página pública es una (`/reservar/<slug>`)
+// y su API también. La antigua `/api/public/booking/[slug]` se retiró al unificar
+// las dos páginas — dejarla sería una segunda forma de reservar, con su propio
+// criterio de publicación.
 const RUTAS_PUBLICAS = [
-  'app/api/public/booking/[slug]/route.ts',
   'app/api/public/booking/[slug]/cotizar/route.ts',
   'app/api/public/booking/[slug]/reservar/route.ts',
 ];
@@ -138,6 +141,19 @@ describe('el cobro va a la cuenta del tenant, nunca a la de Volkern', () => {
   });
 });
 
+describe('solo hay una página pública de reserva', () => {
+  it('el enlace antiguo redirige a la página única y no sirve su propia versión', () => {
+    const antiguo = leer('app/booking/[slug]/page.tsx');
+    // Redirección permanente (308): los enlaces que los hoteles ya repartieron y
+    // el buscador se quedan con la dirección buena.
+    expect(antiguo).toContain('permanentRedirect');
+    expect(antiguo).toContain('propiedadesPublicadas');
+    expect(antiguo).not.toContain('estado: \'conectada\'');
+    // Sin formulario ni API propios: no puede haber dos criterios de publicación.
+    expect(antiguo).not.toContain('/api/public/booking/');
+  });
+});
+
 describe('la sección existe y se puede llegar a ella', () => {
   it('la página de configuración está en el menú de Hospitality', () => {
     const navegacion = leer('lib/navigation-config.ts');
@@ -167,28 +183,31 @@ describe('el desglose noche a noche (estancia en temporada)', () => {
     expect(leer('app/api/public/booking/[slug]/cotizar/route.ts')).toContain(
       'desgloseNoches: u.desgloseNoches'
     );
-    // La página pública: el desglose viaja con la cotización del motor.
-    expect(leer('app/booking/[slug]/page.tsx')).toContain('desgloseNoches');
+    // La página pública: el desglose viaja con la cotización del motor hasta el
+    // asistente, que es quien lo enseña.
     expect(leer('components/hospitality/booking/BookingWizard.tsx')).toContain('desgloseNoches');
+    // El enlace antiguo ya no pinta ninguna página: solo redirige (308) a la
+    // página única, así que no hay una segunda superficie que pueda cotizar
+    // distinto.
+    const enlaceAntiguo = leer('app/booking/[slug]/page.tsx');
+    expect(enlaceAntiguo).toContain('permanentRedirect');
+    expect(enlaceAntiguo).not.toContain('desgloseNoches');
   });
 
-  it('la página pública cotiza con la estacionalidad del plan, no con la tarifa plana', () => {
-    const ruta = leer('app/api/public/booking/[slug]/route.ts');
-    // Cotizar (GET) y reservar (POST) con el MISMO plan: si una añadiera las
-    // temporadas y la otra no, la página y la reserva dirían precios distintos.
-    expect(ruta).toMatch(/estacionalidad:\s*plan \? plan\.temporadas/);
-    expect(ruta).toMatch(/estacionalidad:\s*ratePlan \? ratePlan\.temporadas/);
-    // Y las reglas son las del motor que ya usa el asistente: una sola. La
-    // página pública no suma a mano: delega en `./pricing`.
+  it('la reserva cotiza con la estacionalidad del plan, no con la tarifa plana', () => {
+    // Cotizar y reservar con el MISMO plan: si una añadiera las temporadas y la
+    // otra no, la página y la reserva dirían precios distintos. Ahora hay un solo
+    // motor, así que la comprobación es una: el motor público pasa la
+    // estacionalidad del plan a la tarificación.
+    const motor = leer('lib/hospitality/booking-engine.ts');
+    expect(motor).toMatch(/estacionalidad:\s*plan \? plan\.temporadas/);
+    // Y las reglas son las del módulo único de tarificación: nadie suma a mano.
     expect(leer('lib/hospitality/booking-rates.ts')).toContain("from './pricing'");
   });
 
   it('la fecha de cada noche se lee como día local (una fecha ISO no se corre un día)', () => {
     expect(leer('lib/hospitality/booking-i18n.ts')).toContain('fechaDeNoche');
-    for (const superficie of [
-      'app/booking/[slug]/page.tsx',
-      'components/hospitality/booking/BookingWizard.tsx',
-    ]) {
+    for (const superficie of ['components/hospitality/booking/BookingWizard.tsx']) {
       const codigo = leer(superficie);
       expect(codigo, `${superficie} no localiza la fecha de la noche`).toContain('fechaDeNoche');
       // `new Date('2026-09-25')` es medianoche UTC: en América se lee como el 24.
@@ -220,7 +239,7 @@ describe('la capa 2 (ajustes por demanda) es de la reserva directa', () => {
     expect(leer('lib/hospitality/availability.ts')).toContain('export function ocupacionPorNoche');
     for (const ruta of [
       'lib/hospitality/booking-engine.ts',
-      'app/api/public/booking/[slug]/route.ts',
+      'lib/hospitality/booking-rates.ts',
     ]) {
       expect(leer(ruta), `${ruta} no mide la demanda con el motor`).toContain('ocupacionPorNoche');
     }

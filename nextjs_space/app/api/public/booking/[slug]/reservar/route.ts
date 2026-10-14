@@ -5,9 +5,6 @@ import { crearReservaDirecta, resolverPaginaPublica } from '@/lib/hospitality/bo
 import { crearSesionDePago, estadoDeCobroDelTenant } from '@/lib/hospitality/booking-payments';
 import { urlConfirmacionReserva } from '@/lib/hospitality/booking-link';
 import { getEnlaceAppUrl } from '@/lib/hospitality/compliance-link';
-import { cotizarEstancia } from '@/lib/hospitality/pricing';
-import { tarifaPorNocheDe } from '@/lib/hospitality/pricing';
-import { prisma } from '@/lib/db';
 import { errorPublico, leerCuerpo, leerRango, textoOpcional } from '../../_comun';
 
 /**
@@ -80,6 +77,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
       // El idioma de la página (`?lang=en`) viaja con la reserva: es el idioma en
       // que el huésped recibirá sus comunicaciones automáticas.
       idioma: textoOpcional(cuerpo.lang, 8),
+      // Extras y documento viajan tal cual al motor: él resuelve el precio del
+      // catálogo y valida el registro de viajeros. La ruta no interpreta ninguno
+      // de los dos — hacerlo aquí sería una segunda verdad sobre el dinero y
+      // sobre el parte.
+      extras: cuerpo.extras,
       huesped: {
         nombre,
         email,
@@ -87,6 +89,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
         pais: textoOpcional(cuerpo.pais, 80),
         ciudad: textoOpcional(cuerpo.ciudad, 80),
         notas: textoOpcional(cuerpo.notas, 1000),
+        documento:
+          cuerpo.documento && typeof cuerpo.documento === 'object'
+            ? (cuerpo.documento as Record<string, unknown>)
+            : null,
       },
     });
 
@@ -109,6 +115,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
         moneda: resultado.moneda,
         noches: resultado.noches,
         confirmacionUrl,
+        checkinUrl: resultado.checkinUrl,
         pagoUrl: null,
       });
     }
@@ -118,27 +125,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
     let pagoUrl: string | null = null;
     let avisoDePago: string | null = null;
     if (config.requierePagoOnline) {
-      const unidad = await prisma.hospitalityUnit.findFirst({
-        where: { id: unitId, tenantId: config.tenantId },
-        select: { tarifaBase: true, ratePlans: { where: { activo: true }, orderBy: { tarifa: 'asc' }, take: 1 } },
-      });
-      const tarifa = tarifaPorNocheDe({
-        plan: unidad?.ratePlans[0] || null,
-        tarifaBase: unidad?.tarifaBase,
-      });
-      const cotizacion =
-        tarifa === null
-          ? null
-          : cotizarEstancia({
-              checkIn: rango.rango.checkIn,
-              checkOut: rango.rango.checkOut,
-              tarifaPorNoche: tarifa,
-              limpieza: config.tarifaLimpieza,
-              anticipoPorcentaje: config.anticipoPorcentaje,
-              moneda,
-            });
-
-      const aCobrar = cotizacion ? (cotizacion.anticipo > 0 ? cotizacion.anticipo : cotizacion.total) : resultado.total;
+      // El importe lo dice el motor, que es quien cotizó: el anticipo acordado
+      // (o el total de la estancia, con sus extras, si no hay anticipo). Volver
+      // a cotizar aquí sería una segunda verdad sobre el mismo precio — y una
+      // que no conocería los extras.
+      const aCobrar = resultado.anticipo > 0 ? resultado.anticipo : resultado.total;
       const sesion = await crearSesionDePago({
         tenantId: config.tenantId,
         reservaId: resultado.reservaId,
@@ -165,7 +156,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
         total: resultado.total,
         moneda: resultado.moneda,
         noches: resultado.noches,
+        totalExtras: resultado.totalExtras,
         confirmacionUrl,
+        checkinUrl: resultado.checkinUrl,
         pagoUrl,
         avisoDePago,
       },

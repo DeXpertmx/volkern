@@ -27,6 +27,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { AccionHospitality } from '@/components/hospitality/AccionHospitality';
 import { MONEDAS_SELECCIONABLES, formatearImporte, primeraMoneda } from '@/lib/moneda';
+import { NOCHES_TEMPORADA_MAX } from '@/lib/hospitality/estacionalidad';
+// Módulo puro: la forma del informe de descartes del canal que devuelve
+// `POST /api/hospitality/sync` (el botón de sincronizar de esta pantalla).
+import type { RechazoDeCanal } from '@/lib/hospitality/rechazo-canal';
 import { useMonedaTenant } from '@/lib/use-moneda-tenant';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -69,11 +73,19 @@ interface RatePlan {
   property?: { id: string; nombre: string };
 }
 
-/** Fila de temporada en el formulario (la tarifa como texto del input). */
+/**
+ * Fila de temporada en el formulario (los números son texto del input).
+ * Cada regla vacía = la temporada no la impone y manda la del plan: mínimo,
+ * máximo y días de entrada/salida se editan por temporada.
+ */
 interface TemporadaUI {
   desde: string;
   hasta: string;
   tarifa: string;
+  minNoches: string;
+  maxNoches: string;
+  checkInDias: number[];
+  checkOutDias: number[];
   nombre: string;
 }
 
@@ -132,8 +144,18 @@ function temporadasDePlan(plan: RatePlan): TemporadaUI[] {
       desde: typeof t.desde === 'string' ? t.desde : '',
       hasta: typeof t.hasta === 'string' ? t.hasta : '',
       tarifa: t.tarifa != null ? String(t.tarifa) : '',
+      minNoches: t.minNoches != null ? String(t.minNoches) : '',
+      maxNoches: t.maxNoches != null ? String(t.maxNoches) : '',
+      checkInDias: diasDeTemporada(t.checkInDias),
+      checkOutDias: diasDeTemporada(t.checkOutDias),
       nombre: typeof t.nombre === 'string' ? t.nombre : '',
     }));
+
+/** Días 0-6 guardados en el Json de una temporada, sin fiarse de su forma. */
+function diasDeTemporada(valor: unknown): number[] {
+  if (!Array.isArray(valor)) return [];
+  return valor.filter((d): d is number => typeof d === 'number' && d >= 0 && d <= 6);
+}
 }
 
 function finDeSemanaDePlan(plan: RatePlan): { dias: number[]; porcentaje: string } {
@@ -199,6 +221,10 @@ export default function HospitalityTarifasPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  // Último descarte del canal: se queda visible hasta la siguiente sincronización
+  const [syncRechazo, setSyncRechazo] = useState<
+    { mensaje: string; descartadas: RechazoDeCanal['descartadas'] } | null
+  >(null);
 
   const [properties, setProperties] = useState<Property[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
@@ -259,8 +285,21 @@ export default function HospitalityTarifasPage() {
     return {
       planes: plans.length,
       activos: activos.length,
-      conRestriccionNoches: plans.filter((p) => p.minNoches > 1 || (p.maxNoches != null && p.maxNoches > 0)).length,
-      conRestriccionDias: plans.filter((p) => (p.checkInDias?.length || 0) > 0 || (p.checkOutDias?.length || 0) > 0).length,
+      // Cuenta también las temporadas con mínimo propio: son restricciones de
+      // noches igual que el mínimo general, y dejarlas fuera del contador haría
+      // que el panel dijera que no hay ninguna donde el hotel ya puso una.
+      conRestriccionNoches: plans.filter(
+        (p) =>
+          p.minNoches > 1 ||
+          (p.maxNoches != null && p.maxNoches > 0) ||
+          temporadasDePlan(p).some((t) => Number(t.minNoches) > 1 || t.maxNoches.trim() !== '')
+      ).length,
+      conRestriccionDias: plans.filter(
+        (p) =>
+          (p.checkInDias?.length || 0) > 0 ||
+          (p.checkOutDias?.length || 0) > 0 ||
+          temporadasDePlan(p).some((t) => t.checkInDias.length > 0 || t.checkOutDias.length > 0)
+      ).length,
       conEstacionalidad: plans.filter((p) => (Array.isArray(p.temporadas) && p.temporadas.length > 0) || (() => { const fw = finDeSemanaDePlan(p); return fw.dias.length > 0; })()).length,
       conAjustes: plans.filter((p) => cuantosAjustes(p) > 0).length,
     };
@@ -323,7 +362,37 @@ export default function HospitalityTarifasPage() {
   };
 
   const addTemporada = () => {
-    setForm((f) => ({ ...f, temporadas: [...f.temporadas, { desde: '', hasta: '', tarifa: '', nombre: '' }] }));
+    setForm((f) => ({
+      ...f,
+      temporadas: [
+        ...f.temporadas,
+        {
+          desde: '',
+          hasta: '',
+          tarifa: '',
+          minNoches: '',
+          maxNoches: '',
+          checkInDias: [],
+          checkOutDias: [],
+          nombre: '',
+        },
+      ],
+    }));
+  };
+
+  /** Días de entrada/salida de UNA temporada (los chips de su fila). */
+  const toggleDiaTemporada = (idx: number, field: 'checkInDias' | 'checkOutDias', d: number) => {
+    setForm((f) => ({
+      ...f,
+      temporadas: f.temporadas.map((t, i) =>
+        i === idx
+          ? {
+              ...t,
+              [field]: t[field].includes(d) ? t[field].filter((x) => x !== d) : [...t[field], d],
+            }
+          : t
+      ),
+    }));
   };
 
   const removeTemporada = (idx: number) => {
@@ -382,15 +451,46 @@ export default function HospitalityTarifasPage() {
     // Temporadas: solo las filas completas; una fila a medias se descarta con
     // un aviso (la API revalida todo: aquí es cortesía, allá es la guardia).
     const temporadas = form.temporadas
-      .filter((t) => t.desde || t.hasta || t.tarifa || t.nombre)
+      .filter(
+        (t) =>
+          t.desde ||
+          t.hasta ||
+          t.tarifa ||
+          t.nombre ||
+          t.minNoches ||
+          t.maxNoches ||
+          t.checkInDias.length ||
+          t.checkOutDias.length
+      )
       .map((t) => ({
         desde: t.desde,
         hasta: t.hasta,
         tarifa: Number(t.tarifa),
+        ...(t.minNoches.trim() !== '' ? { minNoches: Number(t.minNoches) } : {}),
+        ...(t.maxNoches.trim() !== '' ? { maxNoches: Number(t.maxNoches) } : {}),
+        ...(t.checkInDias.length ? { checkInDias: t.checkInDias } : {}),
+        ...(t.checkOutDias.length ? { checkOutDias: t.checkOutDias } : {}),
         ...(t.nombre.trim() ? { nombre: t.nombre.trim() } : {}),
       }));
     if (temporadas.some((t) => !t.desde || !t.hasta || !t.tarifa || t.tarifa <= 0)) {
       toast.error('Hay temporadas incompletas: fechas YYYY-MM-DD y tarifa mayor a 0');
+      return;
+    }
+    // Las reglas de cada temporada son restricciones de venta: se avisan antes
+    // de enviar (la API las vuelve a validar y responde 400 si no encajan).
+    const nochesValidas = (n: number) =>
+      Number.isInteger(n) && n >= 1 && n <= NOCHES_TEMPORADA_MAX;
+    if (
+      temporadas.some(
+        (t) =>
+          (t.minNoches != null && !nochesValidas(t.minNoches)) ||
+          (t.maxNoches != null && !nochesValidas(t.maxNoches)) ||
+          (t.minNoches != null && t.maxNoches != null && t.maxNoches < t.minNoches)
+      )
+    ) {
+      toast.error(
+        `Revisa las temporadas: noches enteras entre 1 y ${NOCHES_TEMPORADA_MAX}, y el máximo no puede ser menor que el mínimo`
+      );
       return;
     }
     const finDeSemana =
@@ -526,6 +626,7 @@ export default function HospitalityTarifasPage() {
 
   const syncManual = async () => {
     setSyncing(true);
+    setSyncRechazo(null);
     try {
       const res = await fetch('/api/hospitality/sync', {
         method: 'POST',
@@ -536,6 +637,12 @@ export default function HospitalityTarifasPage() {
       if (res.ok && data.ok) {
         toast.success(`Sincronización completada (${data.pushCount} push, ${data.errores} errores)`);
       } else {
+        // Un descarte del canal se queda en pantalla, unidad por unidad: en un
+        // toast se iría antes de que nadie lo lea, y es lo único accionable.
+        const descartadas = (data?.rechazo?.descartadas ?? []) as RechazoDeCanal['descartadas'];
+        if (descartadas.length > 0 || data?.rechazo?.mensaje) {
+          setSyncRechazo({ mensaje: data.rechazo.mensaje ?? '', descartadas });
+        }
         toast.error(data.error || data.message || 'La sincronización falló (revisa los sync-logs)');
       }
     } catch {
@@ -620,6 +727,26 @@ export default function HospitalityTarifasPage() {
           </Button>
         </div>
       </div>
+
+      {syncRechazo && (
+        <Alert variant="destructive">
+          <AlertDescription className="space-y-2">
+            <p>{syncRechazo.mensaje}</p>
+            {syncRechazo.descartadas.length > 0 && (
+              <ul className="space-y-1 text-xs">
+                {syncRechazo.descartadas.map((d) => (
+                  <li key={d.unitId}>
+                    <span className="font-medium">{d.nombre}</span>
+                    {d.roomCode ? ` · habitación ${d.roomCode}` : ''}
+                    {d.codigosTarifa.length > 0 ? ` · tarifa ${d.codigosTarifa.join(', ')}` : ''}
+                    {d.motivos[0] ? ` — ${d.motivos[0]}` : ''}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
@@ -719,6 +846,36 @@ export default function HospitalityTarifasPage() {
                     <Badge variant="outline" className="text-[10px]">
                       <CalendarRange className="h-3 w-3 mr-1" />
                       {p.temporadas.length} temporada{p.temporadas.length > 1 ? 's' : ''}
+                    </Badge>
+                  )}
+                  {(() => {
+                    const conNoches = temporadasDePlan(p).filter(
+                      (t) => Number(t.minNoches) > 1 || t.maxNoches.trim() !== ''
+                    );
+                    if (conNoches.length === 0) return null;
+                    const minimos = conNoches
+                      .map((t) => Number(t.minNoches))
+                      .filter((n) => Number.isInteger(n) && n > 1);
+                    const maximos = conNoches
+                      .map((t) => Number(t.maxNoches))
+                      .filter((n) => Number.isInteger(n));
+                    const texto = [
+                      minimos.length ? `mín. ${Math.max(...minimos)}` : null,
+                      maximos.length ? `máx. ${Math.min(...maximos)}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ');
+                    return (
+                      <Badge variant="outline" className="text-[10px]">
+                        <Moon className="h-3 w-3 mr-1" />
+                        {texto} noches en temporada
+                      </Badge>
+                    );
+                  })()}
+                  {temporadasDePlan(p).some((t) => t.checkInDias.length > 0 || t.checkOutDias.length > 0) && (
+                    <Badge variant="outline" className="text-[10px]">
+                      <CalendarCheck2 className="h-3 w-3 mr-1" />
+                      días en temporada
                     </Badge>
                   )}
                   {(() => {
@@ -963,6 +1120,12 @@ export default function HospitalityTarifasPage() {
               <p className="text-[11px] text-muted-foreground -mt-2">
                 El precio se cobra <strong>por noche</strong>: cada noche cuesta la tarifa de su fecha. La tarifa general queda como "desde" y como respaldo de las fechas sin temporada.
               </p>
+              <p className="text-[11px] text-muted-foreground">
+                <strong>Reglas de la temporada</strong>: noches mínimas y máximas y los días en que se puede
+                entrar o salir. Aplican a las <strong>llegadas dentro de la temporada</strong> y reemplazan, campo a
+                campo, a las del plan: lo que dejes vacío lo pone el plan. Una estancia que empieza en la
+                temporada se juzga entera con su regla. Viajan al canal y se aplican igual en tu web de reservas.
+              </p>
 
               {form.temporadas.length === 0 ? (
                 <p className="text-xs text-muted-foreground italic">
@@ -971,52 +1134,105 @@ export default function HospitalityTarifasPage() {
               ) : (
                 <div className="space-y-2">
                   {form.temporadas.map((t, idx) => (
-                    <div key={idx} className="grid grid-cols-[1fr_1fr_90px_1fr_32px] gap-2 items-end">
-                      <div className="space-y-1">
-                        <Label className="text-[10px] text-muted-foreground">Desde</Label>
-                        <Input
-                          type="date"
-                          value={t.desde}
-                          onChange={(e) => setTemporada(idx, { desde: e.target.value })}
-                        />
+                    <div key={idx} className="rounded-md border p-2 space-y-2">
+                      <div className="grid grid-cols-[1fr_1fr_90px_1fr_32px] gap-2 items-end">
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-muted-foreground">Desde</Label>
+                          <Input
+                            type="date"
+                            value={t.desde}
+                            onChange={(e) => setTemporada(idx, { desde: e.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-muted-foreground">Hasta</Label>
+                          <Input
+                            type="date"
+                            value={t.hasta}
+                            onChange={(e) => setTemporada(idx, { hasta: e.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-muted-foreground">Tarifa</Label>
+                          <Input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={t.tarifa}
+                            onChange={(e) => setTemporada(idx, { tarifa: e.target.value })}
+                            placeholder={form.tarifa || '0'}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-muted-foreground">Nombre</Label>
+                          <Input
+                            value={t.nombre}
+                            onChange={(e) => setTemporada(idx, { nombre: e.target.value })}
+                            placeholder="Ej: Verano, Semana Santa"
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => removeTemporada(idx)}
+                          title="Quitar temporada"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
                       </div>
-                      <div className="space-y-1">
-                        <Label className="text-[10px] text-muted-foreground">Hasta</Label>
-                        <Input
-                          type="date"
-                          value={t.hasta}
-                          onChange={(e) => setTemporada(idx, { hasta: e.target.value })}
-                        />
+
+                      {/* Reglas de la estancia: vacío = las del plan. */}
+                      <div className="grid grid-cols-[100px_100px_minmax(0,1fr)_minmax(0,1fr)] gap-2 items-end">
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-muted-foreground">Mín. noches</Label>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={NOCHES_TEMPORADA_MAX}
+                            step="1"
+                            value={t.minNoches}
+                            onChange={(e) => setTemporada(idx, { minNoches: e.target.value })}
+                            placeholder={form.minNoches || '1'}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-muted-foreground">Máx. noches</Label>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={NOCHES_TEMPORADA_MAX}
+                            step="1"
+                            value={t.maxNoches}
+                            onChange={(e) => setTemporada(idx, { maxNoches: e.target.value })}
+                            placeholder={form.maxNoches || '∞'}
+                          />
+                        </div>
+                        {(['checkInDias', 'checkOutDias'] as const).map((campo) => (
+                          <div key={campo} className="space-y-1">
+                            <Label className="text-[10px] text-muted-foreground">
+                              {campo === 'checkInDias' ? 'Días de entrada' : 'Días de salida'}
+                            </Label>
+                            <div className="flex flex-wrap gap-1">
+                              {DIAS_SEMANA.map((d) => (
+                                <button
+                                  key={d.v}
+                                  type="button"
+                                  onClick={() => toggleDiaTemporada(idx, campo, d.v)}
+                                  className={`text-[10px] rounded px-1.5 py-0.5 border transition-colors ${
+                                    t[campo].includes(d.v)
+                                      ? 'bg-primary text-primary-foreground border-primary'
+                                      : 'bg-background text-muted-foreground hover:bg-muted'
+                                  }`}
+                                >
+                                  {d.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                      <div className="space-y-1">
-                        <Label className="text-[10px] text-muted-foreground">Tarifa</Label>
-                        <Input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          value={t.tarifa}
-                          onChange={(e) => setTemporada(idx, { tarifa: e.target.value })}
-                          placeholder={form.tarifa || '0'}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-[10px] text-muted-foreground">Nombre</Label>
-                        <Input
-                          value={t.nombre}
-                          onChange={(e) => setTemporada(idx, { nombre: e.target.value })}
-                          placeholder="Ej: Verano, Semana Santa"
-                        />
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="text-destructive hover:text-destructive"
-                        onClick={() => removeTemporada(idx)}
-                        title="Quitar temporada"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
                     </div>
                   ))}
                 </div>

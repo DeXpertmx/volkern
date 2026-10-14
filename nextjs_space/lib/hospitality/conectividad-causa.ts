@@ -10,6 +10,13 @@
  * nombra — la misma filosofía que las causas de los partes de viajeros
  * («rechazado por el Ministerio» ≠ «sin respuesta del servicio»: se arreglan
  * distinto).
+ *
+ * Las tres causas que NO son «rotar credenciales» se reconocen por el texto del
+ * proveedor: ID de socio deshabilitado (400 «Partner is disabled!»), ID de socio
+ * desconocido (403 «partner desconocido») y hotel no concedido a ese ID (403
+ * «Access Denied - <hotelCode>», que es lo que responde el proveedor cuando el
+ * hotel no está asignado a la cuenta y que durante semanas se leyó como
+ * «credenciales rechazadas»).
  */
 
 /** Un SyncLog fallido, reducido a lo que la regla necesita. */
@@ -43,6 +50,7 @@ export interface CausaConectividad {
     | 'credenciales_rechazadas'
     | 'partner_deshabilitado'
     | 'partner_desconocido'
+    | 'hotel_sin_concesion'
     | 'sin_respuesta_servicio'
     | 'otro_error';
   /** Lo que se muestra al operador. */
@@ -76,6 +84,16 @@ const INDICIOS_ID_SOCIO_DESCONOCIDO = [
   'invalid partner',
 ];
 
+/**
+ * Cómo responde el proveedor cuando el hotel NO está concedido al ID de socio.
+ * Texto verificado contra el servicio (2026-10-09):
+ * `403 {"success":false,"message":"Access Denied - 75fdbbce2e"}` — con el par
+ * Basic y el ID de socio correctos. No es un fallo de credenciales: el
+ * proveedor contesta eso tanto para el hotel de pruebas retirado
+ * (`sandbox-pms`) como para un hotel que aún no ha asignado a la cuenta.
+ */
+const INDICIOS_HOTEL_SIN_CONCESION = ['access denied', 'not granted', 'no access to'];
+
 /** Motivo del ID de socio que el proveedor nombra en su mensaje, si lo nombra. */
 function motivoDelIdSocio(mensaje?: string | null): 'deshabilitado' | 'desconocido' | null {
   if (!mensaje) return null;
@@ -90,10 +108,18 @@ function motivoDelIdSocio(mensaje?: string | null): 'deshabilitado' | 'desconoci
 }
 
 /**
- * Palabras clave de error de red/timeout del cliente HTTP (Node `fetch`):
- * aborts, DNS, conexión rechazada, socket colgado. Cualquiera de ellas sin
- * `httpStatus` significa que la petición no obtuvo respuesta.
+ * ¿El mensaje del proveedor dice que el hotel no está concedido a ese ID de
+ * socio? Es el `Access Denied - <hotelCode>` del servicio. Se separa de
+ * «partner desconocido» porque el arreglo es distinto: aquí el ID de socio es el
+ * correcto y lo que falta es la asignación del hotel (y a veces el código de
+ * propiedad está mal copiado).
  */
+function hotelSinConcesion(mensaje?: string | null): boolean {
+  if (!mensaje) return false;
+  const texto = mensaje.toLowerCase();
+  return INDICIOS_HOTEL_SIN_CONCESION.some((indicio) => texto.includes(indicio));
+}
+
 const INDICIOS_RED = [
   'timeout',
   'timed out',
@@ -125,6 +151,9 @@ function pareceErrorDeRed(mensaje?: string | null): boolean {
  * - El mensaje del proveedor nombra el ID de socio (deshabilitado o
  *   desconocido) → esa es la causa, aunque el código sea 400 o 403: se arregla
  *   hablando con el proveedor o corrigiendo el valor, no rotando credenciales.
+ * - El mensaje dice «Access Denied - <hotelCode>» → «Hotel no concedido a este
+ *   ID de socio»: el par Basic y el ID son válidos, lo que falta es la
+ *   asignación del hotel. Sigue siendo un 403, pero no de credenciales.
  * - 401/403 → «Credenciales rechazadas»: el servicio respondió y dijo no.
  * - 5xx, o sin HTTP con indicio de red/timeout en el mensaje → «Sin respuesta
  *   del servicio»: el servicio no llegó a contestar con sentido.
@@ -162,6 +191,17 @@ export function causaDeFalloConectividad(fallo?: FalloConectividad | null): Caus
       texto: 'El servicio no reconoce el ID de socio',
       consejo:
         'El ID de socio guardado no es el que el servicio tiene para este hotel: revisa el que te dieron al registrar el hotel, o quítalo para usar el de la plataforma.',
+    };
+  }
+
+  // Y el hotel sin conceder a ese ID de socio: mismo código 403, otro arreglo
+  // (el ID de socio es correcto; falta que el proveedor asigne el hotel).
+  if (hotelSinConcesion(mensaje)) {
+    return {
+      clave: 'hotel_sin_concesion',
+      texto: 'El hotel no está concedido a este ID de socio',
+      consejo:
+        'El servicio reconoce las credenciales y el ID de socio: lo que no tiene es ese hotel asignado a la cuenta. Comprueba que el código de propiedad es el correcto y pide que lo asignen a tu ID de socio: hasta entonces no fluyen ni el inventario ni las reservas de ese hotel.',
     };
   }
 

@@ -40,7 +40,7 @@ import {
   type Cotizacion,
   type NocheCotizada,
 } from './pricing';
-import { tieneEstacionalidad } from './estacionalidad';
+import { reglasDeVentaDeLlegada, tieneEstacionalidad } from './estacionalidad';
 import { normalizarDetalleUnidad } from './unit-detalle';
 import { upsertGuest, type WebhookReservationPayload } from './reservations';
 import { emitReservationCreated } from './events';
@@ -48,6 +48,17 @@ import { dispararComunicacionReserva } from './comunicaciones';
 import { dispatchConnectivityPush } from './sync';
 import { leerConfigPorSlug, monedaPublicada, type ConfigBooking } from './booking-config';
 import { idiomaDeValor } from './booking-i18n';
+// Extras comprables y registro de viajeros: vivían solo en la página antigua
+// (`/booking/<id>`); al unificar la reserva pública en un único flujo tienen que
+// seguir existiendo aquí, o el huésped dejaría de poder contratarlos y el parte
+// de viajeros perdería la documentación que ya dejaba al reservar.
+import { resolverExtras, filasDeItemsExtras, type ExtraCatalogo } from './booking-extras';
+import { normalizarViajero, type ViajeroCheckin } from './guest-checkin';
+import { asegurarTokenCheckin, enlaceCheckin } from './checkin-service';
+// Las fotos del alojamiento se leen con el mismo módulo que el editor que las
+// escribió: el Json guarda `{ url, titulo?, portada? }` y aquí solo interesan
+// las URLs, con la portada delante (ver `urlsFotosHospedaje`).
+import { urlsFotosHospedaje } from './property-editor-config';
 
 /** Canal de las reservas que llegan por la página pública del tenant. */
 export const CANAL_DIRECTO = 'Directa';
@@ -82,6 +93,12 @@ export interface PropiedadPublica {
   ciudad: string | null;
   direccion: string | null;
   descripcion: string | null;
+  /**
+   * Fotos de la FICHA del alojamiento, con la portada delante: la galería de la
+   * página pública las enseña arriba (plantilla clásica) o de cabecera
+   * (moderna). Cada unidad lleva además las suyas —o estas— en `unidades`.
+   */
+  fotos: string[];
   unidades: UnidadPublica[];
 }
 
@@ -120,7 +137,7 @@ export async function listarPropiedadesPublicables(
   });
 
   return propiedades.map((propiedad) => {
-    const fotosPropiedad = aLista(propiedad.fotos);
+    const fotosPropiedad = urlsFotosHospedaje(propiedad.fotos);
     const unidades = propiedad.units
       .map((unidad) => {
         const plan = unidad.ratePlans[0] || null;
@@ -132,22 +149,28 @@ export async function listarPropiedadesPublicables(
       })
       // Sin precio no se publica: vender a cero sería peor que no vender.
       .filter((fila): fila is { unidad: typeof fila.unidad; plan: typeof fila.plan; tarifa: number } => fila.tarifa !== null)
-      .map(({ unidad, plan, tarifa }) => ({
-        id: unidad.id,
-        propertyId: unidad.propertyId,
-        nombre: unidad.nombre,
-        codigo: unidad.codigo,
-        tipo: unidad.tipo,
-        capacidad: unidad.capacidad,
-        descripcion: unidad.descripcion,
-        tarifaPorNoche: tarifa,
-        tarifaDesde: plan && tieneEstacionalidad(plan.temporadas ?? plan.finDeSemana) ? tarifa : null,
-        fotos: aLista(unidad.fotos).length ? aLista(unidad.fotos) : fotosPropiedad,
-        amenidades: aLista(unidad.amenidades),
-        // Distribución de ESTA unidad (habitaciones/camas), normalizada por el
-        // módulo puro: la ficha pública nunca expone un JSONB corrupto.
-        detalle: normalizarDetalleUnidad(unidad.detalleAlojamiento),
-      }));
+      .map(({ unidad, plan, tarifa }) => {
+        const fotosUnidad = urlsFotosHospedaje(unidad.fotos);
+        return {
+          id: unidad.id,
+          propertyId: unidad.propertyId,
+          nombre: unidad.nombre,
+          codigo: unidad.codigo,
+          tipo: unidad.tipo,
+          capacidad: unidad.capacidad,
+          descripcion: unidad.descripcion,
+          tarifaPorNoche: tarifa,
+          tarifaDesde: plan && tieneEstacionalidad(plan.temporadas ?? plan.finDeSemana) ? tarifa : null,
+          // Fotos de la unidad o, si no tiene, las de la propiedad: una unidad
+          // sin fotos propias enseña la del alojamiento (y su portada) en lugar
+          // de un hueco, que es lo que hacía con el Json rico sin leer.
+          fotos: fotosUnidad.length ? fotosUnidad : fotosPropiedad,
+          amenidades: aLista(unidad.amenidades),
+          // Distribución de ESTA unidad (habitaciones/camas), normalizada por el
+          // módulo puro: la ficha pública nunca expone un JSONB corrupto.
+          detalle: normalizarDetalleUnidad(unidad.detalleAlojamiento),
+        };
+      });
 
     return {
       id: propiedad.id,
@@ -155,6 +178,7 @@ export async function listarPropiedadesPublicables(
       ciudad: propiedad.ciudad,
       direccion: propiedad.direccion,
       descripcion: propiedad.descripcion,
+      fotos: fotosPropiedad,
       unidades,
     };
   });
@@ -257,10 +281,15 @@ export async function cotizarDisponibilidad(params: {
       checkOut,
       restricciones: plan
         ? {
-            minNoches: plan.minNoches,
-            maxNoches: plan.maxNoches,
-            checkInDias: aLista(plan.checkInDias).map(Number),
-            checkOutDias: aLista(plan.checkOutDias).map(Number),
+            // Las reglas de la temporada que contiene la llegada reemplazan,
+            // campo a campo, a las generales del plan (una sola regla, la de
+            // `estacionalidad`): la misma que aplica la web pública y la que
+            // viaja al canal.
+            ...reglasDeVentaDeLlegada({
+              fecha: startOfDay(checkIn),
+              estacionalidad: plan.temporadas ?? plan.finDeSemana,
+              plan,
+            }),
           }
         : null,
     });
@@ -329,6 +358,12 @@ export interface HuespedDirecto {
   pais?: string | null;
   ciudad?: string | null;
   notas?: string | null;
+  /**
+   * Documento del titular tal como lo envía el formulario (`tipoDocumento`,
+   * `numeroDocumento`, `fechaNacimiento`, `nacionalidad`…). Es opcional: el
+   * huésped puede dejarlo para el enlace de check-in.
+   */
+  documento?: Record<string, unknown> | null;
 }
 
 export interface EntradaReservaDirecta {
@@ -356,10 +391,31 @@ export interface EntradaReservaDirecta {
    * ausente o desconocido cae a español.
    */
   idioma?: string | null;
+  /**
+   * Extras elegidos en la web (`[{ extraId, cantidad }]`). Es una SELECCIÓN: el
+   * precio lo pone el catálogo activo del servidor, nunca el navegador.
+   */
+  extras?: unknown;
 }
 
 export type ResultadoReservaDirecta =
-  | { ok: true; reservaId: string; referencia: string; estado: string; total: number; moneda: string; noches: number; yaExistia: boolean }
+  | {
+      ok: true;
+      reservaId: string;
+      referencia: string;
+      estado: string;
+      /** Total de la reserva: estancia + extras. */
+      total: number;
+      moneda: string;
+      noches: number;
+      /** Anticipo de la estancia (0 = se cobra el total). */
+      anticipo: number;
+      /** Suma de las líneas de extras seleccionadas. */
+      totalExtras: number;
+      /** Enlace de check-in del huésped (null si no se pudo preparar). */
+      checkinUrl: string | null;
+      yaExistia: boolean;
+    }
   | { ok: false; motivo: 'no_disponible' | 'datos' | 'sin_precio' | 'sin_solicitud'; mensaje: string };
 
 /**
@@ -406,6 +462,11 @@ export async function crearReservaDirecta(
       total: Number(previa.amountAfterTax) || 0,
       moneda: previa.currency || moneda,
       noches: nightsBetween(previa.checkIn, previa.checkOut),
+      // Un reintento del formulario no vuelve a cotizar ni a cobrar: devuelve la
+      // misma reserva y su enlace de check-in (el que el huésped ya tiene).
+      anticipo: 0,
+      totalExtras: 0,
+      checkinUrl: await enlaceDeCheckinDe(previa, entrada.idioma),
       yaExistia: true,
     };
   }
@@ -429,10 +490,13 @@ export async function crearReservaDirecta(
     checkOut,
     restricciones: plan
       ? {
-          minNoches: plan.minNoches,
-          maxNoches: plan.maxNoches,
-          checkInDias: aLista(plan.checkInDias).map(Number),
-          checkOutDias: aLista(plan.checkOutDias).map(Number),
+          // Igual que en la cotización: las reglas de la temporada de la llegada
+          // son restricciones más de la estancia que se va a crear.
+          ...reglasDeVentaDeLlegada({
+            fecha: startOfDay(checkIn),
+            estacionalidad: plan.temporadas ?? plan.finDeSemana,
+            plan,
+          }),
         }
       : null,
   });
@@ -474,6 +538,31 @@ export async function crearReservaDirecta(
       mensaje: `La unidad admite hasta ${unidad.capacidad} huéspedes.`,
     };
   }
+
+  // Extras: la selección del huésped se resuelve contra el catálogo ACTIVO de la
+  // propiedad, que es el único que fija el precio (el navegador solo nombra el
+  // extra). Se lee antes de escribir porque el importe que se guarda y el que se
+  // cobra ya los incluyen: la reserva nace con su desglose completo.
+  const catalogo = await catalogoDeExtras(propertyId);
+  const seleccionExtras = resolverExtras(entrada.extras, catalogo, cotizacion.noches);
+  const lineasExtras = seleccionExtras.ok ? seleccionExtras.lineas : [];
+  const totalExtras = seleccionExtras.ok ? seleccionExtras.total : 0;
+  if (!seleccionExtras.ok) {
+    console.error('[BookingEngine] Selección de extras inválida:', seleccionExtras.error);
+  } else if (seleccionExtras.ignorados.length > 0) {
+    console.log('[BookingEngine] Extras ignorados en la reserva directa:', seleccionExtras.ignorados);
+  }
+  const total = Math.round((cotizacion.total + totalExtras) * 100) / 100;
+
+  // Registro de viajeros (RD 933/2021): el documento que el huésped deja al
+  // reservar se guarda YA, en el formato que lee el parte; lo que falte lo
+  // completa él mismo desde el enlace de check-in.
+  const viajeros = viajerosDelTitular({
+    documento: entrada.huesped.documento,
+    nombre: entrada.huesped.nombre,
+    email: entrada.huesped.email,
+    telefono: entrada.huesped.telefono,
+  });
 
   const payloadHuésped: WebhookReservationPayload = {
     action: 'book',
@@ -529,8 +618,8 @@ export async function crearReservaDirecta(
         segment: CANAL_DIRECTO,
         specialRequests: payloadHuésped.specialRequests ?? null,
         pah: false,
-        amountAfterTax: cotizacion.total,
-        amountBeforeTax: cotizacion.total,
+        amountAfterTax: total,
+        amountBeforeTax: total,
         tax: 0,
         currency: moneda,
         commission: 0,
@@ -543,11 +632,13 @@ export async function crearReservaDirecta(
           phone: payloadHuésped.guest?.phone ?? null,
           idioma: idiomaDeValor(entrada.idioma),
           origen: 'booking_engine',
+          ...(viajeros.length ? { viajeros } : {}),
         } as Prisma.InputJsonValue,
         payload: {
           origen: 'booking_engine',
           solicitudId: entrada.solicitudId,
           cotizacion,
+          extras: lineasExtras,
         } as unknown as Prisma.InputJsonValue,
       },
     });
@@ -588,6 +679,14 @@ export async function crearReservaDirecta(
               },
             ]
           : []),
+        // Cada extra es una línea tipo `extra` del MISMO desglose que suma
+        // Finanzas: la selección del huésped entra en el margen de la reserva.
+        ...filasDeItemsExtras(lineasExtras, {
+          tenantId,
+          reservationId: reserva.id,
+          propertyId,
+          unitId,
+        }),
       ],
     });
 
@@ -605,6 +704,12 @@ export async function crearReservaDirecta(
   // A partir de aquí no se bloquea nada: la reserva ya existe y es lo que el
   // huésped tiene que ver. Un fallo de mensajería o de push no puede convertirla
   // en un error para él.
+  //
+  // El enlace de check-in se prepara ANTES de disparar nada que lo renderice: la
+  // confirmación arma su propio enlace y, si la reserva todavía no tiene token,
+  // generaría otro —dejando sin valor el que ve el huésped al reservar—.
+  const checkinUrl = await enlaceDeCheckinDe(creada, entrada.idioma);
+
   emitReservationCreated({
     tenantId,
     reservationId: creada.id,
@@ -636,11 +741,79 @@ export async function crearReservaDirecta(
     reservaId: creada.id,
     referencia,
     estado: estadoInicial,
-    total: cotizacion.total,
+    total,
     moneda,
     noches: cotizacion.noches,
+    anticipo: cotizacion.anticipo,
+    totalExtras,
+    checkinUrl,
     yaExistia: false,
   };
+}
+
+/**
+ * Catálogo activo de extras de la propiedad.
+ *
+ * Auxiliar a propósito: si la lectura falla, la reserva se vende sin extras en
+ * lugar de caerse. El huésped nunca ve un error por un catálogo que no carga.
+ */
+async function catalogoDeExtras(propertyId: string): Promise<ExtraCatalogo[]> {
+  try {
+    return await prisma.hospitalityExtra.findMany({ where: { propertyId, activo: true } });
+  } catch (e) {
+    console.error('[BookingEngine] No se pudo leer el catálogo de extras:', e);
+    return [];
+  }
+}
+
+/**
+ * Viajeros que deja documentados el titular al reservar.
+ *
+ * Solo se guarda si hay documentación de verdad: el nombre suelto no es un
+ * parte. Lo que falte lo completa el huésped desde su enlace de check-in.
+ */
+function viajerosDelTitular(params: {
+  documento?: Record<string, unknown> | null;
+  nombre: string;
+  email?: string | null;
+  telefono?: string | null;
+}): ViajeroCheckin[] {
+  const crudo = (params.documento || {}) as Record<string, unknown>;
+  const titular = normalizarViajero({
+    ...crudo,
+    // Si el huésped no repitió su nombre en el bloque del documento, vale el que
+    // ya escribió arriba: es la misma persona.
+    nombre: crudo.nombre || params.nombre,
+    correo: crudo.correo || params.email,
+    telefono: crudo.telefono || params.telefono,
+  });
+  if (!titular) return [];
+  const documentaAlgo = Boolean(
+    titular.tipoDocumento ||
+      titular.numeroDocumento ||
+      titular.fechaNacimiento ||
+      titular.direccion
+  );
+  return documentaAlgo ? [titular] : [];
+}
+
+/**
+ * Enlace de check-in de una reserva recién creada (o recuperada).
+ *
+ * No bloquea la venta: si el token no se puede preparar, la reserva existe y el
+ * huésped recibe el enlace por el email de pre-llegada, que lo genera al vuelo.
+ */
+async function enlaceDeCheckinDe(
+  reserva: { id: string; tokenCheckin?: string | null },
+  idioma?: unknown
+): Promise<string | null> {
+  try {
+    const token = await asegurarTokenCheckin(reserva);
+    return enlaceCheckin(token, idioma);
+  } catch (e) {
+    console.error('[BookingEngine] No se pudo preparar el enlace de check-in:', e);
+    return null;
+  }
 }
 
 /** Fechas ISO del rango, para mostrarlas sin depender del locale del servidor. */

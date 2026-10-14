@@ -190,6 +190,8 @@ y `integraciones.gestionar`). Se guarda cifrado en
 | Fetch Inventory | POST | `/data/{pms}` | Consultar inventario. `type` en el body decide el dataset. **No implementado en el adapter.** |
 | Fetch Rates | POST | `/data/{pms}` | Consultar tarifas (room, rateplan, date). **No implementado en el adapter.** |
 | Fetch Reservations | POST | `/data/{pms}` | Consultar reservas (mismo payload que el webhook Book). `startDate`/`endDate` filtran por **fecha de reserva** (`bookedOn`), no por estancia — ver la nota de abajo. |
+| Message Webhook | POST | `{nuestra_url}` | ENTRANTE: el proveedor nos entrega cada mensaje de huésped (o del hotel) de una conversación de OTA. **Implementado** en `/api/hospitality/webhook/messages`. Ver la nota de mensajería. |
+| Message Reply | POST | `/message-reply/{pms}` | SALIENTE: respondemos en la conversación (mismo Basic que el resto). **Implementado** en `enviarMensajeCanal`. En booking.com el `booking_id` es obligatorio. |
 
 > **Un 200 no siempre significa «aplicado»: mira `warnings`.** El proveedor puede
 > contestar `200 {"success": true, "message": "Request Received Successfully",
@@ -203,6 +205,32 @@ y `integraciones.gestionar`). Se guarda cifrado en
 > en `HospitalitySyncLog` como fallo con el texto de la advertencia y el proveedor
 > pasa a estado `error`. El código de tarifa válido es el `rateplan_id` del
 > catálogo (`property_details`), nunca el `room_id`.
+>
+> **Y la advertencia se lee POR UNIDAD, no por código.** `INVALID_ROOM_CODE` es el
+> otro código medido (13 oct 2026, mismo hotel: `INVALID_ROOM_CODE : 2a · 1a · 1b`
+> con la unidad `2b` aceptada — las tres habitaciones existen en el catálogo del
+> proveedor, es el canal el que todavía no las tiene autorizadas). Como el
+> operador no piensa en `room_id`s, `lib/hospitality/rechazo-canal.ts` (puro)
+> atribuye cada descarte a la unidad que empuja ese `room_id` o ese
+> `rateplanCode`, dice qué **sí** se envió y deja aparte los códigos que no son de
+> ninguna unidad del envío; el error del `HospitalitySyncLog`, la respuesta de
+> `POST /api/hospitality/sync` y los pasos 7-8 del asistente llevan ese nombre. La
+> regla de fondo no cambia: **200 con `warnings` sigue siendo `ok: false`** — se
+> perdió un dato—, pero ahora se sabe de qué unidad.
+>
+> **Y se atribuye contra lo que viajó en ESE push, no contra toda la propiedad.**
+> Los cuatro pushes no llevan lo mismo: el de restricciones de tarifa solo incluye
+> unidades con plan de tarifa con código (una unidad sin plan no tiene estancia
+> mínima que anunciar), mientras el de tarifas sí empuja su tarifa base bajo el
+> código vinculado. Medido en producción (13 oct 2026, mismo hotel): el push de
+> restricciones de tarifa llevaba 2 de las 4 unidades y su mensaje decía «las
+> otras 3 sí se enviaron», nombrando dos unidades que no iban en la petición —lo
+> contrario de lo que había pasado—. Por eso `atribuirDescartes` recibe las
+> unidades de `unidadesDelEnvio(unidades, envio)` y las ausentes como
+> `unidadesFueraDelEnvio`, que las nombra con su motivo («no tiene vínculo con el
+> proveedor», «no tiene plan de tarifa con código del proveedor»): un descarte
+> solo puede nombrar códigos que iban en la petición, y una unidad que no viajó no
+> es ni enviada ni fallida.
 
 > **Lo que el proveedor cree de nuestro inventario, sin poder preguntárselo.**
 > Solo pedimos reservas a `/data/{pms}`: los datasets de inventario y tarifas
@@ -229,6 +257,39 @@ y `integraciones.gestionar`). Se guarda cifrado en
 > fuente de la ventana (30 días atrás / 30 adelante por defecto) y la comparten
 > el barrido diario y la re-verificación de una divergencia.
 | Channel Multiplier | POST | `/channel_multiplier/{pms}` | Multiplicador de tarifas por canal (`1.2` = +20%). No implementado en V1. |
+
+> **Mensajería del canal (el chat del huésped en la OTA).** El proveedor expone
+> dos endpoints de mensajería que NO son de distribución y viven en su grupo
+> «Messages»: el **webhook** con el que nos entrega cada mensaje de una
+> conversación de OTA (`hotel_id`, `channel`, `booking_id`, `guest_details`,
+> `conversation_id`, `message_id`, `attachments`, `message_type`, `time_sent`,
+> `content`, `sender_id` y `sender_type` — `property` = el hotel) y la
+> **respuesta** (`POST /message-reply/{pms}` con `channel`, `content`,
+> `hotel_code`|`hotel_id` y `conversation_id`; **`booking_id` obligatorio si el
+> canal es `booking.com`**). El hilo se identifica por `conversation_id` y las
+> entregas repetidas por `message_id` (el propio contrato avisa de que el mismo
+> mensaje puede llegar más de una vez). Lo implementado en Volkern —endpoint
+> entrante, bandeja, respuesta y sus estados— queda documentado en
+> `docs/hospitality-mensajes-canal.md`.
+>
+> Un mensaje de un `hotel_id` **sin mapping** no se puede entregar (404 con
+> `Retry-After`) y **deja incidencia visible** en el panel de Conectividad, igual
+> que una reserva sin mapping: una fila por (`hotelCode`, canal) con su código,
+> su canal, su motivo y su **contador de intentos** —el proveedor reintenta el
+> mismo mensaje cada pocos minutos, así que lo que informa es cuántas entregas
+> se han quedado fuera, no una fila por reintento—. Se ve en la tarjeta
+> «Mensajes sin hotel vinculado» y se consulta por
+> `GET /api/admin/conectividad/mensajes-sin-mapping` (Superadmin). Cuando el
+> código se vincula, la primera entrega con mapping cierra la incidencia sola. La
+> incidencia no guarda el mensaje del huésped (PII): solo código, canal y motivo.
+>
+> **Lo que el proveedor NO expone: reseñas.** Su documentación no tiene ningún
+> endpoint de reseñas ni de reputación (verificado el 9-oct-2026 sobre el
+> catálogo completo de `apidocs.aiosell.com`: ni un `review` en el bundle, y el
+> dataset de `/data/{pms}` solo admite `inventory`, `rates` y `reservation`).
+> Las reseñas históricas entran por CSV (`lib/hospitality/resenas-import.ts`) y
+> la petición de un endpoint de reseñas al proveedor está documentada en
+> `docs/hospitality-email-proveedor-resenas.md`.
 
 ## Webhook de reservas (proveedor → PMS)
 

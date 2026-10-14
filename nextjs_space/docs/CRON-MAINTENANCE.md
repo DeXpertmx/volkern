@@ -115,6 +115,17 @@ por el DPO").
 - **Qué hace**: recorre los tenants con mappings de conectividad activos y
   reconcilia **30 días** de reservas contra el proveedor. Crea, actualiza y
   cancela reservas, y anota las divergencias en `HospitalitySyncLog`.
+- **Qué hace además (desde el 9-oct-2026)**: pasa la **guardia de inventario**
+  (`lib/hospitality/inventario-divergencias.ts`): compara lo que el proveedor
+  tiene por bueno (el último push con éxito que cubre cada noche) con la
+  disponibilidad que justifica el estado interno, y anota en
+  `HospitalitySyncLog` (tipo `divergencias_inventario`) las **noches sin
+  justificar** de cada propiedad. No lee nada del proveedor —no se le pide
+  inventario: `Fetch Inventory` sigue sin implementar en el adapter— ni empuja
+  nada: solo diagnóstica. Los avisos suben al panel de
+  estado del cron (ámbar) y el resultado se ve en el panel de Conectividad. Un
+  fallo del barrido cuenta como fallo del job (el calendario del canal quedaría
+  sin auditar), pero no impide reconciliar reservas.
 - **Datos personales**: **sí**, y son el núcleo del job. Lee y escribe
   `HospitalityReservation.guestData` (Json: identificativos y contacto del
   huésped) — nombre, email y teléfono del titular y de los acompañantes — más
@@ -125,7 +136,8 @@ por el DPO").
   reservas desincronizadas *es* mantener los datos exactos.
 - **Minimización**: `cancelarAusentes` siempre en `false`: una reserva interna
   activa que el proveedor ya no reporta se registra como **divergencia**, nunca
-  se cancela automáticamente. Sólo escribe si hay diferencias (idempotente).
+  se cancela automáticamente. Sólo escribe si hay diferencias (idempotente). La
+  guardia de inventario no toca datos personales: habla de `roomCode` y fechas.
 - **Seguridad**: **Art. 32** — `Bearer ${CRON_SECRET}`, con el 401 devuelto
   antes de tocar Prisma.
 - **Nota operativa**: este job está programado **dos veces** — crontab 04:00 y

@@ -31,7 +31,7 @@
  * datos del entorno en el que se lance.
  *
  * Uso (lo normal es el lanzador, que además levanta el servidor):
- *   E2E_DIA_H=1 BASE_URL=http://localhost:3097 npx tsx --require dotenv/config \
+ *   E2E_DIA_H=1 BASE_URL=http://localhost:3097 npx tsx --require ./scripts/cargar-entorno.cjs \
  *     scripts/e2e-dia-h-conectividad.ts
  *   E2E_DIA_H=1 ... --keep    # deja los datos para mirarlos en la interfaz
  *

@@ -107,7 +107,7 @@ la clave interna.
 
 ## 3. Capa de aplicación
 
-### Rutas API (41 en `/api/hospitality` + 5 en `/api/admin/conectividad` + 3 de cron + 5 públicas)
+### Rutas API (41 en `/api/hospitality` + 7 en `/api/admin/conectividad` + 3 de cron + 5 públicas)
 
 | Dominio | Rutas |
 | --- | --- |
@@ -117,16 +117,16 @@ la clave interna.
 | Bloqueos | `blocks`, `blocks/[id]` |
 | Operación | `operations`, `tasks` |
 | Cliente | `guests`, `guests/link` |
-| Comunicación | `comunicaciones`, `comunicaciones/[id]`, `comunicaciones/[id]/enviar-prueba` |
+| Comunicación | `comunicaciones`, `comunicaciones/[id]`, `comunicaciones/[id]/enviar-prueba` (el `diseno` de bloques del email viaja en POST/PATCH y la prueba devuelve `htmlPreview`) |
 | Automatización | `automatizaciones`, `automatizaciones/[id]`, `automatizaciones/[id]/test` |
 | Dinero | `finanzas`, `dashboard`, `reportes` |
 | Registro de viajeros | `compliance`, `compliance/[reservationId]`, `compliance/config` |
 | Onboarding | `onboarding`, `onboarding/catalogo`, `onboarding/mapping`, `onboarding/probar`, `onboarding/activar` |
 | Conectividad | `sync` (push manual), **`webhook/reservations`** |
 | Booking Engine | `booking` (configuración de la reserva directa) |
-| Admin conectividad | `/api/admin/conectividad` (+ `test`, `propiedades`, `reconciliar`, `sync-logs`) |
+| Admin conectividad | `/api/admin/conectividad` (+ `test`, `propiedades`, `reconciliar`, `sync-logs`, `divergencias`, `mensajes-sin-mapping`) |
 | Crons | `/api/cron/hospitality-checkin-due`, `/api/cron/hospitality-reconcile`, `/api/cron/hospitality-review-request` |
-| Público | `/api/public/viajeros/[token]` (formulario del viajero con enlace firmado); `/api/public/booking/[slug]` (+ `cotizar`, `reservar`) |
+| Público | `/api/public/viajeros/[token]` (formulario del viajero con enlace firmado); `/api/public/booking/[slug]/cotizar` y `/api/public/booking/[slug]/reservar` (motor directo) |
 
 ### Módulos puros (`lib/hospitality/`)
 
@@ -339,7 +339,9 @@ retries ciegos, error con su causa (404 si la reserva a cancelar/modificar no ex
 | Rate Push | `POST /update-rates/{pms}` | implementado |
 | Inventory Restrictions Push | `POST /update/{pms}` | implementado |
 | Rate Restrictions Push | `POST /update-rates/{pms}` | implementado |
-| Fetch Reservations | `POST /data/{pms}` (`type: "reservation"`) | implementado (reconciliación) |
+| Fetch Reservations | `POST /data/{pms}` (`type: "reservation"`) | implementado (reconciliación). `startDate`/`endDate` filtran por **fecha de reserva** (`bookedOn`), no por estancia: la ventana la fija `lib/hospitality/ventana-reservas.ts` (30 días atrás / 30 adelante) |
+| Message Webhook (entrante) | `POST {nuestra_url}` | implementado (`/api/hospitality/webhook/messages`, `docs/hospitality-mensajes-canal.md`) |
+| Message Reply | `POST /message-reply/{pms}` | implementado (`enviarMensajeCanal`; en booking.com exige `booking_id`) |
 | Fetch Inventory | `POST /data/{pms}` | **no implementado** |
 | Fetch Rates | `POST /data/{pms}` | **no implementado** |
 | Mark No Show | `POST /marknoshow/{pms}` | **no implementado** (fuera de V1 por el plan) |
@@ -386,10 +388,20 @@ descuenta **reservas activas + bloqueos manuales** con la misma regla de interva
 Cron 04:15 (Europe/Madrid)  →  runHospitalityReconcileScan()
    para cada tenant con mappings activos
      fetchReservations(hotelCode, desde, hasta)   ← POST /data/{pms}
+        ventana = ventanaFetchReservas(730 días atrás, 30 adelante)
+        (son FECHAS DE RESERVA, no de estancia, y el barrido mira el
+         horizonte de venta: una reserva viva pudo reservarse hace meses
+         —ver ventana-reservas.ts—; lo que no entra por ser antiguo es la
+         ESTANCIA ya terminada hace >30 días, que se cuenta como histórica)
      comparar con las reservas internas:
-        faltante           → registrar divergencia (NO se crea sola)
-        modificada         → registrar cambio detectado
-        cancelada externa  → registrar
+        faltante           → se CREA (processBook: es la red de seguridad del push perdido)
+        modificada         → se aplica (estado completo nuevo)
+        cancelada externa  → se cancela
+        interna activa que el proveedor ya no reporta → divergencia para revisar
+     si tocó algo (creadas+actualizadas+canceladas > 0):
+        dispatchConnectivityPush(operacion 'reconciliacion')  ← la disponibilidad
+        recalculada viaja al canal: la unidad vendida aquí no puede quedar
+        abierta allí (sin esto, una reserva recuperada seguía vendiéndose)
      todo idempotente y auditado en HospitalitySyncLog (tipo 'reconciliacion')
 ```
 
@@ -467,8 +479,12 @@ al alterar la firma, y **push real a la capa de conectividad** (`inventory` e
 `requierePagoOnline` activo y sin cuenta conectada, la API responde **503 con la causa** y no
 crea nada.
 
-`app/booking/[slug]` y `app/embed/booking` siguen siendo de Real Estate (agenda citas con
-agentes) y no se reutilizaron, tal y como decidió la FASE 3.
+`app/embed/booking` sigue siendo de Real Estate (agenda citas con agentes) y no se reutilizó,
+tal y como decidió la FASE 3. `app/booking/[slug]` fue la primera página pública del Booking
+Engine y hoy **solo redirige** (308) a la página única `/reservar/<slug>` —o a
+`/embed/reservar/<slug>` si venía con `?embed=1`— conservando `?lang`; si la propiedad no está
+en la lista de publicación de la configuración, responde la misma frase de «no disponible»
+que la página única. El criterio de publicación es uno: `propiedadesPublicadas`.
 
 ---
 
@@ -511,6 +527,17 @@ Comunicaciones: `lib/hospitality/comunicaciones.ts` renderiza la plantilla del e
 envía por el canal correspondiente (WhatsApp de la plataforma o del tenant; email SMTP).
 Crons de pre-llegada y reseña las disparan solo.
 
+El correo del canal email se **compone con bloques** en el editor visual: el diseño
+(cabecera, título, párrafos, secciones de etiqueta/valor y botones) se guarda en
+`hospitality_communication_templates.diseno` (JSON, nullable) y lo compila
+`lib/hospitality/comunicaciones-email.ts` —módulo puro, sin base de datos ni red— a HTML de
+tabla con estilos en línea, que es lo único que maqueta igual en Gmail, Outlook y el móvil.
+El mismo módulo pinta la vista previa en el navegador, así que lo que se ve al editar es lo
+que sale. Nada de HTML del hotel se ejecuta: el texto se escapa siempre y solo se reconocen
+`**negrita**`, `*cursiva*` y `[texto](enlace)` con esquema http(s)/mailto. El canal WhatsApp
+sigue enviando `contenido` en texto plano y `contenido` es también la parte de texto del
+correo (si está vacío se genera del diseño).
+
 ---
 
 ## 11. Qué falta
@@ -532,7 +559,7 @@ comunicaciones siguen en `pendiente`; **nada se ha enviado nunca al Ministerio**
 | --- | --- | --- |
 | 4 | **Stripe Connect (Express)** por tenant: alta KYC, cobro de la reserva directa, conciliación. Modelo `HospitalityPaymentAccount` creado, **0 código que lo use**; hoy los pagos se registran a mano (`POST .../payments`) | FASE 3.C |
 | 5 | **Cuenta de cobro (Stripe Connect)**: el alta KYC del tenant y el estado de la cuenta. El cobro ya está implementado y el estado se consulta en vivo, pero **ningún tenant tiene cuenta conectada**: mientras no la haya, exigir pago online rechaza la reserva en vez de dejar una que nadie puede pagar | FASE 3.C |
-| 7 | **Fetch Inventory y Fetch Rates**: la reconciliación solo compara reservas; no detecta divergencias de disponibilidad ni de tarifas entre Volkern y los canales | Plan maestro §14 |
+| 7 | **Diferencias de disponibilidad, cubiertas sin `Fetch Inventory`** (9-oct-2026): la reconciliación diaria compara lo que el proveedor tiene por bueno —el último push de inventario que cubre cada noche— con la disponibilidad que justifica el estado interno, y anota las **noches sin justificar** por propiedad (`lib/hospitality/inventario-divergencias.ts`, tipo `divergencias_inventario`) con avisos en el panel de crons y sección propia en el panel de Conectividad. **Sigue pendiente** la mitad de tarifas y leer del proveedor en vez de rehacer el push | Plan maestro §14 |
 | 8 | **Reintentos controlados de push**: hoy un fallo se registra y no se reintenta (§30 lo permite, pero no hay estrategia por tipo de error) | §30 |
 
 ### C. Deuda detectada en la revisión
@@ -543,7 +570,9 @@ comunicaciones siguen en `pendiente`; **nada se ha enviado nunca al Ministerio**
 | 10 | **Exportación a PDF en Reportes**: hoy solo CSV |
 | 11 | **Sección técnica de Integraciones** dentro de Volkern: la observabilidad (último webhook, último push, último error) existe en `/api/admin/conectividad`, pero el plan la pide como vista administrativa del producto con estado **por propiedad** |
 | 12 | **Datos operativos de la demo**: 0 bloqueos, 0 tareas de limpieza y 0 incidencias en producción. Operaciones y el ciclo de limpieza no tienen nada que mostrar en una demo |
-| 13 | **`Fetch Inventory`/`Fetch Rates` no implementados** dejan el flujo inverso incompleto frente a la cadena de §41 del plan maestro |
+| 13 | **`Fetch Inventory`/`Fetch Rates` no implementados** dejan el flujo inverso incompleto frente a la cadena de §41 del plan maestro. La guardia de noches sin justificar mitiga la mitad de disponibilidad reconstruyendo lo empujado, pero no sustituye a leer del proveedor (que además cazaría ediciones hechas en su panel, invisibles para el replay) |
+| 14 | **Reseñas de OTA: el proveedor no las expone** (medido el 9-oct-2026 sobre el catálogo completo de su documentación: ni un endpoint de reseñas, y el dataset de `/data/{pms}` solo admite `inventory`, `rates` y `reservation`). Hoy el histórico entra por CSV exportado del canal (panel Reseñas) y la petición de un endpoint está redactada en `docs/hospitality-email-proveedor-resenas.md`. Alternativas si no lo añaden: agregador de reputación (otra cuenta y contrato) o API de reseñas de cada OTA (exige ser partner certificado, no lo somos). Descartado raspar la URL pública |
+| 15 | **Mensajería del canal: falta que el proveedor configure la URL del webhook** (`/api/hospitality/webhook/messages`) con el Basic de la capa. Mientras no lo haga, la bandeja está vacía por falta de datos, no por un fallo. Un `hotel_id` sin mapping **ya deja incidencia visible** en el panel de Conectividad (misma tabla que las reservas sin mapping, una fila por código y canal con su contador de intentos, que se cierra sola al vincular el código). Siguen fuera los adjuntos (se enseñan por nombre, sin descarga) y el reintento de un saliente fallido (lo reescribe el hotel) |
 
 ### D. Fuera de alcance declarado en V1 (no es deuda)
 

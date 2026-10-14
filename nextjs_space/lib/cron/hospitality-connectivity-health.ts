@@ -39,7 +39,7 @@ import {
   partnerIdEsDeCadaHotel,
   testConnectivityConnection,
   updateConnectivityStatus,
-  resolveProbeHotelCode,
+  resolverHotelDeSonda,
 } from '@/lib/hospitality/connectivity';
 
 /** Identificador del job en el panel de estado de crons. */
@@ -109,9 +109,11 @@ export async function runConnectivityHealthCheck(): Promise<ConnectivityHealthRe
   }
 
   // La sonda es la del botón «Probar»: property_details con el hotel de la
-  // sonda, configurable (por defecto el sandbox del contrato). El health-check
-  // no inventa su propia verdad sobre la capa.
-  const hotelCode = resolveProbeHotelCode(provider);
+  // sonda —lo configurado (entorno/config) y, si no hay nada, un hotel REAL ya
+  // vinculado, no el sandbox del contrato, que un partner de producción no tiene
+  // concedido y responde 403 «Access Denied»—. El health-check no inventa su
+  // propia verdad sobre la capa.
+  const hotelCode = await resolverHotelDeSonda(provider);
   const sondeo = await testConnectivityConnection(hotelCode);
 
   // Mover el estado de la capa con las MISMAS reglas que el botón «Probar»:

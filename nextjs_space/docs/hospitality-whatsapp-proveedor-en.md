@@ -14,6 +14,20 @@
 > is correct; the partner simply has **no hotel assigned** (every hotel answers 403 Access Denied).
 > The ERP panel must store the username in lowercase and this partnerId.
 > Do NOT send credentials over chat. India is IST (UTC+5:30) — best window 03:30–09:30 UTC.
+>
+> **Reverificado el 2026-10-09** (solo con el `partnerId`, sin contraseñas válidas, que el servicio
+> valida ANTES de la contraseña) — sirve para separar los dos rechazos sin revelar nada:
+>
+> | Llamada | Respuesta | Qué prueba |
+> |---|---|---|
+> | `.../property_details/sandbox-pms?partnerId=volkern-hospitality` + contraseña inválida | `400 Authentication Required!` | El partnerId `volkern-hospitality` es aceptado: el rechazo ya es de autenticación. |
+> | `.../property_details/75fdbbce2e?partnerId=75fdbbce2e` + la misma contraseña inválida | `400 Partner is disabled!` | `75fdbbce2e` **NO es un partnerId** (es el `hotelCode`): se rechaza antes de mirar la contraseña. |
+>
+> De ahí las dos consecuencias para el ERP: `75fdbbce2e` va como **código de propiedad**, nunca como
+> ID de socio; y la sonda por defecto ya no es `sandbox-pms` —se sondea el `hotelCode` de una propiedad
+> ya vinculada (`resolverHotelDeSonda`)—, porque el sandbox responde `403 Access Denied - sandbox-pms`
+> a una cuenta de producción. Los `403 Access Denied - <hotelCode>` se diagnostican como «hotel sin
+> conceder a este ID de socio» (distinto de «partner desconocido» y de «credenciales rechazadas»).
 
 ---
 

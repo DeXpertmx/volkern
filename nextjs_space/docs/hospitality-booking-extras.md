@@ -13,13 +13,14 @@
      │  crea el catálogo por propiedad: nombre, precio, moneda,
      │  ¿precio por noche?, descripción ES/EN
      ▼
-[2] GET /api/public/booking/[slug]  → data.extras (solo ACTIVOS, en el idioma
-     │  del huésped). El precio viaja del servidor hacia la web, nunca al revés.
+[2] Página única /reservar/<slug> → extras de cada propiedad publicada
+     │  (solo ACTIVOS, en el idioma del huésped, vía `datosPaginaPublica`).
+     │  El precio viaja del servidor hacia la web, nunca al revés.
      ▼
 [3] Huésped → paso 3 de la reserva: selector de cantidad por extra (0–5).
      │  La selección viaja como [{ extraId, cantidad }] — SIN importes.
      ▼
-[4] POST /api/public/booking/[slug]
+[4] POST /api/public/booking/[slug]/reservar
      │  resolverExtras (módulo puro): resuelve contra el catálogo ACTIVO del
      │  servidor, acota cantidades (1–10), consolida duplicados y multiplica
      │  por noches los extras «por noche».
@@ -65,8 +66,9 @@ re-crea.
 | Catálogo por propiedad (modelo) | `HospitalityExtra` + migración `20260922120000` |
 | API del panel: listar (con inactivos), crear, editar, desactivar | `app/api/hospitality/extras/route.ts` |
 | Gestión del catálogo en el panel del motor | `app/dashboard/hospitality/booking-engine/page.tsx` |
-| Exposición pública y validación en el POST | `app/api/public/booking/[slug]/route.ts` |
-| Selector bilingüe en el paso 3 de la reserva | `app/booking/[slug]/page.tsx` |
+| Exposición pública (catálogo con la propiedad) | `lib/hospitality/booking-public.ts` |
+| Resolución de la selección y líneas de la reserva | `lib/hospitality/booking-engine.ts` (`crearReservaDirecta`) |
+| Selector bilingüe en el paso 3 de la reserva | `components/hospitality/booking/BookingWizard.tsx` |
 | Textos ES/EN del selector | `lib/hospitality/booking-i18n.ts` (`extrasTitulo`…) |
 
 ## Detalles operativos

@@ -222,7 +222,8 @@ export default function ConectividadDelHotel() {
           <CardDescription>
             Escribe el código de propiedad que te dio el proveedor. Con tu ID de socio debe devolver
             sus habitaciones y planes de tarifa: eso es lo que después se vincula en la puesta en
-            marcha.
+            marcha. Si ya tienes una propiedad vinculada, déjalo vacío y se comprueba con la suya
+            (el mismo código con el que se envían tarifas y disponibilidad).
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -232,13 +233,13 @@ export default function ConectividadDelHotel() {
               id="hotelCode"
               value={hotelCode}
               onChange={(e) => setHotelCode(e.target.value)}
-              placeholder="El código del proveedor para tu hotel"
+              placeholder="El código del proveedor (vacío = el de tu propiedad vinculada)"
               autoComplete="off"
             />
           </div>
 
           <AccionHospitality capacidad="integraciones.gestionar">
-            <Button onClick={() => void probar()} disabled={probando || hotelCode.trim() === ''}>
+            <Button onClick={() => void probar()} disabled={probando}>
               {probando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
               <span className="ml-2">Comprobar</span>
             </Button>
