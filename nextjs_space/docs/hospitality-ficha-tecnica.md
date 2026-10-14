@@ -124,7 +124,7 @@ la clave interna.
 | Onboarding | `onboarding`, `onboarding/catalogo`, `onboarding/mapping`, `onboarding/probar`, `onboarding/activar` |
 | Conectividad | `sync` (push manual), **`webhook/reservations`** |
 | Booking Engine | `booking` (configuración de la reserva directa) |
-| Admin conectividad | `/api/admin/conectividad` (+ `test`, `propiedades`, `reconciliar`, `sync-logs`, `divergencias`, `mensajes-sin-mapping`) |
+| Admin conectividad | `/api/admin/conectividad` (+ `test`, `propiedades`, `reconciliar`, `sync-logs`, `divergencias`, `reservas-faltantes`, `mensajes-sin-mapping`) |
 | Crons | `/api/cron/hospitality-checkin-due`, `/api/cron/hospitality-reconcile`, `/api/cron/hospitality-review-request` |
 | Público | `/api/public/viajeros/[token]` (formulario del viajero con enlace firmado); `/api/public/booking/[slug]/cotizar` y `/api/public/booking/[slug]/reservar` (motor directo) |
 

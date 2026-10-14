@@ -132,6 +132,56 @@ describe('Panel de conectividad — noches sin justificar en el proveedor (§29)
   });
 });
 
+describe('Panel de conectividad — reservas del canal que el ERP no tiene (aviso temprano)', () => {
+  const fuente = leer('app/admin/conectividad/page.tsx');
+
+  it('consume el sondeo en vivo y lo pide al abrir el panel', () => {
+    expect(fuente).toContain('/api/admin/conectividad/reservas-faltantes');
+    expect(fuente).toContain('setFaltantes(data as ResumenFaltantes)');
+    // Se pide en el arranque: esperar a que alguien pulse el botón sería esperar
+    // a que alguien sospeche.
+    expect(fuente).toMatch(/useEffect\(\(\) => \{[\s\S]*?loadFaltantes\(\);[\s\S]*?\}, \[\]\);/);
+  });
+
+  it('nombra el defecto: el canal las vendió y aquí siguen libres', () => {
+    expect(fuente).toContain('Reservas del canal que el ERP no tiene');
+    expect(fuente).toContain('el push de esa reserva se perdió');
+    expect(fuente).toContain('noche(s) vendidas en el canal');
+  });
+
+  it('dice que el sondeo no escribe nada (no es un botón que arregle solo)', () => {
+    expect(fuente).toContain('en vivo y de solo lectura');
+    expect(fuente).toContain('no crea ni cancela nada');
+  });
+
+  it('trae las reservas con la reconciliación que ya existe, no por un camino nuevo', () => {
+    expect(fuente).toContain('Traerlas ahora (ejecutar reconciliación)');
+    expect(fuente).toMatch(/await handleReconciliar\(\);[\s\S]*?await loadFaltantes\(\);/);
+    // Y avisa de lo que hace de verdad: crear aquí + re-empujar al canal.
+    expect(fuente).toContain('vuelve a empujar la disponibilidad');
+  });
+
+  it('no promete cobertura: enseña lo sondeado y lo que quedó fuera', () => {
+    expect(fuente).toContain('Propiedades sondeadas');
+    expect(fuente).toContain('sin sondear (tope)');
+    expect(fuente).toContain('Históricas fuera');
+    expect(fuente).toContain('Se listan las primeras');
+  });
+
+  it('distingue «no se pudo comprobar» de «no falta nada»', () => {
+    expect(fuente).toContain('No se pudo comprobar (fallo de red)');
+    expect(fuente).toContain('Ninguna: el proveedor devolvió');
+    // El salto de línea del JSX no cuenta: lo que importa es que la tarjeta
+    // diga que un fallo parcial no invalida lo demás.
+    expect(fuente).toMatch(/lo demás sí se\s+comprobó/);
+  });
+
+  it('las que no tienen vínculo de unidad se cuentan y se explica qué falta', () => {
+    expect(fuente).toContain('Sin vínculo de unidad');
+    expect(fuente).toContain('Traerlas necesita vincular la unidad antes');
+  });
+});
+
 describe('Panel de conectividad — mensajes de un hotel_id sin vínculo', () => {
   const fuente = leer('app/admin/conectividad/page.tsx');
 

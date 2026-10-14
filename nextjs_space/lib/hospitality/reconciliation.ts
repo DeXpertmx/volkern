@@ -128,7 +128,16 @@ export interface ReservaAusente {
   huespedes: number;
 }
 
-function normalizePayload(item: Record<string, unknown>): WebhookReservationPayload | null {
+/**
+ * Puerta de forma del contrato: de un item crudo del proveedor a un payload
+ * utilizable, o null si no se puede ni comparar.
+ *
+ * Es la MISMA puerta para el barrido y para el aviso temprano
+ * (`lib/hospitality/reservas-faltantes.ts`): si los dos decidieran por su
+ * cuenta qué item es una reserva, el aviso y el barrido contarían cosas
+ * distintas sobre la misma respuesta.
+ */
+export function normalizePayload(item: Record<string, unknown>): WebhookReservationPayload | null {
   const bookingId = item.bookingId as string | undefined;
   const channel = item.channel as string | undefined;
   const hotelCode = item.hotelCode as string | undefined;

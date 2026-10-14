@@ -24,6 +24,7 @@ import {
   Info,
   Trash2,
   MessageSquareWarning,
+  Inbox,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -171,6 +172,42 @@ interface InventarioDivergente {
   abiertas: NocheInventario[];
 }
 
+/**
+ * Reserva viva que el proveedor reporta y el ERP no tiene (push perdido).
+ * Sondeo en vivo de solo lectura: `lib/hospitality/reservas-faltantes.ts`.
+ */
+interface ReservaFaltante {
+  propertyId: string;
+  propertyNombre: string;
+  hotelCode: string;
+  channel: string;
+  externalBookingId: string;
+  huesped: string | null;
+  checkIn: string | null;
+  checkOut: string | null;
+  noches: number | null;
+  bookedOn: string | null;
+  unidad: string | null;
+  huespedes: number | null;
+}
+
+/** Resultado del sondeo en vivo (contadores + lista recortada). */
+interface ResumenFaltantes {
+  ok: boolean;
+  propiedades: number;
+  propiedadesNoSondeadas: number;
+  totalFetch: number;
+  faltantes: number;
+  historicas: number;
+  sinForma: number;
+  cancelaciones: number;
+  sinVinculo: number;
+  ajenas: number;
+  comprobadoEn: string;
+  errores: string[];
+  lista: ReservaFaltante[];
+}
+
 interface EstadoPropiedad {
   propertyId: string;
   property: string;
@@ -257,6 +294,8 @@ export default function AdminConectividad() {
   } | null>(null);
   const [divergencias, setDivergencias] = useState<Divergencia[]>([]);
   const [inventario, setInventario] = useState<InventarioDivergente[]>([]);
+  const [faltantes, setFaltantes] = useState<ResumenFaltantes | null>(null);
+  const [loadingFaltantes, setLoadingFaltantes] = useState(true);
   const [loadingDivergencias, setLoadingDivergencias] = useState(true);
   const [cancelando, setCancelando] = useState<string | null>(null);
   const [confirmarCancel, setConfirmarCancel] = useState<Divergencia | null>(null);
@@ -268,7 +307,24 @@ export default function AdminConectividad() {
     loadPropiedades();
     loadDivergencias();
     loadMensajesSinMapping();
+    // El aviso temprano se pide al abrir el panel: esperar a que alguien
+    // pulse el botón sería esperar a que alguien sospeche.
+    loadFaltantes();
   }, []);
+
+  const loadFaltantes = async () => {
+    try {
+      setLoadingFaltantes(true);
+      const res = await fetch('/api/admin/conectividad/reservas-faltantes');
+      if (!res.ok) return;
+      const data = await res.json();
+      setFaltantes(data as ResumenFaltantes);
+    } catch {
+      // Informativa: un fallo aquí no rompe la pantalla (y la tarjeta lo dice).
+    } finally {
+      setLoadingFaltantes(false);
+    }
+  };
 
   const loadMensajesSinMapping = async () => {
     try {
@@ -617,6 +673,7 @@ export default function AdminConectividad() {
     0
   );
   const ultimoBarridoInventario = inventario[0]?.syncLogFecha ?? null;
+  const hayFaltantes = (faltantes?.faltantes ?? 0) > 0;
 
   return (
     <div className="space-y-6">
@@ -1056,6 +1113,204 @@ export default function AdminConectividad() {
                 </ul>
               )}
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Aviso temprano del push perdido: reservas VIVAS que el canal reporta y
+          el ERP no tiene. El barrido de la tarjeta de arriba las trae, pero
+          corre una vez al día; esto le pregunta al proveedor en el momento y
+          NO escribe nada (ni reservas, ni logs, ni push al canal). */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div
+                className={`p-2 rounded-lg ${
+                  hayFaltantes ? 'bg-rose-100 dark:bg-rose-950' : 'bg-emerald-100 dark:bg-emerald-950'
+                }`}
+              >
+                <Inbox
+                  className={`h-5 w-5 ${
+                    hayFaltantes ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'
+                  }`}
+                />
+              </div>
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  Reservas del canal que el ERP no tiene
+                  {hayFaltantes && <Badge variant="destructive">{faltantes?.faltantes}</Badge>}
+                </CardTitle>
+                <CardDescription>
+                  El proveedor las reporta y aquí no existen: el push de esa reserva se perdió (o se
+                  rechazó) y el canal tiene vendidas noches que aquí siguen libres. Es un sondeo
+                  <strong> en vivo y de solo lectura</strong> —no crea ni cancela nada—; tráelas y cierra las
+                  noches con «Ejecutar reconciliación», en la tarjeta de arriba.
+                </CardDescription>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                {loadingFaltantes
+                  ? 'Preguntando al proveedor...'
+                  : faltantes
+                    ? `Comprobado ${hace(faltantes.comprobadoEn)}`
+                    : 'Sin comprobar'}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void loadFaltantes()}
+                disabled={loadingFaltantes}
+              >
+                {loadingFaltantes ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                )}
+                Comprobar ahora
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {loadingFaltantes && !faltantes ? (
+            <div className="flex items-center justify-center py-6 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin mr-2" />
+              Preguntando al proveedor qué reservas tiene...
+            </div>
+          ) : !faltantes ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">
+              No se pudo comprobar (fallo de red). Vuelve a intentarlo con «Comprobar ahora».
+            </p>
+          ) : (
+            <>
+              {faltantes.errores.length > 0 && (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
+                  <p className="font-medium">
+                    No se pudo preguntar por {faltantes.errores.length} propiedad(es) — lo demás sí se
+                    comprobó:
+                  </p>
+                  <ul className="mt-1 list-disc pl-5 text-xs space-y-1">
+                    {faltantes.errores.map((e, i) => (
+                      <li key={i}>{e}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {faltantes.lista.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-6 text-center">
+                  Ninguna: el proveedor devolvió {faltantes.totalFetch} reserva(s) en la ventana y
+                  todas están en el ERP
+                  {faltantes.historicas > 0 ? ` (${faltantes.historicas} con estancia ya terminada, fuera de plazo)` : ''}
+                  {faltantes.cancelaciones > 0 ? ` (${faltantes.cancelaciones} cancelaciones)` : ''}.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Reserva</TableHead>
+                        <TableHead>Propiedad / unidad</TableHead>
+                        <TableHead>Fechas</TableHead>
+                        <TableHead>Huésped</TableHead>
+                        <TableHead>Reservada el</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {faltantes.lista.map((f) => (
+                        <TableRow key={`${f.hotelCode}|${f.channel}|${f.externalBookingId}`}>
+                          <TableCell>
+                            <div className="font-medium">{f.externalBookingId}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {f.channel}
+                              {f.hotelCode ? ` · ${f.hotelCode}` : ''}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            <div>{f.propertyNombre}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {f.unidad || 'sin unidad vinculada'}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {f.checkIn || '—'} → {f.checkOut || '—'}
+                            {f.noches !== null && f.noches > 0 && (
+                              <div className="text-xs text-muted-foreground">
+                                {f.noches} noche(s) vendidas en el canal
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {f.huesped || '—'}
+                            {f.huespedes !== null && f.huespedes > 0 && (
+                              <div className="text-xs text-muted-foreground">{f.huespedes} huésped(es)</div>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm">{f.bookedOn || '—'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+
+              {/* Lo que se miró y lo que quedó fuera, para que un «0» no sea ambiguo. */}
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="secondary">Reservas del proveedor: {faltantes.totalFetch}</Badge>
+                <Badge variant="outline">Propiedades sondeadas: {faltantes.propiedades}</Badge>
+                {faltantes.historicas > 0 && (
+                  <Badge variant="outline">Históricas fuera: {faltantes.historicas}</Badge>
+                )}
+                {faltantes.sinVinculo > 0 && (
+                  <Badge variant="outline">Sin vínculo de unidad: {faltantes.sinVinculo}</Badge>
+                )}
+                {faltantes.sinForma > 0 && (
+                  <Badge variant="outline">Sin forma del contrato: {faltantes.sinForma}</Badge>
+                )}
+                {faltantes.propiedadesNoSondeadas > 0 && (
+                  <Badge variant="destructive">
+                    {faltantes.propiedadesNoSondeadas} propiedad(es) sin sondear (tope)
+                  </Badge>
+                )}
+                {faltantes.faltantes > faltantes.lista.length && (
+                  <Badge variant="destructive">
+                    Se listan las primeras {faltantes.lista.length} de {faltantes.faltantes}
+                  </Badge>
+                )}
+              </div>
+
+              {faltantes.sinVinculo > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  «Sin vínculo de unidad»: el proveedor las reporta con un roomCode que no tiene
+                  vínculo activo. Traerlas necesita vincular la unidad antes (Onboarding → mapping).
+                </p>
+              )}
+
+              {hayFaltantes && (
+                <div className="space-y-2">
+                  <Button
+                    onClick={async () => {
+                      await handleReconciliar();
+                      await loadFaltantes();
+                    }}
+                    disabled={reconciliando || !estado?.username}
+                  >
+                    {reconciliando ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <RefreshCcw className="h-4 w-4 mr-2" />
+                    )}
+                    Traerlas ahora (ejecutar reconciliación)
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Traerlas crea la reserva aquí y vuelve a empujar la disponibilidad al canal: las
+                    noches vendidas se cierran solas.
+                  </p>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

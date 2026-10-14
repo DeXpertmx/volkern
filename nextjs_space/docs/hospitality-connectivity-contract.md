@@ -592,6 +592,36 @@ una persona que mira fechas e importes antes de tocar una reserva. Los logs de
 reconciliación alimentan el "último fetch" del panel de admin de conectividad y
 quedan excluidos del "último push", que es de canales.
 
+#### Aviso temprano en el panel: reservas vivas del canal que el ERP no tiene
+
+El barrido anterior resuelve el problema, pero **una vez al día**: hasta que
+corre, una reserva cuyo push se perdió está vendida en el canal y libre aquí —
+la sobreventa se cocina en esa ventana. Para cerrarla, el panel de
+`/admin/conectividad` pide en vivo `GET
+/api/admin/conectividad/reservas-faltantes` (Superadmin, sin parámetros; 200
+siempre, con el fallo del proveedor en `errores`) y lista las reservas vivas que
+el proveedor reporta y el ERP no tiene, en la tarjeta «Reservas del canal que el
+ERP no tiene».
+
+La comprobación vive en `lib/hospitality/reservas-faltantes.ts` y **no escribe
+nada**: no crea ni modifica reservas, no registra logs, no empuja al canal y no
+toca el estado de la capa. No es un «dry-run» del barrido —sería un condicional
+que una edición futura podría olvidar—, sino un módulo que solo importa
+lecturas. Comparte con el barrido lo que decide qué es una reserva:
+`ventanaFetchReservas` (fechas de RESERVA), `normalizePayload`,
+`estanciaImportable` y `resolveMapping`, así que su número es el que el barrido
+crearía si se lanzara ahora.
+
+Límites, explícitos: una reserva que aquí **existe cancelada** mientras el canal
+la sigue vendiendo no aparece (el barrido la reescribe como `modify` sin
+revivirla: es otro problema); una reserva cuyo `roomCode` no tiene vínculo
+activo se cuenta (`sinVinculo`) pero no se lista, porque traerla exige vincular
+la unidad antes; se sondean como mucho 20 propiedades por comprobación y las que
+quedan fuera se cuentan (`propiedadesNoSondeadas`); y el contador `faltantes` es
+el número real aunque el listado vaya recortado a 50. La acción sigue siendo el
+barrido a mano —el mismo botón «Ejecutar reconciliación» de la tarjeta de
+arriba—: el aviso no abre una segunda vía de escritura.
+
 #### Revisión de divergencias en el panel de admin
 
 Cada divergencia se guarda **con su lista concreta de reservas** en
