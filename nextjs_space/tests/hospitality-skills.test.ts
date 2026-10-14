@@ -243,6 +243,7 @@ describe('hospitality-skills · registrar_incidencia', () => {
   it('resuelve la unidad por nombre, crea el bloqueo y respeta la ventana', async () => {
     vi.mocked(prisma.hospitalityUnit.findFirst).mockResolvedValue({ id: 'u1', nombre: 'Loft Marina' } as any);
     vi.mocked(prisma.hospitalityUnitBlock.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.hospitalityReservation.findMany).mockResolvedValue([]);
     vi.mocked(prisma.hospitalityUnitBlock.create).mockResolvedValue({ id: 'b1', fechaInicio: fecha(0), fechaFin: fecha(3) } as any);
 
     const resultado = await registrar_incidencia({ tenantId: TENANT, unidad: 'loft marina', descripcion: 'Bañera rota', dias: 3 });
@@ -257,6 +258,38 @@ describe('hospitality-skills · registrar_incidencia', () => {
     expect(resultado.ok).toBe(true);
     expect(resultado.dias).toBe(3);
     expect(resultado.mensaje).toContain('Bañera rota');
+  });
+
+  it('no cierra noches ya vendidas: avisa con la reserva y no crea el bloqueo', async () => {
+    vi.mocked(prisma.hospitalityUnit.findFirst).mockResolvedValue({ id: 'u1', nombre: 'Loft Marina' } as any);
+    vi.mocked(prisma.hospitalityUnitBlock.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.hospitalityReservation.findMany).mockResolvedValue([
+      {
+        id: 'r1',
+        channel: 'booking.com',
+        externalBookingId: '5084548141',
+        estado: 'confirmed',
+        checkIn: fecha(1),
+        checkOut: fecha(3),
+        checkOutReal: null,
+        guestData: { firstName: 'Mohamed', lastName: 'Bouchama' },
+        contact: null,
+      } as any,
+    ]);
+
+    const resultado = await registrar_incidencia({
+      tenantId: TENANT,
+      unidad: 'Loft Marina',
+      descripcion: 'Avería del aire',
+      dias: 3,
+    });
+
+    // El chat no puede hacer lo que el planning no deja: la unidad está libre de
+    // bloqueos y tiene una reserva confirmada encima.
+    expect(resultado.ok).toBe(false);
+    expect(resultado.mensaje).toContain('No se puede cerrar');
+    expect(resultado.mensaje).toContain('5084548141');
+    expect(prisma.hospitalityUnitBlock.create).not.toHaveBeenCalled();
   });
 
   it('no duplica bloqueos: si ya hay uno activo que se solapa, avisa y no crea', async () => {

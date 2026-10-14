@@ -6,7 +6,8 @@ import { authenticateRequest } from '@/lib/api-key-auth';
 import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
 import { logAuditAction } from '@/lib/permissions';
 import { dispatchConnectivityPush } from '@/lib/hospitality/sync';
-import { normalizarTipoBloqueo } from '@/lib/hospitality/block-types';
+import { limpiarMotivo, normalizarTipoBloqueo } from '@/lib/hospitality/block-types';
+import { conflictoDeBloqueo } from '@/lib/hospitality/bloqueos-guarda';
 
 interface Params {
   params: Promise<{ id: string }> | { id: string };
@@ -60,9 +61,10 @@ export async function PATCH(req: NextRequest, ctx: Params) {
     const fechaFin = body.fechaFin === undefined
       ? existing.fechaFin
       : parseDateOnly(body.fechaFin);
-    const motivo = body.motivo === undefined
-      ? existing.motivo
-      : typeof body.motivo === 'string' ? body.motivo.trim().slice(0, 500) || null : null;
+    // El motivo se puede corregir, pero no vaciar: un bloqueo sin razón deja al
+    // que mire el calendario sin saber por qué esas noches estaban cerradas.
+    const motivo = body.motivo === undefined ? existing.motivo : limpiarMotivo(body.motivo);
+    const motivoVaciado = body.motivo !== undefined && !motivo;
     const estado = body.estado === undefined ? existing.estado : body.estado;
     const tipo = body.tipo === undefined
       ? existing.tipo
@@ -76,6 +78,12 @@ export async function PATCH(req: NextRequest, ctx: Params) {
     }
     if (estado !== 'activo' && estado !== 'cancelado') {
       return NextResponse.json({ error: 'estado debe ser activo o cancelado' }, { status: 400 });
+    }
+    if (motivoVaciado) {
+      return NextResponse.json(
+        { error: 'Indica el motivo del bloqueo: queda registrado con las fechas.' },
+        { status: 400 }
+      );
     }
 
     if (estado === 'activo') {
@@ -93,6 +101,20 @@ export async function PATCH(req: NextRequest, ctx: Params) {
       if (overlap) {
         return NextResponse.json({ error: 'El intervalo se solapa con otro bloqueo activo de esta unidad' }, { status: 409 });
       }
+
+      // Un bloqueo activo no puede pisar noches ya contratadas. Se comprueba
+      // cuando el cambio CIERRA fechas que antes no cerraba: al mover el rango
+      // de un bloqueo activo y al reactivar uno liberado. Editar el motivo o el
+      // tipo de un bloqueo que ya estaba activo no vuelve a mirar las reservas:
+      // no es este cambio el que cierra nada, y un dato heredado no debe impedir
+      // documentarlo.
+      const rangoCambia =
+        fechaInicio.getTime() !== existing.fechaInicio.getTime() ||
+        fechaFin.getTime() !== existing.fechaFin.getTime();
+      if (rangoCambia || existing.estado !== 'activo') {
+        const conflicto = await conflictoDeBloqueo(auth.tenant!.id, existing.unitId, fechaInicio, fechaFin);
+        if (conflicto) return NextResponse.json(conflicto, { status: 409 });
+      }
     }
 
     const block = await prisma.hospitalityUnitBlock.update({
@@ -107,7 +129,7 @@ export async function PATCH(req: NextRequest, ctx: Params) {
       'actualizar',
       'hospitality_unit_block',
       id,
-      `Bloqueo actualizado para "${existing.unit.nombre}"`
+      `Bloqueo de "${existing.unit.nombre}" del ${serializeDate(fechaInicio)} al ${serializeDate(fechaFin)} (${tipo}, ${estado}) actualizado · motivo: ${motivo ?? 'sin motivo registrado'}`
     ).catch(() => {});
 
     await pushProperty(auth.tenant!.id, existing.unit.propertyId);

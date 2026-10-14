@@ -13,10 +13,12 @@ import { logAuditAction } from '@/lib/permissions';
 import { dispatchConnectivityPush } from '@/lib/hospitality/sync';
 import {
   esTipoBloqueoValido,
+  limpiarMotivo,
   normalizarTipoBloqueo,
   TIPO_BLOQUEO_POR_DEFECTO,
   type TipoBloqueo,
 } from '@/lib/hospitality/block-types';
+import { conflictoDeBloqueo } from '@/lib/hospitality/bloqueos-guarda';
 
 function parseDateOnly(value: unknown): Date | null {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
@@ -95,7 +97,11 @@ export async function POST(req: NextRequest) {
     const unitId = typeof body?.unitId === 'string' ? body.unitId.trim() : '';
     const fechaInicio = parseDateOnly(body?.fechaInicio);
     const fechaFin = parseDateOnly(body?.fechaFin);
-    const motivo = typeof body?.motivo === 'string' ? body.motivo.trim().slice(0, 500) : null;
+    // El motivo es obligatorio: es la razón documentada del cierre (uso del
+    // propietario, visita de un familiar, noches cedidas o vendidas a una
+    // empresa fuera de canal, avería...). Un bloqueo sin razón deja al que mire
+    // el calendario en marzo sin saber por qué esas noches estaban cerradas.
+    const motivo = limpiarMotivo(body?.motivo);
     // El tipo decide qué representa el bloqueo (propietario, mantenimiento o
     // administrativo). Un valor desconocido no rompe: cae al por defecto.
     const tipo: TipoBloqueo = body?.tipo === undefined
@@ -112,6 +118,15 @@ export async function POST(req: NextRequest) {
     }
     if (fechaFin.getTime() <= fechaInicio.getTime()) {
       return NextResponse.json({ error: 'La fecha fin debe ser posterior a la fecha inicio' }, { status: 400 });
+    }
+    if (!motivo) {
+      return NextResponse.json(
+        {
+          error:
+            'Indica el motivo del bloqueo: queda registrado con las fechas (uso del propietario, visita de un familiar, noches cedidas o vendidas a una empresa, avería...).',
+        },
+        { status: 400 }
+      );
     }
 
     const unit = await prisma.hospitalityUnit.findFirst({
@@ -137,6 +152,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Las fechas ya contratadas no se cierran: un bloqueo resta disponibilidad
+    // como una reserva, pero la reserva tiene un huésped detrás. La guarda es la
+    // misma que usan el PATCH y el asistente (`bloqueos-guarda`).
+    const conflicto = await conflictoDeBloqueo(auth.tenant!.id, unitId, fechaInicio, fechaFin);
+    if (conflicto) return NextResponse.json(conflicto, { status: 409 });
+
     const block = await prisma.hospitalityUnitBlock.create({
       data: {
         tenantId: auth.tenant!.id,
@@ -144,7 +165,7 @@ export async function POST(req: NextRequest) {
         fechaInicio,
         fechaFin,
         tipo: normalizarTipoBloqueo(tipo),
-        motivo: motivo || null,
+        motivo,
       },
       include: { unit: { select: { id: true, nombre: true, codigo: true, propertyId: true } } },
     });
@@ -155,7 +176,7 @@ export async function POST(req: NextRequest) {
       'crear',
       'hospitality_unit_block',
       block.id,
-      `Bloqueo creado para "${unit.nombre}" del ${serializeDate(fechaInicio)} al ${serializeDate(fechaFin)}`
+      `Bloqueo (${normalizarTipoBloqueo(tipo)}) creado para "${unit.nombre}" del ${serializeDate(fechaInicio)} al ${serializeDate(fechaFin)} · motivo: ${motivo}`
     ).catch(() => {});
 
     await pushUnitProperty(auth.tenant!.id, unit.propertyId);

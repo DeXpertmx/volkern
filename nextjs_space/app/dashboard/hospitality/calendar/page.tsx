@@ -7,13 +7,23 @@ import { AccionHospitality } from '@/components/hospitality/AccionHospitality';
 import { capacidadDeTarea } from '@/lib/hospitality/capacidades';
 import { toast } from 'sonner';
 import {
+  accionBloqueo,
   colorTipoBloqueo,
+  esBloqueoActivo,
   etiquetaTipoBloqueo,
+  LONGITUD_MAXIMA_MOTIVO,
   normalizarTipoBloqueo,
   PRESENTACION_BLOQUEO,
+  RAZONES_BLOQUEO,
   TIPOS_BLOQUEO,
+  type EstadoBloqueo,
   type TipoBloqueo,
 } from '@/lib/hospitality/block-types';
+import {
+  choquesParaRespuesta,
+  mensajeConflictoBloqueo,
+  type ChoqueBloqueo,
+} from '@/lib/hospitality/bloqueos-conflicto';
 import {
   Building2,
   ChevronLeft,
@@ -38,6 +48,7 @@ import {
   Plus,
   Trash2,
   Ban,
+  Unlock,
 } from 'lucide-react';
 import {
   buildDays,
@@ -47,6 +58,7 @@ import {
   statusLabel,
   currentWeekRange,
   buildMonthGrid,
+  fechaDeIso,
   occupancyByDay,
   startOfDay,
   toIsoDate,
@@ -120,6 +132,16 @@ interface RawReservation {
 }
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const DIA_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Ventana del listado de bloqueos: lo liberado hace poco —que es lo que se
+ * reactiva— y el año de venta por delante. La rejilla pide la UNIÓN de esta
+ * ventana con la semana visible, así que un bloqueo del mes que viene se puede
+ * abrir desde el listado aunque no esté en la semana que se está mirando.
+ */
+const BLOQUEOS_ATRAS_MS = 30 * DIA_MS;
+const BLOQUEOS_ADELANTE_MS = 365 * DIA_MS;
 
 function fmtDay(d: Date): string {
   return new Intl.DateTimeFormat('es-MX', { weekday: 'short', day: 'numeric', month: 'short' }).format(d);
@@ -159,6 +181,13 @@ export default function HospitalityCalendar() {
     motivo: string;
   } | null>(null);
   const [blockSaving, setBlockSaving] = useState(false);
+  // Bloqueo abierto en el detalle: desde ahí se libera, se reactiva o se borra.
+  const [blockDetail, setBlockDetail] = useState<ManualBlock | null>(null);
+  const [blockBusy, setBlockBusy] = useState(false);
+  // Reservas que impiden cerrar las fechas que el operador está mirando. Se
+  // limpia al abrir cualquier diálogo: un aviso de un intento anterior no puede
+  // quedarse pegado a otro bloqueo.
+  const [bloqueoConflicto, setBloqueoConflicto] = useState<ChoqueBloqueo[] | null>(null);
 
   const rangeEnd = useMemo(() => new Date(rangeStart.getTime() + 6 * 24 * 60 * 60 * 1000), [rangeStart]);
 
@@ -202,9 +231,10 @@ export default function HospitalityCalendar() {
 
   const loadBlocks = useCallback(async () => {
     try {
+      const ahora = Date.now();
       const params = new URLSearchParams({
-        from: toIsoDate(rangeStart),
-        to: toIsoDate(new Date(rangeStart.getTime() + 8 * 24 * 60 * 60 * 1000)),
+        from: toIsoDate(new Date(Math.min(rangeStart.getTime(), ahora - BLOQUEOS_ATRAS_MS))),
+        to: toIsoDate(new Date(Math.max(rangeStart.getTime() + 8 * DIA_MS, ahora + BLOQUEOS_ADELANTE_MS))),
       });
       if (selectedProperty !== 'all') params.set('propertyId', selectedProperty);
       const res = await fetch(`/api/hospitality/blocks?${params.toString()}`);
@@ -386,7 +416,8 @@ export default function HospitalityCalendar() {
 
   const openBlockForm = (unit: CalendarUnit) => {
     const inicio = toIsoDate(rangeStart);
-    const fin = toIsoDate(new Date(rangeStart.getTime() + 2 * 24 * 60 * 60 * 1000));
+    const fin = toIsoDate(new Date(rangeStart.getTime() + 2 * DIA_MS));
+    setBloqueoConflicto(null);
     setBlockForm({
       open: true,
       unitId: unit.id,
@@ -408,6 +439,19 @@ export default function HospitalityCalendar() {
       toast.error('La fecha fin debe ser posterior a la fecha inicio');
       return;
     }
+    // La razón es obligatoria: es lo que queda escrito junto a las fechas.
+    if (!blockForm.motivo.trim()) {
+      toast.error('Escribe el motivo: queda registrado con las fechas y se ve en el calendario');
+      return;
+    }
+    // Aviso previo con las reservas que ya están cargadas en pantalla. El
+    // servidor vuelve a comprobarlo —es la autoridad—; esto solo evita el viaje
+    // cuando el choque ya se ve.
+    if (choquesDelFormulario.length > 0) {
+      setBloqueoConflicto(choquesDelFormulario);
+      toast.error(mensajeConflictoBloqueo(choquesDelFormulario));
+      return;
+    }
     setBlockSaving(true);
     try {
       const res = await fetch('/api/hospitality/blocks', {
@@ -418,12 +462,18 @@ export default function HospitalityCalendar() {
           fechaInicio: blockForm.fechaInicio,
           fechaFin: blockForm.fechaFin,
           tipo: blockForm.tipo,
-          motivo: blockForm.motivo || undefined,
+          motivo: blockForm.motivo.trim(),
         }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'No se pudo crear el bloqueo');
+      if (!res.ok) {
+        // Si el servidor conoce choques que la pantalla no tenía (una reserva
+        // fuera de la semana visible), se enseñan con su detalle.
+        if (Array.isArray(data.conflicto)) setBloqueoConflicto(data.conflicto);
+        throw new Error(data.error || 'No se pudo crear el bloqueo');
+      }
       toast.success('Bloqueo creado y disponibilidad sincronizada');
+      setBloqueoConflicto(null);
       setBlockForm(null);
       await loadBlocks();
     } catch (error) {
@@ -433,18 +483,113 @@ export default function HospitalityCalendar() {
     }
   };
 
+  /**
+   * Abrir el detalle de un bloqueo (desde la rejilla o desde el listado). El
+   * aviso de choque de un intento anterior no viaja con él.
+   */
+  const abrirDetalleBloqueo = (block: ManualBlock) => {
+    setBloqueoConflicto(null);
+    setBlockDetail(block);
+  };
+
+  /**
+   * Liberar y reactivar son la MISMA llamada: el `estado` de destino del PATCH.
+   * El servidor empuja la propiedad al canal, así que el calendario que ve la
+   * OTA se reabre (o se cierra) en el mismo acto. Liberar no borra la fila: el
+   * motivo y el tipo se conservan para poder reactivarla sin volver a escribirla.
+   */
+  const cambiarEstadoBloqueo = async (block: ManualBlock, destino: EstadoBloqueo) => {
+    setBlockBusy(true);
+    try {
+      const res = await fetch(`/api/hospitality/blocks/${block.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado: destino }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        // Reactivar sobre noches vendidas: el servidor devuelve las reservas
+        // que están en medio para poder enseñarlas.
+        if (Array.isArray(data.conflicto)) setBloqueoConflicto(data.conflicto);
+        throw new Error(data.error || 'No se pudo actualizar el bloqueo');
+      }
+      setBloqueoConflicto(null);
+      toast.success(
+        destino === 'cancelado'
+          ? 'Fechas liberadas: vuelven a estar disponibles'
+          : 'Fechas bloqueadas otra vez y sincronizadas'
+      );
+      setBlockDetail(null);
+      await loadBlocks();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Error al actualizar el bloqueo');
+    } finally {
+      setBlockBusy(false);
+    }
+  };
+
   const deleteBlock = async (block: ManualBlock) => {
-    if (!window.confirm(`¿Eliminar el bloqueo de ${block.unit?.nombre || 'la unidad'}?`)) return;
+    if (!window.confirm(`¿Eliminar el bloqueo de ${block.unit?.nombre || 'la unidad'}? Se pierde el motivo y no se podrá reactivar.`)) return;
     try {
       const res = await fetch(`/api/hospitality/blocks/${block.id}`, { method: 'DELETE' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'No se pudo eliminar el bloqueo');
       toast.success('Bloqueo eliminado y disponibilidad sincronizada');
+      setBlockDetail(null);
       await loadBlocks();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Error al eliminar bloqueo');
     }
   };
+
+  // Listado de gestión: primero lo que cierra fechas hoy, después lo liberado
+  // —que es justo lo que se reactiva— y, dentro de cada grupo, por fecha.
+  const bloqueosLista = useMemo(() => {
+    const hoy = toIsoDate(new Date());
+    return blocks
+      .filter((b) => b.fechaFin > hoy)
+      .slice()
+      .sort((a, b) => {
+        const grupoA = esBloqueoActivo(a.estado) ? 0 : 1;
+        const grupoB = esBloqueoActivo(b.estado) ? 0 : 1;
+        if (grupoA !== grupoB) return grupoA - grupoB;
+        return a.fechaInicio.localeCompare(b.fechaInicio);
+      });
+  }, [blocks]);
+
+  /**
+   * Aviso previo del choque con reservas, con las que ya están cargadas en
+   * pantalla. Usa la MISMA regla pura que el servidor (`choquesParaRespuesta`),
+   * así que si aquí sale un choque, la API lo confirmaría; y si aquí no sale,
+   * el servidor sigue siendo quien decide (puede haber reservas fuera de la
+   * semana y rango que se está mirando).
+   */
+  const choquesDelFormulario = useMemo(() => {
+    if (!blockForm?.open) return [];
+    const inicio = fechaDeIso(blockForm.fechaInicio);
+    const fin = fechaDeIso(blockForm.fechaFin);
+    if (!inicio || !fin || fin.getTime() <= inicio.getTime()) return [];
+    return choquesParaRespuesta(
+      reservations
+        .filter((r) => r.unitId === blockForm.unitId)
+        .map((r) => ({
+          id: r.id,
+          estado: r.estado,
+          checkIn: r.checkIn,
+          checkOut: r.checkOut,
+          checkOutReal: r.checkOutReal,
+          channel: r.channel,
+          externalBookingId: r.externalBookingId,
+          huesped: r.guestName,
+        })),
+      inicio,
+      fin
+    );
+  }, [blockForm, reservations]);
+
+  // Lo que enseña el diálogo: lo que el servidor ya confirmó (es la verdad) o,
+  // si aún no se ha intentado, el aviso previo de la pantalla.
+  const choquesVisibles = bloqueoConflicto ?? choquesDelFormulario;
   const createTaskFromReservation = async () => {
     if (!taskForm) return;
     if (!taskForm.unitId) {
@@ -748,7 +893,7 @@ export default function HospitalityCalendar() {
                             type="button"
                             title="Bloquear fechas de esta unidad"
                             onClick={() => openBlockForm(unit)}
-                            className="rounded p-1 text-muted-foreground hover:bg-amber-100 hover:text-amber-700"
+                            className="rounded-md border border-amber-300/70 p-1 text-amber-700 hover:bg-amber-100 dark:border-amber-800/70 dark:text-amber-400 dark:hover:bg-amber-950/40"
                           >
                             <Ban className="h-3.5 w-3.5" />
                           </button>
@@ -821,7 +966,12 @@ export default function HospitalityCalendar() {
                           </span>
                         );
                       })}
-                      {blocks.filter((b) => b.unitId === unit.id && b.estado === 'activo').map((block) => {
+                      {/* Bloqueos manuales — los activos con el color de su tipo y
+                          los ya liberados en trazo discontinuo. Los dos se ven, y
+                          se pueden abrir, porque un bloqueo liberado es lo que hay
+                          que reactivar, y uno invisible no se puede reactivar. */}
+                      {blocks.filter((b) => b.unitId === unit.id).map((block) => {
+                        const activo = esBloqueoActivo(block.estado);
                         // El bloqueo usa [fechaInicio, fechaFin): el checkout no se bloquea.
                         const first = days.findIndex((d) => d.key >= block.fechaInicio);
                         const end = days.findIndex((d) => d.key >= block.fechaFin);
@@ -829,33 +979,46 @@ export default function HospitalityCalendar() {
                         const endCol = end < 0 ? days.length : end;
                         if (endCol <= 0 || startCol >= days.length || endCol <= startCol) return null;
                         return (
-                          <AccionHospitality key={`block-${block.id}`} capacidad="reservas.editar">
-                            <button
-                              type="button"
-                              onClick={() => deleteBlock(block)}
-                              className="z-20 rounded-md border px-2 py-1 text-left text-[11px] shadow-sm hover:brightness-95"
-                              style={{
-                                gridColumn: `${startCol + 1} / span ${Math.max(1, endCol - startCol)}`,
-                                gridRow: 1,
-                                marginLeft: 2,
-                                marginRight: 2,
-                                marginTop: 5,
-                                marginBottom: 5,
-                                borderColor: colorTipoBloqueo(block.tipo),
-                                backgroundColor: `${colorTipoBloqueo(block.tipo)}1f`,
-                                color: colorTipoBloqueo(block.tipo),
-                              }}
-                              title={`Bloqueo: ${etiquetaTipoBloqueo(block.tipo)} · pulsa para eliminar`}
-                            >
-                              <div className="flex items-center gap-1 truncate font-medium">
+                          <button
+                            key={`block-${block.id}`}
+                            type="button"
+                            onClick={() => abrirDetalleBloqueo(block)}
+                            className={`z-20 rounded-md border px-2 py-1 text-left text-[11px] shadow-sm hover:brightness-95 ${
+                              activo ? '' : 'border-dashed border-muted-foreground/50 text-muted-foreground opacity-70'
+                            }`}
+                            style={{
+                              gridColumn: `${startCol + 1} / span ${Math.max(1, endCol - startCol)}`,
+                              gridRow: 1,
+                              marginLeft: 2,
+                              marginRight: 2,
+                              marginTop: 5,
+                              marginBottom: 5,
+                              ...(activo
+                                ? {
+                                    borderColor: colorTipoBloqueo(block.tipo),
+                                    backgroundColor: `${colorTipoBloqueo(block.tipo)}1f`,
+                                    color: colorTipoBloqueo(block.tipo),
+                                  }
+                                : {}),
+                            }}
+                            title={
+                              activo
+                                ? `Bloqueo: ${etiquetaTipoBloqueo(block.tipo)} · pulsa para liberar o eliminar`
+                                : `Bloqueo liberado: ${etiquetaTipoBloqueo(block.tipo)} · pulsa para reactivar`
+                            }
+                          >
+                            <div className="flex items-center gap-1 truncate font-medium">
+                              {activo ? (
                                 <Ban className="h-3 w-3 shrink-0" />
-                                <span className="truncate">
-                                  {etiquetaTipoBloqueo(block.tipo)}
-                                  {block.motivo ? ` · ${block.motivo}` : ''}
-                                </span>
-                              </div>
-                            </button>
-                          </AccionHospitality>
+                              ) : (
+                                <Unlock className="h-3 w-3 shrink-0" />
+                              )}
+                              <span className={`truncate ${activo ? '' : 'line-through'}`}>
+                                {etiquetaTipoBloqueo(block.tipo)}
+                                {block.motivo ? ` · ${block.motivo}` : ''}
+                              </span>
+                            </div>
+                          </button>
                         );
                       })}
                     </div>
@@ -901,7 +1064,74 @@ export default function HospitalityCalendar() {
               {PRESENTACION_BLOQUEO[tipo].etiqueta}
             </span>
           ))}
+          <span className="flex items-center gap-1.5">
+            {/* Liberado: trazo discontinuo gris, igual que en la cuadrícula. */}
+            <span className="w-3 h-3 rounded-sm border border-dashed border-muted-foreground/50" />
+            Liberado
+          </span>
         </div>
+      </Card>
+
+      {/* Listado de bloqueos: lo que cierra fechas y lo liberado, cada uno con su
+          acción. Existe porque un bloqueo fuera de la semana visible no está en
+          la rejilla: sin este listado no habría forma de liberarlo ni de
+          reactivarlo sin navegar hasta su semana. */}
+      <Card className="mt-4">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Ban className="h-4 w-4 text-amber-600" />
+            Bloqueos de fechas ({bloqueosLista.filter((b) => esBloqueoActivo(b.estado)).length} activos)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <p className="text-xs text-muted-foreground">
+            Uso del propietario, mantenimiento o cierre administrativo. Al <strong>liberar</strong> las
+            fechas vuelven a estar disponibles en tu web y en los canales; al <strong>reactivar</strong> se
+            cierran otra vez, con el mismo motivo, sin volver a crearlas.
+          </p>
+          {bloqueosLista.length === 0 ? (
+            <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+              No hay bloqueos entre hoy y el próximo año. Usa el botón «Bloquear fechas» de la fila de
+              una unidad en la cuadrícula de arriba.
+            </p>
+          ) : (
+            <div className="divide-y rounded-lg border">
+              {bloqueosLista.map((block) => {
+                const activo = esBloqueoActivo(block.estado);
+                const accion = accionBloqueo(block.estado);
+                return (
+                  <div key={block.id} className="flex flex-wrap items-center gap-2 p-2.5">
+                    <span
+                      className="h-2.5 w-2.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: colorTipoBloqueo(block.tipo) }}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className={`truncate text-sm font-medium ${activo ? '' : 'text-muted-foreground line-through'}`}>
+                        {block.unit?.nombre || 'Unidad'} · {etiquetaTipoBloqueo(block.tipo)}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {block.fechaInicio} → {block.fechaFin}
+                        {block.motivo ? ` · ${block.motivo}` : ''}
+                        {activo ? '' : ' · liberado'}
+                      </p>
+                    </div>
+                    <AccionHospitality capacidad="reservas.editar">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={activo ? 'outline' : 'default'}
+                        onClick={() => cambiarEstadoBloqueo(block, accion.destino)}
+                        disabled={blockBusy}
+                      >
+                        {accion.etiqueta}
+                      </Button>
+                    </AccionHospitality>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
       </Card>
         </>
       )}
@@ -1312,18 +1542,33 @@ export default function HospitalityCalendar() {
               </select>
             </label>
             <label className="mt-3 block text-sm">
-              <span className="font-medium">Motivo (opcional)</span>
+              <span className="font-medium">Motivo (queda registrado)</span>
               <input
                 value={blockForm.motivo}
                 onChange={(event) => setBlockForm((form) => form ? { ...form, motivo: event.target.value } : form)}
-                placeholder="Mantenimiento, uso del propietario..."
-                maxLength={500}
+                list="razones-bloqueo"
+                placeholder={RAZONES_BLOQUEO[blockForm.tipo][0]}
+                maxLength={LONGITUD_MAXIMA_MOTIVO}
                 className="mt-1 h-9 w-full rounded-md border bg-background px-3 text-sm"
               />
+              {/* Las razones frecuentes del tipo elegido: sugieren sin cerrar la
+                  lista. Escribir «Visita de un familiar» o «Noches vendidas a
+                  una empresa» es lo que hace que el cierre se entienda después. */}
+              <datalist id="razones-bloqueo">
+                {RAZONES_BLOQUEO[blockForm.tipo].map((razon) => (
+                  <option key={razon} value={razon} />
+                ))}
+              </datalist>
             </label>
-            <p className="mt-3 text-xs text-muted-foreground">
-              El intervalo no estará disponible para reservas y se enviará al canal conectado.
+            <p className="mt-1 text-xs text-muted-foreground">
+              Escribe la razón con tus palabras: quien mire el calendario más adelante sabrá por qué esas
+              noches estaban cerradas.
             </p>
+            <p className="mt-3 text-xs text-muted-foreground">
+              El intervalo no estará disponible para reservas y se enviará al canal conectado. Las noches ya
+              vendidas no se pueden cerrar.
+            </p>
+            {choquesVisibles.length > 0 && <AvisoConflictoBloqueo choques={choquesVisibles} />}
             <div className="mt-5 flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setBlockForm(null)}>Cancelar</Button>
               <AccionHospitality capacidad="reservas.editar">
@@ -1336,6 +1581,143 @@ export default function HospitalityCalendar() {
           </div>
         </div>
       )}
+
+      {/* Detalle del bloqueo: liberar (deja las fechas disponibles otra vez),
+          reactivar (las cierra de nuevo) o eliminar la fila. */}
+      {blockDetail && (() => {
+        const activo = esBloqueoActivo(blockDetail.estado);
+        const accion = accionBloqueo(blockDetail.estado);
+        return (
+          <div
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="block-detail-title"
+            onClick={() => setBlockDetail(null)}
+          >
+            <div
+              className="w-full max-w-md rounded-xl bg-white p-5 shadow-2xl dark:bg-slate-950"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div>
+                  <h2 id="block-detail-title" className="flex items-center gap-2 text-lg font-semibold">
+                    {activo ? <Ban className="h-5 w-5 text-amber-600" /> : <Unlock className="h-5 w-5 text-muted-foreground" />}
+                    {activo ? 'Fechas bloqueadas' : 'Bloqueo liberado'}
+                  </h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {blockDetail.unit?.nombre || 'Unidad'}
+                  </p>
+                </div>
+                <button type="button" onClick={() => setBlockDetail(null)} className="rounded-lg p-1.5 hover:bg-muted" aria-label="Cerrar">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="space-y-1.5 rounded-lg border p-3 text-sm">
+                <p className="flex items-center gap-2">
+                  <CalendarDays className="h-4 w-4 shrink-0 text-primary" />
+                  {blockDetail.fechaInicio} → {blockDetail.fechaFin}
+                  <span className="text-xs text-muted-foreground">(sin incluir)</span>
+                </p>
+                <p className="flex items-center gap-2">
+                  <span
+                    className="h-3 w-3 shrink-0 rounded-sm border"
+                    style={{
+                      backgroundColor: `${colorTipoBloqueo(blockDetail.tipo)}1f`,
+                      borderColor: colorTipoBloqueo(blockDetail.tipo),
+                    }}
+                  />
+                  {etiquetaTipoBloqueo(blockDetail.tipo)}
+                </p>
+                <p className="flex items-start gap-2">
+                  <StickyNote className="h-4 w-4 shrink-0 text-primary" />
+                  <span className={blockDetail.motivo ? '' : 'italic text-muted-foreground'}>
+                    {blockDetail.motivo ||
+                      'Sin motivo registrado (bloqueo anterior a que el motivo fuera obligatorio)'}
+                  </span>
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {activo
+                    ? 'Estas noches están cerradas en tu web y en los canales.'
+                    : 'Estas noches están otra vez a la venta; el bloqueo se conserva para poder reactivarlo.'}
+                </p>
+              </div>
+
+              <p className="mt-3 text-xs text-muted-foreground">{accion.ayuda}</p>
+
+              {blockDetail && bloqueoConflicto && bloqueoConflicto.length > 0 && (
+                <AvisoConflictoBloqueo choques={bloqueoConflicto} />
+              )}
+
+              <div className="mt-5 flex flex-wrap justify-end gap-2">
+                <AccionHospitality capacidad="reservas.editar">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => deleteBlock(blockDetail)}
+                    disabled={blockBusy}
+                  >
+                    <Trash2 className="mr-1 h-4 w-4" />
+                    Eliminar
+                  </Button>
+                </AccionHospitality>
+                <AccionHospitality capacidad="reservas.editar">
+                  <Button
+                    type="button"
+                    onClick={() => cambiarEstadoBloqueo(blockDetail, accion.destino)}
+                    disabled={blockBusy}
+                  >
+                    {blockBusy ? (
+                      <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                    ) : activo ? (
+                      <Unlock className="mr-1 h-4 w-4" />
+                    ) : (
+                      <Ban className="mr-1 h-4 w-4" />
+                    )}
+                    {accion.etiqueta}
+                  </Button>
+                </AccionHospitality>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
+/* ─── Aviso de choque con fechas ya contratadas ───────────────────────────── */
+
+/**
+ * Las reservas que impiden cerrar esas fechas, cada una con su estancia
+ * completa (la de la reserva, que puede sobresalir del bloqueo que se intenta
+ * crear): es lo que el operador necesita para decidir —liberarla, moverla o
+ * bloquear solo las noches libres—.
+ *
+ * El texto sale del módulo puro compartido con la API
+ * (`mensajeConflictoBloqueo`), así que la pantalla y el servidor dicen
+ * exactamente lo mismo.
+ */
+function AvisoConflictoBloqueo({ choques }: { choques: ChoqueBloqueo[] }) {
+  if (choques.length === 0) return null;
+  return (
+    <div
+      role="alert"
+      className="mt-3 rounded-lg border border-red-300 bg-red-50 p-3 text-xs text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
+    >
+      <p className="flex items-center gap-1.5 font-semibold">
+        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+        Esas noches ya están vendidas
+      </p>
+      <p className="mt-1">{mensajeConflictoBloqueo(choques)}</p>
+      <ul className="mt-2 space-y-0.5">
+        {choques.map((choque) => (
+          <li key={choque.id}>
+            {choque.etiqueta} · {choque.desde} → {choque.hasta}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

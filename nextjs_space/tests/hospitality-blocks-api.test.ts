@@ -11,6 +11,11 @@ const mocks = vi.hoisted(() => ({
   hospitalityUnit: {
     findFirst: vi.fn(),
   },
+  // La guarda de fechas contratadas (`bloqueos-guarda`): por defecto, ninguna
+  // reserva en el rango.
+  hospitalityReservation: {
+    findMany: vi.fn(),
+  },
   authenticateRequest: vi.fn(),
   dispatchConnectivityPush: vi.fn(),
   logAuditAction: vi.fn(),
@@ -20,6 +25,7 @@ vi.mock('@/lib/db', () => ({
   prisma: {
     hospitalityUnitBlock: mocks.hospitalityUnitBlock,
     hospitalityUnit: mocks.hospitalityUnit,
+    hospitalityReservation: mocks.hospitalityReservation,
   },
 }));
 vi.mock('@/lib/api-key-auth', () => ({
@@ -73,6 +79,7 @@ beforeEach(() => {
   mocks.authenticateRequest.mockResolvedValue(auth);
   mocks.logAuditAction.mockResolvedValue(undefined);
   mocks.dispatchConnectivityPush.mockResolvedValue({ ok: true });
+  mocks.hospitalityReservation.findMany.mockResolvedValue([]);
 });
 
 describe('API de bloqueos manuales — aislamiento y validación', () => {
@@ -95,6 +102,7 @@ describe('API de bloqueos manuales — aislamiento y validación', () => {
       unitId: 'unit_foreign',
       fechaInicio: '2026-09-10',
       fechaFin: '2026-09-12',
+      motivo: 'Uso del propietario',
     }));
 
     expect(response.status).toBe(404);
@@ -114,6 +122,7 @@ describe('API de bloqueos manuales — aislamiento y validación', () => {
       unitId: 'unit_a',
       fechaInicio: '2026-09-11',
       fechaFin: '2026-09-13',
+      motivo: 'Uso del propietario',
     }));
 
     expect(response.status).toBe(409);
@@ -171,6 +180,7 @@ describe('tipo de bloqueo (Calendar Blocks)', () => {
       fechaInicio: '2026-09-10',
       fechaFin: '2026-09-12',
       tipo: 'mantenimiento',
+      motivo: 'Avería del aire',
     }));
 
     expect(response.status).toBe(201);
@@ -188,6 +198,7 @@ describe('tipo de bloqueo (Calendar Blocks)', () => {
       unitId: 'unit_a',
       fechaInicio: '2026-09-10',
       fechaFin: '2026-09-12',
+      motivo: 'Uso del propietario',
     }));
 
     expect(mocks.hospitalityUnitBlock.create.mock.calls[0][0].data).toMatchObject({
@@ -205,6 +216,7 @@ describe('tipo de bloqueo (Calendar Blocks)', () => {
       fechaInicio: '2026-09-10',
       fechaFin: '2026-09-12',
       tipo: 'inventado',
+      motivo: 'Uso del propietario',
     }));
 
     expect(response.status).toBe(201);
@@ -226,5 +238,243 @@ describe('tipo de bloqueo (Calendar Blocks)', () => {
     expect(mocks.hospitalityUnitBlock.update.mock.calls[0][0].data).toMatchObject({
       tipo: 'administrativo',
     });
+  });
+});
+
+/**
+ * Liberar y reactivar son el mismo PATCH con distinto `estado`: liberar deja las
+ * fechas a la venta (la fila se conserva, con su motivo) y reactivar las vuelve
+ * a cerrar. Lo que se vigila aquí es que liberar no exija comprobar solapes
+ * —es el que los resuelve— y que reactivar sí, para no dejar dos bloqueos
+ * activos pisándose las mismas noches.
+ */
+describe('Estado del bloqueo: liberar (cancelado) y reactivar (activo)', () => {
+  it('PATCH a cancelado libera las fechas, guarda el estado y empuja la propiedad', async () => {
+    mocks.hospitalityUnitBlock.findFirst.mockResolvedValueOnce(block);
+    mocks.hospitalityUnitBlock.update.mockResolvedValue({ ...block, estado: 'cancelado' });
+
+    const response = await PATCH(request('PATCH', { estado: 'cancelado' }), ctx('block_a'));
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mocks.hospitalityUnitBlock.update.mock.calls[0][0].data).toMatchObject({
+      estado: 'cancelado',
+    });
+    expect(data.block.estado).toBe('cancelado');
+    expect(mocks.dispatchConnectivityPush).toHaveBeenCalledWith(
+      'tenant_a',
+      'property_a',
+      'unidad_cambiada',
+      { skipRates: true }
+    );
+  });
+
+  it('liberar NO busca solapes: una sola lectura, la del propio bloqueo', async () => {
+    mocks.hospitalityUnitBlock.findFirst.mockResolvedValueOnce(block);
+    mocks.hospitalityUnitBlock.update.mockResolvedValue({ ...block, estado: 'cancelado' });
+
+    const response = await PATCH(request('PATCH', { estado: 'cancelado' }), ctx('block_a'));
+
+    expect(response.status).toBe(200);
+    expect(mocks.hospitalityUnitBlock.findFirst).toHaveBeenCalledTimes(1);
+  });
+
+  it('reactivar rechaza 409 si el intervalo choca con otro bloqueo activo', async () => {
+    mocks.hospitalityUnitBlock.findFirst
+      .mockResolvedValueOnce({ ...block, estado: 'cancelado' })
+      .mockResolvedValueOnce({ id: 'otro_bloqueo' });
+
+    const response = await PATCH(request('PATCH', { estado: 'activo' }), ctx('block_a'));
+
+    expect(response.status).toBe(409);
+    expect(mocks.hospitalityUnitBlock.update).not.toHaveBeenCalled();
+    expect(mocks.dispatchConnectivityPush).not.toHaveBeenCalled();
+  });
+
+  it('reactivar un bloqueo no se cuenta como solape consigo mismo', async () => {
+    mocks.hospitalityUnitBlock.findFirst
+      .mockResolvedValueOnce({ ...block, estado: 'cancelado' })
+      .mockResolvedValueOnce(null);
+    mocks.hospitalityUnitBlock.update.mockResolvedValue({ ...block, estado: 'activo' });
+
+    const response = await PATCH(request('PATCH', { estado: 'activo' }), ctx('block_a'));
+
+    expect(response.status).toBe(200);
+    const solape = mocks.hospitalityUnitBlock.findFirst.mock.calls[1][0];
+    expect(solape.where.id).toEqual({ not: 'block_a' });
+    expect(solape.where.estado).toBe('activo');
+    expect(mocks.hospitalityUnitBlock.update.mock.calls[0][0].data).toMatchObject({
+      estado: 'activo',
+    });
+  });
+
+  it('un estado que no existe no se guarda', async () => {
+    mocks.hospitalityUnitBlock.findFirst.mockResolvedValueOnce(block);
+
+    const response = await PATCH(request('PATCH', { estado: 'suspendido' }), ctx('block_a'));
+
+    expect(response.status).toBe(400);
+    expect(mocks.hospitalityUnitBlock.update).not.toHaveBeenCalled();
+  });
+
+  it('GET no filtra por estado: los liberados viajan a la UI para poder reactivarlos', async () => {
+    mocks.hospitalityUnitBlock.findMany.mockResolvedValue([]);
+
+    await GET(request('GET'));
+
+    const args = mocks.hospitalityUnitBlock.findMany.mock.calls[0][0];
+    expect(args.where.estado).toBeUndefined();
+  });
+});
+
+/**
+ * Dos reglas del producto que la API no puede dejar pasar:
+ *  - el motivo es OBLIGATORIO: es la razón documentada del cierre (uso del
+ *    propietario, visita de un familiar, noches cedidas o vendidas a una empresa
+ *    fuera de canal...), y un bloqueo sin razón deja al que mire el calendario
+ *    más adelante sin saber por qué esas noches estaban cerradas; y
+ *  - las fechas ya CONTRATADAS no se cierran: un bloqueo resta disponibilidad
+ *    como una reserva, pero detrás de la reserva hay un huésped confirmado.
+ */
+describe('Motivo obligatorio y fechas ya contratadas', () => {
+  /** Una estancia vendida que ocupa las noches 10 y 11 de septiembre. */
+  const venta = {
+    id: 'res_1',
+    channel: 'booking.com',
+    externalBookingId: '5084548141',
+    estado: 'confirmed',
+    checkIn: new Date('2026-09-10T15:00:00'),
+    checkOut: new Date('2026-09-12T11:00:00'),
+    checkOutReal: null,
+    guestData: { firstName: 'Mohamed', lastName: 'Bouchama' },
+    contact: null,
+  };
+
+  it('POST sin motivo: no hay bloqueo (la razón es obligatoria)', async () => {
+    const response = await POST(
+      request('POST', { unitId: 'unit_a', fechaInicio: '2026-09-10', fechaFin: '2026-09-12' })
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.error).toContain('motivo');
+    expect(mocks.hospitalityUnitBlock.create).not.toHaveBeenCalled();
+    expect(mocks.dispatchConnectivityPush).not.toHaveBeenCalled();
+  });
+
+  it('POST con el motivo en blanco tampoco cierra fechas', async () => {
+    const response = await POST(
+      request('POST', {
+        unitId: 'unit_a',
+        fechaInicio: '2026-09-10',
+        fechaFin: '2026-09-12',
+        motivo: '   ',
+      })
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.hospitalityUnitBlock.create).not.toHaveBeenCalled();
+  });
+
+  it('POST guarda el motivo recortado: es la razón documentada', async () => {
+    mocks.hospitalityUnit.findFirst.mockResolvedValue(unit);
+    mocks.hospitalityUnitBlock.findFirst.mockResolvedValue(null);
+    mocks.hospitalityUnitBlock.create.mockResolvedValue({ ...block, motivo: 'Visita de un familiar' });
+
+    await POST(
+      request('POST', {
+        unitId: 'unit_a',
+        fechaInicio: '2026-09-10',
+        fechaFin: '2026-09-12',
+        motivo: '  Visita de un familiar  ',
+      })
+    );
+
+    expect(mocks.hospitalityUnitBlock.create.mock.calls[0][0].data).toMatchObject({
+      motivo: 'Visita de un familiar',
+    });
+  });
+
+  it('POST no cierra noches vendidas: 409 con la reserva que está en medio', async () => {
+    mocks.hospitalityUnit.findFirst.mockResolvedValue(unit);
+    mocks.hospitalityUnitBlock.findFirst.mockResolvedValue(null);
+    mocks.hospitalityReservation.findMany.mockResolvedValue([venta]);
+
+    const response = await POST(
+      request('POST', {
+        unitId: 'unit_a',
+        fechaInicio: '2026-09-11',
+        fechaFin: '2026-09-13',
+        motivo: 'Uso del propietario',
+      })
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(data.conflicto).toHaveLength(1);
+    // La estancia completa y con lo que la identifica, para poder resolverlo.
+    expect(data.conflicto[0]).toMatchObject({
+      id: 'res_1',
+      referencia: '5084548141',
+      desde: '2026-09-10',
+      hasta: '2026-09-12',
+    });
+    // El mensaje dice la noche concreta que está vendida.
+    expect(data.error).toContain('2026-09-11');
+    expect(mocks.hospitalityUnitBlock.create).not.toHaveBeenCalled();
+    expect(mocks.dispatchConnectivityPush).not.toHaveBeenCalled();
+  });
+
+  it('una reserva cancelada en el rango no impide cerrar: sus noches están libres', async () => {
+    mocks.hospitalityUnit.findFirst.mockResolvedValue(unit);
+    mocks.hospitalityUnitBlock.findFirst.mockResolvedValue(null);
+    mocks.hospitalityReservation.findMany.mockResolvedValue([{ ...venta, estado: 'cancelled' }]);
+    mocks.hospitalityUnitBlock.create.mockResolvedValue(block);
+
+    const response = await POST(
+      request('POST', {
+        unitId: 'unit_a',
+        fechaInicio: '2026-09-11',
+        fechaFin: '2026-09-13',
+        motivo: 'Uso del propietario',
+      })
+    );
+
+    expect(response.status).toBe(201);
+  });
+
+  it('reactivar tampoco pisa noches vendidas: 409 y sin actualizar', async () => {
+    mocks.hospitalityUnitBlock.findFirst
+      .mockResolvedValueOnce({ ...block, estado: 'cancelado' })
+      .mockResolvedValueOnce(null);
+    mocks.hospitalityReservation.findMany.mockResolvedValue([venta]);
+
+    const response = await PATCH(request('PATCH', { estado: 'activo' }), ctx('block_a'));
+    const data = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(data.conflicto[0].id).toBe('res_1');
+    expect(mocks.hospitalityUnitBlock.update).not.toHaveBeenCalled();
+  });
+
+  it('liberar no se bloquea por reservas: liberar abre fechas, no las cierra', async () => {
+    mocks.hospitalityUnitBlock.findFirst.mockResolvedValueOnce(block);
+    mocks.hospitalityReservation.findMany.mockResolvedValue([venta]);
+    mocks.hospitalityUnitBlock.update.mockResolvedValue({ ...block, estado: 'cancelado' });
+
+    const response = await PATCH(request('PATCH', { estado: 'cancelado' }), ctx('block_a'));
+
+    expect(response.status).toBe(200);
+    // Ni siquiera se consultan las reservas: no se está cerrando nada.
+    expect(mocks.hospitalityReservation.findMany).not.toHaveBeenCalled();
+  });
+
+  it('el motivo de un bloqueo no se puede vaciar al editarlo', async () => {
+    mocks.hospitalityUnitBlock.findFirst.mockResolvedValueOnce(block);
+
+    const response = await PATCH(request('PATCH', { motivo: '   ' }), ctx('block_a'));
+
+    expect(response.status).toBe(400);
+    expect(mocks.hospitalityUnitBlock.update).not.toHaveBeenCalled();
   });
 });

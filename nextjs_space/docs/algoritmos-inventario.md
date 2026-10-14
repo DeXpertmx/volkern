@@ -83,6 +83,7 @@ Ver §5.1.
 | H22 | Dinero y divisa | `lib/moneda.ts` | puro | `moneda-plataforma-guard` |
 | H23 | Permisos por capacidad | `capacidades.ts`, `permissions.ts` | puro | 4 guardias |
 | H24 | Crons y su estado | `lib/cron/*`, `cron-status.ts` | servicio | 6 guardias |
+| H25 | Bloqueos de fechas: la razón y el choque con lo contratado | `block-types.ts`, `bloqueos-conflicto.ts` (+ `bloqueos-guarda.ts`) | puro + guarda | `hospitality-bloqueos-conflicto`, `hospitality-block-ui-guard` |
 
 ### Familia comercial
 
@@ -868,6 +869,52 @@ reiniciar: es una decisión declarada (el panel muestra el proceso vivo).
 **Investigar / mejorar.** El estado se pierde al reiniciar. Si se quiere tendencia
 («este job falla desde el martes»), hace falta persistir el histórico de ejecuciones; es
 exactamente el tipo de dato que necesitan las mejoras de H7 y H15 para calibrar ventanas.
+
+---
+
+### H25 · Bloqueos de fechas: la razón y el choque con lo contratado ✅
+
+**Qué hace.** Dos reglas sobre las fechas que se cierran a la venta sin ser una reserva
+(uso del propietario, visita de un familiar, avería, cierre administrativo, noches cedidas
+o vendidas a una empresa fuera de canal): el **motivo es obligatorio** y el cierre **no
+puede pisar noches ya contratadas**.
+
+**En qué beneficia.** El motivo es lo que hace que el cierre se entienda después: quien
+mire el calendario en marzo sabe por qué esas noches estaban cerradas, y el catálogo de
+razones frecuentes hace que se escriba siempre igual. Y un bloqueo no puede pasar por
+encima de un huésped con confirmación: la unidad está libre de bloqueos, pero puede tener
+una estancia vendida encima.
+
+**Parte técnica.** `block-types.ts` guarda el catálogo de tipos, las razones frecuentes y
+`limpiarMotivo` (recorta, acota a 500 y convierte cualquier cosa que no sea texto en
+cadena vacía, que es lo que la API rechaza con 400). `bloqueos-conflicto.ts` es PURO y
+decide qué está ocupado con la definición del motor de disponibilidad: solo reservas con
+producción (una cancelada o un no-show liberan sus noches) y el rango
+`[checkIn, finEstanciaReal)` — el día de salida no ocupa y una salida anticipada devuelve
+las noches no usadas. `bloqueos-guarda.ts` es la consulta del servidor: el `where` es un
+prefiltro barato y quien decide es la regla pura. Con eso responden 409 (y 400 sin motivo)
+las dos puertas que cierran fechas por API —`POST /api/hospitality/blocks` y el `PATCH` al
+reactivar o al mover el rango de un bloqueo activo— y el asistente
+(`registrar_incidencia`), con el texto y las reservas en conflicto (`conflicto`) para que
+el operador sepa qué liberar o mover. Liberar (`cancelado`) no se bloquea por reservas:
+liberar abre fechas, no las cierra. La pantalla del planning avisa ANTES de enviar con las
+reservas que ya tiene cargadas y, si el servidor encuentra un choque que la rejilla no veía
+(una reserva fuera de la semana visible), lo enseña con sus reservas en vez de un aviso
+efímero.
+
+**Dónde.** `lib/hospitality/block-types.ts`, `lib/hospitality/bloqueos-conflicto.ts`,
+`lib/hospitality/bloqueos-guarda.ts`; API en `app/api/hospitality/blocks[/[id]]`; pantalla
+en `app/dashboard/hospitality/calendar`.
+
+**Guardia.** `hospitality-bloqueos-conflicto` (la definición de ocupada),
+`hospitality-blocks-api` (400 sin motivo, 409 con reserva, liberar no se bloquea),
+`hospitality-block-ui-guard` (catálogo, motivo exigido y aviso) y
+`hospitality-bloqueos-liberar-reactivar` (el flujo sobre la pantalla real).
+
+**Investigar / mejorar.** El sentido contrario —una reserva **manual** creada encima de un
+bloqueo activo (`POST /api/hospitality/reservations`)— hoy no se rechaza: ese camino solo
+compara reservas entre sí, mientras el motor de la reserva pública sí mira los bloqueos.
+Queda como cabo suelto declarado.
 
 ---
 

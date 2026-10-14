@@ -5,9 +5,32 @@ import {
   layoutReservations,
   currentWeekRange,
   channelStyle,
+  fechaDeIso,
   toIsoDate,
   type CalendarReservation,
 } from '@/lib/hospitality/calendar';
+
+describe('fechaDeIso (el día local de las APIs y los filtros)', () => {
+  it('lee un día local y devuelve la misma fecha', () => {
+    const fecha = fechaDeIso('2026-10-14');
+    expect(fecha).not.toBeNull();
+    // Día local, no UTC: la hora de medianoche del huso del servidor.
+    expect(fecha!.getHours()).toBe(0);
+    expect(toIsoDate(fecha!)).toBe('2026-10-14');
+  });
+
+  it('rechaza lo que no es un día en vez de inventarse una fecha', () => {
+    // `new Date('2026-02-31')` daría una fecha válida en JavaScript: ese día no existe.
+    expect(fechaDeIso('2026-02-31')).toBeNull();
+    expect(fechaDeIso('2026-2-1')).toBeNull();
+    expect(fechaDeIso('14/10/2026')).toBeNull();
+    expect(fechaDeIso('2026-10-14T00:00:00')).toBeNull();
+    expect(fechaDeIso('')).toBeNull();
+    expect(fechaDeIso(undefined)).toBeNull();
+    expect(fechaDeIso(null)).toBeNull();
+    expect(fechaDeIso(20261014)).toBeNull();
+  });
+});
 
 function res(overrides: Partial<CalendarReservation>): CalendarReservation {
   return {

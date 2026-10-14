@@ -238,6 +238,19 @@ Lo que ocupa una unidad no siempre es una reserva. `HospitalityUnitBlock` incorp
 | `mantenimiento` | Unidad fuera de servicio por incidencia |
 | `administrativo` | Bloqueo administrativo / cierre comercial |
 
+El `motivo` es **obligatorio** y es la razón documentada del cierre (visita de un familiar,
+noches cedidas o vendidas a una empresa fuera de canal, avería, obra, cierre por
+temporada): el planning sugiere las razones frecuentes del tipo elegido y el texto queda
+guardado con el bloqueo —y en la auditoría— para que el cierre se entienda cuando nadie
+recuerda quién lo hizo. Un bloqueo sin razón no se crea.
+
+Y un bloqueo **no puede cerrar noches ya contratadas**: si el rango pisa una reserva viva,
+la API responde **409 con las reservas que están en medio** (canal, referencia, huésped y
+estancia completa) y no crea el bloqueo. Quién decide qué está ocupado es
+`lib/hospitality/bloqueos-conflicto.ts`, con la misma definición de ocupación del motor de
+disponibilidad —no una segunda regla—: cancelada y no-show liberan sus noches, el día de
+salida no ocupa y la salida anticipada devuelve las no usadas.
+
 Reserva, limpieza y mantenimiento ya existen como entidades propias. Los cuatro tipos
 **restan disponibilidad por el mismo motor**.
 
@@ -299,6 +312,9 @@ que la mayor parte de la rentabilidad es un **cálculo derivado**, no esquema nu
 
 ### FASE 3.A — Cimientos de dinero y disponibilidad
 - [x] `tipo` en `HospitalityUnitBlock` + selector en el planning y leyenda.
+- [x] Motivo **obligatorio** del bloqueo (razones frecuentes por tipo) y guarda de las
+      fechas ya contratadas: 409 con las reservas en medio, en la API, el asistente y el
+      aviso previo del planning.
 - [x] Modelos `HospitalityReservationItem`, `HospitalityPayment`,
       `HospitalityPaymentAccount` + migración.
 - [x] Módulo puro de rentabilidad y estado de cobro + tests.

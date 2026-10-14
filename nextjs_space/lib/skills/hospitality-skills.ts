@@ -22,6 +22,7 @@ import { aportaProduccion, esEstadoValido, ESTADOS_RESERVA, type EstadoReserva }
 import { resumenReservas } from '@/lib/hospitality/analytics';
 import { nightsBetween, startOfDay } from '@/lib/hospitality/calendar';
 import { esTipoBloqueoValido } from '@/lib/hospitality/block-types';
+import { conflictoDeBloqueo } from '@/lib/hospitality/bloqueos-guarda';
 import { datosDeSalida } from '@/lib/hospitality/checkout';
 import {
   calcularRentabilidad,
@@ -368,6 +369,15 @@ export async function registrar_incidencia(input: {
       ok: false,
       mensaje: `La unidad ${unidad.nombre} ya está bloqueada (${solape.tipo}) hasta ${solape.fechaFin.toISOString().slice(0, 10)}. Ajusta ese bloqueo desde el planning.`,
     };
+  }
+
+  // Y tampoco se cierran noches ya contratadas: la unidad puede estar libre de
+  // bloqueos y tener una reserva confirmada encima. Misma guarda que la API
+  // (`bloqueos-guarda`), para que el chat no pueda hacer lo que el planning no
+  // deja.
+  const conflicto = await conflictoDeBloqueo(input.tenantId, unidad.id, inicio, fin);
+  if (conflicto) {
+    return { ok: false, mensaje: conflicto.error };
   }
 
   const bloqueo = await prisma.hospitalityUnitBlock.create({

@@ -61,7 +61,7 @@ la clave interna.
 | `HospitalityProperty` | `hospitality_properties` | Propiedad física: dirección, zona, coordenadas, fotos, timezone, estado |
 | `HospitalityUnit` | `hospitality_units` | Unidad reservable: tipo, capacidad, tarifa base, moneda, `estado` operativo (`available\|occupied\|cleaning\|dirty\|maintenance\|out_of_service`) |
 | `HospitalityRatePlan` | `hospitality_rate_plans` | Plan de tarifa por unidad: precio/noche, min/max noches, días de check-in/out permitidos |
-| `HospitalityUnitBlock` | `hospitality_unit_blocks` | Bloqueo manual de fechas con `tipo` (`propietario\|mantenimiento\|administrativo`). Intervalo `[inicio, fin)` |
+| `HospitalityUnitBlock` | `hospitality_unit_blocks` | Bloqueo manual de fechas con `tipo` (`propietario\|mantenimiento\|administrativo`) y `motivo` **obligatorio** (la razón documentada: visita de un familiar, noches vendidas a una empresa fuera de canal, avería…). Intervalo `[inicio, fin)`. `estado` (`activo\|cancelado`): cancelar LIBERA las fechas sin perder la fila —su motivo y su tipo se conservan— y reactivar las vuelve a cerrar. Un bloqueo activo no puede pisar noches ya contratadas |
 
 ### Reservas y trazabilidad
 | Modelo | Tabla | Para qué |
@@ -114,7 +114,7 @@ la clave interna.
 | Propiedades / unidades | `properties`, `properties/[id]`, `units`, `units/[id]` |
 | Tarifas | `rateplans`, `rateplans/[id]` |
 | Reservas | `reservations`, `reservations/[id]`, `reservations/[id]/check`, `reservations/[id]/items[/itemId]`, `reservations/[id]/payments[/paymentId]` |
-| Bloqueos | `blocks`, `blocks/[id]` |
+| Bloqueos | `blocks`, `blocks/[id]` (el PATCH cambia fechas, tipo, motivo o `estado`: liberar/reactivar el rango). POST y PATCH responden **400 sin motivo** y **409 con `conflicto`** si el rango pisa noches vendidas; liberar no se bloquea por reservas |
 | Operación | `operations`, `tasks` |
 | Cliente | `guests`, `guests/link` |
 | Comunicación | `comunicaciones`, `comunicaciones/[id]`, `comunicaciones/[id]/enviar-prueba` (el `diseno` de bloques del email viaja en POST/PATCH y la prueba devuelve `htmlPreview`) |

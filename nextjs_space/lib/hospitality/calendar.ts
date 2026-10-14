@@ -224,6 +224,21 @@ export function buildMonthGrid(ref?: Date): { start: Date; end: Date; days: Cale
 }
 
 /** ISO local yyyy-MM-dd (sin desfase UTC). */
+/**
+ * La fecha LOCAL de un día en forma `YYYY-MM-DD` — la que usan las APIs de
+ * bloqueos, los filtros y el propio calendario.
+ *
+ * Devuelve `null` si no encaja en vez de inventar una fecha: `new Date('2026-02-31')`
+ * da una fecha válida en JavaScript, y un «31 de febrero» no es un día.
+ */
+export function fechaDeIso(iso: unknown): Date | null {
+  if (typeof iso !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
+  const fecha = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(fecha.getTime())) return null;
+  // Ida y vuelta: descarta días que no existen (31 de febrero) y horas raras.
+  return toIsoDate(fecha) === iso ? fecha : null;
+}
+
 export function toIsoDate(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');

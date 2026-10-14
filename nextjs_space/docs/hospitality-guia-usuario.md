@@ -280,6 +280,31 @@ unidad) puedes cerrar un rango con motivo `Propietario`, `Mantenimiento` o
 `Administrativo`. Un bloqueo resta disponibilidad en todos los canales igual que una
 reserva, y se comunica al canal externo.
 
+**La razón es obligatoria**: al cerrar unas fechas hay que escribir **por qué** (uso propio
+del propietario, visita de un familiar, noches cedidas o vendidas a una empresa fuera de
+canal, avería, obra, cierre por temporada). El campo sugiere las razones más frecuentes
+del tipo elegido, pero se escribe con tus palabras y **queda guardado con el bloqueo** (y
+en la auditoría, aunque el bloqueo se borre): quien mire el calendario en unos meses sabrá
+por qué esas noches estaban cerradas. Un bloqueo sin razón no se crea.
+
+**Las fechas ya vendidas no se cierran**: un bloqueo no puede pisar una estancia
+contratada. Si el rango incluye noches que ya tiene una reserva viva, el sistema **no
+cierra el bloqueo**: te dice qué noches están vendidas y de qué reserva son (canal,
+referencia y huésped), y tienes tres salidas — liberar o mover esa reserva, o cerrar solo
+las noches que estén libres. Cuenta lo que ocupa el motor de disponibilidad: una reserva
+cancelada o un no-show liberan sus noches, el día de salida no ocupa y una salida
+anticipada devuelve las noches no usadas. Reactivar un bloqueo liberado se comprueba igual
+(no se reabre el cierre sobre una noche vendida); **liberar nunca se bloquea**, porque
+liberar abre fechas en vez de cerrarlas.
+
+**Liberar y reactivar**: para reabrir unas fechas no hace falta borrar el bloqueo —se
+**libera**—. Pulsa la barra del bloque en la cuadrícula (o su botón en el listado
+«Bloqueos de fechas») y elige **Liberar fechas**: las noches vuelven a estar a la venta
+en tu web y en los canales, y el bloqueo se conserva con su motivo y su tipo para poder
+**reactivarlo** cuando quieras, sin volver a escribirlo. Lo liberado se dibuja con trazo
+discontinuo y figura como «liberado» en el listado. **Eliminar** sí borra la fila: se
+pierde el motivo y ya no se puede reactivar.
+
 ---
 
 ## 6. Booking Engine: reserva directa
@@ -527,8 +552,13 @@ conmutador de vistas).
 ### Las tres vistas
 
 - **Planning**: rejilla de unidades × días (semana navegable, botón «Hoy»). Cada barra es
-  una reserva con su color de canal (y los bloqueos en su color). En la cabecera de cada
-  fila: nº de reservas de la unidad y botón **Bloquear fechas**.
+  una reserva con su color de canal; los bloqueos van con el color de su tipo (y los ya
+  liberados con trazo discontinuo). En la cabecera de cada fila: nº de reservas de la
+  unidad y botón **Bloquear fechas**. Bajo la cuadrícula, el listado **Bloqueos de fechas**
+  reúne lo que cierra fechas y lo liberado —cada uno con su motivo— y su acción
+  (**Liberar fechas** / **Reactivar bloqueo**): al liberar, las noches vuelven a venderse.
+  Al abrir un bloqueo liberado, el detalle recuerda su motivo y su tipo, así que
+  reactivarlo no exige volver a escribirlo.
 - **Mes**: ocupación del mes por día, con navegación por meses.
 - **Operaciones**: el **día de hoy** de la casa — llegadas (con su estado de check-in),
   salidas, limpiezas pendientes/en curso y mantenimientos abiertos. Botón **Refrescar**.
