@@ -3,7 +3,8 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/db';
+import prisma from '@/lib/db'
+import { normalizarSubdominio } from '@/lib/tenant-subdomain';
 
 // GET /api/admin/tenants/[id] - Get tenant details
 export async function GET(
@@ -120,8 +121,21 @@ export async function PATCH(
       mrr,
       moneda,
       limites,
-      configuracion
+      configuracion,
+      subdomain
     } = body;
+
+    // El subdominio se valida aquí y no con el resto: de él cuelgan la URL del
+    // tenant y su dominio de email, así que lo inválido no debe entrar.
+    // Ausente = sin cambio; null/vacío = quitarlo.
+    const subdominioResultado =
+      subdomain === undefined ? null : normalizarSubdominio(subdomain);
+    if (subdominioResultado && !subdominioResultado.ok) {
+      return NextResponse.json(
+        { error: subdominioResultado.error },
+        { status: 400 }
+      );
+    }
 
     // Get current tenant
     const currentTenant = await prisma.tenant.findUnique({
@@ -133,6 +147,25 @@ export async function PATCH(
         { error: 'Tenant no encontrado' },
         { status: 404 }
       );
+    }
+
+    const subdominioNuevo =
+      subdominioResultado?.ok ? subdominioResultado.subdominio : undefined;
+
+    // Unicidad explícita: el índice único de Prisma daría un P2002 opaco y sin
+    // decir quién lo ocupa (p. ej. un tenant archivado que conserva el suyo).
+    if (subdominioNuevo && subdominioNuevo !== currentTenant.subdomain) {
+      const ocupado = await prisma.tenant.findFirst({
+        where: { subdomain: subdominioNuevo, NOT: { id: params.id } },
+        select: { nombre: true, estado: true },
+      });
+      if (ocupado) {
+        const archivado = ocupado.estado === 'archived' ? ' (archivado)' : '';
+        return NextResponse.json(
+          { error: `El subdominio "${subdominioNuevo}" ya lo usa ${ocupado.nombre}${archivado}.` },
+          { status: 409 }
+        );
+      }
     }
 
     // Update tenant
@@ -149,7 +182,8 @@ export async function PATCH(
         ...(mrr !== undefined && { mrr }),
         ...(moneda && { moneda }),
         ...(limites && { limites }),
-        ...(configuracion && { configuracion })
+        ...(configuracion && { configuracion }),
+        ...(subdominioNuevo !== undefined && { subdomain: subdominioNuevo })
       }
     });
 
@@ -160,7 +194,11 @@ export async function PATCH(
         accion: 'actualizar',
         entidad: 'tenant',
         entidadId: params.id,
-        descripcion: `Tenant actualizado: ${updatedTenant.nombre}`,
+        descripcion:
+          subdominioNuevo !== undefined &&
+          (subdominioNuevo ?? null) !== (currentTenant.subdomain ?? null)
+            ? `Tenant actualizado: ${updatedTenant.nombre} — subdominio ${currentTenant.subdomain ?? '(ninguno)'} → ${subdominioNuevo ?? '(ninguno)'}`
+            : `Tenant actualizado: ${updatedTenant.nombre}`,
         cambiosAntes: currentTenant as any,
         cambiosDespues: updatedTenant as any
       }

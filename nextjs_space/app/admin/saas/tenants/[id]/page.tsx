@@ -70,6 +70,12 @@ export default function TenantDetail() {
   const [savingLimit, setSavingLimit] = useState(false);
   const [limitType, setLimitType] = useState('max_pipelines');
 
+  // Subdominio del tenant: el alta normal (signup) lo deja vacío y hasta ahora
+  // no había forma de ponerlo después de creado.
+  const [showSubdomainDialog, setShowSubdomainDialog] = useState(false);
+  const [subdomainDraft, setSubdomainDraft] = useState('');
+  const [savingSubdomain, setSavingSubdomain] = useState(false);
+
   useEffect(() => {
     if (params?.id) {
       loadTenant();
@@ -168,6 +174,32 @@ export default function TenantDetail() {
       toast.error('Error de conexión');
     } finally {
       setSavingLimit(false);
+    }
+  };
+
+  const handleSaveSubdomain = async () => {
+    if (!tenant) return;
+    setSavingSubdomain(true);
+    try {
+      const res = await fetch(`/api/admin/tenants/${tenant.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subdomain: subdomainDraft.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || 'No se pudo guardar el subdominio');
+        return;
+      }
+      setTenant((prev: any) => (prev ? { ...prev, subdomain: data.subdomain } : prev));
+      setShowSubdomainDialog(false);
+      toast.success(
+        data.subdomain ? `Subdominio guardado: ${data.subdomain}.volkern.app` : 'Subdominio quitado'
+      );
+    } catch {
+      toast.error('Error de conexión');
+    } finally {
+      setSavingSubdomain(false);
     }
   };
 
@@ -416,6 +448,25 @@ export default function TenantDetail() {
                 <div>
                   <p className="text-sm font-medium text-gray-500">Slug</p>
                   <p className="text-base font-medium mt-1">{tenant.slug}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Subdominio</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <p className="text-base font-medium">
+                      {tenant.subdomain ? `${tenant.subdomain}.volkern.app` : 'Sin subdominio'}
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSubdomainDraft(tenant.subdomain || '');
+                        setShowSubdomainDialog(true);
+                      }}
+                    >
+                      <Settings size={14} className="mr-1.5" />
+                      {tenant.subdomain ? 'Cambiar' : 'Asignar'}
+                    </Button>
+                  </div>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-500">Dominio</p>
@@ -862,6 +913,55 @@ export default function TenantDetail() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Subdominio Dialog */}
+      <Dialog open={showSubdomainDialog} onOpenChange={setShowSubdomainDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Subdominio del tenant</DialogTitle>
+            <DialogDescription>
+              La dirección con la que {tenant?.nombre} entra a la plataforma. Déjalo vacío
+              para quitarlo.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-4">
+            <Label htmlFor="tenantSubdomain">Subdominio</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                id="tenantSubdomain"
+                value={subdomainDraft}
+                onChange={(e) =>
+                  setSubdomainDraft(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))
+                }
+                placeholder="mi-hotel"
+                autoComplete="off"
+              />
+              <span className="text-sm text-gray-500 whitespace-nowrap">.volkern.app</span>
+            </div>
+            {subdomainDraft.trim() && (
+              <p className="text-xs text-blue-700 font-mono break-all">
+                https://{subdomainDraft.trim()}.volkern.app
+              </p>
+            )}
+            <p className="text-xs text-gray-500">
+              Minúsculas, números y guiones (3–40 caracteres). Solo cambia la dirección del
+              tenant: el dominio de envío de correo se aprovisiona aparte.
+            </p>
+          </div>
+          <DialogFooter className="flex items-center justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowSubdomainDialog(false)}
+              disabled={savingSubdomain}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveSubdomain} disabled={savingSubdomain}>
+              {savingSubdomain ? 'Guardando...' : 'Guardar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Feature Limit Dialog */}
       <Dialog open={showLimitDialog} onOpenChange={setShowLimitDialog}>
