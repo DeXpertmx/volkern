@@ -11,6 +11,8 @@ import {
   buildRateUpdates,
   buildInventoryRestrictions,
   buildRateRestrictions,
+  horizonteDeTemporadas,
+  HORIZONTE_PUSH_MAX_DIAS,
 } from '../lib/hospitality/sync';
 
 const day = (iso: string) => new Date(iso + 'T00:00:00');
@@ -535,5 +537,233 @@ describe('buildRateRestrictions (Rate Restrictions POST)', () => {
     const pares = restricciones.flatMap((u) => u.rates.map((r) => `${r.roomCode}/${r.rateplanCode}`));
     expect(new Set(pares)).toEqual(new Set(['1a/1a-d-ep']));
     expect(restricciones[0].rates[0].restrictions.minimumStay).toBe(2);
+  });
+});
+
+describe('el rateplanCode de un plan: el suyo, el del vínculo, o ninguno', () => {
+  // Caso real (hotel `75fdbbce2e`, 14-oct-2026): la `Tarifa 2A` se creó sin
+  // código y el push mandó `cmv877haz0072us01nb0np80t` —su cuid interno— como
+  // `rateplanCode`; el proveedor lo descartó con `INVALID_RATEPLAN_CODE` y el
+  // mensaje que leía el hotel le pedía «activar en su extranet» ese id.
+  const ID_INTERNO = 'cmv877haz0072us01nb0np80t';
+  const unidad = (extra: Record<string, unknown> = {}) => ({
+    id: 'u1',
+    roomCode: '2a',
+    tarifaBase: 120,
+    rateplanCodeMapeado: '2a-d-ep',
+    ratePlans: [{ codigo: null, tarifa: 120 }],
+    ...extra,
+  });
+
+  it('un plan sin código viaja con el código VINCULADO de la unidad', () => {
+    const updates = buildRateUpdates([unidad()], day('2026-10-14'), day('2026-10-16'));
+    expect(updates).toEqual([
+      {
+        startDate: '2026-10-14',
+        endDate: '2026-10-15',
+        rates: [{ roomCode: '2a', rateplanCode: '2a-d-ep', rate: 120 }],
+      },
+    ]);
+    expect(JSON.stringify(updates)).not.toContain(ID_INTERNO);
+  });
+
+  it('sin código de plan y sin vínculo, esa tarifa NO viaja (no se inventa un código)', () => {
+    expect(
+      buildRateUpdates([unidad({ rateplanCodeMapeado: null })], day('2026-10-14'), day('2026-10-16'))
+    ).toEqual([]);
+  });
+
+  it('la tarifa base de una unidad SIN planes conserva su respaldo histórico', () => {
+    // No es el caso del plan sin código: aquí no hay ningún plan que etiquetar.
+    expect(
+      buildRateUpdates(
+        [{ id: 'u1', roomCode: '2a', tarifaBase: 120, ratePlans: [] }],
+        day('2026-10-14'),
+        day('2026-10-16')
+      )
+    ).toEqual([
+      {
+        startDate: '2026-10-14',
+        endDate: '2026-10-15',
+        rates: [{ roomCode: '2a', rateplanCode: '2a', rate: 120 }],
+      },
+    ]);
+  });
+
+  it('un plan con su propio código no lo cambia por el del vínculo', () => {
+    const updates = buildRateUpdates(
+      [unidad({ ratePlans: [{ codigo: '2a-s-ep', tarifa: 99 }] })],
+      day('2026-10-14'),
+      day('2026-10-16')
+    );
+    expect(updates[0].rates).toEqual([
+      { roomCode: '2a', rateplanCode: '2a-s-ep', rate: 99 },
+    ]);
+  });
+
+  it('dos planes que acaban en el MISMO par empujan un solo precio (el primero)', () => {
+    // El canal tiene un único número por (habitación, tarifa): mandar dos y que
+    // gane el que llegue último sería un precio que el hotel no decidió.
+    const updates = buildRateUpdates(
+      [
+        unidad({
+          tarifaBase: null,
+          ratePlans: [
+            { codigo: null, tarifa: 120 },
+            { codigo: null, tarifa: 90 },
+          ],
+        }),
+      ],
+      day('2026-10-14'),
+      day('2026-10-16')
+    );
+    expect(updates).toEqual([
+      {
+        startDate: '2026-10-14',
+        endDate: '2026-10-15',
+        rates: [{ roomCode: '2a', rateplanCode: '2a-d-ep', rate: 120 }],
+      },
+    ]);
+  });
+
+  it('el plan con estacionalidad sin código usa el del vínculo como clave de su serie', () => {
+    const updates = buildRateUpdates(
+      [
+        unidad({
+          tarifaBase: null,
+          ratePlans: [
+            {
+              codigo: null,
+              tarifa: 120,
+              temporadas: [{ desde: '2026-10-15', hasta: '2026-10-15', tarifa: 140 }],
+            },
+          ],
+        }),
+      ],
+      day('2026-10-14'),
+      day('2026-10-17')
+    );
+    expect(updates).toEqual([
+      { startDate: '2026-10-14', endDate: '2026-10-14', rates: [{ roomCode: '2a', rateplanCode: '2a-d-ep', rate: 120 }] },
+      { startDate: '2026-10-15', endDate: '2026-10-15', rates: [{ roomCode: '2a', rateplanCode: '2a-d-ep', rate: 140 }] },
+      { startDate: '2026-10-16', endDate: '2026-10-16', rates: [{ roomCode: '2a', rateplanCode: '2a-d-ep', rate: 120 }] },
+    ]);
+  });
+
+  it('las restricciones de tarifa siguen el mismo criterio', () => {
+    const conVinculo = buildRateRestrictions(
+      [{ roomCode: '2a', rateplanCodeMapeado: '2a-d-ep', ratePlans: [{ codigo: null, minNoches: 2 }] }],
+      day('2026-10-14'),
+      day('2026-10-15')
+    );
+    expect(conVinculo[0].rates).toEqual([
+      expect.objectContaining({
+        roomCode: '2a',
+        rateplanCode: '2a-d-ep',
+        restrictions: expect.objectContaining({ minimumStay: 2 }),
+      }),
+    ]);
+
+    // Sin vínculo tampoco hay restricciones que inventar para esa tarifa.
+    expect(
+      buildRateRestrictions(
+        [{ roomCode: '2a', ratePlans: [{ codigo: null, minNoches: 2 }] }],
+        day('2026-10-14'),
+        day('2026-10-15')
+      )
+    ).toEqual([]);
+  });
+});
+
+describe('horizonteDeTemporadas (el horizonte del push alcanza la temporada configurada)', () => {
+  const HOY = day('2026-10-15');
+  /** Plan con una temporada, en la forma cruda que llega del Json de la base. */
+  const planCon = (desde: string, hasta: string, tarifa = 140) => ({ temporadas: [{ desde, hasta, tarifa }] });
+
+  it('sin temporadas no pide nada: manda el horizonte pedido', () => {
+    expect(horizonteDeTemporadas([], HOY)).toEqual({ dias: 0, hasta: null, fueraDelTope: false });
+    expect(horizonteDeTemporadas([{ temporadas: null }], HOY)).toEqual({
+      dias: 0,
+      hasta: null,
+      fueraDelTope: false,
+    });
+  });
+
+  it('la temporada de verano de Ciudad Patio Cuarenta entra en el push (caso real 15-oct-2026)', () => {
+    // 17-jun → 31-ago-2027 desde el 15-oct-2026: 320 noches, y el horizonte es
+    // EXCLUSIVO, así que hacen falta 321 días para que la última noche entre.
+    // Con los 90 del producto (13-ene-2027) y los 180 del panel (13-abr-2027)
+    // esa tarifa no viajaba por ninguna vía.
+    const h = horizonteDeTemporadas([planCon('2027-06-17', '2027-08-31')], HOY);
+    expect(h.dias).toBe(321);
+    expect(h.hasta).toBe('2027-08-31');
+    expect(h.fueraDelTope).toBe(false);
+  });
+
+  it('manda la temporada más lejana de todos los planes', () => {
+    const h = horizonteDeTemporadas(
+      [planCon('2027-06-17', '2027-08-31'), planCon('2027-12-20', '2028-01-06')],
+      HOY
+    );
+    expect(h.hasta).toBe('2028-01-06');
+    // 15-oct-2026 → 6-ene-2028 = 448 noches, +1 para que entre la última.
+    expect(h.dias).toBe(449);
+  });
+
+  it('una temporada pasada no pide nada (el push no va hacia atrás)', () => {
+    expect(horizonteDeTemporadas([planCon('2026-09-01', '2026-09-30')], HOY)).toEqual({
+      dias: 0,
+      hasta: null,
+      fueraDelTope: false,
+    });
+  });
+
+  it('la temporada que termina hoy pide un día (el horizonte es exclusivo)', () => {
+    expect(horizonteDeTemporadas([planCon('2026-10-01', '2026-10-15')], HOY)).toEqual({
+      dias: 1,
+      hasta: '2026-10-15',
+      fueraDelTope: false,
+    });
+  });
+
+  it('lo que no es una temporada válida no alarga el horizonte', () => {
+    // Tarifa 0, rango invertido y un Json que no es una lista: el normalizador
+    // los descarta pieza a pieza y ninguno mueve el horizonte — alargarlo por un
+    // dato que no existe sería publicar de más por nada.
+    expect(
+      horizonteDeTemporadas(
+        [
+          planCon('2027-01-01', '2027-12-31', 0),
+          planCon('2027-12-31', '2027-01-01'),
+          { temporadas: 'Verano' },
+        ],
+        HOY
+      )
+    ).toEqual({ dias: 0, hasta: null, fueraDelTope: false });
+  });
+
+  it('un «31 de febrero» que el normalizador deja pasar no alarga el horizonte', () => {
+    // `fechaIsoValida` acepta la forma `YYYY-MM-DD` y `new Date('2027-02-31')` no
+    // es inválido (rueda al 3 de marzo), así que esa fila sobrevive la
+    // normalización; aquí la fecha se comprueba de ida y vuelta (`fechaDeIso`) y
+    // un día que no existe no puede mover el horizonte.
+    expect(horizonteDeTemporadas([planCon('2027-01-01', '2027-02-31')], HOY)).toEqual({
+      dias: 0,
+      hasta: null,
+      fueraDelTope: false,
+    });
+  });
+
+  it('se queda en el tope del horizonte de venta, y lo dice', () => {
+    const h = horizonteDeTemporadas([planCon('2029-06-01', '2029-08-31')], HOY);
+    expect(h.dias).toBe(HORIZONTE_PUSH_MAX_DIAS);
+    expect(h.fueraDelTope).toBe(true);
+    // El tope es el mismo horizonte de venta que usa el barrido de reservas.
+    expect(HORIZONTE_PUSH_MAX_DIAS).toBe(730);
+  });
+
+  it('con tope a medida (el tope es parámetro, no una constante escondida)', () => {
+    const h = horizonteDeTemporadas([planCon('2027-06-17', '2027-08-31')], HOY, 100);
+    expect(h).toEqual({ dias: 100, hasta: '2027-08-31', fueraDelTope: true });
   });
 });

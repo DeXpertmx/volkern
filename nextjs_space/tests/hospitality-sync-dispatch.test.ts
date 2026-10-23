@@ -9,6 +9,7 @@ const __prisma = vi.hoisted(() => ({
   hospitalityUnit: { findMany: vi.fn() },
   hospitalityReservation: { findMany: vi.fn() },
   hospitalityUnitBlock: { findMany: vi.fn() },
+  hospitalityRatePlan: { findMany: vi.fn() },
   connectivityMapping: { findFirst: vi.fn() },
   hospitalitySyncLog: { create: vi.fn() },
 }));
@@ -136,6 +137,8 @@ beforeEach(() => {
   __prisma.hospitalityProperty.findMany.mockResolvedValue([{ id: 'p1' }]);
   __prisma.hospitalityReservation.findMany.mockResolvedValue([]);
   __prisma.hospitalityUnitBlock.findMany.mockResolvedValue([]);
+  // Sin temporadas configuradas, el horizonte es el que pide el llamador.
+  __prisma.hospitalityRatePlan.findMany.mockResolvedValue([]);
   __prisma.connectivityMapping.findFirst.mockResolvedValue({ externalPropertyId: 'HOTEL1' });
   mockUnidades([unidadConPlan()]);
   __prisma.hospitalitySyncLog.create.mockResolvedValue({});
@@ -178,6 +181,152 @@ describe('dispatchConnectivityPush (plan §5 y §15.2)', () => {
     expect(rateUpdates.flatMap((u: any) => u.rates)).toEqual([
       { roomCode: 'SUITE', rateplanCode: 'SUITE-REST', rate: 1000 },
     ]);
+  });
+
+  it('el id interno del plan NUNCA viaja como rateplanCode (caso real 14-oct-2026)', async () => {
+    // La `Tarifa 2A` del hotel se creó sin código y el push mandó su cuid como
+    // `rateplanCode`: el proveedor lo descartó (`INVALID_RATEPLAN_CODE`) y el
+    // mensaje le pedía al hotel activar ese id en su extranet. Con el código de
+    // tarifa del vínculo, el plan viaja donde debe.
+    const ID_INTERNO = 'cmv877haz0072us01nb0np80t';
+    mockUnidades([
+      {
+        id: 'u1',
+        nombre: 'Apartamento centro ciudad patio cuarenta 2A',
+        codigo: 'CPC-2A',
+        propertyId: 'p1',
+        estado: 'available',
+        tarifaBase: 120,
+        mappings: [{ unitId: 'u1', externalUnitCode: '2a', externalRatePlanCode: '2a-d-ep' }],
+        // El plan llega con el id que la base pone en la PK y sin código propio.
+        ratePlans: [
+          {
+            id: ID_INTERNO,
+            codigo: null,
+            tarifa: 120,
+            activo: true,
+            minNoches: 2,
+            maxNoches: null,
+            checkInDias: null,
+            checkOutDias: null,
+            temporadas: null,
+            finDeSemana: null,
+          },
+        ],
+      },
+    ]);
+
+    const { dispatchConnectivityPush } = await import('@/lib/hospitality/sync');
+    await dispatchConnectivityPush('t1', 'p1', 'manual', { diasHorizonte: 5 });
+
+    const [, rateUpdates] = __pushRates.mock.calls[0];
+    expect(rateUpdates.flatMap((u: any) => u.rates)).toEqual([
+      { roomCode: '2a', rateplanCode: '2a-d-ep', rate: 120 },
+    ]);
+    const [, restricciones] = __pushRateRestrictions.mock.calls[0];
+    expect(restricciones[0].rates[0].rateplanCode).toBe('2a-d-ep');
+    // Ni en un payload ni en el otro.
+    expect(JSON.stringify(__pushRates.mock.calls[0][1])).not.toContain(ID_INTERNO);
+    expect(JSON.stringify(__pushRateRestrictions.mock.calls[0][1])).not.toContain(ID_INTERNO);
+  });
+
+  it('sin código de plan y sin vínculo la tarifa no viaja: la unidad cuenta como «no viajó»', async () => {
+    mockUnidades([
+      {
+        ...unidadConPlan({ codigo: null, tarifa: 120 }),
+        id: 'u1',
+        nombre: 'Apartamento con tarifa sin código',
+        tarifaBase: 120,
+        mappings: [{ unitId: 'u1', externalUnitCode: '2a', externalRatePlanCode: null }],
+      },
+      {
+        ...unidadConPlan(),
+        id: 'u2',
+        nombre: 'Apartamento 2B',
+        mappings: [{ unitId: 'u2', externalUnitCode: '2b', externalRatePlanCode: '2b-d-ep' }],
+      },
+    ]);
+    // El push falla con un descarte: es cuando el informe publica lo que no viajó.
+    __pushRates.mockResolvedValue({
+      ok: false,
+      tipo: 'rates',
+      httpStatus: 200,
+      error: 'descartó datos',
+      respuestaExterna: { success: true, warnings: ['INVALID_RATEPLAN_CODE : 2b-d-ep'] },
+      duracionMs: 5,
+    });
+
+    const { dispatchConnectivityPush } = await import('@/lib/hospitality/sync');
+    const res = await dispatchConnectivityPush('t1', 'p1', 'manual', { diasHorizonte: 5 });
+
+    // Solo viaja la unidad que tiene con qué etiquetar su precio, y con el
+    // código de SU plan (el del vínculo solo entra cuando el plan no tiene).
+    const [, rateUpdates] = __pushRates.mock.calls[0];
+    expect(rateUpdates.flatMap((u: any) => u.rates)).toEqual([
+      { roomCode: '2b', rateplanCode: 'SUITE-REST', rate: 1000 },
+    ]);
+    expect(res.rates.error).toContain('«Apartamento con tarifa sin código»');
+    expect(res.rates.error).toContain('no tiene plan de tarifa con código del proveedor');
+    expect(res.rechazo.noEnviadas.map((n) => n.nombre)).toEqual([
+      'Apartamento con tarifa sin código',
+    ]);
+  });
+
+  it('la temporada configurada entra en el push sin empujar a mano (caso real 15-oct-2026)', async () => {
+    // El horizonte pedido (5 días) no llegaba a la temporada: el canal se
+    // quedaba con el precio plano y la «Tarifa de Verano» del hotel solo viajó
+    // en un push manual de 365 días. Ahora el horizonte se alarga hasta la
+    // última noche de temporada y su precio por fecha viaja en el mismo envío.
+    const hoy = new Date();
+    const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + 20);
+    const fin = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + 25);
+    const isoInicio = isoLocal(inicio);
+    const isoFin = isoLocal(fin);
+
+    mockUnidades([unidadConPlan({ temporadas: [{ desde: isoInicio, hasta: isoFin, tarifa: 1400 }] })]);
+    __prisma.hospitalityRatePlan.findMany.mockResolvedValue([
+      { temporadas: [{ desde: isoInicio, hasta: isoFin, tarifa: 1400 }] },
+    ]);
+
+    const { dispatchConnectivityPush } = await import('@/lib/hospitality/sync');
+    await dispatchConnectivityPush('t1', null, 'manual', { diasHorizonte: 5 });
+
+    // Las tarifas llevan el tramo de temporada con su precio (y 1000 fuera de él).
+    const [, rateUpdates] = __pushRates.mock.calls[0];
+    const precios = rateUpdates.flatMap((u: any) => u.rates);
+    expect(precios).toEqual(
+      expect.arrayContaining([
+        { roomCode: 'SUITE', rateplanCode: 'SUITE-REST', rate: 1400 },
+      ])
+    );
+    const tramoTemporada = rateUpdates.find((u: any) =>
+      u.rates.some((r: any) => r.rate === 1400)
+    );
+    expect(tramoTemporada.startDate).toBe(isoInicio);
+    expect(tramoTemporada.endDate).toBe(isoFin);
+
+    // Y la disponibilidad cubre la temporada entera (la última noche, incluida).
+    const dias = disponibilidadPorDia(__pushInventory.mock.calls[0][1]);
+    expect(dias.get(isoFin)).toBe(1);
+    expect([...dias.keys()].sort().at(-1)).toBe(isoFin);
+  });
+
+  it('el horizonte de la temporada se queda en el de venta de los canales (tope)', async () => {
+    const hoy = new Date();
+    const hoyIso = isoLocal(hoy);
+    const lejano = new Date(hoy.getFullYear() + 3, hoy.getMonth(), hoy.getDate());
+
+    __prisma.hospitalityRatePlan.findMany.mockResolvedValue([
+      { temporadas: [{ desde: isoLocal(lejano), hasta: isoLocal(lejano), tarifa: 1400 }] },
+    ]);
+
+    const { dispatchConnectivityPush, HORIZONTE_PUSH_MAX_DIAS } = await import('@/lib/hospitality/sync');
+    await dispatchConnectivityPush('t1', null, 'manual', { diasHorizonte: 5 });
+
+    const dias = disponibilidadPorDia(__pushInventory.mock.calls[0][1]);
+    const ultimo = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + HORIZONTE_PUSH_MAX_DIAS - 1);
+    expect(isoLocal(ultimo)).not.toBe(hoyIso);
+    expect([...dias.keys()].sort().at(-1)).toBe(isoLocal(ultimo));
   });
 
   it('una unidad sin planes empuja su tarifa base bajo el código de tarifa VINCULADO', async () => {

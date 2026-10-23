@@ -16,6 +16,8 @@
 
 import { prisma } from '@/lib/db';
 import { availabilityByRoomCode, loadAvailabilityContext } from './availability';
+import { fechaDeIso, startOfDay } from './calendar';
+import { DIAS_HORIZONTE_VENTA } from './ventana-reservas';
 import {
   normalizarEstacionalidad,
   serieDeTarifas,
@@ -219,6 +221,84 @@ async function recordSyncLog(input: {
 }
 
 /**
+ * Tope del horizonte del push, en días: es el horizonte de venta de los
+ * canales (`DIAS_HORIZONTE_VENTA`, el mismo que usa el barrido de reservas).
+ * Ninguna OTA deja abrir más calendario que eso, así que publicar más allá no
+ * sirve de nada y solo engorda la petición.
+ */
+export const HORIZONTE_PUSH_MAX_DIAS = DIAS_HORIZONTE_VENTA;
+
+/** Lo que hay que saber de las temporadas configuradas para fijar el horizonte. */
+export interface HorizonteDeTemporadas {
+  /**
+   * Días que hay que empujar para que la última noche de temporada entre en el
+   * rango (0 = ninguna temporada futura: manda el horizonte pedido).
+   */
+  dias: number;
+  /** Último día de temporada (ISO), o null si no hay ninguna por delante. */
+  hasta: string | null;
+  /**
+   * La temporada más lejana se sale del tope: se empuja hasta el tope. Lo que
+   * queda fuera son fechas que ningún canal puede vender todavía; cuando la
+   * ventana ruede hasta ellas, su precio de temporada se publicará igual.
+   */
+  fueraDelTope: boolean;
+}
+
+/**
+ * Cuántos días de horizonte hacen falta para que la temporada más lejana
+ * configurada viaje.
+ *
+ * Por qué existe: un plan con estacionalidad se empuja noche a noche con el
+ * precio de SU fecha, pero el horizonte del push es una ventana desde hoy —90
+ * días por defecto y 180 en las dos puertas del panel—. Una temporada que
+ * empieza más allá de esa ventana no viajaba por NINGUNA vía del producto: el
+ * canal se quedaba con el precio plano y la temporada solo llegaba si alguien
+ * empujaba a mano. Medido en producción (hotel `75fdbbce2e`, 15-oct-2026): la
+ * «Tarifa de Verano» de sus cuatro planes (`2027-06-17 → 2027-08-31`, 140 €)
+ * viajó una única vez, en un push manual de 365 días; con los 90/180 del
+ * producto (13-ene y 13-abr-2027) no llegaba nunca.
+ *
+ * Se lee el Json crudo de la base a propósito (`normalizarEstacionalidad` es
+ * tolerante con lo malformado): una temporada con fechas raras se descarta
+ * pieza a pieza y no puede alargar el horizonte por un dato que no existe.
+ * Una temporada ya pasada no pide nada (no se empuja hacia atrás).
+ */
+export function horizonteDeTemporadas(
+  planes: Array<{ temporadas?: unknown }>,
+  hoy: Date,
+  tope: number = HORIZONTE_PUSH_MAX_DIAS
+): HorizonteDeTemporadas {
+  const desde = startOfDay(hoy).getTime();
+  let dias = 0;
+  let hasta: string | null = null;
+  let fueraDelTope = false;
+
+  for (const plan of planes) {
+    const config = normalizarEstacionalidad(plan?.temporadas);
+    for (const temporada of config?.temporadas ?? []) {
+      const ultimaNoche = fechaDeIso(temporada.hasta);
+      if (!ultimaNoche) continue; // fecha imposible: no alarga nada
+      const noches = Math.round((ultimaNoche.getTime() - desde) / 86_400_000);
+      if (noches < 0) continue; // temporada pasada
+      // El horizonte es EXCLUSIVO ([hoy, horizonte)): para que la última noche
+      // entre, hay que empujar un día más allá de ella.
+      const necesarios = noches + 1;
+      if (hasta === null || necesarios > dias) {
+        dias = necesarios;
+        hasta = temporada.hasta;
+      }
+    }
+  }
+
+  if (dias > tope) {
+    dias = tope;
+    fueraDelTope = true;
+  }
+  return { dias, hasta, fueraDelTope };
+}
+
+/**
  * Empuja inventario y tarifas de una propiedad al exterior tras un cambio.
  *
  * @param tenantId Tenant al que pertenece la propiedad.
@@ -235,7 +315,7 @@ export async function dispatchConnectivityPush(
   operacion: SyncOperacion,
   opts?: { diasHorizonte?: number; skipRates?: boolean; skipInventory?: boolean }
 ): Promise<SyncResult> {
-  const dias = opts?.diasHorizonte ?? 90;
+  const diasPedidos = opts?.diasHorizonte ?? 90;
 
   // Si no hay con qué llamar, no hay nada que empujar. El partner id puede ser
   // el del cliente (su propia fila) o el de plataforma, y
@@ -259,6 +339,19 @@ export async function dispatchConnectivityPush(
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+
+  // El horizonte no puede quedarse corto respecto a lo que el hotel YA
+  // configuró: la temporada más lejana de sus planes activos entra en el push
+  // (con el tope del horizonte de venta), así que su precio por fecha viaja por
+  // la vía normal en vez de esperar a un push manual. El horizonte pedido nunca
+  // se acorta: solo se alarga hasta donde haga falta.
+  const planesConTemporada = await prisma.hospitalityRatePlan.findMany({
+    where: { tenantId, activo: true, ...(propertyId ? { propertyId } : {}) },
+    select: { temporadas: true },
+  });
+  const temporadas = horizonteDeTemporadas(planesConTemporada, today);
+  const dias = Math.min(Math.max(diasPedidos, temporadas.dias), HORIZONTE_PUSH_MAX_DIAS);
+
   const horizon = new Date(today);
   horizon.setDate(today.getDate() + dias);
 
@@ -345,8 +438,25 @@ export async function dispatchConnectivityPush(
       tarifaBase: u.tarifaBase,
       ratePlans: (u.ratePlans || [])
         .filter((rp: any) => rp.activo)
+        // Orden determinista antes de deduplicar: gana el plan con código
+        // propio y, entre los que no lo tienen, el de id menor. Dos planes de la
+        // misma unidad que acaban en el MISMO código del canal no pueden mandar
+        // dos precios distintos y que decida el orden en que los devuelva la
+        // base.
+        .sort(
+          (a: any, b: any) =>
+            String(a.codigo ?? '').localeCompare(String(b.codigo ?? '')) ||
+            String(a.id).localeCompare(String(b.id))
+        )
         .map((rp: any) => ({
-          codigo: rp.codigo || rp.id,
+          // El código con el que viaja un plan es EL SUYO, y si no lo tiene, el
+          // de tarifa que la unidad tiene vinculado (`rateplanCodeMapeado`, que
+          // resuelve el builder puro); **nunca la PK interna**. Un plan sin
+          // código empujaba su cuid como `rateplanCode` y el proveedor lo
+          // descartaba —`INVALID_RATEPLAN_CODE : cmv877haz0072us01nb0np80t`,
+          // medido en producción el 14-oct-2026— con un mensaje que mandaba al
+          // hotel a «activar en su extranet» un identificador interno nuestro.
+          codigo: rp.codigo || null,
           tarifa: rp.tarifa,
           minNoches: rp.minNoches ?? 1,
           maxNoches: rp.maxNoches ?? null,
@@ -600,11 +710,17 @@ function isNextDay(prev: string, next: string): boolean {
 
 /**
  * Construye los updates de tarifas: un bloque por (roomCode, rateplanCode)
- * con los rate plans ACTIVOS de la unidad. Si la unidad no tiene planes
- * configurados, cae a su tarifaBase (compatibilidad con datos existentes)
- * bajo el código de tarifa que el hotel haya VINCULADO (`rateplanCodeMapeado`);
- * sin vínculo se usa el roomCode, que es el respaldo histórico.
+ * con los rate plans ACTIVOS de la unidad. El código de cada plan es el suyo y,
+ * si no lo tiene, el de tarifa que la unidad haya VINCULADO
+ * (`rateplanCodeMapeado`); sin ninguno de los dos esa tarifa no viaja —un
+ * precio con un código que no existe no está publicado, y el canal lo descarta
+ * con `INVALID_RATEPLAN_CODE`—. Si la unidad no tiene planes configurados, cae
+ * a su tarifaBase (compatibilidad con datos existentes) bajo el código
+ * vinculado; sin vínculo se usa el roomCode, que es el respaldo histórico.
  * Sin tarifa ni plan no se empujan tarifas (no inventar precios).
+ * Dos planes que acaban en el mismo par (roomCode, rateplanCode) empujan un solo
+ * precio: el canal tiene un único número por par y elegir por el orden de la
+ * base sería un precio que el hotel no decidió.
  *
  * Estacionalidad: un plan con temporadas/fin de semana ya no viaja como un
  * bloque plano — se expande noche a noche con la MISMA regla del booking
@@ -624,7 +740,7 @@ export function buildRateUpdates(
     id: string;
     roomCode: string | null;
     tarifaBase: number | null;
-    ratePlans?: Array<{ codigo: string; tarifa: number; temporadas?: unknown; finDeSemana?: unknown }>;
+    ratePlans?: Array<{ codigo: string | null; tarifa: number; temporadas?: unknown; finDeSemana?: unknown }>;
     /** Código de tarifa vinculado de la unidad (catálogo del proveedor). */
     rateplanCodeMapeado?: string | null;
   }>,
@@ -641,10 +757,22 @@ export function buildRateUpdates(
     // 1) Rate plans activos de la unidad (cada plan = un rateplanCode).
     const plans = (u.ratePlans || []).filter((p) => p.tarifa != null && p.tarifa > 0);
     if (plans.length > 0) {
+      const yaPuestos = new Set<string>();
       for (const p of plans) {
+        // El código del plan o, si no tiene, el de tarifa que la unidad tiene
+        // vinculado. Sin ninguno de los dos esa tarifa NO viaja: un precio con
+        // un código inventado no es un precio publicado, y el informe del push
+        // deja la unidad como «no viajó» con su motivo. El respaldo por el
+        // ROOMCODE se queda para las unidades que de verdad no tienen planes.
+        const rateplanCode = p.codigo || u.rateplanCodeMapeado;
+        if (!rateplanCode) continue;
+        const clave = `${u.roomCode}\u0000${rateplanCode}`;
+        if (yaPuestos.has(clave)) continue; // dos precios en el mismo par: gana el primero
+        yaPuestos.add(clave);
+
         const config = normalizarEstacionalidad(p.temporadas ?? p.finDeSemana);
         if (config) {
-          seriesPorPlan.set(`${u.roomCode}\u0000${p.codigo || u.roomCode}`, serieDeTarifas({
+          seriesPorPlan.set(clave, serieDeTarifas({
             desde: start,
             hasta: end,
             tarifaBase: null,
@@ -653,7 +781,7 @@ export function buildRateUpdates(
         } else {
           rates.push({
             roomCode: u.roomCode,
-            rateplanCode: p.codigo || u.roomCode,
+            rateplanCode,
             rate: p.tarifa,
           });
         }
@@ -883,8 +1011,10 @@ export function buildInventoryRestrictions(
 export function buildRateRestrictions(
   units: Array<{
     roomCode: string | null;
+    /** Código de tarifa vinculado de la unidad: respaldo del plan sin código. */
+    rateplanCodeMapeado?: string | null;
     ratePlans?: Array<{
-      codigo: string;
+      codigo: string | null;
       minNoches?: number | null;
       maxNoches?: number | null;
       checkInDias?: unknown;
@@ -907,12 +1037,22 @@ export function buildRateRestrictions(
     estacionalidad: ConfigEstacionalidad | null;
   }> = [];
 
+  const vistos = new Set<string>();
   for (const u of units) {
     if (!u.roomCode) continue;
     for (const p of u.ratePlans || []) {
+      // Mismo criterio que el push de tarifas: el código del plan o el del
+      // vínculo, y sin ninguno no se inventan restricciones para una tarifa que
+      // el canal no conoce. El par repetido se cuenta una sola vez.
+      const rateplanCode = p.codigo || u.rateplanCodeMapeado;
+      if (!rateplanCode) continue;
+      const clave = `${u.roomCode}\u0000${rateplanCode}`;
+      if (vistos.has(clave)) continue;
+      vistos.add(clave);
+
       plans.push({
         roomCode: u.roomCode,
-        rateplanCode: p.codigo || u.roomCode,
+        rateplanCode,
         minimumStay: typeof p.minNoches === 'number' && p.minNoches > 0 ? p.minNoches : 1,
         maximumStay: typeof p.maxNoches === 'number' && p.maxNoches > 0 ? p.maxNoches : null,
         checkInDias: p.checkInDias ?? null,
