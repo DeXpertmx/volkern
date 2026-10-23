@@ -38,9 +38,12 @@ export function DashboardHeader() {
   const getPageTitle = () => {
     const parts = pathname.split('/').filter(Boolean);
     if (parts.length === 0 || (parts[0] === 'dashboard' && parts.length === 1)) return 'General';
-    const lastPart = parts[parts.length - 1];
+    // En las fichas de detalle el último segmento es el id del registro, no una
+    // sección: mostrar el CUID crudo en la cabecera no dice nada al usuario.
+    const esId = /^(c[a-z0-9]{20,}|[0-9a-f]{8}-[0-9a-f-]{27,})$/i.test(parts[parts.length - 1]);
+    const parte = esId && parts.length > 1 ? parts[parts.length - 2] : parts[parts.length - 1];
     // Formatear el nombre de la página (ej: leads -> Leads)
-    return lastPart.charAt(0).toUpperCase() + lastPart.slice(1).replace(/-/g, ' ');
+    return parte.charAt(0).toUpperCase() + parte.slice(1).replace(/-/g, ' ');
   };
 
   const isImpersonating = impersonation?.active;
