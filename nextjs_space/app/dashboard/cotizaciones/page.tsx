@@ -13,7 +13,7 @@ import {
   Plus,
   Search,
   FileText,
-  DollarSign,
+  Coins,
   Clock,
   CheckCircle,
   XCircle,
@@ -41,6 +41,7 @@ import {
 } from '@/components/ui/sheet'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
+import { useMonedaTenant } from '@/lib/use-moneda-tenant'
 import { DocumentPreview } from '@/components/document-preview'
 import { DocumentTimeline, TimelineEvent } from '@/components/document-timeline'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -83,6 +84,7 @@ const estadoConfig: Record<string, { label: string; color: string; icon: any }> 
 
 export default function CotizacionesPage() {
   const router = useRouter()
+  const monedaTenant = useMonedaTenant()
   const [cotizaciones, setCotizaciones] = useState<Cotizacion[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -143,9 +145,21 @@ export default function CotizacionesPage() {
   })
 
   const formatCurrency = (amount: number, currency: string) => {
+    // Sin divisa no se inventa una: se muestra el importe sin símbolo hasta que
+    // el tenant (o la cotización) la declaren.
+    if (!currency) return new Intl.NumberFormat('es-MX', { minimumFractionDigits: 2 }).format(amount)
     return new Intl.NumberFormat('es-MX', {
       style: 'currency',
-      currency: currency || 'MXN'
+      currency,
+    }).format(amount)
+  }
+
+  const formatCurrencyCompacto = (amount: number, currency: string) => {
+    if (!currency) return new Intl.NumberFormat('es-MX', { maximumFractionDigits: 0 }).format(amount)
+    return new Intl.NumberFormat('es-MX', {
+      style: 'currency',
+      currency,
+      maximumFractionDigits: 0,
     }).format(amount)
   }
 
@@ -273,10 +287,10 @@ export default function CotizacionesPage() {
           <CardContent className="p-4">
             <div className="flex flex-col gap-1">
               <div className="flex items-center justify-between">
-                <DollarSign className="h-5 w-5 text-emerald-600" />
+                <Coins className="h-5 w-5 text-emerald-600" />
                 <Badge variant="outline" className="text-[10px] h-4 border-emerald-200 text-emerald-700">VALOR</Badge>
               </div>
-              <p className="text-xl font-bold tracking-tight mt-1 truncate">{formatCurrency(metrics.valorTotal, 'MXN')}</p>
+              <p className="text-lg font-bold tracking-tight mt-1 truncate">{formatCurrencyCompacto(metrics.valorTotal, monedaTenant)}</p>
               <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Ventas Reales</p>
             </div>
           </CardContent>

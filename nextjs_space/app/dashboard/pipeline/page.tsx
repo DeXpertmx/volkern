@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
 import { apiFetch, apiPost } from '@/lib/api-client'
+import { useMonedaTenant } from '@/lib/use-moneda-tenant'
 import {
   DndContext,
   DragOverlay,
@@ -61,7 +62,7 @@ import {
   Search,
   Filter,
   TrendingUp,
-  DollarSign,
+  Coins,
   Calendar,
   User,
   MoreVertical,
@@ -557,8 +558,11 @@ export default function PipelinePage() {
     setActiveId(null)
   }
 
-  const formatCurrency = (value: number, currency: string = 'MXN') => {
-    return new Intl.NumberFormat('es-MX', {
+  // La divisa de los totales es la del tenant, no una constante MXN: el embudo
+  // de un cliente español mostraba «$» junto a tarjetas en euros.
+  const monedaTenant = useMonedaTenant()
+  const formatCurrency = (value: number, currency: string = monedaTenant || 'EUR') => {
+    return new Intl.NumberFormat('es-ES', {
       style: 'currency',
       currency,
       minimumFractionDigits: 0,
@@ -899,7 +903,7 @@ export default function PipelinePage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Valor Total</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
+              <Coins className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
@@ -911,7 +915,7 @@ export default function PipelinePage() {
           <Card className="bg-primary/5 border-primary/20">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-bold text-primary">Weighted Value</CardTitle>
-              <DollarSign className="h-4 w-4 text-primary" />
+              <Coins className="h-4 w-4 text-primary" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-black text-primary">

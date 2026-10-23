@@ -15,7 +15,7 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
-  DollarSign,
+  Coins,
   Target,
   Clock,
   BarChart3,
@@ -27,6 +27,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
+import { useMonedaTenant } from '@/lib/use-moneda-tenant'
 import {
   BarChart,
   Bar,
@@ -120,10 +121,22 @@ export default function PronosticosPage() {
     }
   }
 
+  // La divisa es la del tenant: la previsión de un cliente español mostraba
+  // pesos porque estaba escrita a mano en el componente.
+  const monedaTenant = useMonedaTenant()
+  const formatEje = (value: number) => {
+    const numero = Math.abs(value) >= 1000 ? `${Math.round(value / 1000)}k` : `${value}`
+    if (!monedaTenant) return numero
+    const simbolo = new Intl.NumberFormat('es-ES', { style: 'currency', currency: monedaTenant })
+      .formatToParts(0)
+      .find((parte) => parte.type === 'currency')?.value
+    return simbolo ? `${numero} ${simbolo}` : numero
+  }
+
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('es-MX', {
+    return new Intl.NumberFormat('es-ES', {
       style: 'currency',
-      currency: 'MXN',
+      currency: monedaTenant || 'EUR',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(value)
@@ -201,7 +214,7 @@ export default function PronosticosPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Pipeline Total</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <Coins className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(data.resumen.totalPipeline)}</div>
@@ -314,7 +327,7 @@ export default function PronosticosPage() {
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                   <XAxis dataKey="mes" className="text-xs" />
-                  <YAxis tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} className="text-xs" />
+                  <YAxis tickFormatter={(value) => formatEje(Number(value) || 0)} className="text-xs" />
                   <Tooltip 
                     formatter={(value) => [formatCurrency(Number(value) || 0), 'Valor']}
                     contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
@@ -344,7 +357,7 @@ export default function PronosticosPage() {
                 <BarChart data={data.proyeccionMensual}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                   <XAxis dataKey="mes" tickFormatter={(value) => value.substring(0, 3)} className="text-xs" />
-                  <YAxis tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} className="text-xs" />
+                  <YAxis tickFormatter={(value) => formatEje(Number(value) || 0)} className="text-xs" />
                   <Tooltip 
                     formatter={(value, name) => [
                       formatCurrency(Number(value) || 0), 
@@ -375,7 +388,7 @@ export default function PronosticosPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={data.funnelData} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis type="number" tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} className="text-xs" />
+                  <XAxis type="number" tickFormatter={(value) => formatEje(Number(value) || 0)} className="text-xs" />
                   <YAxis type="category" dataKey="etapa" width={100} className="text-xs" />
                   <Tooltip 
                     formatter={(value) => [formatCurrency(Number(value) || 0), 'Valor']}
@@ -460,7 +473,7 @@ export default function PronosticosPage() {
                           {deal.fechaEstimadaCierre && (
                             <span className="flex items-center gap-1">
                               <Calendar className="h-3 w-3" />
-                              {new Date(deal.fechaEstimadaCierre).toLocaleDateString('es-MX', { month: 'short', day: 'numeric' })}
+                              {new Date(deal.fechaEstimadaCierre).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })}
                             </span>
                           )}
                         </div>
