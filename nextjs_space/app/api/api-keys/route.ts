@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { generateApiKey, AVAILABLE_SCOPES } from '@/lib/api-keys';
+import { crmAllows, getCrmEntitlements, upgradeMessage } from '@/lib/crm-entitlements';
 
 // GET - Listar todas las API keys del tenant
 export async function GET(request: NextRequest) {
@@ -81,6 +82,11 @@ export async function POST(request: NextRequest) {
 
     if (!user?.tenantId) {
       return NextResponse.json({ error: 'Usuario sin tenant' }, { status: 403 });
+    }
+
+    const ent = await getCrmEntitlements(user.tenantId);
+    if (!crmAllows(ent, 'api')) {
+      return NextResponse.json({ error: upgradeMessage('api', ent) }, { status: 403 });
     }
 
     const body = await request.json();

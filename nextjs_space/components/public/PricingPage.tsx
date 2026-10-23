@@ -4,6 +4,15 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { VERTICAL_PLANS, getVerticalPlanPrice } from '@/lib/vertical-plans';
+import {
+  CRM_LADDER_SEATS,
+  CRM_MAX_SELF_SERVE_SEATS,
+  CRM_TIERS,
+  calcularPrecioCrm,
+  formatearEuros,
+  type CrmInterval,
+  type CrmPriceResult,
+} from '@/lib/crm-pricing';
 import { MONEDA_PLATAFORMA, formatearImporte } from '@/lib/moneda';
 import { Button } from '@/components/ui/button';
 import {
@@ -27,6 +36,31 @@ const PRECIO_DESDE = formatearImporte(
   0
 );
 
+/**
+ * Tabla pública de volumen, calculada con el mismo motor que cobra.
+ *
+ * Es la respuesta a «no es lo mismo 1 usuario que 100 o 1.000»: el cliente ve
+ * el precio medio de cada tamaño de equipo sin pedir presupuesto. Se muestra
+ * con facturación anual, que es la modalidad que da el precio de entrada.
+ */
+const TABLA_VOLUMEN: Array<{
+  seats: number;
+  precios: CrmPriceResult[];
+}> = CRM_LADDER_SEATS.map((seats) => ({
+  seats,
+  precios: CRM_TIERS.map((tier) =>
+    calcularPrecioCrm({ tier: tier.id, interval: 'yearly', seats }),
+  ),
+}));
+
+/** Precio por usuario en formato español: 12 → «12», 8.36 → «8,36». */
+function formatearPorUsuario(valor: number): string {
+  return new Intl.NumberFormat('es-ES', {
+    minimumFractionDigits: Number.isInteger(valor) ? 0 : 2,
+    maximumFractionDigits: 2,
+  }).format(valor);
+}
+
 /* ─── Vertical definitions ─────────────────────────────────────────────── */
 
 const VERTICALS = [
@@ -38,7 +72,7 @@ const VERTICALS = [
     icon: TrendingUp,
     target: 'Equipos comerciales B2B',
     color: 'cyan',
-    modules: ['CRM de ventas', 'Pipeline personalizable', 'Automatización de seguimiento', 'Email integrado', 'Telefonía', 'Dashboard de ventas', 'Reportes y analítica', 'Scoring de leads', 'Pronósticos'],
+    modules: ['CRM de ventas', 'Pipeline personalizable', 'Automatización de seguimiento', 'Email y campañas', 'Dashboard de ventas', 'Reportes y analítica', 'Scoring de leads', 'Pronósticos'],
   },
   {
     id: 'agencia_marketing',
@@ -137,6 +171,8 @@ const FAQ_ITEMS = [
 
 export default function PricingPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [crmInterval, setCrmInterval] = useState<CrmInterval>('yearly');
+  const [crmSeats, setCrmSeats] = useState(5);
 
   return (
     <PublicLayout>
@@ -150,7 +186,7 @@ export default function PricingPage() {
             <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease: 'easeOut' }}>
               <span className="inline-flex items-center gap-2 py-1.5 px-4 rounded-full bg-emerald-500/10 text-emerald-400 text-sm font-medium mb-6 border border-emerald-500/20">
                 <Zap className="w-4 h-4" />
-                Desde {PRECIO_DESDE}/mes · 14 días gratis
+                Desde {PRECIO_DESDE}/usuario/mes · 14 días gratis
               </span>
               <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 leading-tight tracking-tight">
                 Precios claros.{' '}
@@ -159,9 +195,185 @@ export default function PricingPage() {
                 </span>
               </h1>
               <p className="text-lg text-slate-400 max-w-xl mx-auto leading-relaxed">
-                Cada vertical es independiente. Elige la que necesitas hoy. Todos los módulos incluidos en el precio.
+                Cada vertical es independiente. CRM & Ventas se paga por usuario y nivel; el resto, por vertical.
               </p>
             </motion.div>
+          </div>
+        </section>
+
+        {/* ═══ CRM POR USUARIO ═══ */}
+        <section id="crm-ventas" className="pb-20 scroll-mt-28">
+          <div className="container mx-auto px-6">
+            <div className="max-w-6xl mx-auto">
+              <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 mb-8">
+                <div className="max-w-2xl">
+                  <span className="inline-flex items-center gap-2 py-1 px-3 rounded-full bg-cyan-500/10 text-cyan-400 text-xs font-bold uppercase tracking-wider border border-cyan-500/20 mb-4">
+                    <TrendingUp className="w-3.5 h-3.5" /> CRM &amp; Ventas
+                  </span>
+                  <h2 className="text-3xl md:text-4xl font-bold text-white mb-3">
+                    Precio por usuario, <span className="text-cyan-400">no por empresa</span>
+                  </h2>
+                  <p className="text-slate-400 leading-relaxed">
+                    Elige cuántos comerciales van a usar el CRM y qué necesitan hacer. Pagas por usuario: 12 € con un comercial y unos 8 € de media con mil, en facturación anual.
+                  </p>
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                  <label className="flex items-center gap-3 text-sm text-slate-400">
+                    Usuarios
+                    <input
+                      type="number"
+                      min={1}
+                      max={CRM_MAX_SELF_SERVE_SEATS}
+                      value={crmSeats}
+                      onChange={(e) => {
+                        const n = Number(e.target.value);
+                        setCrmSeats(Number.isFinite(n) ? Math.min(CRM_MAX_SELF_SERVE_SEATS, Math.max(1, Math.floor(n))) : 1);
+                      }}
+                      className="w-20 rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-white text-center font-bold focus:outline-none focus:border-cyan-500"
+                    />
+                  </label>
+                  <div className="inline-flex p-1 rounded-xl bg-slate-900 border border-slate-800">
+                    <button
+                      onClick={() => setCrmInterval('yearly')}
+                      className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${crmInterval === 'yearly' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                    >
+                      Anual · 2 meses gratis
+                    </button>
+                    <button
+                      onClick={() => setCrmInterval('monthly')}
+                      className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${crmInterval === 'monthly' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                    >
+                      Mensual
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-3 gap-4">
+                {CRM_TIERS.map((tier) => {
+                  const precio = calcularPrecioCrm({ tier: tier.id, interval: crmInterval, seats: crmSeats });
+                  const destacado = tier.id === 'profesional';
+
+                  return (
+                    <div
+                      key={tier.id}
+                      className={`relative flex flex-col rounded-2xl border p-6 ${
+                        destacado
+                          ? 'bg-cyan-950/30 border-cyan-500/50 shadow-xl shadow-cyan-950/30'
+                          : 'bg-slate-900/40 border-slate-800'
+                      }`}
+                    >
+                      {destacado && (
+                        <span className="absolute -top-3 left-6 rounded-full bg-cyan-600 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white">
+                          El más elegido
+                        </span>
+                      )}
+                      <h3 className="text-xl font-bold text-white">{tier.name}</h3>
+                      <p className="text-sm text-slate-400 mt-1 mb-5 min-h-[40px]">{tier.tagline}</p>
+
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-4xl font-black text-white">{formatearPorUsuario(precio.perUser)}</span>
+                        <span className="text-sm text-slate-400">€ /usuario/mes</span>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-1">
+                        {precio.custom
+                          ? 'Precio a medida'
+                          : `${formatearEuros(precio.billedAmount)} ${crmInterval === 'yearly' ? 'al año' : 'al mes'} · ${crmSeats} ${crmSeats === 1 ? 'usuario' : 'usuarios'}`}
+                      </p>
+                      {precio.discount > 0 && !precio.custom && (
+                        <p className="text-xs text-emerald-400 mt-1">
+                          Precio medio · {Math.round(precio.discount * 100)} % de descuento por volumen
+                        </p>
+                      )}
+
+                      <div className="my-5 h-px bg-slate-800" />
+
+                      <ul className="space-y-2 flex-1">
+                        {tier.features.map((feature) => (
+                          <li key={feature} className="flex items-start gap-2 text-sm text-slate-300">
+                            <Check className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
+                            <span>{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
+
+                      <Link
+                        href={`/signup?vertical=crm_ventas&tier=${tier.id}&seats=${crmSeats}&interval=${crmInterval}`}
+                        className="mt-6"
+                      >
+                        <Button
+                          className={`w-full py-5 rounded-xl font-bold ${
+                            destacado
+                              ? 'bg-cyan-600 hover:bg-cyan-500 text-white'
+                              : 'bg-slate-800 hover:bg-slate-700 text-white'
+                          }`}
+                        >
+                          Probar 14 días gratis
+                          <ArrowRight className="ml-1.5 w-4 h-4" />
+                        </Button>
+                      </Link>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* ═══ Tabla de volumen ═══ */}
+              <div className="mt-10 rounded-2xl border border-slate-800 bg-slate-900/40 overflow-hidden">
+                <div className="px-6 py-5 border-b border-slate-800">
+                  <h3 className="text-sm font-bold text-white">Cómo baja el precio con el tamaño del equipo</h3>
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                    Precio medio por usuario y mes con facturación anual. Los descuentos son marginales: cada tramo descuenta solo los usuarios que caen dentro de él, así que añadir un comercial nunca abarata la factura.
+                  </p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-[10px] uppercase tracking-widest text-slate-500 border-b border-slate-800">
+                        <th className="text-left font-bold px-6 py-3">Usuarios</th>
+                        {CRM_TIERS.map((tier) => (
+                          <th key={tier.id} className="text-right font-bold px-4 py-3">{tier.name}</th>
+                        ))}
+                        <th className="text-right font-bold px-6 py-3">Descuento medio</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {TABLA_VOLUMEN.map(({ seats, precios }) => {
+                        const activo = seats === crmSeats;
+                        return (
+                          <tr
+                            key={seats}
+                            className={`border-b border-slate-800/60 last:border-0 ${activo ? 'bg-cyan-500/5' : ''}`}
+                          >
+                            <td className="px-6 py-3">
+                              <button
+                                type="button"
+                                onClick={() => setCrmSeats(seats)}
+                                className={`font-bold tabular-nums hover:text-cyan-400 transition-colors ${activo ? 'text-cyan-400' : 'text-white'}`}
+                              >
+                                {seats.toLocaleString('es-ES')}
+                              </button>
+                            </td>
+                            {precios.map((precio) => (
+                              <td key={precio.tier.id} className="px-4 py-3 text-right tabular-nums text-slate-300">
+                                {precio.perUser.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                              </td>
+                            ))}
+                            <td className="px-6 py-3 text-right tabular-nums text-emerald-400">
+                              {Math.round((precios[0].discount ?? 0) * 100)} %
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-500 mt-5 leading-relaxed">
+                Precios sin IVA. La facturación anual equivale a diez mensualidades del precio mensual. El descuento por volumen se aplica por tramos: 10 % de 10 a 24 usuarios, 15 % de 25 a 49, 20 % de 50 a 99, 25 % de 100 a 249, 30 % de 250 a 499, 35 % de 500 a 999 y 40 % a partir de mil. Hasta {CRM_MAX_SELF_SERVE_SEATS.toLocaleString('es-ES')} usuarios se contrata en línea; por encima, precio a medida.
+              </p>
+            </div>
           </div>
         </section>
 
@@ -205,7 +417,7 @@ export default function PricingPage() {
                           {/* El precio no se escribe aquí: sale de la fuente única
                               (lib/vertical-plans.ts), la misma que usa el cobro. */}
                           <span className="text-3xl font-black text-white">{formatearImporte(getVerticalPlanPrice(v.id) ?? 0, MONEDA_PLATAFORMA, 0)}</span>
-                          <span className="text-sm text-slate-500">/mes</span>
+                          <span className="text-sm text-slate-500">{v.id === 'crm_ventas' ? '/usuario/mes' : '/mes'}</span>
                         </div>
                         <p className="text-[10px] text-slate-600 mt-0.5">14 días gratis · Sin permanencia</p>
                       </div>
@@ -267,7 +479,7 @@ export default function PricingPage() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {[
                   { icon: ShieldCheck, label: '14 días gratis' },
-                  { icon: Users, label: 'Equipo ilimitado' },
+                  { icon: Users, label: 'Precio por usuario en CRM' },
                   { icon: Zap, label: 'Sin permanencia' },
                   { icon: ShieldCheck, label: 'Datos protegidos' },
                 ].map((item, i) => (

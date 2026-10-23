@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { DealCoachService } from '@/lib/sales/deal-coach-service';
+import { crmAllows, getCrmEntitlements, upgradeMessage } from '@/lib/crm-entitlements';
 
 export async function GET(
   req: NextRequest,
@@ -15,6 +16,13 @@ export async function GET(
     }
 
     const tenantId = (session.user as any).tenantId;
+
+    // El Deal Coach es la función de IA que separa Avanzado de Profesional.
+    const ent = await getCrmEntitlements(tenantId);
+    if (!crmAllows(ent, 'ai')) {
+      return NextResponse.json({ error: upgradeMessage('ai', ent) }, { status: 403 });
+    }
+
     const dealId = params.id;
 
     const advice = await DealCoachService.getDealAdvice(dealId, tenantId);

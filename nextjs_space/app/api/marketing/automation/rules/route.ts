@@ -2,7 +2,8 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/db';
+import { prisma } from '@/lib/db'
+import { getCrmEntitlements } from '@/lib/crm-entitlements';
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -29,6 +30,20 @@ export async function POST(req: Request) {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
+    const tenantId = session.user.tenantId!;
+    const ent = await getCrmEntitlements(tenantId);
+    const existentes = await prisma.automationRule.count({
+      where: { tenantId, isActive: true },
+    });
+    if (existentes >= ent.limits.maxAutomations) {
+      return NextResponse.json(
+        {
+          error: `Tu plan ${ent.tierName} permite ${ent.limits.maxAutomations} automatizaciones activas. Pausa una o sube de nivel.`,
+        },
+        { status: 403 },
+      );
+    }
+
     const data = await req.json();
     const rule = await prisma.automationRule.create({
       data: {

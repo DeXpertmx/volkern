@@ -8,10 +8,12 @@ import { TRIAL_DAYS } from '@/lib/plans';
 // aplicación. Escribirlos aquí a mano es justo lo que dejó a la portada
 // anunciando 49 € mientras el cobro leía una tabla distinta.
 const PRECIO_MINIMO = Math.min(...VERTICAL_PLANS.map((v) => v.price));
-const LISTA_DE_PRECIOS = VERTICAL_PLANS.map((v) => `${v.name} €${v.price}`).join(', ');
+const LISTA_DE_PRECIOS = VERTICAL_PLANS.map((v) =>
+  v.id === 'crm_ventas' ? `${v.name} desde €${v.price}/usuario` : `${v.name} €${v.price}`,
+).join(', ');
 
 export const metadata: Metadata = {
-  title: `Precios | Volkern — Planes claros por vertical desde €${PRECIO_MINIMO}/mes`,
+  title: `Precios | Volkern — CRM desde €${PRECIO_MINIMO}/usuario/mes`,
   description: `Planes y precios de Volkern por vertical: ${LISTA_DE_PRECIOS}. ${TRIAL_DAYS} días gratis.`,
   openGraph: {
     title: 'Precios — Volkern',

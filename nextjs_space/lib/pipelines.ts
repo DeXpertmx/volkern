@@ -218,6 +218,12 @@ export const PIPELINE_LIMITS_BY_PLAN: Record<string, number> = {
   basico: 1,
   growth: 3,
   profesional: 3,
+  // CRM por usuario: el tope real lo pone el nivel en `lib/crm-pricing.ts`.
+  // Aquí va el máximo del que puede disponer cualquier nivel.
+  crm_ventas: 25,
+  crm_esencial: 1,
+  crm_profesional: 10,
+  crm_avanzado: 25,
   pro: 5,
   'pro-agency': 10,
   'pro-accounting': 5,

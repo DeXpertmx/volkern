@@ -328,16 +328,33 @@ export async function POST(request: NextRequest) {
               console.log(`[StripeWebhook] Reserva directa cobrada: ${reservaHospitality} (registrado=${cobro.registrado})`)
             }
           } else if (session.mode === 'subscription') {
-            const { tenantId: subTenantId, plan: planKey, planId } = session.metadata || {}
+            const { tenantId: subTenantId, plan: planKey, planId, crmTier, crmSeats } = session.metadata || {}
             const resolvedPlan = planKey || planId
 
             if (subTenantId && resolvedPlan) {
+              // CRM por usuario: el nivel y los asientos viajan en la metadata
+              // del checkout y se guardan en la configuración del tenant. Las
+              // puertas de `lib/crm-entitlements.ts` leen de ahí.
+              let configuracion: Record<string, unknown> | undefined
+              if (crmTier) {
+                const actual = await prisma.tenant.findUnique({
+                  where: { id: subTenantId },
+                  select: { configuracion: true },
+                })
+                configuracion = {
+                  ...((actual?.configuracion as Record<string, unknown>) || {}),
+                  crmTier,
+                  crmSeats: crmSeats ? Number(crmSeats) : undefined,
+                }
+              }
+
               await prisma.tenant.update({
                 where: { id: subTenantId },
                 data: {
                   plan: resolvedPlan,
                   estado: 'activo',
-                  stripeCustomerId: session.customer as string
+                  stripeCustomerId: session.customer as string,
+                  ...(configuracion && { configuracion: configuracion as any }),
                 }
               })
 
@@ -427,7 +444,7 @@ export async function POST(request: NextRequest) {
         case 'customer.subscription.created':
         case 'customer.subscription.updated': {
           const subscription = event.data.object as any
-          const { tenantId: subTenantId, plan: planKey, planId } = subscription.metadata || {}
+          const { tenantId: subTenantId, plan: planKey, planId, crmTier, crmSeats } = subscription.metadata || {}
           const resolvedPlan = planKey || planId
 
           if (subTenantId) {
@@ -439,6 +456,21 @@ export async function POST(request: NextRequest) {
 
             if (resolvedPlan) {
               updateData.plan = resolvedPlan
+            }
+
+            // Los asientos pueden cambiar desde el portal de Stripe; la
+            // cantidad de la suscripción manda sobre la metadata inicial.
+            if (crmTier) {
+              const actual = await prisma.tenant.findUnique({
+                where: { id: subTenantId },
+                select: { configuracion: true },
+              })
+              const asientos = subscription.items?.data?.[0]?.quantity
+              updateData.configuracion = {
+                ...((actual?.configuracion as Record<string, unknown>) || {}),
+                crmTier,
+                crmSeats: typeof asientos === 'number' ? asientos : Number(crmSeats) || undefined,
+              }
             }
 
             await prisma.tenant.update({

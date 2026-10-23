@@ -8,6 +8,12 @@ import { stripe } from '@/lib/stripe'
 import { PLAN_PRICES, PLANS } from '@/lib/plans'
 import { calcularPrecio } from '@/lib/pricing-engine'
 import { VERTICAL_PLAN_IDS, getVerticalPlan } from '@/lib/vertical-plans'
+import {
+  CRM_MAX_SELF_SERVE_SEATS,
+  calcularPrecioCrm,
+  getCrmTier,
+  isCrmTier,
+} from '@/lib/crm-pricing'
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,7 +22,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    const { planId, interval = 'monthly' } = await request.json()
+    const { planId, interval = 'monthly', tier, seats } = await request.json()
 
     // Lo que la plataforma vende son las verticales. Esencial/Profesional/Infinity
     // quedan fuera de la venta: su checkout dependía de `NEXT_PUBLIC_STRIPE_PRICE_*`,
@@ -74,8 +80,64 @@ export async function POST(request: NextRequest) {
     // de entorno ni de Stripe Price IDs precreados. El descuento anual (20 %) sale
     // de PLAN_PRICES, donde se deriva de la misma fuente única.
     if (vertical) {
-      const priceInfo = PLAN_PRICES[vertical.id as keyof typeof PLAN_PRICES]
-      const unitAmount = interval === 'yearly' ? priceInfo.yearly : priceInfo.monthly
+      const esCrm = vertical.id === 'crm_ventas'
+
+      // ─── CRM & Ventas: precio por usuario y nivel ─────────────────────────
+      // El importe sale de `lib/crm-pricing.ts`, la misma fuente que la web y
+      // el dossier. Stripe cobra `quantity = asientos`; el descuento por
+      // volumen ya viene aplicado en el precio unitario.
+      let unitAmount: number
+      /** Precio por asiento en céntimos decimales, solo para el CRM. */
+      let unitAmountDecimal: string | null = null
+      let quantity = 1
+      let crmTier: string | null = null
+      let crmSeats: number | null = null
+      let descripcion = vertical.subtitle
+
+      if (esCrm) {
+        if (!isCrmTier(tier)) {
+          return NextResponse.json(
+            { error: 'Elige un nivel de CRM: esencial, profesional o avanzado.' },
+            { status: 400 },
+          )
+        }
+
+        const asientos = Number(seats)
+        if (!Number.isInteger(asientos) || asientos < 1) {
+          return NextResponse.json(
+            { error: 'Indica al menos un usuario.' },
+            { status: 400 },
+          )
+        }
+        if (asientos > CRM_MAX_SELF_SERVE_SEATS) {
+          return NextResponse.json(
+            {
+              error: 'Hasta mil usuarios se contrata en línea. Para más, hablemos: el precio es a medida.',
+            },
+            { status: 400 },
+          )
+        }
+
+        const precio = calcularPrecioCrm({ tier, interval, seats: asientos })
+        const nivel = getCrmTier(tier)!
+
+        // En anual se cobra el año completo por asiento; el precio de lista ya
+        // es el mensual equivalente con el descuento de pagar al año. Los
+        // tramos son marginales, así que el importe del periodo se reparte
+        // entre los asientos en céntimos decimales: `precio medio × asientos`
+        // no siempre da un céntimo exacto por asiento.
+        unitAmount = precio.billedAmount / asientos
+        unitAmountDecimal = (
+          Math.round(((precio.billedAmount * 100) / asientos) * 100) / 100
+        ).toFixed(2)
+        quantity = asientos
+        crmTier = nivel.id
+        crmSeats = asientos
+        descripcion = `${nivel.name} · ${asientos} ${asientos === 1 ? 'usuario' : 'usuarios'}${precio.discount > 0 ? ` · ${Math.round(precio.discount * 100)} % de descuento por volumen` : ''}`
+      } else {
+        const priceInfo = PLAN_PRICES[vertical.id as keyof typeof PLAN_PRICES]
+        unitAmount = interval === 'yearly' ? priceInfo.yearly : priceInfo.monthly
+      }
 
       const checkoutSession = await stripe.checkout.sessions.create({
         customer: customerId,
@@ -86,13 +148,15 @@ export async function POST(request: NextRequest) {
             price_data: {
               currency: 'eur',
               product_data: {
-                name: `Volkern ${vertical.name}`,
-                description: vertical.subtitle,
+                name: `Volkern ${vertical.name}${crmTier ? ` ${getCrmTier(crmTier)?.name}` : ''}`,
+                description: descripcion,
               },
               recurring: { interval: interval === 'yearly' ? 'year' : 'month' },
-              unit_amount: Math.round(unitAmount * 100),
+              ...(unitAmountDecimal
+                ? { unit_amount_decimal: unitAmountDecimal }
+                : { unit_amount: Math.round(unitAmount * 100) }),
             },
-            quantity: 1,
+            quantity,
           },
         ],
         success_url: successUrl,
@@ -102,6 +166,7 @@ export async function POST(request: NextRequest) {
           plan: vertical.id,
           vertical: vertical.id,
           interval,
+          ...(crmTier && { crmTier, crmSeats: String(crmSeats) }),
         },
         subscription_data: {
           metadata: {
@@ -109,6 +174,7 @@ export async function POST(request: NextRequest) {
             plan: vertical.id,
             vertical: vertical.id,
             interval,
+            ...(crmTier && { crmTier, crmSeats: String(crmSeats) }),
           },
         },
       })
@@ -118,12 +184,16 @@ export async function POST(request: NextRequest) {
           accion: 'crear',
           entidad: 'Subscription',
           entidadId: checkoutSession.id,
-          descripcion: `Checkout de la vertical ${vertical.name} iniciado (${unitAmount} € / ${interval === 'yearly' ? 'año' : 'mes'})`,
+          descripcion: crmTier
+            ? `Checkout de CRM ${getCrmTier(crmTier)?.name} iniciado (${quantity} usuarios, ${Math.round(unitAmount * 100) / 100} € / ${interval === 'yearly' ? 'año' : 'mes'} por usuario de media)`
+            : `Checkout de la vertical ${vertical.name} iniciado (${unitAmount} € / ${interval === 'yearly' ? 'año' : 'mes'})`,
           cambiosDespues: {
             planId: vertical.id,
             vertical: vertical.id,
             interval,
             unitAmount,
+            quantity,
+            ...(crmTier && { crmTier, crmSeats }),
             sessionId: checkoutSession.id,
           },
           userId: user.id,

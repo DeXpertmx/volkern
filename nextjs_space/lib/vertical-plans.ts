@@ -31,7 +31,7 @@ export interface VerticalPlan {
   slug: string
   name: string
   subtitle: string
-  /** Precio publicado en € / mes, impuestos no incluidos. */
+  /** Precio publicado en € / mes, impuestos no incluidos. En CRM es el de entrada por usuario. */
   price: number
   /** Módulos que habilita la vertical (centrales + los propios de la vertical). */
   modules: string[]
@@ -39,7 +39,10 @@ export interface VerticalPlan {
 
 /** Definición declarativa; los módulos se completan más abajo. */
 const DEFINICIONES = [
-  { id: 'crm_ventas',       slug: 'crm-ventas',  name: 'CRM & Ventas',      subtitle: 'Pipeline, leads y cierres',            price: 49 },
+  // CRM & Ventas se cobra por usuario desde `lib/crm-pricing.ts` (12/24/39 €).
+  // `price` es el precio de entrada, el mismo que anuncia la web; el cobro real
+  // lo calcula el checkout con el nivel y los asientos elegidos.
+  { id: 'crm_ventas',       slug: 'crm-ventas',  name: 'CRM & Ventas',      subtitle: 'Pipeline, leads y cierres',            price: 12 },
   { id: 'agencia_marketing', slug: 'marketing',  name: 'Agencia Marketing', subtitle: 'Campañas, leads y conversión',         price: 49 },
   { id: 'academia',         slug: 'academy',     name: 'Academia',          subtitle: 'Cursos, pagos y alumnos',              price: 49 },
   { id: 'asesoria_contable', slug: 'accounting', name: 'Asesoría Contable', subtitle: 'Clientes, documentos y compliance',    price: 59 },

@@ -7,6 +7,12 @@ import { prisma } from '@/lib/db'
 import { stripe } from '@/lib/stripe'
 import { PLAN_PRICES, PLANS } from '@/lib/plans'
 import { VERTICAL_PLAN_IDS, getVerticalPlan } from '@/lib/vertical-plans'
+import {
+  CRM_MAX_SELF_SERVE_SEATS,
+  calcularPrecioCrm,
+  getCrmTier,
+  isCrmTier,
+} from '@/lib/crm-pricing'
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,7 +21,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    const { newPlanId } = await request.json()
+    const { newPlanId, tier, seats } = await request.json()
 
     // Se puede cambiar a una vertical (lo que la plataforma vende) o a los planes
     // legacy que un tenant ya tuviera contratados.
@@ -56,8 +62,12 @@ export async function POST(request: NextRequest) {
     }
 
     const subscription = subscriptions.data[0]
-    const currentPriceId = subscription.items.data[0].price.id
+    const currentItem = subscription.items.data[0]
+    const currentPriceId = currentItem.price.id
+    const intervalActual = currentItem.price.recurring?.interval === 'year' ? 'yearly' : 'monthly'
     let newPriceId = PLAN_PRICES[newPlanId as keyof typeof PLAN_PRICES]?.stripePriceId
+    let nuevaCantidad: number | undefined
+    let crmTierFinal: string | null = null
 
     // Las verticales se cobran con `price_data` en línea, así que no tienen un
     // Price ID precreado. Para poder cambiar de vertical con prorrateo —sin
@@ -72,18 +82,57 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      const interval = subscription.items.data[0].price.recurring?.interval === 'year' ? 'yearly' : 'monthly'
-      const priceInfo = PLAN_PRICES[vertical.id as keyof typeof PLAN_PRICES]
-      const createdPrice = await stripe.prices.create({
-        currency: 'eur',
-        unit_amount: Math.round((interval === 'yearly' ? priceInfo.yearly : priceInfo.monthly) * 100),
-        recurring: { interval: interval === 'yearly' ? 'year' : 'month' },
-        product_data: { name: `Volkern ${vertical.name}` },
-      })
-      newPriceId = createdPrice.id
+      if (vertical.id === 'crm_ventas') {
+        // Subir o bajar de nivel sin cambiar de producto: el nivel sale del
+        // cuerpo o de la configuración actual, y los asientos de la suscripción.
+        const config = (tenant.configuracion as Record<string, unknown> | null) || {}
+        const tierFinal = isCrmTier(tier) ? tier : config.crmTier
+        if (!isCrmTier(tierFinal as string)) {
+          return NextResponse.json(
+            { error: 'Elige un nivel de CRM: esencial, profesional o avanzado.' },
+            { status: 400 },
+          )
+        }
+
+        const asientos = Number(seats) || currentItem.quantity || 1
+        if (!Number.isInteger(asientos) || asientos < 1 || asientos > CRM_MAX_SELF_SERVE_SEATS) {
+          return NextResponse.json(
+            { error: `Indica entre 1 y ${CRM_MAX_SELF_SERVE_SEATS} usuarios.` },
+            { status: 400 },
+          )
+        }
+
+        const precio = calcularPrecioCrm({ tier: tierFinal as string, interval: intervalActual, seats: asientos })
+        const nivel = getCrmTier(tierFinal as string)!
+
+        // El importe del periodo se reparte entre los asientos en céntimos
+        // decimales: con tramos marginales, el precio medio por asiento no
+        // siempre cae en un céntimo exacto.
+        const centimosPorAsiento =
+          Math.round(((precio.billedAmount * 100) / asientos) * 100) / 100
+
+        const createdPrice = await stripe.prices.create({
+          currency: 'eur',
+          unit_amount_decimal: centimosPorAsiento.toFixed(2),
+          recurring: { interval: intervalActual === 'yearly' ? 'year' : 'month' },
+          product_data: { name: `Volkern ${vertical.name} ${nivel.name}` },
+        })
+        newPriceId = createdPrice.id
+        nuevaCantidad = asientos
+        crmTierFinal = nivel.id
+      } else {
+        const priceInfo = PLAN_PRICES[vertical.id as keyof typeof PLAN_PRICES]
+        const createdPrice = await stripe.prices.create({
+          currency: 'eur',
+          unit_amount: Math.round((intervalActual === 'yearly' ? priceInfo.yearly : priceInfo.monthly) * 100),
+          recurring: { interval: intervalActual === 'yearly' ? 'year' : 'month' },
+          product_data: { name: `Volkern ${vertical.name}` },
+        })
+        newPriceId = createdPrice.id
+      }
     }
 
-    if (currentPriceId === newPriceId) {
+    if (currentPriceId === newPriceId && !nuevaCantidad) {
       return NextResponse.json({ error: 'Ya estás en ese plan' }, { status: 400 })
     }
 
@@ -91,14 +140,16 @@ export async function POST(request: NextRequest) {
     const updatedSubscription = await stripe.subscriptions.update(subscription.id, {
       items: [
         {
-          id: subscription.items.data[0].id,
-          price: newPriceId
+          id: currentItem.id,
+          price: newPriceId,
+          ...(nuevaCantidad && { quantity: nuevaCantidad }),
         }
       ],
       proration_behavior: 'always_invoice', // Facturar inmediatamente el prorreo
       metadata: {
         tenantId: tenant.id,
-        planId: newPlanId
+        planId: newPlanId,
+        ...(crmTierFinal && { crmTier: crmTierFinal, crmSeats: String(nuevaCantidad) }),
       }
     })
 
@@ -107,7 +158,14 @@ export async function POST(request: NextRequest) {
     await prisma.tenant.update({
       where: { id: tenant.id },
       data: {
-        plan: newPlanId
+        plan: newPlanId,
+        ...(crmTierFinal && {
+          configuracion: {
+            ...((tenant.configuracion as Record<string, unknown>) || {}),
+            crmTier: crmTierFinal,
+            crmSeats: nuevaCantidad,
+          } as any,
+        }),
       }
     })
 

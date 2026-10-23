@@ -8,6 +8,7 @@ import { validateBody } from '@/lib/validation';
 import { ContratoCreateSchema } from '@/lib/validation/schemas';
 import { addContratoTimelineEvent } from '@/lib/contratos/timeline';
 import { randomBytes } from 'crypto';
+import { crmAllows, getCrmEntitlements, upgradeMessage } from '@/lib/crm-entitlements';
 
 // GET /api/contratos - Listar contratos
 export const GET = withTenantAuth(async (request, auth) => {
@@ -61,6 +62,13 @@ export const POST = withTenantAuth(async (request, auth) => {
   try {
     const tenantId = auth.tenant!.id;
     const userId = auth.user!.id;
+
+    // Los contratos con firma son del nivel Profesional en adelante.
+    const ent = await getCrmEntitlements(tenantId);
+    if (!crmAllows(ent, 'contracts')) {
+      return NextResponse.json({ error: upgradeMessage('contracts', ent) }, { status: 403 });
+    }
+
     const raw = await request.json();
     const body = validateBody(ContratoCreateSchema, raw);
     if (body instanceof NextResponse) return body;

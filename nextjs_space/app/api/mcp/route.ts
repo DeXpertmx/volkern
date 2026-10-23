@@ -28,6 +28,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/api-key-auth';
 import { prisma } from '@/lib/db';
+import { crmAllows, getCrmEntitlements, upgradeMessage } from '@/lib/crm-entitlements';
 import { cookies } from 'next/headers';
 import {
   handleListTools,
@@ -114,6 +115,14 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // El acceso programático (API/MCP) es del nivel Avanzado.
+    if (auth.tenant?.id) {
+      const ent = await getCrmEntitlements(auth.tenant.id);
+      if (!crmAllows(ent, 'api')) {
+        return NextResponse.json({ error: upgradeMessage('api', ent) }, { status: 403 });
+      }
+    }
+
     // Obtener parámetro de acción
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action');
@@ -166,6 +175,13 @@ export async function POST(request: NextRequest) {
         { error: 'No autorizado', details: auth.error },
         { status: 401 }
       );
+    }
+
+    if (auth.tenant?.id) {
+      const ent = await getCrmEntitlements(auth.tenant.id);
+      if (!crmAllows(ent, 'api')) {
+        return NextResponse.json({ error: upgradeMessage('api', ent) }, { status: 403 });
+      }
     }
 
     // Rate limiting

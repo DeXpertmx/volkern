@@ -351,8 +351,14 @@ export default function BillingPage() {
                     <h3 className="text-lg font-bold">{v.name}</h3>
                     <p className="text-sm text-gray-500 mt-1">{v.subtitle}</p>
                     <p className="text-2xl font-black mt-3">
-                      {v.price}€<span className="text-sm font-normal text-gray-400">/mes</span>
+                      {v.price}€
+                      <span className="text-sm font-normal text-gray-400">
+                        {v.id === 'crm_ventas' ? '/usuario/mes' : '/mes'}
+                      </span>
                     </p>
+                    {v.id === 'crm_ventas' && (
+                      <p className="text-xs text-gray-500 mt-1">Desde el nivel Esencial, facturación anual.</p>
+                    )}
                     <ul className="mt-4 space-y-2 mb-6 flex-1">
                       {destacados.map((f) => (
                         <li key={f} className="flex items-start gap-2 text-sm text-gray-600">
@@ -362,7 +368,13 @@ export default function BillingPage() {
                       ))}
                     </ul>
                     <Button
-                      onClick={() => handleSubscribe(v.id)}
+                      onClick={() => {
+                        if (v.id === 'crm_ventas') {
+                          window.location.href = '/precios#crm-ventas'
+                          return
+                        }
+                        handleSubscribe(v.id)
+                      }}
                       disabled={actionLoading}
                       className="w-full font-bold"
                       variant="outline"
@@ -370,7 +382,7 @@ export default function BillingPage() {
                       {actionLoading && selectedPlan === v.id ? (
                         <Loader2 className="w-4 h-4 animate-spin mr-2" />
                       ) : null}
-                      Elegir {v.name}
+                      {v.id === 'crm_ventas' ? 'Ver niveles' : `Elegir ${v.name}`}
                     </Button>
                   </div>
                 )

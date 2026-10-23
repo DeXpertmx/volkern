@@ -10,6 +10,24 @@ export interface LimitCheckResult {
 }
 
 /**
+ * Asientos de CRM comprados, si el tenant los tiene.
+ *
+ * El CRM se vende por usuario: un cliente de 50 o de 1.000 asientos no puede
+ * quedarse con el tope genérico de 2 usuarios que hereda la vertical. Los
+ * asientos los escribe el checkout y los sincroniza el webhook de Stripe en
+ * `configuracion.crmSeats`; esta es la puerta que los respeta.
+ */
+export function asientosCrmContratados(configuracion: unknown): number | null {
+  if (!configuracion || typeof configuracion !== 'object' || Array.isArray(configuracion)) {
+    return null
+  }
+  const asientos = (configuracion as Record<string, unknown>).crmSeats
+  return typeof asientos === 'number' && Number.isFinite(asientos) && asientos > 0
+    ? Math.floor(asientos)
+    : null
+}
+
+/**
  * Verifica si un tenant puede crear un nuevo recurso basado en sus límites
  */
 export async function checkResourceLimit(
@@ -19,7 +37,7 @@ export async function checkResourceLimit(
   // 1. Obtener información de plan del Control Plane (Global DB)
   const tenant = await globalPrisma.tenant.findUnique({
     where: { id: tenantId },
-    select: { plan: true, limites: true }
+    select: { plan: true, limites: true, configuracion: true }
   });
 
   if (!tenant) {
@@ -40,7 +58,12 @@ export async function checkResourceLimit(
 
   // Map automations to automation_runs in plan limits
   const limitKey = resourceType === 'automations' ? 'automation_runs' : resourceType;
-  const maxAllowed = (planLimits as any)[limitKey];
+  // El CRM se cobra por asiento: los usuarios contratados mandan sobre el tope
+  // genérico del plan.
+  const asientosCrm = resourceType === 'users'
+    ? asientosCrmContratados(tenant.configuracion)
+    : null;
+  const maxAllowed = asientosCrm ?? (planLimits as any)[limitKey];
 
   // -1 significa ilimitado
   if (maxAllowed === -1) {
@@ -111,7 +134,7 @@ export async function getTenantUsage(tenantId: string) {
   // 1. Obtener plan desde Global DB
   const tenant = await globalPrisma.tenant.findUnique({
     where: { id: tenantId },
-    select: { plan: true }
+    select: { plan: true, configuracion: true }
   });
 
   if (!tenant) {
@@ -119,6 +142,7 @@ export async function getTenantUsage(tenantId: string) {
   }
 
   const planLimits = PLAN_LIMITS[tenant.plan as PlanType] || PLAN_LIMITS['esencial'];
+  const asientosCrm = asientosCrmContratados(tenant.configuracion);
   const now = new Date();
   const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
@@ -147,7 +171,7 @@ export async function getTenantUsage(tenantId: string) {
 
   return {
     leads: { current: leadsCount, max: planLimits.leads },
-    users: { current: usersCount, max: planLimits.users },
+    users: { current: usersCount, max: asientosCrm ?? planLimits.users },
     emails_per_month: { current: emailsCount, max: planLimits.emails_per_month },
     automations: { current: automationsCount, max: (planLimits as any).automation_runs },
     storage_gb: { current: storageGb, max: planLimits.storage_gb },

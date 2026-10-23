@@ -4,7 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { getMaxPipelines, seedTenantPipelines } from '@/lib/pipelines-server';
+import { getMaxPipelines, seedTenantPipelines } from '@/lib/pipelines-server'
+import { getCrmEntitlements } from '@/lib/crm-entitlements';
 
 /**
  * GET /api/pipelines
@@ -56,7 +57,11 @@ export async function GET(request: NextRequest) {
       select: { plan: true },
     });
 
-    const maxPipelines = await getMaxPipelines(tenantId, tenant?.plan || 'esencial');
+    const ent = await getCrmEntitlements(tenantId);
+    const maxPipelines = Math.min(
+      await getMaxPipelines(tenantId, tenant?.plan || 'esencial'),
+      ent.limits.maxPipelines,
+    );
 
     return NextResponse.json({
       pipelines,
@@ -94,15 +99,21 @@ export async function POST(request: NextRequest) {
       select: { plan: true },
     });
 
-    const maxPipelines = await getMaxPipelines(tenantId, tenant?.plan || 'esencial');
+    const ent = await getCrmEntitlements(tenantId);
+    const maxPipelines = Math.min(
+      await getMaxPipelines(tenantId, tenant?.plan || 'esencial'),
+      ent.limits.maxPipelines,
+    );
     const existingCount = await prisma.pipeline.count({
       where: { tenantId, activo: true },
     });
 
     if (existingCount >= maxPipelines) {
       return NextResponse.json(
-        { error: `Límite de pipelines alcanzado (${maxPipelines})` },
-        { status: 403 }
+        {
+          error: `Tu plan ${ent.tierName} permite ${maxPipelines} ${maxPipelines === 1 ? 'embudo' : 'embudos'}. Sube de nivel para crear más.`,
+        },
+        { status: 403 },
       );
     }
 

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/db'
 import { authOptions } from '@/lib/auth'
+import { crmAllows, getCrmEntitlements, upgradeMessage } from '@/lib/crm-entitlements'
 
 export async function GET(req: NextRequest) {
   try {
@@ -17,6 +18,12 @@ export async function GET(req: NextRequest) {
 
     if (!user?.tenantId) {
       return NextResponse.json({ error: 'Usuario sin tenant' }, { status: 403 })
+    }
+
+    // La previsión es del nivel Profesional en adelante.
+    const ent = await getCrmEntitlements(user.tenantId)
+    if (!crmAllows(ent, 'forecast')) {
+      return NextResponse.json({ error: upgradeMessage('forecast', ent) }, { status: 403 })
     }
 
     // Obtener todos los deals históricos

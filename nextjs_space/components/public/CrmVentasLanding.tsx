@@ -23,7 +23,7 @@ import { getVerticalPlanPrice } from '@/lib/vertical-plans';
  */
 const PRECIO_MES = getVerticalPlanPrice('crm_ventas') ?? 0;
 const PRECIO_MES_TEXTO = formatearImporte(PRECIO_MES, MONEDA_PLATAFORMA, 0);
-const CON_VOLKERN = `${PRECIO_MES_TEXTO}/mes`;
+const CON_VOLKERN = `${PRECIO_MES_TEXTO}/usuario/mes`;
 
 /* ─── Data ────────────────────────────────────────────────────────────────── */
 
@@ -81,7 +81,7 @@ const USE_CASES = [
 const TESTIMONIALS = [
   { quote: 'Pasamos de perder el 30% de los leads a tener todo bajo control. El pipeline nos da visibilidad que antes no teníamos.', name: 'Javier Medina', role: 'Director Comercial, TechSolutions', avatar: 'JM' },
   { quote: 'Mis vendedores saben exactamente qué hacer cada día. Ya no dependo de que me cuenten — lo veo todo en el dashboard.', name: 'Laura Castillo', role: 'CEO, Distribuidora Norte', avatar: 'LC' },
-  { quote: `Integramos CRM, email y telefonía en un solo sitio. Antes pagábamos ${formatearImporte(190, MONEDA_PLATAFORMA, 0)}/mes en 3 herramientas. Ahora ${PRECIO_MES_TEXTO}.`, name: 'Diego Morales', role: 'Gerente de Ventas, Grupo Atlas', avatar: 'DM' },
+  { quote: `Integramos CRM, email y tareas en un solo sitio. Antes pagábamos ${formatearImporte(190, MONEDA_PLATAFORMA, 0)}/mes en 3 herramientas. Ahora ${PRECIO_MES_TEXTO} por usuario.`, name: 'Diego Morales', role: 'Gerente de Ventas, Grupo Atlas', avatar: 'DM' },
 ];
 
 const COMPETITOR_TOOLS = [
@@ -466,7 +466,7 @@ export default function CrmVentasLanding() {
               <p className="text-lg text-slate-400 mb-4 max-w-xl mx-auto">
                 <span className="text-white font-bold">14 días gratis</span>. Sin tarjeta. Sin compromiso.
               </p>
-              <p className="text-slate-500 text-sm mb-10">Luego {CON_VOLKERN}. Incluye CRM, pipeline, email, telefonía y más.</p>
+              <p className="text-slate-500 text-sm mb-10">Luego {CON_VOLKERN}. Incluye CRM, pipeline, email, tareas y más.</p>
               <Link href="/signup?vertical=crm_ventas">
                 <Button size="lg" className="bg-cyan-600 hover:bg-cyan-500 text-white px-12 py-7 text-lg rounded-xl font-bold shadow-xl shadow-cyan-600/30 group">
                   Probar 14 días gratis

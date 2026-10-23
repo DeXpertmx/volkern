@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateRequest } from '@/lib/api-key-auth'
 import { crearContratoDesdeCotizacion } from '@/lib/contratos/from-cotizacion'
+import { crmAllows, getCrmEntitlements, upgradeMessage } from '@/lib/crm-entitlements'
 
 /**
  * POST /api/contratos/from-cotizacion
@@ -16,6 +17,11 @@ export async function POST(req: NextRequest) {
     const auth = await authenticateRequest(req, ['deals:write', 'contracts:write'])
     if (!auth.valid) {
       return NextResponse.json({ error: auth.error }, { status: 401 })
+    }
+
+    const ent = await getCrmEntitlements(auth.tenant!.id)
+    if (!crmAllows(ent, 'contracts')) {
+      return NextResponse.json({ error: upgradeMessage('contracts', ent) }, { status: 403 })
     }
 
     const body = await req.json()

@@ -27,14 +27,16 @@ API key (o la credencial de skill) dentro de su tenant. Consulta también
 | Método | Endpoint de registro | Audiencia |
 |---|---|---|
 | API Key de tenant | \`POST /api/api-keys\` (sesión) o UI \`/dashboard/developers\` | Integradores SaaS (ERPs, POS, e-commerce) |
-| Skill Key de agente | \`POST /api/users/me/skill-key\` (sesión) | Agentes de IA (Gemma, Gemini, asistentes) con scope \`agent:skill\` |
+| Skill Key de agente | \`POST /api/users/me/skill-key\` (sesión) | Agentes de IA (Gemma, Gemini, asistentes): scopes \`agent:skill\`, \`mcp:read\` y \`mcp:execute\` |
 
 Pasos para registrar un agente:
 
 1. Inicia sesión en ${baseUrl}/dashboard/developers como usuario del tenant.
 2. Crea una API Key (\`POST /api/api-keys\`) con los scopes que el agente
    necesite (p.ej. \`leads:read\`, \`invoices:write\`), o una Skill Key
-   (\`POST /api/users/me/skill-key\`) con scope \`agent:skill\` para agentes de IA.
+   (\`POST /api/users/me/skill-key\`) con scopes \`agent:skill\` + \`mcp:read\` +
+   \`mcp:execute\` para agentes de IA: abre el gateway de skills y el servidor
+   MCP (\`POST /mcp\` con \`tools/call\`) con la misma credencial.
 3. La credencial se muestra **una sola vez** en la respuesta: guárdala de forma
    segura. En la BD solo se persiste el hash SHA-256.
 

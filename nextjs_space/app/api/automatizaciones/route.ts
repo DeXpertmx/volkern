@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db'
 import { validateLimit } from '@/lib/limits'
 import { withTenantAuth } from '@/lib/api-key-auth'
 import { getTriggerFromFlow } from '@/lib/automation/flow-trigger'
+import { getCrmEntitlements } from '@/lib/crm-entitlements'
 
 // GET /api/automatizaciones - Obtener todas las automatizaciones del tenant
 export const GET = withTenantAuth(async (request, auth) => {
@@ -40,6 +41,16 @@ export const POST = withTenantAuth(async (request, auth) => {
     const limitCheck = await validateLimit(tenantId, 'automations');
     if (!limitCheck.allowed) {
       return NextResponse.json(limitCheck.error, { status: limitCheck.error.status });
+    }
+
+    // El nivel de CRM también manda: Esencial permite 2 automatizaciones.
+    const ent = await getCrmEntitlements(tenantId)
+    const existentes = await prisma.automation.count({ where: { tenantId } })
+    if (existentes >= ent.limits.maxAutomations) {
+      return NextResponse.json(
+        { error: `Tu plan ${ent.tierName} permite ${ent.limits.maxAutomations} automatizaciones. Sube de nivel para crear más.` },
+        { status: 403 },
+      )
     }
 
     const body = await request.json()
