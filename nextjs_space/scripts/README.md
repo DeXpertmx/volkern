@@ -91,6 +91,62 @@ de un vistazo en `docs/img/real-estate-tecnico/galeria.html`.
 
 ---
 
+## Dossier comercial de CRM de Ventas (pantallas + PDF)
+
+```bash
+node scripts/generar-dossier-crm-ventas.cjs
+```
+
+Genera en una sola pasada las seis pantallas de producto
+(`documentacion_comercial/img/crm-ventas/`) y el dossier A4 de 16 páginas
+(`documentacion_comercial/Dossier_Comercial_CRM_Ventas.pdf`, más el HTML con las
+imágenes incrustadas). Está pensado para el equipo comercial: diagnóstico,
+propuesta, guion de demo, objeciones, precio y qué no prometer.
+
+Por defecto dibuja **ilustraciones de la interfaz con datos de ejemplo**
+(`scripts/dossier-crm-ventas/pantallas.cjs`). Para usar **capturas reales** del
+tenant de demostración, primero siembra los datos y captura el panel, y luego
+compón el documento con esas imágenes:
+
+```bash
+DEMO_CRM_PASSWORD='…' npx tsx --require ./scripts/cargar-entorno.cjs scripts/seed-demo-crm-ventas.ts
+DEMO_CRM_PASSWORD='…' node scripts/capturar-pantallas-crm-ventas.cjs
+DOSSIER_CAPTURAS_REALES=1 node scripts/generar-dossier-crm-ventas.cjs
+```
+
+`capturar-pantallas-crm-ventas.cjs` entra con el usuario demo y guarda una
+imagen por sección; `CRM_SOLO=04` permite repetir una sola. Las dos variantes
+llevan datos ficticios y el documento lo advierte en la última página.
+
+### Variante para el cliente (sin precios)
+
+```bash
+DOSSIER_CLIENTE=1 node scripts/generar-dossier-crm-ventas.cjs
+```
+
+Escribe `documentacion_comercial/Dossier_Cliente_CRM_Ventas.pdf` (12 páginas) y
+su HTML. Es el documento que se deja al cliente: mantiene el problema, las seis
+pantallas, el coste de tener las piezas repartidas y la puesta en marcha, y
+quita todo lo que solo sirve al comercial —tarifas y tramos, ocho objeciones,
+guion de quince minutos y checklist de cierre—. Donde estaba el precio queda
+una llamada a la acción con el contacto (`info@volkern.app`) y la prueba de
+`TRIAL` días, que sigue leyendo de `lib/crm-pricing.ts`.
+
+Las páginas de esta variante viven en `scripts/dossier-crm-ventas/cliente.cjs`
+(sin puppeteer, para poder probarlas) y
+`tests/dossier-cliente-sin-precios.test.ts` falla si alguien vuelve a meter una
+tarifa o el material interno en el documento del cliente.
+
+Las dos páginas de precio (niveles, tramos de volumen y prueba) y la tabla de
+funciones por nivel salen de `lib/crm-pricing.ts`, la fuente única del cobro,
+vía `scripts/dossier-crm-ventas/escalera.cjs`; aquí no se escribe ningún precio
+a mano. `tests/dossier-crm-ventas-precios.test.ts` compara esa lectura con el
+módulo y con `calcularPrecioCrm`, así que un cambio de tarifa sin regenerar el
+dossier rompe la suite. Usa **`puppeteer`** (headless Chromium), con los mismos
+requisitos que el resto.
+
+---
+
 ## Nota sobre `lib/pdf-generator.ts` y `lib/finance/pdf-render.ts`
 
 No son scripts, pero se ejecutan dentro de la app (rutas de API de

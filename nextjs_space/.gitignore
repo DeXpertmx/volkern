@@ -27,3 +27,10 @@ typecheck_output.txt
 # credenciales locales: nunca versionar (recetas del VPS: VPS-SEGURIDAD-PUERTOS.md)
 .db_pass
 .env.e2e-dia-h
+
+# capturas y manifiestos locales del dossier de CRM (se regeneran con scripts/)
+.demo-crm-ventas.json
+public/_shots/
+public/_login-debug.png
+documentacion_comercial/_check/
+tsconfig.tmp-*.tsbuildinfo
