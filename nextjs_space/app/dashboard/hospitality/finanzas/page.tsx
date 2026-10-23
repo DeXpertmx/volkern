@@ -78,7 +78,15 @@ interface FilaReserva {
   moneda: string;
   /** Ingreso de alojamiento: NO incluye la penalización por no-show. */
   bruto: number;
-  desglose: { alojamiento: number; limpieza: number; extra: number; otro: number; penalizacion: number };
+  desglose: {
+    alojamiento: number;
+    limpieza: number;
+    extra: number;
+    /** Rebajas aplicadas (códigos promocionales): importe NEGATIVO. */
+    descuento: number;
+    otro: number;
+    penalizacion: number;
+  };
   /** Cargo por no-show emitido en esta reserva (0 si no hay). */
   penalizacion: number;
   comisionOta: number;
@@ -95,7 +103,7 @@ interface FilaReserva {
 }
 
 interface Resumen {
-  porMoneda: Record<string, { bruto: number; penalizacion: number; comisionOta: number; neto: number; cobrado: number; pendiente: number; reservas: number }>;
+  porMoneda: Record<string, { bruto: number; descuento?: number; penalizacion: number; comisionOta: number; neto: number; cobrado: number; pendiente: number; reservas: number }>;
   porCanal: Record<string, { bruto: number; neto: number; reservas: number }>;
   porEstadoCobro: Record<string, number>;
   total: number;
@@ -132,6 +140,7 @@ const TIPO_LINEA_LABEL: Record<string, string> = {
   alojamiento: 'Alojamiento',
   limpieza: 'Limpieza',
   extra: 'Extras',
+  descuento: 'Descuento',
   otro: 'Otros',
   penalizacion: 'Penalización',
 };
@@ -394,6 +403,15 @@ export default function HospitalityFinanzas() {
                     <span className="text-muted-foreground">Ingreso bruto</span>
                     <span className="font-semibold">{fmtDinero(m.bruto, moneda)}</span>
                   </div>
+                  {/* Rebajas del período en su propia fila: no se esconden dentro
+                      de «otros». Se aclara que ya están restadas del bruto para
+                      que la fila negra no se lea como una resta adicional. */}
+                  {(m.descuento ?? 0) < 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Descuentos aplicados (en el bruto)</span>
+                      <span className="text-emerald-600">{fmtDinero(m.descuento ?? 0, moneda)}</span>
+                    </div>
+                  )}
                   {m.penalizacion > 0 && (
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Penalizaciones no-show</span>

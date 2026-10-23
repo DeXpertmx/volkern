@@ -34,6 +34,12 @@ describe('Página Finanzas de hospitality', () => {
     expect(fuente).not.toContain('después de gastos');
   });
 
+  it('muestra los descuentos en su propia fila, no dentro de «otros»', () => {
+    expect(fuente).toContain('Descuentos aplicados (en el bruto)');
+    expect(fuente).toContain("descuento: 'Descuento'");
+    expect(fuente).toContain('m.descuento');
+  });
+
   it('muestra el estado de cobro derivado y el pendiente por reserva', () => {
     expect(fuente).toContain('estadoCobro');
     expect(fuente).toContain('Pendiente');

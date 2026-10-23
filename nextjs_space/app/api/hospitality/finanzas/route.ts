@@ -215,12 +215,16 @@ export async function GET(req: NextRequest) {
       : rows;
 
     // Resumen agregado: por moneda (una propiedad suele operar en una) y por canal.
-    const porMoneda: Record<string, { bruto: number; penalizacion: number; comisionOta: number; neto: number; cobrado: number; pendiente: number; reservas: number }> = {};
+    const porMoneda: Record<string, { bruto: number; descuento: number; penalizacion: number; comisionOta: number; neto: number; cobrado: number; pendiente: number; reservas: number }> = {};
     const porCanal: Record<string, { bruto: number; neto: number; reservas: number }> = {};
     const porEstadoCobro: Record<string, number> = {};
     for (const r of filtradas) {
-      const m = (porMoneda[r.moneda] ||= { bruto: 0, penalizacion: 0, comisionOta: 0, neto: 0, cobrado: 0, pendiente: 0, reservas: 0 });
+      const m = (porMoneda[r.moneda] ||= { bruto: 0, descuento: 0, penalizacion: 0, comisionOta: 0, neto: 0, cobrado: 0, pendiente: 0, reservas: 0 });
       m.bruto = redondear(m.bruto + r.bruto);
+      // Rebajas del período (códigos promocionales). Va en negativo y aparte de
+      // «otro»: así el propietario ve cuánto está dejando en promociones sin
+      // confundirlo con un ingreso ni con un cargo.
+      m.descuento = redondear(m.descuento + (r.desglose?.descuento || 0));
       // Se agrega aparte del bruto a propósito: es un cargo, no alojamiento.
       m.penalizacion = redondear(m.penalizacion + r.penalizacion);
       m.comisionOta = redondear(m.comisionOta + r.comisionOta);

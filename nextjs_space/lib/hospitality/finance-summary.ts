@@ -191,6 +191,9 @@ export function resumenFinanciero(filas: FilaFinanciera[]): TotalesFinancieros {
       alojamiento: acumular('alojamiento'),
       limpieza: acumular('limpieza'),
       extra: acumular('extra'),
+      // Las rebajas se acumulan en negativo: el bruto sigue siendo la suma del
+      // desglose, y aun así se ve cuánto se dejó en promociones en el período.
+      descuento: acumular('descuento'),
       otro: acumular('otro'),
       // La penalización por no-show es un cargo de cancelación: no es ingreso
       // de alojamiento, así que viaja en su propia línea y no en «alojamiento».
@@ -319,6 +322,7 @@ export function csvFinanciero(filas: FilaFinanciera[], separador = ','): string 
     'importe_alojamiento',
     'importe_limpieza',
     'importe_extras',
+    'importe_descuento',
     'importe_otros',
     'ingreso_bruto',
     'comision_ota',
@@ -351,6 +355,7 @@ export function csvFinanciero(filas: FilaFinanciera[], separador = ','): string 
       fila.desglose.alojamiento,
       fila.desglose.limpieza,
       fila.desglose.extra,
+      fila.desglose.descuento,
       fila.desglose.otro,
       fila.bruto,
       fila.comisionOta,

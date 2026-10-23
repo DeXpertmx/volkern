@@ -14,7 +14,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Check, Copy, ExternalLink, Globe, Loader2, Plus, RefreshCcw, ShoppingBag, Trash2 } from 'lucide-react';
+import { AlertTriangle, Check, Copy, ExternalLink, Globe, Loader2, Plus, Receipt, RefreshCcw, ShoppingBag, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { AccionHospitality } from '@/components/hospitality/AccionHospitality';
@@ -42,6 +42,32 @@ interface ExtraCatalogoPanel {
   orden: number;
 }
 
+/**
+ * Tarifa adicional por estancia, tal como la devuelve `/api/hospitality/fees`.
+ * `obligatoria` la cobra en toda estancia; si es `false`, el huésped la marca.
+ */
+interface TarifaCatalogoPanel {
+  id: string;
+  nombre: string;
+  descripcionEs: string | null;
+  descripcionEn: string | null;
+  importe: number;
+  moneda: string;
+  obligatoria: boolean;
+  activo: boolean;
+  orden: number;
+}
+
+const TARIFA_VACIA = {
+  id: null as string | null,
+  nombre: '',
+  importe: '',
+  moneda: '',
+  obligatoria: true,
+  descripcionEs: '',
+  descripcionEn: '',
+};
+
 const EXTRA_VACIO = {
   id: null as string | null,
   nombre: '',
@@ -54,6 +80,119 @@ const EXTRA_VACIO = {
   descripcionEn: '',
 };
 
+/**
+ * Código promocional del canal directo. Es del TENANT (vale en todas las webs
+ * publicadas) y descuenta solo alojamiento; `usos` cuenta las reservas hechas
+ * con él y `maxUsos` nulo significa sin límite.
+ */
+interface PromoPanel {
+  id: string;
+  codigo: string;
+  tipo: 'porcentaje' | 'importe';
+  valor: number;
+  moneda: string;
+  desde: string | null;
+  hasta: string | null;
+  minNoches: number;
+  maxUsos: number | null;
+  usos: number;
+  activo: boolean;
+  descripcion: string | null;
+}
+
+/**
+ * Rendimiento de un código: lo que concedió y lo que trajo. «Otorgado» cuenta
+ * todas sus reservas y «aprovechado» solo las que acabaron en venta (cancelada y
+ * no-show no son ingreso), igual que en Finanzas.
+ */
+interface RendimientoPromoPanel {
+  codigo: string;
+  moneda: string;
+  activo: boolean;
+  maxUsos: number | null;
+  reservas: number;
+  reservasSinVenta: number;
+  noches: number;
+  descuentoOtorgado: number;
+  descuentoAprovechado: number;
+  alojamientoSinDescuento: number;
+  bruto: number;
+  comisionOta: number;
+  neto: number;
+  ticketMedio: number;
+  descuentoPct: number;
+  netoPorDescontado: number;
+  usosDelContador: number;
+  usosSinReservaMedida: number;
+  /** Consultas con el código aplicable: el denominador de la conversión. */
+  consultas: number;
+  consultasConvertidas: number;
+  consultasSinReserva: number;
+  /** Intentos rechazados por las condiciones del código. */
+  intentosRechazados: number;
+  conversionPct: number;
+}
+
+interface AlertaPromoPanel {
+  codigo: string;
+  consultas: number;
+  consultasConvertidas: number;
+  consultasSinReserva: number;
+  conversionPct: number;
+  motivo: 'sin_conversion' | 'conversion_baja';
+  /** Frase con los números: «Solo 1 de 40 consultas…». */
+  mensaje: string;
+}
+
+interface InformeRendimiento {
+  desde: string;
+  hasta: string;
+  filas: RendimientoPromoPanel[];
+  /**
+   * Códigos que se prueban y no venden. Ventana PROPIA (fecha de registro de la
+   * consulta, últimos 90 días), no la de la tabla: una consulta para dentro de
+   * seis meses es un intento de hoy.
+   */
+  alertas?: AlertaPromoPanel[];
+  ventanaAlertas?: {
+    desde: string;
+    hasta: string;
+    minimoConsultas: number;
+    conversionMinimaPct: number;
+  };
+  sinCodigo: number;
+  totales: {
+    reservas: number;
+    descuentoOtorgado: number;
+    descuentoAprovechado: number;
+    bruto: number;
+    neto: number;
+    consultas: number;
+    consultasConvertidas: number;
+    intentosRechazados: number;
+    conversionPct: number;
+  };
+  deCodigosDesconocidos: Array<{ codigo: string; intentos: number }>;
+}
+
+const PROMO_VACIA = {
+  id: null as string | null,
+  codigo: '',
+  tipo: 'porcentaje' as 'porcentaje' | 'importe',
+  valor: '',
+  desde: '',
+  hasta: '',
+  minNoches: '1',
+  maxUsos: '',
+  descripcion: '',
+};
+
+interface UnidadBooking {
+  id: string;
+  nombre: string;
+  codigo: string | null;
+}
+
 interface PropiedadBooking {
   id: string;
   nombre: string;
@@ -64,6 +203,8 @@ interface PropiedadBooking {
   moneda: string;
   /** Publicada en la página de reservas: lo dice la config, no el estado. */
   publicada: boolean;
+  /** Unidades de la propiedad, para elegir cuáles salen en la web. */
+  listaUnidades: UnidadBooking[];
 }
 
 export default function BookingEngineConfig() {
@@ -80,10 +221,27 @@ export default function BookingEngineConfig() {
   const [borrador, setBorrador] = useState(EXTRA_VACIO);
   const [guardandoExtra, setGuardandoExtra] = useState(false);
 
+  // Catálogo de tarifas adicionales por propiedad (la clave es el propertyId).
+  const [tarifasPorPropiedad, setTarifasPorPropiedad] = useState<Record<string, TarifaCatalogoPanel[]>>({});
+  const [tarifasAbiertas, setTarifasAbiertas] = useState<string | null>(null);
+  const [borradorTarifa, setBorradorTarifa] = useState(TARIFA_VACIA);
+  const [guardandoTarifa, setGuardandoTarifa] = useState(false);
+
+  // Códigos promocionales: son del tenant, no de una propiedad.
+  const [promos, setPromos] = useState<PromoPanel[]>([]);
+  const [borradorPromo, setBorradorPromo] = useState(PROMO_VACIA);
+  const [guardandoPromo, setGuardandoPromo] = useState(false);
+  // Comparativa de los códigos entre sí (últimos 12 meses por defecto).
+  const [rendimiento, setRendimiento] = useState<InformeRendimiento | null>(null);
+
   // Aspecto y dominio (plantilla, colores, dominio propio del tenant).
   const [aspecto, setAspecto] = useState<AspectoActual | null>(null);
   // Propiedad que se está publicando/retirando (el switch espera su respuesta).
   const [publicando, setPublicando] = useState<string | null>(null);
+  // Unidades retiradas de la web (config del tenant, no estado de la unidad).
+  const [excluidas, setExcluidas] = useState<string[]>([]);
+  // Unidad cuyo interruptor está esperando la respuesta.
+  const [cambiandoUnidad, setCambiandoUnidad] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -113,6 +271,7 @@ export default function BookingEngineConfig() {
         tarifaDesde: null,
         moneda: '',
         publicada: publicadasIds.includes(p.id),
+        listaUnidades: [],
       }));
       // Cada propiedad se escribe con la divisa de sus unidades (la de la más
       // barata, que es la tarifa que se enseña) y, si no tiene ninguna con
@@ -121,6 +280,7 @@ export default function BookingEngineConfig() {
         const p = props.find((x) => x.id === u.propertyId);
         if (!p) continue;
         p.unidades += 1;
+        p.listaUnidades.push({ id: u.id, nombre: u.nombre, codigo: u.codigo ?? null });
         const tarifa = u.tarifaBase ?? null;
         if (tarifa != null && (p.tarifaDesde == null || tarifa < p.tarifaDesde)) {
           p.tarifaDesde = tarifa;
@@ -131,9 +291,15 @@ export default function BookingEngineConfig() {
         if (!p.moneda) p.moneda = monedaTenant;
       }
       setPropiedades(props);
-      // Config del Booking Engine: plantilla, colores y dominio para la sección.
+      // Config del Booking Engine: plantilla, colores, dominio y unidades
+      // retiradas de la web para la sección.
       if (cfgData?.config) {
         const c = cfgData.config;
+        setExcluidas(
+          Array.isArray(c.unidadesExcluidas)
+            ? c.unidadesExcluidas.filter((id: unknown): id is string => typeof id === 'string')
+            : []
+        );
         setAspecto({
           plantilla: c.plantilla ?? null,
           personalizacion: c.personalizacion ?? null,
@@ -185,6 +351,39 @@ export default function BookingEngineConfig() {
       await load();
     } finally {
       setPublicando(null);
+    }
+  };
+
+  /**
+   * Muestra u oculta una unidad de la página pública.
+   *
+   * La exclusión NO cambia el estado de la unidad ni su disponibilidad: sigue
+   * vendiéndose en Booking.com y ocupando el planning. Solo decide si aparece
+   * en el motor directo. Se manda la lista completa (la config la sanea contra
+   * las unidades del tenant).
+   */
+  const alternarUnidad = async (unitId: string, visible: boolean) => {
+    if (!aspecto?.slug || cambiandoUnidad) return;
+    const siguientes = visible
+      ? excluidas.filter((id) => id !== unitId)
+      : Array.from(new Set([...excluidas, unitId]));
+
+    setCambiandoUnidad(unitId);
+    try {
+      const res = await fetch('/api/hospitality/booking', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug: aspecto.slug, unidadesExcluidas: siguientes }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'No se pudo cambiar la unidad');
+      setExcluidas(siguientes);
+      toast.success(visible ? 'Unidad visible en tu web' : 'Unidad oculta de tu web');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al cambiar la unidad');
+      await load();
+    } finally {
+      setCambiandoUnidad(null);
     }
   };
 
@@ -268,6 +467,177 @@ export default function BookingEngineConfig() {
       setExtrasAbiertos(propertyId);
     } catch {
       toast.error('No se pudo cambiar el extra');
+    }
+  };
+
+  const abrirTarifas = async (propertyId: string) => {
+    if (tarifasAbiertas === propertyId) {
+      setTarifasAbiertas(null);
+      return;
+    }
+    setTarifasAbiertas(propertyId);
+    setBorradorTarifa(TARIFA_VACIA);
+    try {
+      const res = await fetch(`/api/hospitality/fees?propertyId=${propertyId}`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setTarifasPorPropiedad((prev) => ({ ...prev, [propertyId]: data.tarifas || [] }));
+    } catch {
+      toast.error('No se pudo cargar las tarifas adicionales');
+    }
+  };
+
+  const guardarTarifa = async (propertyId: string) => {
+    if (guardandoTarifa) return;
+    if (!borradorTarifa.nombre.trim()) {
+      toast.error('El nombre de la tarifa es requerido');
+      return;
+    }
+    const importe = Number(borradorTarifa.importe);
+    if (!Number.isFinite(importe) || importe < 0) {
+      toast.error('El importe debe ser un número ≥ 0');
+      return;
+    }
+    setGuardandoTarifa(true);
+    try {
+      const res = await fetch('/api/hospitality/fees', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          propertyId,
+          id: borradorTarifa.id,
+          nombre: borradorTarifa.nombre,
+          importe,
+          moneda: borradorTarifa.moneda,
+          obligatoria: borradorTarifa.obligatoria,
+          descripcionEs: borradorTarifa.descripcionEs,
+          descripcionEn: borradorTarifa.descripcionEn,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.ok) {
+        toast.error(data?.error || 'No se pudo guardar la tarifa');
+        return;
+      }
+      toast.success(borradorTarifa.id ? 'Tarifa actualizada' : 'Tarifa creada');
+      setBorradorTarifa(TARIFA_VACIA);
+      await abrirTarifas(propertyId);
+      setTarifasAbiertas(propertyId); // reabrir tras recargar
+    } finally {
+      setGuardandoTarifa(false);
+    }
+  };
+
+  const alternarTarifa = async (propertyId: string, tarifa: TarifaCatalogoPanel) => {
+    try {
+      const res = await fetch('/api/hospitality/fees', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          propertyId,
+          id: tarifa.id,
+          nombre: tarifa.nombre,
+          importe: tarifa.importe,
+          moneda: tarifa.moneda,
+          obligatoria: tarifa.obligatoria,
+          descripcionEs: tarifa.descripcionEs,
+          descripcionEn: tarifa.descripcionEn,
+          activo: !tarifa.activo,
+        }),
+      });
+      if (!res.ok) throw new Error();
+      await abrirTarifas(propertyId);
+      setTarifasAbiertas(propertyId);
+    } catch {
+      toast.error('No se pudo cambiar la tarifa');
+    }
+  };
+
+  const cargarPromos = useCallback(async () => {
+    try {
+      // La lista y la comparativa son dos lecturas distintas: si el rendimiento
+      // falla, la lista se sigue viendo (y al revés) — el panel de códigos no
+      // puede quedarse en blanco por un informe.
+      const [listaRes, rendRes] = await Promise.all([
+        fetch('/api/hospitality/promos'),
+        fetch('/api/hospitality/promos/rendimiento'),
+      ]);
+      if (!listaRes.ok) throw new Error();
+      const data = await listaRes.json();
+      setPromos(data.promos || []);
+      setRendimiento(rendRes.ok ? await rendRes.json() : null);
+    } catch {
+      toast.error('No se pudieron cargar los códigos promocionales');
+    }
+  }, []);
+
+  useEffect(() => {
+    cargarPromos();
+  }, [cargarPromos]);
+
+  const guardarPromo = async () => {
+    if (guardandoPromo) return;
+    if (!borradorPromo.codigo.trim()) {
+      toast.error('El código es requerido');
+      return;
+    }
+    const valor = Number(borradorPromo.valor);
+    if (!Number.isFinite(valor) || valor <= 0) {
+      toast.error('El descuento debe ser mayor que 0');
+      return;
+    }
+    setGuardandoPromo(true);
+    try {
+      const res = await fetch('/api/hospitality/promos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: borradorPromo.id,
+          codigo: borradorPromo.codigo,
+          tipo: borradorPromo.tipo,
+          valor,
+          desde: borradorPromo.desde || null,
+          hasta: borradorPromo.hasta || null,
+          minNoches: Number(borradorPromo.minNoches) || 1,
+          maxUsos: borradorPromo.maxUsos === '' ? null : Number(borradorPromo.maxUsos),
+          descripcion: borradorPromo.descripcion,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.ok) {
+        toast.error(data?.error || 'No se pudo guardar el código');
+        return;
+      }
+      toast.success(borradorPromo.id ? 'Código actualizado' : 'Código creado');
+      setBorradorPromo(PROMO_VACIA);
+      await cargarPromos();
+    } finally {
+      setGuardandoPromo(false);
+    }
+  };
+
+  const alternarPromo = async (promo: PromoPanel) => {
+    try {
+      const res = await fetch('/api/hospitality/promos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: promo.id,
+          codigo: promo.codigo,
+          tipo: promo.tipo,
+          valor: promo.valor,
+          desde: promo.desde ? String(promo.desde).slice(0, 10) : null,
+          hasta: promo.hasta ? String(promo.hasta).slice(0, 10) : null,
+          minNoches: promo.minNoches,
+          maxUsos: promo.maxUsos,
+          descripcion: promo.descripcion || '',
+          activo: !promo.activo,
+        }),
+      });
+      if (!res.ok) throw new Error();
+      await cargarPromos();
+    } catch {
+      toast.error('No se pudo cambiar el código');
     }
   };
 
@@ -376,6 +746,300 @@ export default function BookingEngineConfig() {
         </CardContent>
       </Card>
 
+      {/* Descuentos: códigos promocionales del canal directo. Valen en todas las
+          webs publicadas del alojamiento y descuentan SOLO el alojamiento. */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Receipt className="h-4 w-4 text-muted-foreground" />
+            Descuentos
+            <span className="text-xs font-normal text-muted-foreground">
+              códigos promocionales para tu web de reservas
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            El descuento se aplica solo al alojamiento (no a limpieza, extras ni tarifas adicionales) y lo calcula el
+            servidor. El huésped escribe el código al reservar.
+          </p>
+
+          {promos.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Todavía no hay códigos: crea el primero abajo.</p>
+          ) : (
+            promos.map((promo) => (
+              <div key={promo.id} className="flex items-center justify-between gap-2 border-b pb-2 last:border-b-0">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate font-mono">{promo.codigo}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {promo.tipo === 'porcentaje'
+                      ? `-${promo.valor}%`
+                      : `-${formatearImporte(promo.valor, promo.moneda)}`}{' '}
+                    · {promo.minNoches > 1 ? `desde ${promo.minNoches} noches · ` : ''}
+                    {promo.maxUsos == null ? 'sin límite de usos' : `${promo.usos}/${promo.maxUsos} usos`}
+                    {promo.desde || promo.hasta
+                      ? ` · ${promo.desde ? String(promo.desde).slice(0, 10) : '…'} → ${
+                          promo.hasta ? String(promo.hasta).slice(0, 10) : '…'
+                        }`
+                      : ''}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Switch
+                    checked={promo.activo}
+                    onCheckedChange={() => alternarPromo(promo)}
+                    aria-label={promo.activo ? 'Desactivar' : 'Activar'}
+                  />
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      setBorradorPromo({
+                        id: promo.id,
+                        codigo: promo.codigo,
+                        tipo: promo.tipo,
+                        valor: String(promo.valor),
+                        desde: promo.desde ? String(promo.desde).slice(0, 10) : '',
+                        hasta: promo.hasta ? String(promo.hasta).slice(0, 10) : '',
+                        minNoches: String(promo.minNoches),
+                        maxUsos: promo.maxUsos == null ? '' : String(promo.maxUsos),
+                        descripcion: promo.descripcion || '',
+                      })
+                    }
+                  >
+                    Editar
+                  </Button>
+                </div>
+              </div>
+            ))
+          )}
+
+          {/* Aviso de códigos que acumulan consultas sin conversión: la misma
+              regla que usa el cron que avisa al equipo, para que el panel y la
+              notificación no digan cosas distintas. */}
+          {rendimiento && rendimiento.alertas && rendimiento.alertas.length > 0 && (
+            <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2">
+              <p className="flex items-center gap-1.5 text-xs font-medium text-amber-800">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                Códigos que se prueban y no venden
+              </p>
+              <p className="mt-1 text-xs text-amber-700">
+                Revísalos: apágalos o reescribe su mensaje. Se miran las consultas de los últimos
+                {' '}{rendimiento.ventanaAlertas?.desde ?? ''} a {rendimiento.ventanaAlertas?.hasta ?? ''}
+                {' '}(mínimo {rendimiento.ventanaAlertas?.minimoConsultas ?? 20} consultas y menos del{' '}
+                {rendimiento.ventanaAlertas?.conversionMinimaPct ?? 5} % de conversión).
+              </p>
+              <ul className="mt-1.5 space-y-1">
+                {rendimiento.alertas.map((alerta) => (
+                  <li key={alerta.codigo} className="text-xs text-amber-800">
+                    <span className="font-mono font-medium">{alerta.codigo}</span>
+                    {' · '}
+                    {alerta.mensaje}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Comparativa entre códigos: cuánto descuento concedió cada uno y
+              cuánto ingreso dejó. Responde «¿cuál repito?». */}
+          {rendimiento && rendimiento.filas.length > 0 && (
+            <div className="space-y-1.5 border-t pt-3">
+              <div className="flex flex-wrap items-baseline justify-between gap-1">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Rendimiento por código · {rendimiento.desde} → {rendimiento.hasta}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {rendimiento.totales.reservas} reservas · {rendimiento.totales.consultas} consultas ·{' '}
+                  {formatearImporte(rendimiento.totales.descuentoOtorgado, monedaTenant)} descontados
+                </p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-left text-muted-foreground">
+                      <th className="py-1 pr-2 font-medium">Código</th>
+                      <th
+                        className="py-1 pr-2 text-right font-medium"
+                        title="Veces que se aplicó el código en la web de reservas (una por sesión)"
+                      >
+                        Consultas
+                      </th>
+                      <th className="py-1 pr-2 text-right font-medium">Reservas</th>
+                      <th
+                        className="py-1 pr-2 text-right font-medium"
+                        title="Reservas nacidas de la consulta / consultas del código"
+                      >
+                        Conversión
+                      </th>
+                      <th className="py-1 pr-2 text-right font-medium">Descuento</th>
+                      <th className="py-1 pr-2 text-right font-medium" title="% del alojamiento a tarifa plena">
+                        Descontado
+                      </th>
+                      <th className="py-1 pr-2 text-right font-medium">Bruto</th>
+                      <th className="py-1 pr-2 text-right font-medium">Neto</th>
+                      <th
+                        className="py-1 text-right font-medium"
+                        title="Ingreso neto por cada unidad monetaria descontada"
+                      >
+                        Neto / descontado
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rendimiento.filas.map((fila) => {
+                      const monedaFila = fila.moneda || monedaTenant;
+                      return (
+                        <tr key={fila.codigo} className="border-t">
+                          <td className="py-1 pr-2 font-mono">{fila.codigo}</td>
+                          <td className="py-1 pr-2 text-right">
+                            {fila.consultas}
+                            {fila.intentosRechazados > 0 && (
+                              <span className="text-muted-foreground"> (+{fila.intentosRechazados})</span>
+                            )}
+                          </td>
+                          <td className="py-1 pr-2 text-right">{fila.reservas}</td>
+                          <td className="py-1 pr-2 text-right text-muted-foreground">
+                            {fila.consultas > 0 ? `${fila.conversionPct.toFixed(1)}%` : '—'}
+                          </td>
+                          <td className="py-1 pr-2 text-right text-emerald-600">
+                            -{formatearImporte(fila.descuentoOtorgado, monedaFila)}
+                          </td>
+                          <td className="py-1 pr-2 text-right text-muted-foreground">
+                            {fila.descuentoPct.toFixed(1)}%
+                          </td>
+                          <td className="py-1 pr-2 text-right">{formatearImporte(fila.bruto, monedaFila)}</td>
+                          <td className="py-1 pr-2 text-right font-medium">{formatearImporte(fila.neto, monedaFila)}</td>
+                          <td className="py-1 text-right">
+                            {fila.descuentoAprovechado > 0 ? `${fila.netoPorDescontado.toFixed(2)}×` : '—'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Un código sin reservas sale a cero: se concedió y no trajo nada. «Descontado» es el % del alojamiento a
+                tarifa plena que se dejó el código. La conversión son las reservas que constan de la misma sesión en que
+                se aplicó el código entre las consultas: el resto son intentos que no reservaron. Entre paréntesis, los
+                intentos rechazados por las condiciones del código (fechas, noches, agotado…).
+                {rendimiento.sinCodigo > 0
+                  ? ` ${rendimiento.sinCodigo} reserva(s) con descuento y sin código legible quedan fuera de la comparativa.`
+                  : ''}
+                {rendimiento.deCodigosDesconocidos?.length
+                  ? ` Códigos no creados: ${rendimiento.deCodigosDesconocidos
+                      .slice(0, 5)
+                      .map((d) => `${d.codigo} (${d.intentos})`)
+                      .join(', ')}.`
+                  : ''}
+              </p>
+            </div>
+          )}
+
+          <div className="space-y-2 border-t pt-3">
+            <p className="text-xs font-medium text-muted-foreground">
+              {borradorPromo.id ? `Editando: ${borradorPromo.codigo}` : 'Nuevo código'}
+            </p>
+            <div className="grid gap-2 sm:grid-cols-3">
+              <label className="text-sm">
+                <span className="font-medium">Código</span>
+                <Input
+                  value={borradorPromo.codigo}
+                  onChange={(ev) => setBorradorPromo({ ...borradorPromo, codigo: ev.target.value.toUpperCase() })}
+                  className="mt-1 font-mono"
+                  placeholder="VERANO2027"
+                />
+              </label>
+              <label className="text-sm">
+                <span className="font-medium">Tipo</span>
+                <select
+                  className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  value={borradorPromo.tipo}
+                  onChange={(ev) =>
+                    setBorradorPromo({ ...borradorPromo, tipo: ev.target.value as 'porcentaje' | 'importe' })
+                  }
+                >
+                  <option value="porcentaje">Porcentaje (%)</option>
+                  <option value="importe">Importe fijo</option>
+                </select>
+              </label>
+              <label className="text-sm">
+                <span className="font-medium">
+                  Valor {borradorPromo.tipo === 'porcentaje' ? '(%)' : `(${monedaTenant})`}
+                </span>
+                <Input
+                  value={borradorPromo.valor}
+                  onChange={(ev) => setBorradorPromo({ ...borradorPromo, valor: ev.target.value })}
+                  className="mt-1"
+                  inputMode="decimal"
+                  placeholder={borradorPromo.tipo === 'porcentaje' ? '10' : '50'}
+                />
+              </label>
+              <label className="text-sm">
+                <span className="font-medium">Válido desde (entrada)</span>
+                <Input
+                  type="date"
+                  value={borradorPromo.desde}
+                  onChange={(ev) => setBorradorPromo({ ...borradorPromo, desde: ev.target.value })}
+                  className="mt-1"
+                />
+              </label>
+              <label className="text-sm">
+                <span className="font-medium">Válido hasta (entrada)</span>
+                <Input
+                  type="date"
+                  value={borradorPromo.hasta}
+                  onChange={(ev) => setBorradorPromo({ ...borradorPromo, hasta: ev.target.value })}
+                  className="mt-1"
+                />
+              </label>
+              <label className="text-sm">
+                <span className="font-medium">Estancia mínima (noches)</span>
+                <Input
+                  value={borradorPromo.minNoches}
+                  onChange={(ev) => setBorradorPromo({ ...borradorPromo, minNoches: ev.target.value })}
+                  className="mt-1"
+                  inputMode="numeric"
+                />
+              </label>
+              <label className="text-sm">
+                <span className="font-medium">Usos máximos (vacío = sin límite)</span>
+                <Input
+                  value={borradorPromo.maxUsos}
+                  onChange={(ev) => setBorradorPromo({ ...borradorPromo, maxUsos: ev.target.value })}
+                  className="mt-1"
+                  inputMode="numeric"
+                  placeholder="Sin límite"
+                />
+              </label>
+              <label className="text-sm sm:col-span-2">
+                <span className="font-medium">Descripción (opcional)</span>
+                <Input
+                  value={borradorPromo.descripcion}
+                  onChange={(ev) => setBorradorPromo({ ...borradorPromo, descripcion: ev.target.value })}
+                  className="mt-1"
+                  placeholder="Promoción de verano"
+                />
+              </label>
+            </div>
+            <div className="flex justify-end gap-2">
+              {borradorPromo.id && (
+                <Button size="sm" variant="ghost" onClick={() => setBorradorPromo(PROMO_VACIA)}>
+                  Cancelar
+                </Button>
+              )}
+              <AccionHospitality capacidad="reservas.editar">
+                <Button size="sm" onClick={guardarPromo} disabled={guardandoPromo}>
+                  <Plus className="mr-1 h-4 w-4" />
+                  {borradorPromo.id ? 'Guardar cambios' : 'Crear código'}
+                </Button>
+              </AccionHospitality>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {propiedades.map((p) => {
         const conectada = p.estado === 'conectada';
         const publicada = p.publicada;
@@ -422,6 +1086,179 @@ export default function BookingEngineConfig() {
 
               {publicada ? (
                 <>
+                  {/* Visibilidad por unidad: una propiedad publicada puede
+                      enseñar solo algunas de sus unidades (venta por canal,
+                      uso interno, obras...). Solo afecta a la web directa. */}
+                  {p.listaUnidades.length > 0 ? (
+                    <div className="rounded-md border p-3 space-y-2">
+                      <p className="text-sm font-medium">Unidades visibles en tu web</p>
+                      <p className="text-xs text-muted-foreground">
+                        Una unidad oculta sigue vendiéndose en Booking.com y ocupando tu planning: solo deja de salir en tu página de reservas.
+                      </p>
+                      {p.listaUnidades.map((u) => {
+                        const visible = !excluidas.includes(u.id);
+                        return (
+                          <div key={u.id} className="flex items-center justify-between gap-2">
+                            <span className="min-w-0 truncate text-sm">
+                              {u.nombre}
+                              {u.codigo ? (
+                                <span className="ml-2 font-mono text-xs text-muted-foreground">{u.codigo}</span>
+                              ) : null}
+                            </span>
+                            <AccionHospitality capacidad="reservas.editar">
+                              <Switch
+                                checked={visible}
+                                disabled={cambiandoUnidad === u.id}
+                                onCheckedChange={(v) => alternarUnidad(u.id, v)}
+                                aria-label={`${visible ? 'Ocultar' : 'Mostrar'} ${u.nombre} en la web`}
+                              />
+                            </AccionHospitality>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+
+                  {/* Tarifas adicionales por estancia: limpieza, gestión,
+                      mascota, ropa de cama, resort, comunidad. Las
+                      obligatorias entran en toda reserva; las opcionales las
+                      marca el huésped en la web. */}
+                  <div className="rounded-md border p-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Receipt className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-medium">Tarifas adicionales</span>
+                        <span className="text-xs text-muted-foreground">por estancia, no por noche</span>
+                      </div>
+                      <Button size="sm" variant="outline" onClick={() => abrirTarifas(p.id)}>
+                        {tarifasAbiertas === p.id ? 'Ocultar' : 'Gestionar'}
+                      </Button>
+                    </div>
+
+                    {tarifasAbiertas === p.id && (
+                      <div className="space-y-3">
+                        {(tarifasPorPropiedad[p.id] || []).length === 0 && (
+                          <p className="text-xs text-muted-foreground">
+                            Todavía no hay tarifas adicionales. Crea la primera (limpieza, gestión, mascota…) y se
+                            sumará al precio de la estancia.
+                          </p>
+                        )}
+                        {(tarifasPorPropiedad[p.id] || []).map((f) => (
+                          <div key={f.id} className="flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium truncate">
+                                {f.nombre}{' '}
+                                <span className="text-xs font-normal text-muted-foreground">
+                                  {formatearImporte(f.importe, f.moneda)} ·{' '}
+                                  {f.obligatoria ? 'obligatoria' : 'opcional'}
+                                </span>
+                              </p>
+                              {(f.descripcionEs || f.descripcionEn) && (
+                                <p className="text-xs text-muted-foreground truncate">
+                                  {f.descripcionEs || f.descripcionEn}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <Switch
+                                checked={f.activo}
+                                onCheckedChange={() => alternarTarifa(p.id, f)}
+                                aria-label={f.activo ? 'Desactivar' : 'Activar'}
+                              />
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() =>
+                                  setBorradorTarifa({
+                                    id: f.id,
+                                    nombre: f.nombre,
+                                    importe: String(f.importe),
+                                    moneda: f.moneda,
+                                    obligatoria: f.obligatoria,
+                                    descripcionEs: f.descripcionEs || '',
+                                    descripcionEn: f.descripcionEn || '',
+                                  })
+                                }
+                              >
+                                Editar
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+
+                        <div className="space-y-2 border-t pt-3">
+                          <p className="text-xs font-medium text-muted-foreground">
+                            {borradorTarifa.id ? `Editando: ${borradorTarifa.nombre}` : 'Nueva tarifa adicional'}
+                          </p>
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            <label className="text-sm">
+                              <span className="font-medium">Nombre</span>
+                              <Input
+                                value={borradorTarifa.nombre}
+                                onChange={(ev) => setBorradorTarifa({ ...borradorTarifa, nombre: ev.target.value })}
+                                className="mt-1"
+                                placeholder="Tarifa de gestión"
+                              />
+                            </label>
+                            <label className="text-sm">
+                              <span className="font-medium">Importe por estancia</span>
+                              <Input
+                                value={borradorTarifa.importe}
+                                onChange={(ev) => setBorradorTarifa({ ...borradorTarifa, importe: ev.target.value })}
+                                className="mt-1"
+                                inputMode="decimal"
+                                placeholder="20"
+                              />
+                            </label>
+                            <label className="text-sm">
+                              <span className="font-medium">Descripción (ES)</span>
+                              <Input
+                                value={borradorTarifa.descripcionEs}
+                                onChange={(ev) => setBorradorTarifa({ ...borradorTarifa, descripcionEs: ev.target.value })}
+                                className="mt-1"
+                              />
+                            </label>
+                            <label className="text-sm">
+                              <span className="font-medium">Descripción (EN)</span>
+                              <Input
+                                value={borradorTarifa.descripcionEn}
+                                onChange={(ev) => setBorradorTarifa({ ...borradorTarifa, descripcionEn: ev.target.value })}
+                                className="mt-1"
+                              />
+                            </label>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <label className="flex items-center gap-2 text-sm">
+                              <Switch
+                                checked={borradorTarifa.obligatoria}
+                                onCheckedChange={(v) => setBorradorTarifa({ ...borradorTarifa, obligatoria: v })}
+                                aria-label="Tarifa obligatoria"
+                              />
+                              Obligatoria (se cobra en toda reserva)
+                            </label>
+                            <div className="ml-auto flex gap-2">
+                              {borradorTarifa.id && (
+                                <Button size="sm" variant="ghost" onClick={() => setBorradorTarifa(TARIFA_VACIA)}>
+                                  Cancelar
+                                </Button>
+                              )}
+                              <AccionHospitality capacidad="reservas.editar">
+                                <Button size="sm" onClick={() => guardarTarifa(p.id)} disabled={guardandoTarifa}>
+                                  <Plus className="mr-1 h-4 w-4" />
+                                  {borradorTarifa.id ? 'Guardar cambios' : 'Crear tarifa'}
+                                </Button>
+                              </AccionHospitality>
+                            </div>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground">
+                            Las opcionales no se cobran solas: el huésped las marca al reservar. Las obligatorias
+                            entran siempre y aparecen en el desglose de la web.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Extras comprables: catálogo por propiedad. */}
                   <div className="rounded-md border p-3 space-y-3">
                     <div className="flex items-center justify-between">

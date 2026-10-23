@@ -519,6 +519,9 @@ model Tenant {
   hospitalityUnitBlocks          HospitalityUnitBlock[]            @relation("HospitalityUnitBlocks")
   hospitalityReservationItems   HospitalityReservationItem[]     @relation("HospitalityReservationItems")
   hospitalityExtras             HospitalityExtra[]               @relation("HospitalityExtras")
+  hospitalityFees               HospitalityFee[]                 @relation("HospitalityFees")
+  hospitalityPromoCodes         HospitalityPromoCode[]           @relation("HospitalityPromoCodes")
+  hospitalityPromoConsultas     HospitalityPromoConsulta[]       @relation("HospitalityPromoConsultas")
   hospitalityPayments           HospitalityPayment[]             @relation("HospitalityPayments")
   hospitalityPaymentAccounts    HospitalityPaymentAccount[]      @relation("HospitalityPaymentAccounts")
   hospitalitySyncLogs           HospitalitySyncLog[]              @relation("HospitalitySyncLogs")
@@ -8308,6 +8311,7 @@ model HospitalityProperty {
   reservationItems HospitalityReservationItem[]
   payments       HospitalityPayment[]
   extras         HospitalityExtra[]
+  fees           HospitalityFee[]
 
   // Código de establecimiento asignado por el Sistema de Hospedajes del
   // Ministerio del Interior en el momento del registro de la entidad. Es el
@@ -8716,7 +8720,106 @@ model HospitalityExtra {
   @@map("hospitality_extra")
 }
 
-// Línea de desglose de una reserva: alojamiento, limpieza, extras u otro.
+// Tarifa adicional por estancia (limpieza, gestión, mascota, ropa de cama,
+// resort, comunidad): lo que el huésped paga ADEMÁS del precio de las noches.
+// A diferencia del extra, no es un producto del catálogo comercial sino un
+// cargo de la propiedad: `obligatoria=true` entra en toda estancia (el huésped
+// no puede quitarla) y `false` se ofrece para que la elija (mascota, cama
+// extra). Se cobra UNA vez por estancia.
+model HospitalityFee {
+  id            String   @id @default(cuid())
+  tenantId      String
+  propertyId    String
+  nombre        String
+  descripcionEs String?
+  descripcionEn String?
+  importe       Float
+  moneda        String   @default("MXN")
+  obligatoria   Boolean  @default(true)
+  activo        Boolean  @default(true)
+  orden         Int      @default(0)
+  fechaCreacion DateTime @default(now())
+  fechaEdicion  DateTime @updatedAt
+  tenant        Tenant              @relation("HospitalityFees", fields: [tenantId], references: [id], onDelete: Cascade)
+  property      HospitalityProperty @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([propertyId, activo])
+  @@map("hospitality_fee")
+}
+
+// Código promocional del canal directo (FASE 3.D).
+//
+// Se aplica SOLO al alojamiento (nunca a extras ni a tarifas adicionales) y es
+// del tenant, no de una propiedad: el hotel comunica «VERANO2027» y vale en
+// todas sus webs publicadas. El descuento lo calcula siempre el servidor; la
+// web solo manda el texto del código.
+//
+// `tipo`: `porcentaje` (valor 0–100) o `importe` (valor en `moneda`, nunca mayor
+// que el alojamiento). `desde`/`hasta` acotan las fechas de ESTANCIA (día de
+// entrada, ambos inclusive); `maxUsos` nulo = sin límite y `usos` es el contador
+// que se incrementa al crear la reserva.
+model HospitalityPromoCode {
+  id            String    @id @default(cuid())
+  tenantId      String
+  codigo        String
+  tipo          String    @default("porcentaje") // porcentaje|importe
+  valor         Float
+  moneda        String    @default("MXN")
+  desde         DateTime?
+  hasta         DateTime?
+  minNoches     Int       @default(1)
+  maxUsos       Int?
+  usos          Int       @default(0)
+  activo        Boolean   @default(true)
+  descripcion   String?
+  fechaCreacion DateTime  @default(now())
+  fechaEdicion  DateTime  @updatedAt
+  tenant        Tenant    @relation("HospitalityPromoCodes", fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, codigo])
+  @@index([tenantId])
+  @@map("hospitality_promo_code")
+}
+
+// Consulta de un código promocional en la web pública: la INTENCIÓN de usarlo.
+// Una consulta que no acaba en reserva es un dato, no un descuento concedido:
+// sin esta fila solo se vería la venta y no el intento, y la conversión de cada
+// código sería invisible.
+//
+// `resultado` es «aplicada» cuando el código valía para la estancia, o el motivo
+// exacto del rechazo (`inactiva`, `fuera_de_fecha`, `min_noches`, `agotada`,
+// `sin_alojamiento`, `no_existe`). `sesionId` lo genera el asistente de reserva:
+// permite que aplicar el código tres veces en la misma sesión cuente una sola
+// consulta y que la reserva marque exactamente esa fila como convertida.
+model HospitalityPromoConsulta {
+  id            String    @id @default(cuid())
+  tenantId      String
+  codigo        String
+  propertyId    String?
+  unitId        String?
+  checkIn       DateTime
+  checkOut      DateTime
+  resultado     String    @default("aplicada")
+  motivo        String?
+  sesionId      String?
+  reservationId String?
+  fecha         DateTime  @default(now())
+  tenant        Tenant    @relation("HospitalityPromoConsultas", fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Una consulta por sesión y código: reintentar no infla el denominador de la
+  // conversión. `sesionId` nulo (integraciones sin sesión) no choca consigo mismo.
+  @@unique([tenantId, sesionId, codigo])
+  @@index([tenantId, codigo, checkIn])
+  @@index([tenantId, checkIn])
+  // Las alertas de conversión se leen por fecha de REGISTRO (una consulta para
+  // dentro de seis meses es un intento de hoy), no por fecha de entrada.
+  @@index([tenantId, fecha])
+  @@map("hospitality_promo_consulta")
+}
+
+// Línea de desglose de una reserva: alojamiento, limpieza, extra, descuento
+// (en negativo) u otro. El ingreso bruto es la suma de las líneas activas.
 // El ingreso bruto es la suma de las líneas activas de la reserva.
 model HospitalityReservationItem {
   id              String   @id @default(cuid())
@@ -9101,6 +9204,10 @@ model HospitalityBookingConfig {
   requierePagoOnline    Boolean  @default(false)
   // Propiedades publicadas en la página pública. Vacío = no hay nada publicado.
   propiedadesPublicadas String[] @default([])
+  // Unidades que, aun estando en una propiedad publicada, NO salen en la página
+  // pública (solo se venden por canal, uso interno, obras...). Vacío = salen
+  // todas. Solo afecta al motor directo: no toca disponibilidad ni canales.
+  unidadesExcluidas     String[] @default([])
   activo                Boolean  @default(true)
   // Plantilla visual de la página pública. Valor del módulo puro
   // (`PLANTILLA_CLASICA`…); null = la clásica. Un valor desconocido se trata

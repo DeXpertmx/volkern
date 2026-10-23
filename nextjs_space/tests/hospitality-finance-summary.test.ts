@@ -54,7 +54,14 @@ describe('filasFinancieras', () => {
     expect(fila.bruto).toBe(660);
     // `penalizacion` es la línea del cargo por no-show: no es ingreso de
     // alojamiento, así que viaja aparte del desglose (ver `finance.ts`).
-    expect(fila.desglose).toEqual({ alojamiento: 600, limpieza: 60, extra: 0, otro: 0, penalizacion: 0 });
+    expect(fila.desglose).toEqual({
+      alojamiento: 600,
+      limpieza: 60,
+      extra: 0,
+      descuento: 0,
+      otro: 0,
+      penalizacion: 0,
+    });
     expect(fila.neto).toBe(510);
     expect(fila.margenPct).toBe(77.27);
     expect(fila.noches).toBe(5);
@@ -120,6 +127,31 @@ describe('resumenFinanciero', () => {
     expect(totales.reembolsado).toBe(400);
   });
 
+  it('acumula los descuentos aparte de «otro», en negativo', () => {
+    const filas = filasFinancieras([
+      reserva({
+        lineas: [
+          linea('alojamiento', 'Alojamiento', 5, 120),
+          linea('descuento', 'Descuento VERANO2027', 1, -60),
+          linea('otro', 'No previsto', 1, 10),
+        ],
+      }),
+      reserva({
+        id: 'r2',
+        lineas: [
+          linea('alojamiento', 'Alojamiento', 2, 100),
+          linea('descuento', 'Descuento BIENVENIDA', 1, -15),
+        ],
+      }),
+    ]);
+
+    const totales = resumenFinanciero(filas);
+    expect(totales.desglose.descuento).toBe(-75);
+    expect(totales.desglose.otro).toBe(10);
+    // El bruto ya viene con la rebaja restada: 600 + 10 - 60 + 200 - 15.
+    expect(totales.bruto).toBe(735);
+  });
+
   it('no inventa margen cuando no hay ingreso bruto', () => {
     const totales = resumenFinanciero(filasFinancieras([]));
     expect(totales.bruto).toBe(0);
@@ -136,7 +168,14 @@ describe('resumenFinanciero', () => {
       }),
     ]);
     const totales = resumenFinanciero(filas);
-    expect(totales.desglose).toEqual({ alojamiento: 800, limpieza: 50, extra: 30, otro: 0, penalizacion: 0 });
+    expect(totales.desglose).toEqual({
+      alojamiento: 800,
+      limpieza: 50,
+      extra: 30,
+      descuento: 0,
+      otro: 0,
+      penalizacion: 0,
+    });
     expect(totales.bruto).toBe(880);
   });
 });
@@ -210,6 +249,8 @@ describe('csvFinanciero', () => {
     const [cabecera, fila] = csv.split('\n');
     expect(cabecera).toContain('ingreso_bruto');
     expect(cabecera).toContain('estado_cobro');
+    // Las rebajas tienen su propia columna: no se mezclan con «importe_otros».
+    expect(cabecera).toContain('importe_descuento');
     expect(fila).toContain('Airbnb');
     expect(fila).toContain('660');
     expect(fila).toContain('pagado');

@@ -379,6 +379,30 @@ export interface WizardTextos {
   extrasCantidad: string;
   /** Etiqueta de la línea de extras en los totales. */
   extrasTotal: string;
+  /**
+   * Tarifas adicionales de la propiedad. Las obligatorias ya vienen sumadas en
+   * el total; las opcionales se marcan aquí y solo entonces se cobran.
+   */
+  tarifasTitulo: string;
+  tarifasAyuda: string;
+  /** Sufijo de una tarifa que se cobra una vez por estancia. */
+  tarifaPorEstancia: string;
+  /** Marca de una tarifa obligatoria (no se puede quitar). */
+  tarifasIncluidas: string;
+  /** Etiqueta de la línea de tarifas adicionales en los totales. */
+  tarifasTotal: string;
+  /** Código promocional en el paso de datos. */
+  promocionTitulo: string;
+  promocionAyuda: string;
+  promocionPlaceholder: string;
+  promocionAplicar: string;
+  promocionQuitar: string;
+  /** «Descuento aplicado: {importe}» */
+  promocionAplicada: string;
+  /** Frase de respaldo si la API no explica el motivo. */
+  promocionNoValida: string;
+  /** Etiqueta de la línea de descuento en los totales. */
+  descuento: string;
   /** Registro de viajeros (RD 933/2021): documentación opcional al reservar. */
   documentoTitulo: string;
   documentoAyuda: string;
@@ -443,6 +467,20 @@ export const WIZARD_TEXTOS: Record<Idioma, WizardTextos> = {
     extraPorNoche: 'por noche',
     extrasCantidad: 'Cantidad',
     extrasTotal: 'Extras',
+    tarifasTitulo: 'Tarifas adicionales',
+    tarifasAyuda:
+      'Cargos de la estancia que no van incluidos en el precio por noche. Los ya incluidos se cobran siempre.',
+    tarifaPorEstancia: 'por estancia',
+    tarifasIncluidas: 'Incluida',
+    tarifasTotal: 'Tarifas adicionales',
+    promocionTitulo: 'Código promocional',
+    promocionAyuda: 'Si tienes un código, aplícalo y verás el descuento antes de reservar.',
+    promocionPlaceholder: 'VERANO2027',
+    promocionAplicar: 'Aplicar',
+    promocionQuitar: 'Quitar',
+    promocionAplicada: 'Descuento aplicado: {importe}',
+    promocionNoValida: 'Ese código no se puede aplicar.',
+    descuento: 'Descuento',
     documentoTitulo: 'Registro de viajeros (opcional)',
     documentoAyuda:
       'Si lo dejas ahora, agilizas tu llegada. También puedes completarlo después con el enlace de check-in.',
@@ -505,6 +543,20 @@ export const WIZARD_TEXTOS: Record<Idioma, WizardTextos> = {
     extraPorNoche: 'per night',
     extrasCantidad: 'Quantity',
     extrasTotal: 'Extras',
+    tarifasTitulo: 'Additional fees',
+    tarifasAyuda:
+      'Charges for the stay that are not included in the nightly price. Those already included are always charged.',
+    tarifaPorEstancia: 'per stay',
+    tarifasIncluidas: 'Included',
+    tarifasTotal: 'Additional fees',
+    promocionTitulo: 'Promo code',
+    promocionAyuda: 'If you have a code, apply it to see the discount before booking.',
+    promocionPlaceholder: 'SUMMER2027',
+    promocionAplicar: 'Apply',
+    promocionQuitar: 'Remove',
+    promocionAplicada: 'Discount applied: {importe}',
+    promocionNoValida: 'That code cannot be applied.',
+    descuento: 'Discount',
     documentoTitulo: 'Traveller registration (optional)',
     documentoAyuda:
       'Filling it in now speeds up your arrival. You can also complete it later with the check-in link.',

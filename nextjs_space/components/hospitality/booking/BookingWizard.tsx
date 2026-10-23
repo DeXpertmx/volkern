@@ -40,6 +40,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { formatearImporte } from '@/lib/moneda';
+// Sesión de la visita: permite que la consulta de un código y la reserva que
+// sale de ella se puedan atar (conversión) sin contar varias veces el mismo
+// intento.
+import { generarSesionPromo } from '@/lib/hospitality/promos-consultas';
 import { toIsoDate } from '@/lib/hospitality/calendar';
 // Teléfono con país: prefijo por selector (evita números sin +34/+33…) en el
 // paso de datos del huésped.
@@ -82,6 +86,20 @@ export interface ExtraPublicoUI {
   precioPorNoche: boolean;
 }
 
+/**
+ * Tarifa adicional de la propiedad (limpienza, gestión, mascota, resort…). Se
+ * cobra UNA vez por estancia y el importe lo fija el servidor: aquí solo se
+ * enseña y, si es opcional, se marca.
+ */
+export interface TarifaPublicaUI {
+  id: string;
+  nombre: string;
+  descripcion: string | null;
+  importe: number;
+  moneda: string;
+  obligatoria: boolean;
+}
+
 export interface PropiedadPublicaUI {
   id: string;
   nombre: string;
@@ -90,6 +108,8 @@ export interface PropiedadPublicaUI {
   unidades: UnidadPublicaUI[];
   /** Catálogo activo de extras de la propiedad, en el idioma del huésped. */
   extras?: ExtraPublicoUI[];
+  /** Tarifas adicionales activas; las obligatorias ya van en el precio. */
+  tarifas?: TarifaPublicaUI[];
 }
 
 export interface ConfigPublicaUI {
@@ -122,7 +142,15 @@ interface UnidadCotizadaUI {
     base?: number;
     ajustes?: AjusteAplicado[];
   }> | null;
-  desglose: { alojamiento: number; limpieza: number; total: number; anticipo: number; saldo: number };
+  desglose: {
+    alojamiento: number;
+    limpieza: number;
+    /** Tarifas adicionales obligatorias, ya incluidas en `total`. */
+    tarifas?: number;
+    total: number;
+    anticipo: number;
+    saldo: number;
+  };
 }
 
 interface ResultadoReservaUI {
@@ -193,6 +221,9 @@ export function BookingWizard({
 
   const [paso, setPaso] = useState<1 | 2 | 3 | 4>(1);
   const [solicitudId, setSolicitudId] = useState(() => nuevoSolicitudId());
+  // Una sola sesión por visita: aplica igual a la consulta del código y a la
+  // reserva que la convierte.
+  const [sesionPromo] = useState(() => generarSesionPromo());
   const [checkIn, setCheckIn] = useState(manana);
   const [checkOut, setCheckOut] = useState(enTresDias);
   const [adultos, setAdultos] = useState(2);
@@ -216,6 +247,16 @@ export function BookingWizard({
   // opcionales y los dos viajan al servidor, que es quien resuelve el precio y
   // valida el registro de viajeros.
   const [extrasSeleccion, setExtrasSeleccion] = useState<Record<string, number>>({});
+  // Tarifas adicionales OPCIONALES marcadas (ids). Las obligatorias no se
+  // eligen: ya vienen sumadas en el desglose de la unidad.
+  const [tarifasSeleccion, setTarifasSeleccion] = useState<string[]>([]);
+  // Código promocional: el texto se manda al servidor, que devuelve el
+  // descuento calculado sobre el alojamiento. El importe no viaja nunca desde
+  // aquí: en `promocion` solo se guarda lo que respondió el servidor.
+  const [codigo, setCodigo] = useState('');
+  const [promocion, setPromocion] = useState<{ codigo: string; descuento: number } | null>(null);
+  const [errorPromo, setErrorPromo] = useState<string | null>(null);
+  const [aplicandoPromo, setAplicandoPromo] = useState(false);
   const [documento, setDocumento] = useState<DocumentoUI>(DOCUMENTO_VACIO);
 
   const caja = embebido ? 'w-full' : 'mx-auto w-full max-w-3xl';
@@ -223,6 +264,16 @@ export function BookingWizard({
   // Extras de la propiedad elegida: el catálogo llegó con ella desde el servidor
   // (ya filtrado a activos y en el idioma del huésped).
   const extrasDisponibles = propiedades.find((p) => p.id === propertyId)?.extras ?? [];
+  // Tarifas adicionales de la propiedad elegida: las obligatorias ya están en el
+  // precio cotizado, así que solo se ofrecen las opcionales.
+  const tarifasDeLaPropiedad = propiedades.find((p) => p.id === propertyId)?.tarifas ?? [];
+  const tarifasOpcionalesDisponibles = tarifasDeLaPropiedad.filter((f) => !f.obligatoria);
+  const totalTarifasEstimado =
+    Math.round(
+      tarifasOpcionalesDisponibles
+        .filter((f) => tarifasSeleccion.includes(f.id))
+        .reduce((acc, f) => acc + f.importe, 0) * 100
+    ) / 100;
   const extrasElegidos = Object.entries(extrasSeleccion)
     .filter(([, cantidad]) => cantidad > 0)
     .map(([extraId, cantidad]) => ({ extraId, cantidad }));
@@ -268,6 +319,51 @@ export function BookingWizard({
     }
   }
 
+  /**
+   * Comprueba el código contra el servidor para la unidad y fechas elegidas.
+   * No consume usos ni reserva: es una consulta. Al reservar se vuelve a
+   * evaluar, porque el código puede agotarse entre una cosa y otra.
+   */
+  async function aplicarCodigo() {
+    if (!unidad || !codigo.trim() || aplicandoPromo) return;
+    setAplicandoPromo(true);
+    setErrorPromo(null);
+    try {
+      const res = await fetch(`/api/public/booking/${slug}/promocion`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          propertyId,
+          unitId: unidad.unitId,
+          checkIn,
+          checkOut,
+          adultos,
+          ninos,
+          codigo,
+          sesionPromo,
+        }),
+      });
+      const datos = await res.json();
+      if (!datos.ok) {
+        setPromocion(null);
+        setErrorPromo(datos.error || t.promocionNoValida);
+        return;
+      }
+      setPromocion({ codigo: datos.codigo as string, descuento: Number(datos.descuento) || 0 });
+      setCodigo(datos.codigo as string);
+    } catch {
+      setErrorPromo(t.errorSinConexion);
+    } finally {
+      setAplicandoPromo(false);
+    }
+  }
+
+  function quitarCodigo() {
+    setPromocion(null);
+    setCodigo('');
+    setErrorPromo(null);
+  }
+
   async function reservar() {
     if (!unidad) return;
     setCargando(true);
@@ -291,6 +387,14 @@ export function BookingWizard({
           // Extras: viaja la SELECCIÓN (id y cantidad); el precio lo pone el
           // catálogo activo del servidor.
           extras: extrasElegidos,
+          // Tarifas adicionales opcionales: viajan como ids y el servidor pone
+          // el importe del catálogo.
+          tarifas: tarifasSeleccion,
+          // Solo el texto del código: el descuento lo recalcula el servidor.
+          codigo: promocion?.codigo ?? '',
+          // La misma sesión con la que se consultó: marca esa consulta como
+          // convertida cuando la reserva se crea.
+          sesionPromo,
           // Documento del titular: si el huésped lo dejó, entra en el registro de
           // viajeros; si no, lo completa desde el enlace de check-in.
           documento: documentaLoAlgo ? documento : null,
@@ -545,6 +649,14 @@ export function BookingWizard({
                       <span>{formatearImporte(u.desglose.limpieza, moneda)}</span>
                     </div>
                   ) : null}
+                  {/* Tarifas adicionales obligatorias: ya están dentro del
+                      total, y se enseñan para que el huésped sepa qué paga. */}
+                  {(u.desglose.tarifas ?? 0) > 0 ? (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>{t.tarifasTotal}</span>
+                      <span>{formatearImporte(u.desglose.tarifas ?? 0, moneda)}</span>
+                    </div>
+                  ) : null}
                   <div className="flex justify-between border-t pt-1 font-medium">
                     <span>{t.total}</span>
                     <span>{formatearImporte(u.desglose.total, moneda)}</span>
@@ -629,9 +741,20 @@ export function BookingWizard({
               extras={extrasDisponibles}
               extrasSeleccion={extrasSeleccion}
               setExtrasSeleccion={setExtrasSeleccion}
+              tarifasOpcionales={tarifasOpcionalesDisponibles}
+              tarifasSeleccion={tarifasSeleccion}
+              setTarifasSeleccion={setTarifasSeleccion}
+              codigo={codigo}
+              setCodigo={setCodigo}
+              promocion={promocion}
+              errorPromo={errorPromo}
+              aplicandoPromo={aplicandoPromo}
+              aplicarCodigo={aplicarCodigo}
+              quitarCodigo={quitarCodigo}
               documento={documento}
               setDocumento={setDocumento}
               totalExtrasEstimado={totalExtrasEstimado}
+              totalTarifasEstimado={totalTarifasEstimado}
               cargando={cargando}
               reservar={reservar}
               cerrar={() => setModalAbierto(false)}
@@ -675,9 +798,20 @@ export function BookingWizard({
               extras={extrasDisponibles}
               extrasSeleccion={extrasSeleccion}
               setExtrasSeleccion={setExtrasSeleccion}
+              tarifasOpcionales={tarifasOpcionalesDisponibles}
+              tarifasSeleccion={tarifasSeleccion}
+              setTarifasSeleccion={setTarifasSeleccion}
+              codigo={codigo}
+              setCodigo={setCodigo}
+              promocion={promocion}
+              errorPromo={errorPromo}
+              aplicandoPromo={aplicandoPromo}
+              aplicarCodigo={aplicarCodigo}
+              quitarCodigo={quitarCodigo}
               documento={documento}
               setDocumento={setDocumento}
               totalExtrasEstimado={totalExtrasEstimado}
+              totalTarifasEstimado={totalTarifasEstimado}
               cargando={cargando}
               reservar={reservar}
               cerrar={() => setPaso(2)}
@@ -752,9 +886,20 @@ function FormularioHuesped({
   extras,
   extrasSeleccion,
   setExtrasSeleccion,
+  tarifasOpcionales,
+  tarifasSeleccion,
+  setTarifasSeleccion,
+  codigo,
+  setCodigo,
+  promocion,
+  errorPromo,
+  aplicandoPromo,
+  aplicarCodigo,
+  quitarCodigo,
   documento,
   setDocumento,
   totalExtrasEstimado,
+  totalTarifasEstimado,
   cargando,
   reservar,
   cerrar,
@@ -777,9 +922,22 @@ function FormularioHuesped({
   extras: ExtraPublicoUI[];
   extrasSeleccion: Record<string, number>;
   setExtrasSeleccion: (v: Record<string, number>) => void;
+  /** Tarifas adicionales OPCIONALES (las obligatorias ya están en el total). */
+  tarifasOpcionales: TarifaPublicaUI[];
+  tarifasSeleccion: string[];
+  setTarifasSeleccion: (v: string[]) => void;
+  codigo: string;
+  setCodigo: (v: string) => void;
+  /** Descuento confirmado por el servidor; null = sin código aplicado. */
+  promocion: { codigo: string; descuento: number } | null;
+  errorPromo: string | null;
+  aplicandoPromo: boolean;
+  aplicarCodigo: () => void;
+  quitarCodigo: () => void;
   documento: DocumentoUI;
   setDocumento: (v: DocumentoUI) => void;
   totalExtrasEstimado: number;
+  totalTarifasEstimado: number;
   cargando: boolean;
   reservar: () => void;
   cerrar: () => void;
@@ -861,6 +1019,94 @@ function FormularioHuesped({
           ) : null}
         </div>
       ) : null}
+
+      {/* Tarifas adicionales opcionales (mascota, cama extra…): a diferencia de
+          los extras no son productos, son cargos de la estancia. Las
+          obligatorias no aparecen aquí: ya están sumadas en el precio. */}
+      {tarifasOpcionales.length > 0 ? (
+        <div className="grid gap-3 rounded-md border p-3">
+          <div>
+            <p className="text-sm font-medium">{t.tarifasTitulo}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{t.tarifasAyuda}</p>
+          </div>
+          {tarifasOpcionales.map((f) => (
+            <label key={f.id} className="flex items-center justify-between gap-3 text-sm">
+              <span className="flex min-w-0 items-center gap-2">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 shrink-0 rounded border"
+                  checked={tarifasSeleccion.includes(f.id)}
+                  onChange={(ev) =>
+                    setTarifasSeleccion(
+                      ev.target.checked
+                        ? [...tarifasSeleccion, f.id]
+                        : tarifasSeleccion.filter((id) => id !== f.id)
+                    )
+                  }
+                />
+                <span className="min-w-0">
+                  <span className="block truncate">{f.nombre}</span>
+                  {f.descripcion ? (
+                    <span className="block text-xs text-muted-foreground">{f.descripcion}</span>
+                  ) : null}
+                </span>
+              </span>
+              <span className="shrink-0 text-muted-foreground">
+                {formatearImporte(f.importe, moneda)}{' '}
+                <span className="text-xs">{t.tarifaPorEstancia}</span>
+              </span>
+            </label>
+          ))}
+          {totalTarifasEstimado > 0 ? (
+            <div className="flex justify-between border-t pt-2 text-sm">
+              <span>{t.tarifasTotal}</span>
+              <span className="font-medium">{formatearImporte(totalTarifasEstimado, moneda)}</span>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* Código promocional: el descuento se aplica al alojamiento y lo calcula
+          el servidor. Lo que se enseña aquí es su respuesta, no una cuenta del
+          navegador; al reservar se vuelve a evaluar. */}
+      <div className="grid gap-2 rounded-md border p-3">
+        <div>
+          <p className="text-sm font-medium">{t.promocionTitulo}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{t.promocionAyuda}</p>
+        </div>
+        {promocion ? (
+          <div className="flex items-center justify-between gap-2 text-sm">
+            <span className="text-emerald-600 dark:text-emerald-400">
+              {interpolar(t.promocionAplicada, {
+                importe: formatearImporte(promocion.descuento, moneda),
+              })}
+            </span>
+            <Button type="button" size="sm" variant="ghost" onClick={quitarCodigo}>
+              {t.promocionQuitar}
+            </Button>
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <Input
+              value={codigo}
+              onChange={(ev) => setCodigo(ev.target.value.toUpperCase())}
+              placeholder={t.promocionPlaceholder}
+              className="uppercase"
+              aria-label={t.promocionTitulo}
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={aplicarCodigo}
+              disabled={aplicandoPromo || !codigo.trim()}
+            >
+              {t.promocionAplicar}
+            </Button>
+          </div>
+        )}
+        {errorPromo ? <p className="text-xs text-destructive">{errorPromo}</p> : null}
+      </div>
 
       {/* Registro de viajeros (RD 933/2021): opcional y sin fricción — lo que no
           se deje aquí se completa desde el enlace de check-in que llega al

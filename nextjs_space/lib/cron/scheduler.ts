@@ -18,6 +18,11 @@ import {
   JOB_LABEL_PUESTA_EN_MARCHA_AVISOS,
   JOB_SCHEDULE_PUESTA_EN_MARCHA_AVISOS,
 } from './hospitality-puesta-en-marcha-avisos';
+import {
+  JOB_ID_PROMOS_ALERTAS,
+  JOB_LABEL_PROMOS_ALERTAS,
+  JOB_SCHEDULE_PROMOS_ALERTAS,
+} from './hospitality-promos-alertas';
 
 /**
  * Orquestador de Tareas Programadas para Gemma 4 Proactivity
@@ -237,6 +242,24 @@ export function initCronJobs() {
   }));
 
   console.log('✅ [Scheduler] Hospitality aviso de puestas en marcha paradas programado (diaria 09:20)');
+
+  // 16i. Hospitality: códigos promocionales que acumulan consultas sin
+  //      conversión. La tabla de Descuentos ya lo dice, pero hay que entrar a
+  //      mirarla; esto avisa al equipo del hotel para que apague el código o
+  //      reescriba su mensaje antes de que siga sumando intentos sin venta.
+  //      Con intervalo por cuenta y adelanto si aparece un código nuevo.
+  // El id/etiqueta/cadencia deben coincidir con las constantes del módulo
+  // (`JOB_ID_PROMOS_ALERTAS` etc.): hay un test que lo exige, porque el panel
+  // de estado cruza los dos registros.
+  cron.schedule(JOB_SCHEDULE_PROMOS_ALERTAS, runCronJob(JOB_ID_PROMOS_ALERTAS, JOB_LABEL_PROMOS_ALERTAS, JOB_SCHEDULE_PROMOS_ALERTAS, async () => {
+    const { runHospitalityPromosAlertasScan } = await import('./hospitality-promos-alertas');
+    const resultado = await runHospitalityPromosAlertasScan();
+    // El mismo resumen y los mismos avisos que el disparo por HTTP: el panel de
+    // estado no puede contar una cosa u otra según quién haya lanzado el job.
+    return { mensaje: resultado.message, avisos: resultado.avisos };
+  }));
+
+  console.log('✅ [Scheduler] Hospitality códigos sin conversión programado (diaria 09:30)');
 
   // 16e. Hospitality: caducidad de holds `pending` olvidados.
   //      Una reserva pendiente bloquea la unidad en todas las vistas; si nadie

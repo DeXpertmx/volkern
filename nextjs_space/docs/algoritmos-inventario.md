@@ -84,6 +84,7 @@ Ver §5.1.
 | H23 | Permisos por capacidad | `capacidades.ts`, `permissions.ts` | puro | 4 guardias |
 | H24 | Crons y su estado | `lib/cron/*`, `cron-status.ts` | servicio | 6 guardias |
 | H25 | Bloqueos de fechas: la razón y el choque con lo contratado | `block-types.ts`, `bloqueos-conflicto.ts` (+ `bloqueos-guarda.ts`) | puro + guarda | `hospitality-bloqueos-conflicto`, `hospitality-block-ui-guard` |
+| H26 | Códigos promocionales y su rendimiento | `booking-promos.ts`, `promos-consultas.ts`, `promos-rendimiento.ts` | puro | `hospitality-promos`, `hospitality-promos-consultas`, `hospitality-promos-rendimiento` |
 
 ### Familia comercial
 
@@ -407,7 +408,9 @@ evita el clásico «figura pagado pero nadie pagó».
 **Parte técnica.** `calcularRentabilidad`, `calcularBruto`, `totalDeLineas`,
 `calcularPenalizacion`, `desglosarLineas`, `calcularCobrado`, `calcularReembolsado`,
 `derivarEstadoCobro`, `lineasDesdeImporteExterno`. La penalización **no es ingreso de
-alojamiento** y viaja aparte en el desglose. `redondear` centraliza el redondeo (no hay
+alojamiento** y viaja aparte en el desglose. El descuento promocional tiene su propio
+cajón (`desglose.descuento`, en negativo) para no confundirse con «otro»; al restar, el
+bruto sigue siendo la suma del desglose. `redondear` centraliza el redondeo (no hay
 aritmética de dinero suelta por la vertical).
 
 **Dónde.** `finance.ts`; consumido por Finanzas, Reportes y el detalle de reserva.
@@ -430,7 +433,8 @@ Que salga de **una sola consulta** (`money-query`) evita que Finanzas y Reportes
 cosas distintas.
 
 **Parte técnica.** `filasFinancieras`, `resumenFinanciero`, `desglosePorCanal`,
-`desglosePorPropiedad`, `conteoPorEstadoCobro`, `csvFinanciero`; `esReservaConVenta`
+`desglosePorPropiedad`, `conteoPorEstadoCobro`, `csvFinanciero` (con columna
+`importe_descuento` separada de `importe_otros`); `esReservaConVenta`
 (cancelada/no-show no aportan bruto, pero sus reembolsos **sí se informan** — el dinero
 salió). Neto siempre vía `calcularRentabilidad`: no hay segunda fórmula. `money-query` es
 lectura pura; `resolverRango` centraliza la ventana de fechas.
@@ -915,6 +919,69 @@ en `app/dashboard/hospitality/calendar`.
 bloqueo activo (`POST /api/hospitality/reservations`)— hoy no se rechaza: ese camino solo
 compara reservas entre sí, mientras el motor de la reserva pública sí mira los bloqueos.
 Queda como cabo suelto declarado.
+
+---
+
+### H26 · Códigos promocionales y su rendimiento ✅
+
+**Qué hace.** Tres cosas. Primero, el código promocional del canal directo: se evalúa contra
+la estancia (vigencia por fecha de entrada, estancia mínima, usos) y descuenta **solo el
+alojamiento**, con el tope puesto para que la estancia nunca quede en negativo. Segundo, la
+comparativa entre códigos: cuánto descuento concedió cada uno y cuánto ingreso dejó. Tercero,
+la **conversión**: cada consulta del código queda registrada, y la que no acaba en reserva
+baja el porcentaje del código en lugar de desaparecer.
+
+**En qué beneficia.** El descuento es dinero que se deja para atraer reservas; sin la
+comparativa solo se ve el contador de usos, y «usado 40 veces» no dice si esa promoción
+valió la pena. La tabla permite decidir con el número delante qué código repetir y cuál
+apagar, y deja a la vista el caso incómodo: el código que se usó y no trajo nada. La
+conversión añade lo que ni el contador ni las reservas dicen: cuánta gente aplicó el código
+y se fue sin reservar, que es la diferencia entre una promoción que convence y una que solo
+abona a quien ya iba a comprar.
+
+**Parte técnica.** `booking-promos.ts` normaliza el código (mayúsculas, sin espacios),
+valida el formato, calcula el descuento acotado a 100 %/alojamiento y escribe la línea
+`tipo: 'descuento'` en negativo con el concepto «Descuento CODIGO». El precio no se
+recalcula aquí: la cotización de siempre recibe el descuento (`Cotizacion.descuento`) y el
+consumo de `maxUsos` se hace **dentro de la transacción** con una guarda atómica en la
+base; si no actualiza fila, la reserva entera se deshace. `promos-rendimiento.ts` atribuye
+cada reserva a su código por el dato que el motor escribió (`payload.promocion.codigo`) y,
+si no está, por el concepto de la línea; separa descuento **otorgado** (todas las reservas)
+de **aprovechado** (solo las que acaban en venta, como Finanzas) y compara contra el
+alojamiento a tarifa plena que es la base del cálculo —la línea de alojamiento se guarda
+antes del descuento—. La ventana por defecto son 12 meses sobre la fecha de entrada y se
+compone en hora local, no en UTC: la ventana es de días de entrada.
+
+La conversión se apoya en `promos-consultas.ts`: la ruta pública del código guarda el
+INTENTO (`hospitality_promo_consulta`) con su resultado —«aplicada» o el motivo del
+rechazo— y la sesión que genera el asistente. La unicidad (tenant, sesión, código) hace que
+reaplicar el mismo código en la misma visita no infle el denominador, y la reserva marca su
+consulta como convertida **dentro de la transacción** que la crea, por sesión y código: sin
+sesión no se atribuye nada, porque atribuir la reserva a la última consulta de cualquier
+visitante sería inventar el dato. Los rechazos (inactiva, fuera de fechas, estancia corta,
+agotada) no entran en el denominador: se cuentan aparte, que es lo que explica por qué una
+promoción no arranca. Los intentos con códigos que no existen se agrupan como sugerencia,
+no como filas del catálogo.
+
+**Dónde.** `lib/hospitality/booking-promos.ts`, `lib/hospitality/promos-consultas.ts`,
+`lib/hospitality/promos-rendimiento.ts`, `lib/hospitality/promos-registro.ts`;
+api `app/api/hospitality/promos[/rendimiento]`, la consulta pública
+`app/api/public/booking/[slug]/promocion`; modelo `HospitalityPromoConsulta`; pantalla
+`app/dashboard/hospitality/booking-engine` (sección Descuentos) y el asistente de la web
+pública.
+
+**Guardia.** `hospitality-promos` (20 pruebas: precio, condiciones, consumo y conversión de
+la reserva), `hospitality-promos-consultas` (9: registro con y sin sesión, best-effort,
+marcado de la conversión y los cuatro desenlaces de la ruta pública) y
+`hospitality-promos-rendimiento` (24: atribución, otorgado vs aprovechado, códigos sin usar,
+conversión y consultas sin reserva, erratas agrupadas, ventana y ruta con 401/403).
+
+**Investigar / mejorar.** El contador `usos` puede ir por delante de las reservas medidas
+(promociones activas fuera del periodo leído) y ese hueco se declara sin resolverse. Las
+consultas sin sesión (integraciones que no mandan `sesionId`) cuentan como intento pero no
+pueden convertirse: bajan la conversión sin que sea culpa del código, y hoy no se distinguen
+en la tabla. Y los códigos **no viajan al canal**: las OTAs gestionan las suyas; con SU API
+la promoción disponible es la de Booking.com (`bdc/promotion/update`), que es otro trabajo.
 
 ---
 

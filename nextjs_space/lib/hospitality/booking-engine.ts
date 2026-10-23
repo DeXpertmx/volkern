@@ -53,6 +53,20 @@ import { idiomaDeValor } from './booking-i18n';
 // seguir existiendo aquí, o el huésped dejaría de poder contratarlos y el parte
 // de viajeros perdería la documentación que ya dejaba al reservar.
 import { resolverExtras, filasDeItemsExtras, type ExtraCatalogo } from './booking-extras';
+// Tarifas adicionales por estancia (limpieza, gestión, mascota, resort…): las
+// obligatorias entran en la cotización; las opcionales se resuelven al reservar.
+import {
+  resolverTarifas,
+  filasDeItemsTarifas,
+  totalObligatorias,
+  type TarifaCatalogo,
+} from './booking-fees';
+import {
+  evaluarPromocion,
+  filaDeDescuento,
+  normalizarCodigo,
+} from './booking-promos';
+import { marcarConsultaConvertida } from './promos-registro';
 import { normalizarViajero, type ViajeroCheckin } from './guest-checkin';
 import { asegurarTokenCheckin, enlaceCheckin } from './checkin-service';
 // Las fotos del alojamiento se leen con el mismo módulo que el editor que las
@@ -62,6 +76,18 @@ import { urlsFotosHospedaje } from './property-editor-config';
 
 /** Canal de las reservas que llegan por la página pública del tenant. */
 export const CANAL_DIRECTO = 'Directa';
+
+/**
+ * El código promocional se agotó entre la cotización y el cobro. Se lanza dentro
+ * de la transacción para deshacerla: una reserva con un descuento que el código
+ * ya no concede sería un agujero, no un error cosmético.
+ */
+class PromoAgotadaError extends Error {
+  constructor() {
+    super('Código promocional agotado');
+    this.name = 'PromoAgotadaError';
+  }
+}
 
 /** Estados de unidad que no se publican: fuera de servicio no es vendible. */
 const ESTADOS_NO_VENDIBLES = ['maintenance', 'out_of_service'];
@@ -117,16 +143,23 @@ function aLista(valor: unknown): string[] {
  */
 export async function listarPropiedadesPublicables(
   tenantId: string,
-  config: Pick<ConfigBooking, 'propiedadesPublicadas'>
+  config: Pick<ConfigBooking, 'propiedadesPublicadas' | 'unidadesExcluidas'>
 ): Promise<PropiedadPublica[]> {
   const publicadas = config.propiedadesPublicadas || [];
   if (publicadas.length === 0) return [];
+
+  // Unidades que el hotel retiró de su web: siguen vendibles por canal y
+  // ocupando su calendario, pero la página pública no las enseña.
+  const excluidas = config.unidadesExcluidas || [];
 
   const propiedades = await prisma.hospitalityProperty.findMany({
     where: { tenantId, id: { in: publicadas } },
     include: {
       units: {
-        where: { estado: { notIn: ESTADOS_NO_VENDIBLES } },
+        where: {
+          estado: { notIn: ESTADOS_NO_VENDIBLES },
+          ...(excluidas.length ? { id: { notIn: excluidas } } : {}),
+        },
         include: {
           ratePlans: { where: { activo: true }, orderBy: { tarifa: 'asc' }, take: 1 },
         },
@@ -246,11 +279,25 @@ export async function cotizarDisponibilidad(params: {
     nochesDelRango.push(new Date(cursor));
   }
 
+  // Tarifas adicionales obligatorias de la propiedad: son parte del precio de
+  // toda estancia, así que la cotización las lleva desde el primer momento (el
+  // huésped no tiene que elegirlas). Las opcionales no se cotizan aquí.
+  const obligatoriasDeTarifas = totalObligatorias(await catalogoDeTarifas(propertyId));
+
+  const excluidas = config.unidadesExcluidas || [];
   const unidades = await prisma.hospitalityUnit.findMany({
     where: {
       tenantId,
       propertyId,
-      ...(unitId ? { id: unitId } : {}),
+      // Una unidad retirada de la web no se cotiza aunque su id viaje en la
+      // petición: la lista de exclusiones también es una guarda del servidor.
+      ...(unitId
+        ? excluidas.length
+          ? { id: { equals: unitId, notIn: excluidas } }
+          : { id: unitId }
+        : excluidas.length
+          ? { id: { notIn: excluidas } }
+          : {}),
       estado: { notIn: ESTADOS_NO_VENDIBLES },
     },
     include: {
@@ -318,6 +365,7 @@ export async function cotizarDisponibilidad(params: {
       ajustes: plan?.ajustes ?? null,
       ocupacionPorNoche: ocupacion,
       limpieza: config.tarifaLimpieza,
+      tarifas: obligatoriasDeTarifas,
       anticipoPorcentaje: config.anticipoPorcentaje,
       moneda: params.moneda,
     });
@@ -396,6 +444,24 @@ export interface EntradaReservaDirecta {
    * precio lo pone el catálogo activo del servidor, nunca el navegador.
    */
   extras?: unknown;
+  /**
+   * Tarifas adicionales opcionales elegidas en la web (`[feeId]`). Igual que los
+   * extras: solo nombra las tarifas; el importe sale del catálogo del servidor.
+   * Las obligatorias no viajan: se cobran sin preguntar.
+   */
+  tarifas?: unknown;
+  /**
+   * Código promocional escrito por el huésped. Solo el TEXTO: el descuento se
+   * calcula aquí sobre el alojamiento y nunca se acepta un importe del cliente.
+   */
+  codigoPromocional?: string | null;
+  /**
+   * Sesión del asistente de reserva (`promos-consultas`). Identifica la consulta
+   * que el huésped hizo del código antes de reservar, para marcarla como
+   * convertida. Sin ella la reserva se crea igual: lo único que falta es la
+   * atribución de la conversión.
+   */
+  sesionPromo?: string | null;
 }
 
 export type ResultadoReservaDirecta =
@@ -412,6 +478,12 @@ export type ResultadoReservaDirecta =
       anticipo: number;
       /** Suma de las líneas de extras seleccionadas. */
       totalExtras: number;
+      /** Suma de las tarifas adicionales cobradas (obligatorias + elegidas). */
+      totalTarifas: number;
+      /** Descuento aplicado al alojamiento por código promocional (0 = ninguno). */
+      descuento: number;
+      /** Código que se aplicó, tal como quedó guardado; null si no hubo. */
+      codigoPromocional: string | null;
       /** Enlace de check-in del huésped (null si no se pudo preparar). */
       checkinUrl: string | null;
       yaExistia: boolean;
@@ -466,9 +538,18 @@ export async function crearReservaDirecta(
       // misma reserva y su enlace de check-in (el que el huésped ya tiene).
       anticipo: 0,
       totalExtras: 0,
+      totalTarifas: 0,
+      descuento: 0,
+      codigoPromocional: null,
       checkinUrl: await enlaceDeCheckinDe(previa, entrada.idioma),
       yaExistia: true,
     };
+  }
+
+  // Retirada de la web: no se puede crear una reserva directa aunque el id
+  // llegue por API. Las reservas de canal no pasan por aquí y no se tocan.
+  if ((config.unidadesExcluidas || []).includes(unitId)) {
+    return { ok: false, motivo: 'no_disponible', mensaje: 'Esa unidad no está disponible para reservar.' };
   }
 
   const unidad = await prisma.hospitalityUnit.findFirst({
@@ -509,6 +590,13 @@ export async function crearReservaDirecta(
   // la transacción, bajo el bloqueo de la unidad, y eso es lo que decide si se
   // puede vender; esto solo decide cuánto. Una lectura más, a cambio de que el
   // precio guardado salga de las mismas reglas que vio el huésped.
+  // Catálogo de tarifas adicionales de la propiedad: las obligatorias entran en
+  // la cotización y las opcionales se resuelven más abajo, con la selección del
+  // huésped. Se lee una sola vez para no cotizar con un catálogo distinto del
+  // que se cobra.
+  const catalogoTarifas = await catalogoDeTarifas(propertyId);
+  const obligatoriasDeTarifas = totalObligatorias(catalogoTarifas);
+
   const contextoPrecio = await loadAvailabilityContext(prisma, tenantId, propertyId, checkIn, checkOut);
   const ocupacion = ocupacionPorNoche(
     contextoPrecio.units,
@@ -518,7 +606,10 @@ export async function crearReservaDirecta(
     contextoPrecio.blocks
   );
 
-  const cotizacion = cotizarEstancia({
+  // La cotización se construye sobre un objeto reutilizable: si hay código
+  // promocional se vuelve a cotizar con el descuento ya calculado sobre el
+  // alojamiento, sin repetir las reglas de precio.
+  const datosDeCotizacion = {
     checkIn,
     checkOut,
     tarifaPorNoche: tarifa,
@@ -526,9 +617,37 @@ export async function crearReservaDirecta(
     ajustes: plan?.ajustes ?? null,
     ocupacionPorNoche: ocupacion,
     limpieza: config.tarifaLimpieza,
+    tarifas: obligatoriasDeTarifas,
     anticipoPorcentaje: config.anticipoPorcentaje,
     moneda,
-  });
+  };
+  const cotizacionBase = cotizarEstancia(datosDeCotizacion);
+
+  // Código promocional: el descuento se calcula sobre el alojamiento real de la
+  // estancia. Un código inválido no impide reservar: se ignora y se dice en el
+  // log — el huésped ya vio el precio sin él si no se aplicó en la web.
+  const codigoPromocional = normalizarCodigo(entrada.codigoPromocional);
+  let promoAplicada: { id: string; codigo: string } | null = null;
+  let descuento = 0;
+  if (codigoPromocional) {
+    const promo = await prisma.hospitalityPromoCode.findUnique({
+      where: { tenantId_codigo: { tenantId, codigo: codigoPromocional } },
+    });
+    if (promo) {
+      const evaluacion = evaluarPromocion(promo, {
+        checkIn,
+        noches: cotizacionBase.noches,
+        alojamiento: cotizacionBase.alojamiento,
+      });
+      if (evaluacion.ok) {
+        descuento = evaluacion.descuento;
+        promoAplicada = { id: promo.id, codigo: promo.codigo };
+      } else {
+        console.log('[BookingEngine] Código promocional no aplicado:', evaluacion.mensaje);
+      }
+    }
+  }
+  const cotizacion = descuento > 0 ? cotizarEstancia({ ...datosDeCotizacion, descuento }) : cotizacionBase;
 
   const huespedes = Math.max(1, entrada.adultos) + Math.max(0, entrada.ninos);
   if (unidad.capacidad < huespedes) {
@@ -552,7 +671,27 @@ export async function crearReservaDirecta(
   } else if (seleccionExtras.ignorados.length > 0) {
     console.log('[BookingEngine] Extras ignorados en la reserva directa:', seleccionExtras.ignorados);
   }
-  const total = Math.round((cotizacion.total + totalExtras) * 100) / 100;
+
+  // Tarifas adicionales: el catálogo ya se leyó para cotizar las obligatorias.
+  // Aquí se suman las opcionales que el huésped marcó, con el precio del
+  // catálogo. La cotización ya lleva las obligatorias dentro de `tarifas`, así
+  // que solo se añade lo elegido: sumar el total del resolvedor las cobraría dos
+  // veces.
+  const seleccionTarifas = resolverTarifas(catalogoTarifas, entrada.tarifas);
+  const lineasTarifas = seleccionTarifas.ok
+    ? seleccionTarifas.lineas.filter((l) => !l.obligatoria)
+    : [];
+  const totalTarifasOpcionales = Math.round(
+    lineasTarifas.reduce((acc, l) => acc + l.importe, 0) * 100
+  ) / 100;
+  if (!seleccionTarifas.ok) {
+    console.error('[BookingEngine] Selección de tarifas inválida:', seleccionTarifas.error);
+  } else if (seleccionTarifas.ignorados.length > 0) {
+    console.log('[BookingEngine] Tarifas ignoradas en la reserva directa:', seleccionTarifas.ignorados);
+  }
+  const totalObligatoriasReserva = cotizacion.tarifas;
+  const totalTarifas = Math.round((totalObligatoriasReserva + totalTarifasOpcionales) * 100) / 100;
+  const total = Math.round((cotizacion.total + totalExtras + totalTarifasOpcionales) * 100) / 100;
 
   // Registro de viajeros (RD 933/2021): el documento que el huésped deja al
   // reservar se guarda YA, en el formato que lee el parte; lo que falte lo
@@ -588,7 +727,9 @@ export async function crearReservaDirecta(
 
   const estadoInicial = config.requierePagoOnline ? 'pending' : 'confirmed';
 
-  const creada = await prisma.$transaction(async (tx) => {
+  let creada: Awaited<ReturnType<typeof prisma.hospitalityReservation.create>> | null = null;
+  try {
+    creada = await prisma.$transaction(async (tx) => {
     // Bloqueo de fila sobre la unidad: serializa las reservas de la misma unidad
     // para que dos solicitudes simultáneas no pasen las dos la comprobación.
     await tx.$queryRaw`SELECT id FROM hospitality_units WHERE id = ${unitId} FOR UPDATE`;
@@ -639,6 +780,8 @@ export async function crearReservaDirecta(
           solicitudId: entrada.solicitudId,
           cotizacion,
           extras: lineasExtras,
+          tarifas: seleccionTarifas.ok ? seleccionTarifas.lineas : [],
+          promocion: promoAplicada ? { codigo: promoAplicada.codigo, descuento } : null,
         } as unknown as Prisma.InputJsonValue,
       },
     });
@@ -687,11 +830,71 @@ export async function crearReservaDirecta(
           propertyId,
           unitId,
         }),
+        // Y cada tarifa adicional, una línea más: las obligatorias viajan
+        // siempre (van en `cotizacion.total`) y las opcionales, solo si el
+        // huésped las marcó. Sin estas líneas el encabezado cobraría importes
+        // que el desglose no explica.
+        ...filasDeItemsTarifas(
+          seleccionTarifas.ok ? seleccionTarifas.lineas : [],
+          { tenantId, reservationId: reserva.id, propertyId, unitId }
+        ),
+        // El descuento va en su propia línea, EN NEGATIVO: el desglose tiene
+        // que explicar el importe cobrado, no solo el precio antes del código.
+        ...(descuento > 0 && promoAplicada
+          ? [
+              filaDeDescuento({
+                codigo: promoAplicada.codigo,
+                descuento,
+                moneda,
+                tenantId,
+                reservationId: reserva.id,
+                propertyId,
+                unitId,
+              }),
+            ]
+          : []),
       ],
     });
 
+    // Consumo del código DENTRO de la transacción y con guarda atómica en la
+    // propia base: dos reservas simultáneas no pueden pasar de `maxUsos`. Si la
+    // fila no se actualiza, el código se agotó entre la cotización y el cobro y
+    // se tira la transacción entera.
+    if (promoAplicada) {
+      const consumidos = await tx.$executeRaw`
+        UPDATE "hospitality_promo_code"
+           SET "usos" = "usos" + 1
+         WHERE "id" = ${promoAplicada.id}
+           AND ("maxUsos" IS NULL OR "usos" < "maxUsos")
+      `;
+      if (Number(consumidos) === 0) throw new PromoAgotadaError();
+    }
+
+    // La consulta que el huésped hizo de este código en esta misma sesión queda
+    // marcada como convertida, dentro de la transacción: si la reserva se cae,
+    // la conversión también. Se guarda el id de la reserva y no el importe — el
+    // dinero ya vive en sus líneas.
+    if (promoAplicada) {
+      await marcarConsultaConvertida(tx, {
+        tenantId,
+        codigo: promoAplicada.codigo,
+        sesionId: entrada.sesionPromo,
+        reservationId: reserva.id,
+      });
+    }
+
     return reserva;
-  });
+    });
+  } catch (e) {
+    if (e instanceof PromoAgotadaError) {
+      return {
+        ok: false,
+        motivo: 'datos',
+        mensaje: 'Ese código promocional se acaba de agotar. Reserva sin el código o prueba con otro.',
+      };
+    }
+    throw e;
+  }
 
   if (!creada) {
     return {
@@ -746,6 +949,9 @@ export async function crearReservaDirecta(
     noches: cotizacion.noches,
     anticipo: cotizacion.anticipo,
     totalExtras,
+    totalTarifas,
+    descuento,
+    codigoPromocional: promoAplicada?.codigo ?? null,
     checkinUrl,
     yaExistia: false,
   };
@@ -757,6 +963,26 @@ export async function crearReservaDirecta(
  * Auxiliar a propósito: si la lectura falla, la reserva se vende sin extras en
  * lugar de caerse. El huésped nunca ve un error por un catálogo que no carga.
  */
+/**
+ * Catálogo activo de tarifas adicionales de la propiedad.
+ *
+ * Auxiliar por la misma razón que el de extras: si la lectura falla, la
+ * cotización se hace sin tarifas adicionales en lugar de tumbar la venta. El
+ * hotel ve el error en su panel; el huésped, nunca.
+ */
+async function catalogoDeTarifas(propertyId: string): Promise<TarifaCatalogo[]> {
+  try {
+    const filas = await prisma.hospitalityFee.findMany({
+      where: { propertyId, activo: true },
+      orderBy: [{ orden: 'asc' }, { nombre: 'asc' }],
+    });
+    return filas as unknown as TarifaCatalogo[];
+  } catch (e) {
+    console.error('[BookingEngine] No se pudo leer el catálogo de tarifas:', e);
+    return [];
+  }
+}
+
 async function catalogoDeExtras(propertyId: string): Promise<ExtraCatalogo[]> {
   try {
     return await prisma.hospitalityExtra.findMany({ where: { propertyId, activo: true } });

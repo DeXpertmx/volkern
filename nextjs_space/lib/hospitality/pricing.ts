@@ -177,6 +177,18 @@ export interface EntradaCotizacion {
   tarifaPorNoche: number;
   /** Tarifa de limpieza por estancia. Nula o 0 = no se cobra. */
   limpieza?: number | null;
+  /**
+   * Suma de las tarifas adicionales OBLIGATORIAS de la propiedad, por estancia
+   * (módulo `./booking-fees`). Las opcionales no entran aquí: dependen de lo
+   * que elija el huésped y se resuelven al crear la reserva.
+   */
+  tarifas?: number | null;
+  /**
+   * Descuento por código promocional, YA calculado sobre el alojamiento
+   * (módulo `./booking-promos`). Se resta del alojamiento, nunca de limpieza ni
+   * de tarifas, y se acota a lo que cuesta la estancia.
+   */
+  descuento?: number | null;
   /** Porcentaje de anticipo sobre el total (0-100). */
   anticipoPorcentaje?: number | null;
   /**
@@ -230,7 +242,11 @@ export interface Cotizacion {
   /** Noches × tarifa, o la suma por noche con estacionalidad. */
   alojamiento: number;
   limpieza: number;
-  /** Ingreso bruto de la reserva: alojamiento + limpieza. */
+  /** Tarifas adicionales obligatorias sumadas a esta cotización. */
+  tarifas: number;
+  /** Descuento aplicado al alojamiento (0 = sin código). */
+  descuento: number;
+  /** Ingreso bruto de la reserva: alojamiento − descuento + limpieza + tarifas. */
   total: number;
   /** Anticipo a cobrar en el momento de reservar. 0 = no se pide. */
   anticipo: number;
@@ -310,6 +326,7 @@ export function cotizarEstancia(entrada: EntradaCotizacion): Cotizacion {
   const config = normalizarEstacionalidad(entrada.estacionalidad);
   const ajustes = normalizarAjustes(entrada.ajustes);
   const limpieza = aCentimo(Math.max(0, Number(entrada.limpieza) || 0));
+  const tarifas = aCentimo(Math.max(0, Number(entrada.tarifas) || 0));
   const tarifaPlana = aCentimo(Math.max(0, Number(entrada.tarifaPorNoche) || 0));
 
   // Capa 1: la tarifa de CADA noche del rango. Con estacionalidad sale de la
@@ -368,7 +385,11 @@ export function cotizarEstancia(entrada: EntradaCotizacion): Cotizacion {
 
   const tarifaEfectiva = aCentimo(alojamiento / noches);
 
-  const total = aCentimo(alojamiento + limpieza);
+  // El descuento se acota al alojamiento: un código no puede dejar la estancia
+  // en negativo ni comerse la limpieza o las tarifas adicionales.
+  const descuento = aCentimo(Math.min(alojamiento, Math.max(0, Number(entrada.descuento) || 0)));
+
+  const total = aCentimo(alojamiento - descuento + limpieza + tarifas);
 
   const porcentaje = Math.min(100, Math.max(0, Math.round(Number(entrada.anticipoPorcentaje) || 0)));
   const anticipo = porcentaje ? aCentimo((total * porcentaje) / 100) : 0;
@@ -378,6 +399,8 @@ export function cotizarEstancia(entrada: EntradaCotizacion): Cotizacion {
     tarifaPorNoche: tarifaEfectiva,
     alojamiento,
     limpieza,
+    tarifas,
+    descuento,
     total,
     anticipo,
     saldo: aCentimo(total - anticipo),

@@ -226,6 +226,45 @@ por el DPO").
   `/admin/hospitality`** — el panel de estado no deja que un aviso se pierda en
   silencio.
 
+### 1.3 Clasificación RGPD — `hospitality-promos-alertas`
+
+**Ficha del job** (`09:30` · `lib/cron/hospitality-promos-alertas.ts`)
+
+- **Qué hace**: busca códigos promocionales **activos** que acumulan consultas
+  sin conversión (mínimo 20 consultas aplicadas, menos del 5 % de conversión, en
+  los últimos 90 días por fecha de registro) y avisa al equipo del hotel para
+  que los apague o reescriba su mensaje. Un aviso por hotel, con intervalo de 7
+  días y adelanto si aparece un código nuevo. La regla es la misma que pinta el
+  aviso ámbar de la sección Descuentos (`lib/hospitality/promos-alertas.ts`).
+- **Datos personales**: **no hay datos de interesados**. El cuerpo del aviso se
+  compone solo con el **código**, el número de consultas, el de conversiones y el
+  porcentaje. No lleva nombre, email, teléfono, documento, importe ni fechas de
+  estancia. La consulta a `hospitality_promo_consulta` selecciona únicamente
+  `(tenantId, codigo, reservationId)`: **no lee `sesionId`**, que es el único dato
+  que enlaza la consulta con una visita concreta.
+- **Base jurídica**: **Art. 6.1.f** — interés legítimo del hotel en medir la
+  eficacia de su propia campaña y en no seguir concediendo un descuento que no
+  vende. No hay finalidad nueva: es el mismo tratamiento que ya hace la tabla de
+  Descuentos, solo que por un canal saliente.
+- **Minimización**: **Art. 5.1.c** — los destinatarios son usuarios **del propio
+  hotel** con la capacidad `reservas.editar` (los mismos que pueden editar el
+  código), no el operador de la plataforma. El texto no permite identificar a
+  ningún huésped ni reconstruir una reserva.
+- **Encargados**: **Art. 28** — la notificación viaja por Web Push / Expo y queda
+  en `InAppNotification`; sus DPA se siguen en
+  `docs/compliance/ENCARGADOS-DPA-PENDIENTES.md`.
+- **Retención**: cada aviso deja una fila en `hospitality_sync_logs`
+  (`tipo = aviso_promos_sin_conversion`) con los códigos y sus contadores, que es
+  la auditoría del envío y el reloj del intervalo. El cuerpo enviado no se
+  persiste. Las consultas conservan la retención de su propia tabla.
+- **Seguridad**: **Art. 32** — el disparo por HTTP exige
+  `Bearer ${CRON_SECRET}`; el 401 se devuelve antes de tocar Prisma (ver §2).
+- **Programación**: **solo scheduler in-process** (09:30). El disparo HTTP queda
+  para diagnóstico y recuperación; no se añade al crontab del VPS.
+- **Sin destinatario**: si ningún usuario del hotel tiene la capacidad, el aviso
+  se registra igual (estado `pendiente`) y se publica en ámbar en el panel de
+  estado: el rastro no se pierde.
+
 **Limitaciones del planificador**:
 - El crontab del VPS **no impone límites** de frecuencia ni de duración: los schedules se ejecutan según lo previsto.
 - `cron.sh` corta el `curl` a los **120 s** (`--max-time 120`). Si un handler tarda más, la corrida se registra como `FALLÓ (000)` y la del día siguiente recoge lo pendiente (los endpoints son idempotentes).

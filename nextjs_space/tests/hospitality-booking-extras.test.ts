@@ -27,6 +27,9 @@ const mocks = vi.hoisted(() => ({
   hospitalityReservation: { findUnique: vi.fn(), create: vi.fn() },
   hospitalityReservationItem: { createMany: vi.fn() },
   hospitalityExtra: { findMany: vi.fn() },
+  // Tarifas adicionales: el motor las lee al cotizar; en esta suite no hay
+  // ninguna configurada (su propia suite es `hospitality-booking-fees`).
+  hospitalityFee: { findMany: vi.fn() },
   queryRaw: vi.fn(),
   loadAvailabilityContext: vi.fn(),
   upsertGuest: vi.fn(),
@@ -42,6 +45,7 @@ vi.mock('@/lib/db', () => ({
     hospitalityReservation: mocks.hospitalityReservation,
     hospitalityReservationItem: mocks.hospitalityReservationItem,
     hospitalityExtra: mocks.hospitalityExtra,
+    hospitalityFee: mocks.hospitalityFee,
     $queryRaw: mocks.queryRaw,
     // La transacción del motor se ejecuta de verdad (con su contexto doblado):
     // la comprobación bajo bloqueo es parte de lo que se vigila.
@@ -188,6 +192,7 @@ beforeEach(() => {
   });
   mocks.hospitalityReservationItem.createMany.mockResolvedValue({ count: 2 });
   mocks.hospitalityExtra.findMany.mockResolvedValue(CATALOGO);
+  mocks.hospitalityFee.findMany.mockResolvedValue([]);
   mocks.queryRaw.mockResolvedValue([]);
   mocks.upsertGuest.mockResolvedValue('c1');
   mocks.dispararComunicacionReserva.mockResolvedValue(undefined);

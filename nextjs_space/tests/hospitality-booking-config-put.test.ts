@@ -37,7 +37,10 @@ function createEnviado(): Record<string, unknown> {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.hospitalityProperty.findMany.mockResolvedValue([{ id: 'prop_a' }, { id: 'prop_b' }]);
+  mocks.hospitalityProperty.findMany.mockResolvedValue([
+    { id: 'prop_a', units: [{ id: 'unit_a1' }, { id: 'unit_a2' }] },
+    { id: 'prop_b', units: [{ id: 'unit_b1' }] },
+  ]);
   mocks.hospitalityBookingConfig.upsert.mockResolvedValue({ id: 'cfg_1', slug: 'mi-hotel' });
 });
 
@@ -87,6 +90,28 @@ describe('guardarConfigBooking — lo que no viene, no se toca', () => {
     await guardarConfigBooking('tenant_a', 'MXN', { slug: 'mi-hotel', propiedadesPublicadas: [] });
 
     expect(updateEnviado().propiedadesPublicadas).toEqual([]);
+  });
+
+  it('las unidades excluidas se sanean contra las unidades del tenant', async () => {
+    await guardarConfigBooking('tenant_a', 'MXN', {
+      slug: 'mi-hotel',
+      unidadesExcluidas: ['unit_a2', 'unit_ajena', 'unit_a2', 'unit_b1'],
+    });
+
+    // Solo las suyas, sin repetidos y en el orden pedido.
+    expect(updateEnviado().unidadesExcluidas).toEqual(['unit_a2', 'unit_b1']);
+  });
+
+  it('sin unidadesExcluidas en el cuerpo no se toca la visibilidad guardada', async () => {
+    await guardarConfigBooking('tenant_a', 'MXN', { slug: 'mi-hotel', plantilla: 'moderna' });
+
+    expect(updateEnviado()).not.toHaveProperty('unidadesExcluidas');
+  });
+
+  it('una lista vacía de excluidas vuelve a enseñar todas las unidades', async () => {
+    await guardarConfigBooking('tenant_a', 'MXN', { slug: 'mi-hotel', unidadesExcluidas: [] });
+
+    expect(updateEnviado().unidadesExcluidas).toEqual([]);
   });
 
   it('los campos presentes se escriben, incluido desactivar la página', async () => {

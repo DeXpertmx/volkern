@@ -51,7 +51,39 @@ describe('rentabilidad de una reserva', () => {
       ...lineas,
       normalizarLinea({ tipo: 'raro', concepto: 'No previsto', cantidad: 1, importeUnitario: 10 }),
     ]);
-    expect(d).toEqual({ alojamiento: 600, limpieza: 60, extra: 40, otro: 10, penalizacion: 0 });
+    expect(d).toEqual({
+      alojamiento: 600,
+      limpieza: 60,
+      extra: 40,
+      descuento: 0,
+      otro: 10,
+      penalizacion: 0,
+    });
+  });
+
+  it('el descuento promocional tiene su propio cajón en negativo, no «otro»', () => {
+    // La línea que escribe `booking-promos.ts`: importe NEGATIVO y tipo propio.
+    const lineas = [
+      normalizarLinea({ tipo: 'alojamiento', concepto: 'Alojamiento', cantidad: 4, importeUnitario: 150 }),
+      normalizarLinea({
+        tipo: 'descuento',
+        concepto: 'Descuento VERANO2027',
+        cantidad: 1,
+        importeUnitario: -60,
+      }),
+      normalizarLinea({ tipo: 'otro', concepto: 'No previsto', cantidad: 1, importeUnitario: 10 }),
+    ];
+
+    const d = desglosarLineas(lineas);
+    expect(d.alojamiento).toBe(600);
+    expect(d.descuento).toBe(-60);
+    expect(d.otro).toBe(10);
+
+    // El bruto sigue siendo la suma del desglose (menos la penalización): el
+    // descuento resta, pero sin desaparecer dentro de un cajón ajeno.
+    const r = calcularRentabilidad({ lineas });
+    expect(r.bruto).toBe(550);
+    expect(r.desglose.descuento).toBe(-60);
   });
 
   it('sin líneas el bruto y el neto son cero y el margen no revienta', () => {

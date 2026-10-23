@@ -61,6 +61,8 @@ la clave interna.
 | `HospitalityProperty` | `hospitality_properties` | Propiedad física: dirección, zona, coordenadas, fotos, timezone, estado |
 | `HospitalityUnit` | `hospitality_units` | Unidad reservable: tipo, capacidad, tarifa base, moneda, `estado` operativo (`available\|occupied\|cleaning\|dirty\|maintenance\|out_of_service`) |
 | `HospitalityRatePlan` | `hospitality_rate_plans` | Plan de tarifa por unidad: precio/noche, min/max noches, días de check-in/out permitidos |
+| `HospitalityFee` | `hospitality_fee` | Tarifa adicional **por estancia** de la propiedad (limpieza, gestión, mascota, ropa de cama, resort, comunidad): `importe`, `moneda`, `obligatoria` (entra en toda reserva) y `activo`. Las obligatorias se suman en la cotización; las opcionales las marca el huésped en el motor directo |
+| `HospitalityPromoCode` | `hospitality_promo_code` | Código promocional del canal directo: `codigo` único por tenant, `tipo` (`porcentaje\|importe`), `valor`, validez de estancia (`desde`/`hasta`), `minNoches`, `maxUsos`/`usos`. Descuenta **solo alojamiento** |
 | `HospitalityUnitBlock` | `hospitality_unit_blocks` | Bloqueo manual de fechas con `tipo` (`propietario\|mantenimiento\|administrativo`) y `motivo` **obligatorio** (la razón documentada: visita de un familiar, noches vendidas a una empresa fuera de canal, avería…). Intervalo `[inicio, fin)`. `estado` (`activo\|cancelado`): cancelar LIBERA las fechas sin perder la fila —su motivo y su tipo se conservan— y reactivar las vuelve a cerrar. Un bloqueo activo no puede pisar noches ya contratadas |
 
 ### Reservas y trazabilidad

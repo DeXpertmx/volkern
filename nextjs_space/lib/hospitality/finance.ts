@@ -17,6 +17,12 @@
  * la EXCLUYE y viaja en su propio campo del desglose; sí suma al neto, a lo
  * pendiente de cobro y al objetivo del estado de cobro, porque es dinero que
  * hay que cobrar. Ver `lib/hospitality/no-show.ts`.
+ *
+ * **El descuento promocional tiene su propio cajón.** El código promocional se
+ * guarda como una línea `tipo: 'descuento'` en negativo; si cayera en «otro» el
+ * informe mezclaría un ingreso con una rebaja y nadie podría ver cuánto se está
+ * dejando en promociones. Al ser negativo sigue restando del bruto, de modo que
+ * el bruto continúa siendo la suma del desglose. Ver `booking-promos.ts`.
  */
 
 import { monedaEscritura } from '@/lib/moneda';
@@ -27,7 +33,14 @@ import { monedaEscritura } from '@/lib/moneda';
  * aparta igual que la penalización y su retención real se lee con
  * `calcularFianzaRetenida`.
  */
-export type LineaTipo = 'alojamiento' | 'limpieza' | 'extra' | 'otro' | 'penalizacion' | 'fianza';
+export type LineaTipo =
+  | 'alojamiento'
+  | 'limpieza'
+  | 'extra'
+  | 'descuento'
+  | 'otro'
+  | 'penalizacion'
+  | 'fianza';
 
 export type PagoMetodo = 'stripe' | 'transferencia' | 'efectivo' | 'manual' | 'otro';
 
@@ -63,11 +76,19 @@ export interface RentabilidadReserva {
    * penalización por no-show (que no es ingreso de alojamiento).
    */
   bruto: number;
-  /** Desglose por tipo de línea (para pintar el detalle). */
+  /**
+   * Desglose por tipo de línea (para pintar el detalle).
+   *
+   * `descuento` va en NEGATIVO (es una rebaja): `alojamiento + limpieza +
+   * extra + descuento + otro` es el bruto. `penalizacion` no entra en esa suma
+   * —es un cargo de cancelación, no alojamiento— y por eso viaja aparte.
+   */
   desglose: {
     alojamiento: number;
     limpieza: number;
     extra: number;
+    /** Rebajas aplicadas (códigos promocionales): importe NEGATIVO. */
+    descuento: number;
     otro: number;
     /** Cargo de cancelación por no-show (no es ingreso de alojamiento). */
     penalizacion: number;
@@ -188,14 +209,25 @@ export function calcularPenalizacion(lineas: LineaReserva[]): number {
   );
 }
 
-/** Desglose por tipo de línea. */
+/**
+ * Desglose por tipo de línea. Cada tipo conocido tiene su cajón: lo que no se
+ * reconoce cae en «otro». El descuento conserva su signo (negativo), así que el
+ * desglose sigue cuadrando con el bruto.
+ */
 export function desglosarLineas(lineas: LineaReserva[]): RentabilidadReserva['desglose'] {
-  const desglose = { alojamiento: 0, limpieza: 0, extra: 0, otro: 0, penalizacion: 0 };
+  const desglose = {
+    alojamiento: 0,
+    limpieza: 0,
+    extra: 0,
+    descuento: 0,
+    otro: 0,
+    penalizacion: 0,
+  };
   for (const linea of lineas) {
-    const clave = (['alojamiento', 'limpieza', 'extra', 'penalizacion'] as const).includes(
+    const clave = (['alojamiento', 'limpieza', 'extra', 'descuento', 'penalizacion'] as const).includes(
       linea.tipo as any
     )
-      ? (linea.tipo as 'alojamiento' | 'limpieza' | 'extra' | 'penalizacion')
+      ? (linea.tipo as 'alojamiento' | 'limpieza' | 'extra' | 'descuento' | 'penalizacion')
       : 'otro';
     desglose[clave] += linea.importeTotal || 0;
   }
@@ -203,6 +235,7 @@ export function desglosarLineas(lineas: LineaReserva[]): RentabilidadReserva['de
     alojamiento: redondear(desglose.alojamiento),
     limpieza: redondear(desglose.limpieza),
     extra: redondear(desglose.extra),
+    descuento: redondear(desglose.descuento),
     otro: redondear(desglose.otro),
     penalizacion: redondear(desglose.penalizacion),
   };

@@ -102,7 +102,40 @@ describe('GET /api/hospitality/finanzas — desglose vía módulo puro', () => {
     expect(r.pendiente).toBe(0);
     expect(r.estadoCobro).toBe('pagado');
     // El desglose por tipo también viene del módulo puro.
-    expect(r.desglose).toEqual({ alojamiento: 600, limpieza: 60, extra: 40, otro: 0, penalizacion: 0 });
+    expect(r.desglose).toEqual({
+      alojamiento: 600,
+      limpieza: 60,
+      extra: 40,
+      descuento: 0,
+      otro: 0,
+      penalizacion: 0,
+    });
+  });
+
+  it('el descuento promocional va en su propio cajón del desglose y del resumen', async () => {
+    mocks.hospitalityReservation.findMany.mockResolvedValue([
+      reserva({
+        items: [
+          { tipo: 'alojamiento', concepto: 'Alojamiento', cantidad: 1, importeUnitario: 600, importeTotal: 600 },
+          { tipo: 'descuento', concepto: 'Descuento VERANO2027', cantidad: 1, importeUnitario: -100, importeTotal: -100 },
+        ],
+        payments: [{ importe: 500, estado: 'pagado', metodo: 'stripe' }],
+      }),
+    ]);
+
+    const res = await GET(request('GET'));
+    const data = await res.json();
+
+    const r = data.reservas[0];
+    // La rebaja resta del bruto pero no se esconde en «otro».
+    expect(r.bruto).toBe(500);
+    expect(r.desglose.descuento).toBe(-100);
+    expect(r.desglose.otro).toBe(0);
+    expect(r.pendiente).toBe(0);
+
+    const m = data.resumen.porMoneda.EUR;
+    expect(m.bruto).toBe(500);
+    expect(m.descuento).toBe(-100);
   });
 
   it('una reserva sin líneas deriva la línea única desde amountAfterTax', async () => {

@@ -82,6 +82,17 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
       // de los dos — hacerlo aquí sería una segunda verdad sobre el dinero y
       // sobre el parte.
       extras: cuerpo.extras,
+      // Tarifas adicionales OPCIONALES marcadas por el huésped: viajan como ids
+      // y el motor las resuelve contra el catálogo activo (las obligatorias no
+      // viajan: se cobran siempre).
+      tarifas: cuerpo.tarifas,
+      // Código promocional: solo el texto. El descuento lo calcula el motor sobre
+      // el alojamiento; aquí no se acepta ningún importe del navegador.
+      codigoPromocional: textoOpcional(cuerpo.codigo, 40),
+      // Sesión del asistente: con ella se marca como convertida la consulta que
+      // hizo el huésped antes de reservar. Es opcional: sin sesión la reserva se
+      // crea igual y la conversión simplemente no se atribuye.
+      sesionPromo: textoOpcional(cuerpo.sesionPromo, 80),
       huesped: {
         nombre,
         email,
@@ -157,6 +168,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
         moneda: resultado.moneda,
         noches: resultado.noches,
         totalExtras: resultado.totalExtras,
+        totalTarifas: resultado.totalTarifas,
+        descuento: resultado.descuento,
+        codigoPromocional: resultado.codigoPromocional,
         confirmacionUrl,
         checkinUrl: resultado.checkinUrl,
         pagoUrl,

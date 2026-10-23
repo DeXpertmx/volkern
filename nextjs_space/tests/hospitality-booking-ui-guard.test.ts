@@ -49,6 +49,13 @@ describe('Página pública de reserva', () => {
     expect(fuente).not.toContain('/api/hospitality/');
   });
 
+  it('manda una sesión estable: el mismo intento no se cuenta dos veces ni se pierde la conversión', () => {
+    // Una sola sesión por visita viaja con la consulta del código y con la
+    // reserva que sale de ella; sin sesión no se puede atar la conversión.
+    expect(fuente).toContain('generarSesionPromo');
+    expect(fuente).toContain('sesionPromo,');
+  });
+
   it('lleva al pago cuando la reserva abre una sesión (Stripe Connect)', () => {
     // El asistente no cobra: si la respuesta trae URL de pago, navega a la
     // pasarela del hotel; si no, enseña la confirmación.
@@ -82,6 +89,25 @@ describe('Sección Booking Engine del dashboard', () => {
   it('ofrece el enlace público en inglés (?lang=en) además del español', () => {
     expect(fuente).toContain('enlacePublicoEn');
     expect(fuente).toContain('Enlace público de reserva (inglés)');
+  });
+
+  it('compara los códigos promocionales entre sí con su rendimiento', () => {
+    // El contador de usos no dice si la promoción valió la pena: la sección
+    // Descuentos enseña el descuento concedido y el ingreso que dejó cada código.
+    expect(fuente).toContain('/api/hospitality/promos/rendimiento');
+    expect(fuente).toContain('Rendimiento por código');
+    expect(fuente).toContain('Neto / descontado');
+    // Lo que no se puede atribuir a un código se declara, no se reparte.
+    expect(fuente).toContain('sinCodigo');
+  });
+
+  it('mide la conversión de cada código: consultas frente a reservas', () => {
+    // La reserva dice que el código funcionó; la consulta que no reservó dice
+    // cuánta gente lo probó y se fue. Las dos columnas son el dato.
+    expect(fuente).toContain('Consultas');
+    expect(fuente).toContain('Conversión');
+    expect(fuente).toContain('conversionPct');
+    expect(fuente).toContain('deCodigosDesconocidos');
   });
 
   it('publica por la MISMA lista que lee la página (interruptor por propiedad)', () => {

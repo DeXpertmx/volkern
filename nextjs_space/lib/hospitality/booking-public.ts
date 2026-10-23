@@ -12,6 +12,11 @@ import { resolverPaginaPublica, type PropiedadPublica } from './booking-engine';
 import { estadoDeCobroDelTenant } from './booking-payments';
 import { logoCorporativoTenant } from './booking-config';
 import { catalogoPublico, type ExtraPublico, type ExtraCatalogo } from './booking-extras';
+import {
+  catalogoPublicoDeTarifas,
+  type TarifaPublica,
+  type TarifaCatalogo,
+} from './booking-fees';
 import { resumenPublicoResenas, type ResenaPublica } from './resenas';
 import { IDIOMA_POR_DEFECTO, type Idioma } from './booking-i18n';
 import {
@@ -51,6 +56,12 @@ export interface ResumenResenasPublico {
  */
 export interface PropiedadPublicaPagina extends PropiedadPublica {
   extras: ExtraPublico[];
+  /**
+   * Tarifas adicionales activas de la propiedad, en el idioma del huésped. Las
+   * obligatorias ya van sumadas en el precio cotizado; las opcionales se
+   * ofrecen en el asistente y solo se cobran si se marcan.
+   */
+  tarifas: TarifaPublica[];
   resenas: ResumenResenasPublico | null;
 }
 
@@ -85,6 +96,24 @@ async function extrasDePropiedad(propertyId: string, idioma: Idioma): Promise<Ex
     return catalogoPublico(extras, idioma);
   } catch (e) {
     console.error('[BookingEngine] No se pudo leer el catálogo de extras:', e);
+    return [];
+  }
+}
+
+/**
+ * Catálogo activo de tarifas adicionales de una propiedad, en el idioma del
+ * huésped. Auxiliar: si falla, la página vende sin tarifas opcionales (las
+ * obligatorias viajan en la cotización, que las lee del mismo catálogo).
+ */
+async function tarifasDePropiedad(propertyId: string, idioma: Idioma): Promise<TarifaPublica[]> {
+  try {
+    const tarifas = (await prisma.hospitalityFee.findMany({
+      where: { propertyId, activo: true },
+      orderBy: [{ orden: 'asc' }, { nombre: 'asc' }],
+    })) as unknown as TarifaCatalogo[];
+    return catalogoPublicoDeTarifas(tarifas, idioma);
+  } catch (e) {
+    console.error('[BookingEngine] No se pudo leer el catálogo de tarifas:', e);
     return [];
   }
 }
@@ -127,6 +156,7 @@ export async function datosPaginaPublica(
     pagina.propiedades.map(async (propiedad) => ({
       ...propiedad,
       extras: await extrasDePropiedad(propiedad.id, idioma),
+      tarifas: await tarifasDePropiedad(propiedad.id, idioma),
       resenas: await resenasDePropiedad(propiedad.id),
     }))
   );

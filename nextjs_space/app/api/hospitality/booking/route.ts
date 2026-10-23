@@ -128,6 +128,14 @@ export async function PUT(req: NextRequest) {
             (id): id is string => typeof id === 'string'
           )
         : undefined,
+      // Unidades fuera de la web: misma regla — sin forma de lista no se toca
+      // (mandar basura no puede vaciar la página), y la lista vacía las vuelve
+      // a enseñar todas.
+      unidadesExcluidas: Array.isArray(cuerpo.unidadesExcluidas)
+        ? (cuerpo.unidadesExcluidas as unknown[]).filter(
+            (id): id is string => typeof id === 'string'
+          )
+        : undefined,
       activo: presente('activo') ? cuerpo.activo !== false : undefined,
       plantilla: cuerpo.plantilla,
       personalizacion: cuerpo.personalizacion,

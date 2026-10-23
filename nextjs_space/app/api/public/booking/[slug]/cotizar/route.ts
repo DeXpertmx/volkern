@@ -70,6 +70,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
         desglose: {
           alojamiento: u.cotizacion.alojamiento,
           limpieza: u.cotizacion.limpieza,
+          // Tarifas adicionales obligatorias: ya sumadas en `total`.
+          tarifas: u.cotizacion.tarifas,
           total: u.cotizacion.total,
           anticipo: u.cotizacion.anticipo,
           saldo: u.cotizacion.saldo,

@@ -46,6 +46,12 @@ export interface ConfigBooking {
   tarifaLimpieza: number | null;
   requierePagoOnline: boolean;
   propiedadesPublicadas: string[];
+  /**
+   * Unidades que no salen en la página pública aunque su propiedad esté
+   * publicada. Vacío = salen todas. Solo afecta al motor directo: no cambia la
+   * disponibilidad ni lo que se empuja a los canales.
+   */
+  unidadesExcluidas?: string[];
   activo: boolean;
   /** Plantilla visual (módulo puro `booking-plantillas`); null = clásica. */
   plantilla?: string | null;
@@ -177,6 +183,21 @@ export function propiedadesPublicables(
 }
 
 /**
+ * Deja solo las unidades que existen y son del tenant.
+ *
+ * La exclusión es una decisión sobre las unidades propias: un id ajeno o ya
+ * borrado no puede sobrevivir en la lista, porque la página pública la lee para
+ * decidir qué enseña.
+ */
+export function unidadesExcluibles(
+  idsSolicitados: string[],
+  unidadesDelTenant: Array<{ id: string }>
+): string[] {
+  const propias = new Set(unidadesDelTenant.map((u) => u.id));
+  return Array.from(new Set(idsSolicitados.filter((id) => propias.has(id))));
+}
+
+/**
  * Las URLs públicas del motor viven en un módulo puro (`booking-urls`) porque
  * las usa también el panel del hotel, que es de cliente: se reexportan para que
  * el resto del producto siga importándolas desde aquí, sin dos verdades.
@@ -213,6 +234,12 @@ export interface EntradaConfigBooking {
   tarifaLimpieza?: unknown;
   requierePagoOnline?: boolean;
   propiedadesPublicadas?: string[];
+  /**
+   * Unidades ocultas de la página pública: AUSENTE = sin cambio; presente = se
+   * sanea contra las unidades reales del tenant (una lista vacía vuelve a
+   * enseñarlas todas).
+   */
+  unidadesExcluidas?: string[];
   activo?: boolean;
   /** Plantilla visual: valor del módulo puro o vacío = clásica. */
   plantilla?: unknown;
@@ -239,9 +266,11 @@ export async function guardarConfigBooking(
   const slug = validarSlug(entrada.slug);
   if (!slug.ok) return { ok: false, error: slug.error };
 
+  // Propiedades con sus unidades: la lista de publicadas se sanea contra las
+  // primeras y la de excluidas contra las segundas, en una sola consulta.
   const propiedades = await prisma.hospitalityProperty.findMany({
     where: { tenantId },
-    select: { id: true },
+    select: { id: true, units: { select: { id: true } } },
   });
 
   // AUSENTE en el body = sin cambio, igual que plantilla/personalización/dominio.
@@ -252,6 +281,16 @@ export async function guardarConfigBooking(
     entrada.propiedadesPublicadas === undefined
       ? undefined
       : propiedadesPublicables(entrada.propiedadesPublicadas, propiedades);
+
+  // Unidades fuera de la web: mismo criterio que las propiedades — ausente =
+  // sin cambio; presente se sanea contra las unidades reales del tenant.
+  const excluidas =
+    entrada.unidadesExcluidas === undefined
+      ? undefined
+      : unidadesExcluibles(
+          entrada.unidadesExcluidas,
+          propiedades.flatMap((p) => p.units ?? [])
+        );
 
   // La divisa publicada es una decisión del tenant; si no la elige, se guarda nula
   // y la página publica en la moneda del tenant. La del esquema no entra aquí.
@@ -301,6 +340,7 @@ export async function guardarConfigBooking(
       ? { requierePagoOnline: entrada.requierePagoOnline === true }
       : {}),
     ...(publicadas !== undefined ? { propiedadesPublicadas: publicadas } : {}),
+    ...(excluidas !== undefined ? { unidadesExcluidas: excluidas } : {}),
     ...(entrada.activo !== undefined ? { activo: entrada.activo !== false } : {}),
   };
 

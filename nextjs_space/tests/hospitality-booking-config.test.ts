@@ -12,6 +12,7 @@ import {
   normalizarSlug,
   normalizarTarifaLimpieza,
   propiedadesPublicables,
+  unidadesExcluibles,
   urlEmbedBooking,
   urlPublicaBooking,
   validarSlug,
@@ -96,6 +97,20 @@ describe('propiedadesPublicables', () => {
 
   it('sin propiedades del tenant no publica nada', () => {
     expect(propiedadesPublicables(['p1'], [])).toEqual([]);
+  });
+});
+
+describe('unidadesExcluibles', () => {
+  it('deja fuera lo que no es del tenant y no repite', () => {
+    const resultado = unidadesExcluibles(
+      ['u1', 'u2', 'ajena', 'u1', 'borrada'],
+      [{ id: 'u1' }, { id: 'u2' }]
+    );
+    expect(resultado).toEqual(['u1', 'u2']);
+  });
+
+  it('sin unidades del tenant no excluye nada', () => {
+    expect(unidadesExcluibles(['u1'], [])).toEqual([]);
   });
 });
 
