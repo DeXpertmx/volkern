@@ -44,6 +44,7 @@ import { prisma } from '@/lib/db';
 import type { Prisma } from '@prisma/client';
 import { fetchReservations, updateConnectivityStatus } from './connectivity';
 import { ESTADOS_RESERVA_VIVA } from './estados';
+import { VINCULO_PENDIENTE_REVISION } from './vinculo-revision';
 import {
   DIAS_BARRIDO_RESERVAS_ATRAS,
   estanciaImportable,
@@ -203,7 +204,13 @@ export async function runReconciliation(
     },
     include: {
       mappings: {
-        where: { provider: 'channel_connectivity', estado: 'activo' },
+        // Lectura de ENTRADA (reconciliación de reservas): los pendientes de
+        // revisión también cuentan como hotel del que importar (ver
+        // vinculo-revision.ts).
+        where: {
+          provider: 'channel_connectivity',
+          estado: { in: ['activo', VINCULO_PENDIENTE_REVISION] },
+        },
         select: { externalPropertyId: true },
         take: 1,
       },

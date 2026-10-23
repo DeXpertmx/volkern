@@ -71,12 +71,15 @@ describe('resumen periódico de vínculos automáticos', () => {
     expect(mocks.hospitalitySyncLog.create).not.toHaveBeenCalled();
   });
 
-  it('consulta solo los vínculos activos que creó el webhook', async () => {
+  it('consulta los automáticos sin confirmar: activos viejos y pendientes de revisión nuevos', async () => {
     await runHospitalityVinculosPendientesScan(AHORA);
 
     const where = mocks.connectivityMapping.findMany.mock.calls[0][0].where;
     expect(where.provider).toBe('channel_connectivity');
-    expect(where.estado).toBe('activo');
+    // El resumen es solo el recordatorio, así que cubre los dos orígenes: los
+    // automáticos ANTERIORES que siguen `activo` y los nuevos
+    // `pendiente_revision` del peaje (ver lib/hospitality/vinculo-revision.ts).
+    expect(where.estado).toEqual({ in: ['activo', 'pendiente_revision'] });
     expect(where.metadata).toEqual({
       path: ['origen'],
       equals: 'vinculacion_automatica_webhook',

@@ -23,6 +23,7 @@ const base: OnboardingEstado = {
   unidades: 2,
   unidadesConDatosOperativos: 2,
   unidadesVinculadas: 2,
+  vinculosPendientesRevision: 0,
   hotelCode: 'sandbox-pms',
   conectividadConfigurada: true,
   pruebas: { disponibilidad: 'exito', tarifas: 'exito', reserva: 'exito' },
@@ -120,6 +121,51 @@ describe('Hospitality onboarding (§31) — pasos', () => {
     expect(estaConectada('conectada')).toBe(true);
     expect(estaConectada('activa')).toBe(false);
     expect(etiquetaEstadoPropiedad('conectada')).toBe('Conectada');
+  });
+});
+
+// ─── Peaje de revisión de vínculos automáticos (canal-seguridad) ───────────
+//
+// Los vínculos que el webhook crea solo nacen `pendiente_revision` (ver
+// vinculo-revision.ts); el onboarding los cuenta en `vinculosPendientesRevision`
+// y el paso 10 NO se completa mientras alguno quede sin revisar: activar con
+// una pendiente sería empezar a publicar una habitación que nadie miró.
+describe('Hospitality onboarding — peaje de revisión de vínculos automáticos', () => {
+  it('con un vínculo pendiente la activación se bloquea y nombra la revisión', () => {
+    const estado = { ...base, vinculosPendientesRevision: 1 };
+    const { ok, faltantes } = puedeActivar(estado);
+    expect(ok).toBe(false);
+    expect(faltantes.some((f) => f.includes('Revise 1 vínculo'))).toBe(true);
+  });
+
+  it('el paso 10 queda bloqueado con el detalle del peaje y el paso 6 sigue completado', () => {
+    const estado = { ...base, vinculosPendientesRevision: 2 };
+    const pasos = computeOnboardingSteps(estado);
+    const vincular = pasos.find((p) => p.clave === 'vincular');
+    expect(vincular?.estado).toBe('completado');
+    expect(vincular?.detalle).toContain('2 vínculo(s) automáticos esperan revisión');
+    expect(pasos[9].estado).toBe('bloqueado');
+  });
+
+  it('revisar todo reabre la activación (el peaje desaparece)', () => {
+    expect(puedeActivar({ ...base, vinculosPendientesRevision: 0 })).toEqual({
+      ok: true,
+      faltantes: [],
+    });
+    const pasos = computeOnboardingSteps({ ...base, vinculosPendientesRevision: 0 });
+    expect(pasos[9].estado).toBe('pendiente');
+    expect(pasos.find((p) => p.clave === 'vincular')?.detalle).not.toContain('esperan revisión');
+  });
+
+  it('la página del wizard pinta la banda y el botón de confirmar (guardia de la pantalla)', () => {
+    const fuente = fs.readFileSync(
+      path.join(RAIZ, 'app/dashboard/hospitality/onboarding/page.tsx'),
+      'utf8'
+    );
+    expect(fuente).toContain('vinculoPendiente');
+    expect(fuente).toContain('Pendiente de revisión');
+    expect(fuente).toContain('esperan revisión');
+    expect(fuente).toContain('confirmarVinculo');
   });
 });
 

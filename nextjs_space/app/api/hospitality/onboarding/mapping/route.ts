@@ -10,6 +10,12 @@ export const dynamic = 'force-dynamic';
  *
  * Al revincular una unidad, el vínculo anterior queda inactivo para que una
  * unidad nunca empuje a dos habitaciones a la vez.
+ *
+ * GUARDAR ES LA REVISIÓN: todo vínculo que sale de aquí lleva
+ * `metadataConfirmado` y estado `activo`, así que un vínculo automático
+ * (`pendiente_revision`) que el operador confirme —o reasigne— deja de
+ * pendiente y vuelve a publicar (ver vinculo-revision.ts). El cotejo se hace
+ * contra el catálogo real del proveedor (paso 5): nada se confirma a ciegas.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -18,6 +24,7 @@ import { authenticateRequest } from '@/lib/api-key-auth';
 import { exigirPermisoHospitality } from '@/lib/hospitality/permissions';
 import { logAuditAction } from '@/lib/permissions';
 import { testConnectivityConnection } from '@/lib/hospitality/connectivity';
+import { VINCULO_PENDIENTE_REVISION } from '@/lib/hospitality/vinculo-revision';
 
 const PROVIDER = 'channel_connectivity';
 
@@ -173,9 +180,19 @@ export async function POST(req: NextRequest) {
     // Aplica los vínculos.
     const vinculados: Array<{ unitId: string; roomCode: string; rateplanCode: string | null }> = [];
     for (const a of asignaciones) {
+      // Los pendientes de revisión de esta unidad también se apagan al
+      // reasignar: si el operador lleva la unidad a otra habitación, el
+      // vínculo automático viejo no puede seguir resolviendo reservas hacia
+      // ella. Sin el estado vivo en el filtro, lo pendiente quedaría
+      // escondido y seguiría importando (entrada) a la unidad reasignada.
       const previos = await prisma.connectivityMapping.findMany({
-        where: { tenantId, unitId: a.unitId, provider: PROVIDER, estado: 'activo' },
-        select: { id: true, externalPropertyId: true, externalUnitCode: true },
+        where: {
+          tenantId,
+          unitId: a.unitId,
+          provider: PROVIDER,
+          estado: { in: ['activo', VINCULO_PENDIENTE_REVISION] },
+        },
+        select: { id: true, estado: true, externalPropertyId: true, externalUnitCode: true },
       });
 
       // Lo que ya apuntaba al mismo destino se conserva (idempotente).

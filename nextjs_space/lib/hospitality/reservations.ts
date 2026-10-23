@@ -15,6 +15,7 @@ import {
 } from '@/lib/hospitality/events';
 import { esReservaViva } from '@/lib/hospitality/estados';
 import { registrarHoldConfirmado } from '@/lib/hospitality/holds-audit';
+import { VINCULO_PENDIENTE_REVISION } from '@/lib/hospitality/vinculo-revision';
 
 /**
  * Reservation Engine — procesa los eventos del webhook de reservas de la capa
@@ -347,13 +348,19 @@ function buildGuestData(payload: WebhookReservationPayload): Prisma.InputJsonVal
   };
 }
 
-/** Carga los mappings activos de un hotelCode con su propiedad y unidad. */
+/**
+ * Carga los mappings trabajables de un hotelCode con su propiedad y unidad.
+ * Lectura de ENTRADA (webhook): incluye los `pendiente_revision` de la
+ * vinculación automática (ver vinculo-revision.ts) — la reserva quizá es la
+ * que provocó el vínculo; rechazarla ahora lo rompería. La SALIDA no pasa
+ * por aquí: el dispatcher que empuja al canal filtra `estado: 'activo'`.
+ */
 async function cargarMappingsActivos(hotelCode: string) {
   return prisma.connectivityMapping.findMany({
     where: {
       provider: 'channel_connectivity',
       externalPropertyId: hotelCode,
-      estado: 'activo',
+      estado: { in: ['activo', VINCULO_PENDIENTE_REVISION] },
     },
     include: {
       property: true,

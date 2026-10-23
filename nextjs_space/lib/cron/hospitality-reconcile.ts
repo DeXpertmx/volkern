@@ -41,6 +41,7 @@ import {
   DIAS_BARRIDO_RESERVAS_ADELANTE,
   DIAS_BARRIDO_RESERVAS_ATRAS,
 } from '@/lib/hospitality/ventana-reservas';
+import { VINCULO_PENDIENTE_REVISION } from '@/lib/hospitality/vinculo-revision';
 
 /**
  * Tope de avisos de inventario que se listan en el panel de crons: con muchos
@@ -80,9 +81,18 @@ interface ResumenTenant {
 export async function runHospitalityReconcileScan(): Promise<HospitalityReconcileScanResult> {
   const startedAt = Date.now();
 
-  // Tenants con al menos una propiedad mapeada a conectividad activa.
+  // Tenants con al menos una propiedad mapeada a conectividad. El barrido es
+  // IMPORTACIÓN (ver vinculo-revision.ts): los vínculos pendientes de revisión
+  // también delimitan a qué tenant reconciliar.
   const props = await prisma.hospitalityProperty.findMany({
-    where: { mappings: { some: { provider: 'channel_connectivity', estado: 'activo' } } },
+    where: {
+      mappings: {
+        some: {
+          provider: 'channel_connectivity',
+          estado: { in: ['activo', VINCULO_PENDIENTE_REVISION] },
+        },
+      },
+    },
     select: { tenantId: true },
     distinct: ['tenantId'],
   });

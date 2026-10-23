@@ -21,6 +21,7 @@ import {
   normalizarMensajeEntrante,
 } from './mensajes-canal';
 import { enviarMensajeCanal } from './connectivity';
+import { VINCULO_PENDIENTE_REVISION } from './vinculo-revision';
 
 /** Igual que el resto de la capa: un solo adapter de conectividad. */
 const PROVIDER = 'channel_connectivity';
@@ -62,8 +63,14 @@ export const ACCION_MENSAJE_CANAL = 'message';
  * bandeja de otro hotel.
  */
 async function resolverPropiedad(hotelCode: string) {
+  // Lectura de ENTRADA (webhook de mensajes): un vínculo pendiente de revisión
+  // también responde "de qué hotel es este mensaje" (ver vinculo-revision.ts).
   return prisma.connectivityMapping.findFirst({
-    where: { provider: PROVIDER, externalPropertyId: hotelCode, estado: 'activo' },
+    where: {
+      provider: PROVIDER,
+      externalPropertyId: hotelCode,
+      estado: { in: ['activo', VINCULO_PENDIENTE_REVISION] },
+    },
     orderBy: { fechaCreacion: 'asc' },
     select: { tenantId: true, propertyId: true },
   });

@@ -16,6 +16,17 @@ import { TIPO_LINEA_PENALIZACION } from './penalizaciones';
 import { CAPACIDADES_HOSPITALITY } from './capacidades';
 import { hasPermisoDeRol } from '@/lib/permissions-core';
 import { MONEDA_MINIMA_ESQUEMA } from '@/lib/moneda';
+import {
+  VINCULO_PENDIENTE_REVISION,
+  estadoDeVinculoAutomatico,
+} from './vinculo-revision';
+
+/**
+ * Estados de vínculo que las LECTURAS DE ENTRADA (resolver una reserva, un
+ * mensaje, una reconciliación) aceptan. La salida (push) sigue filtrando
+ * `estado: 'activo'` en cada sitio que empuja — ver vinculo-revision.ts.
+ */
+const ESTADOS_ENTRADA = { in: ['activo', VINCULO_PENDIENTE_REVISION] };
 
 /**
  * Acciones del webhook de RESERVAS, y solo esas.
@@ -683,7 +694,10 @@ export async function cargarHotelCodesDelTenant(
         entrada = { propertyId: p.id, property: p.nombre, activos: [] };
         porHotelCode.set(code, entrada);
       }
-      if (m.estado === 'activo') {
+      // Los pendientes de revisión también resolven la habitación del lado
+      // ENTRANTE (misma regla que el webhook); quien sea que la confirma o la
+      // deshace, mientras tanto la importación no se pierde.
+      if (m.estado === 'activo' || m.estado === VINCULO_PENDIENTE_REVISION) {
         entrada.activos.push({ externalUnitCode: m.externalUnitCode, unit: m.unit });
       }
     }
@@ -776,8 +790,10 @@ export async function vincularUnidadAMapping(input: {
 }): Promise<void> {
   const { tenantId, propertyId, hotelCode, unitId, roomCode, rateplanCode, metadata, traza } = input;
 
+  // Una unidad tampoco se va a dos habitaciones con lo pendiente: un vínculo
+  // automático sin revisar es igual de vinculante para la entrada.
   const previos = await prisma.connectivityMapping.findMany({
-    where: { tenantId, unitId, provider: PROVIDER_CONECTIVIDAD, estado: 'activo' },
+    where: { tenantId, unitId, provider: PROVIDER_CONECTIVIDAD, estado: ESTADOS_ENTRADA },
     select: { id: true, externalPropertyId: true, externalUnitCode: true },
   });
   const yaCorrecto = previos.find(
@@ -807,7 +823,11 @@ export async function vincularUnidadAMapping(input: {
       externalPropertyId: hotelCode,
       externalUnitCode: roomCode,
       externalRatePlanCode: rateplanCode,
-      estado: 'activo',
+      // Guardia del operador: un vínculo creado solo por el webhook nace
+      // `pendiente_revision` — no publica hasta que una persona lo confirme —
+      // mientras uno que nace de una acción del operador (o de la revisión del
+      // wizard) sigue siendo `activo`. La regla vive en vinculo-revision.ts.
+      estado: estadoDeVinculoAutomatico(metadata),
       ...(metadata && { metadata: metadata as Prisma.InputJsonValue }),
     },
     update: {
@@ -815,7 +835,7 @@ export async function vincularUnidadAMapping(input: {
       propertyId,
       unitId,
       externalRatePlanCode: rateplanCode,
-      estado: 'activo',
+      estado: estadoDeVinculoAutomatico(metadata),
       ...(metadata && { metadata: metadata as Prisma.InputJsonValue }),
     },
   });
@@ -1228,6 +1248,7 @@ export async function proponerVinculacion(input: {
   }
 
   // Catálogo real del proveedor (una consulta por hotelCode y petición).
+  // (la consulta real empieza más abajo; este marcador solo separa bloques)
   let catalogo: Map<string, HabitacionCatalogo> | null;
   const cacheado = input.cache?.catalogos.get(hotelCode);
   if (cacheado !== undefined) {
@@ -1270,7 +1291,9 @@ export async function proponerVinculacion(input: {
     };
   }
 
-  // Unidades libres de la propiedad (sin ningún vínculo activo).
+  // Unidades libres de la propiedad (sin ningún vínculo trabajable: lo
+  // pendiente de revisión también cuenta — la entrada ya lo usa y no puedo
+  // volver a ofrecérsela a otra habitación mientras nadie la confirme).
   const units = await prisma.hospitalityUnit.findMany({
     where: { tenantId, propertyId },
     orderBy: { nombre: 'asc' },
@@ -1280,7 +1303,7 @@ export async function proponerVinculacion(input: {
       codigo: true,
       capacidad: true,
       mappings: {
-        where: { provider: PROVIDER_CONECTIVIDAD, estado: 'activo' },
+        where: { provider: PROVIDER_CONECTIVIDAD, estado: ESTADOS_ENTRADA },
         select: { id: true },
       },
     },
@@ -1380,8 +1403,10 @@ export async function proponerVinculacion(input: {
 async function propiedadDeHotelCode(
   hotelCode: string
 ): Promise<{ tenantId: string; propertyId: string } | null> {
+  // Lectura de ENTRADA: resuelve hacia dónde va la reserva, y un vínculo
+  // pendiente de revisión también responde a eso (ver vinculo-revision.ts).
   const mappings = await prisma.connectivityMapping.findMany({
-    where: { provider: PROVIDER_CONECTIVIDAD, externalPropertyId: hotelCode, estado: 'activo' },
+    where: { provider: PROVIDER_CONECTIVIDAD, externalPropertyId: hotelCode, estado: ESTADOS_ENTRADA },
     orderBy: { fechaCreacion: 'asc' },
     select: { tenantId: true, propertyId: true },
   });
@@ -1463,7 +1488,10 @@ export async function listarVinculosAutomaticosPendientes(
   const mappings = await prisma.connectivityMapping.findMany({
     where: {
       provider: PROVIDER_CONECTIVIDAD,
-      estado: 'activo',
+      // Los automáticos nacen ahora `pendiente_revision` (los peajes del
+      // wizard los cuentan por estado); los `activo` anteriores con metadata
+      // webhook siguen aquí para el resumen periódico, que es solo un aviso.
+      estado: ESTADOS_ENTRADA,
       ...(tenantId ? { tenantId } : {}),
       metadata: { path: ['origen'], equals: 'vinculacion_automatica_webhook' },
     },

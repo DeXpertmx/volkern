@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { runReconciliation } from '@/lib/hospitality/reconciliation';
+import { VINCULO_PENDIENTE_REVISION } from '@/lib/hospitality/vinculo-revision';
 
 async function requireSuperadmin() {
   const session = await getServerSession(authOptions);
@@ -41,8 +42,17 @@ export async function POST(req: NextRequest) {
     if (tenantId) {
       tenants = [tenantId];
     } else {
+      // La reconciliación es IMPORTACIÓN (ver vinculo-revision.ts): los
+      // vínculos pendientes de revisión también delimitan al tenant.
       const props = await prisma.hospitalityProperty.findMany({
-        where: { mappings: { some: { provider: 'channel_connectivity', estado: 'activo' } } },
+        where: {
+          mappings: {
+            some: {
+              provider: 'channel_connectivity',
+              estado: { in: ['activo', VINCULO_PENDIENTE_REVISION] },
+            },
+          },
+        },
         select: { tenantId: true },
         distinct: ['tenantId'],
       });

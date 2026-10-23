@@ -34,6 +34,7 @@ import { logAuditAction } from '@/lib/permissions';
 import { PROVIDER_CONECTIVIDAD } from '@/lib/hospitality/incidencias';
 import { toIsoDate } from '@/lib/hospitality/calendar';
 import { ESTADOS_RESERVA_VIVA } from '@/lib/hospitality/estados';
+import { VINCULO_PENDIENTE_REVISION } from '@/lib/hospitality/vinculo-revision';
 
 /** Máximo de reservas listadas en el preview (el aviso no es un informe). */
 const MAX_RESERVAS_PREVIEW = 20;
@@ -180,8 +181,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Un vínculo pendiente de revisión también se deshace: para el operador es
+    // igual de vínculo, solo aún nadie lo confirmó (ver vinculo-revision.ts).
     const vinculo = await prisma.connectivityMapping.findFirst({
-      where: { tenantId, unitId, provider: PROVIDER_CONECTIVIDAD, estado: 'activo' },
+      where: {
+        tenantId,
+        unitId,
+        provider: PROVIDER_CONECTIVIDAD,
+        estado: { in: ['activo', VINCULO_PENDIENTE_REVISION] },
+      },
       select: {
         id: true,
         externalPropertyId: true,

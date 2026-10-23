@@ -48,6 +48,7 @@ import { esReservaViva } from '@/lib/hospitality/estados';
 import { logAuditAction } from '@/lib/permissions';
 import { notifyDeveloperSensitiveAction } from '@/lib/telegram/developer-notify';
 import { TIPO_LOG_DIVERGENCIAS_INVENTARIO } from '@/lib/hospitality/inventario-divergencias';
+import { VINCULO_PENDIENTE_REVISION } from '@/lib/hospitality/vinculo-revision';
 
 async function requireSuperadmin() {
   const session = await getServerSession(authOptions);
@@ -361,8 +362,16 @@ export async function POST(req: NextRequest) {
         { status: 409 }
       );
     }
+    // Re-verificación contra el proveedor es IMPORTACIÓN (ver
+    // vinculo-revision.ts): un vínculo pendiente de revisión también da el
+    // hotelCode contra el que preguntar.
     const mapping = await prisma.connectivityMapping.findFirst({
-      where: { propertyId, tenantId: log.tenantId, provider: 'channel_connectivity', estado: 'activo' },
+      where: {
+        propertyId,
+        tenantId: log.tenantId,
+        provider: 'channel_connectivity',
+        estado: { in: ['activo', VINCULO_PENDIENTE_REVISION] },
+      },
       select: { externalPropertyId: true },
     });
     const hotelCode = mapping?.externalPropertyId ?? null;

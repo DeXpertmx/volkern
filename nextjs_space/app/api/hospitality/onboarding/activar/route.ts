@@ -5,7 +5,9 @@ export const dynamic = 'force-dynamic';
  *
  * Marca la propiedad como conectada. El servidor revalida los requisitos
  * reales (unidades con tarifa, conectividad, mapping completo y las tres
- * pruebas en éxito): la UI no puede saltarse pasos.
+ * pruebas en éxito): la UI no puede saltarse pasos. Entre ellos está el
+ * peaje de revisión: si hay vínculos automáticos `pendiente_revision`, la
+ * activación se bloquea hasta que el operador los coteje en el paso 6.
  */
 
 import { NextRequest, NextResponse } from 'next/server';

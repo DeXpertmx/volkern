@@ -13,6 +13,7 @@
  */
 
 import type { WebhookReservationPayload } from './reservations';
+import { MOTIVO_PENDIENTE_DOTACION } from './vinculo-revision';
 import { monedaEscritura } from '@/lib/moneda';
 
 export type PasoClave =
@@ -70,6 +71,12 @@ export interface OnboardingEstado {
   unidadesConDatosOperativos: number;
   /** Unidades con mapping activo (unidad ↔ room/rateplan). */
   unidadesVinculadas: number;
+  /**
+   * Vínculos creados por el webhook que nadie ha confirmado todavía
+   * (`pendiente_revision`, ver vinculo-revision.ts): no publican hasta que
+   * alguien los revise, y activar con alguna pendiente queda bloqueado.
+   */
+  vinculosPendientesRevision: number;
   /** hotelCode externo ya vinculado, si existe. */
   hotelCode: string | null;
   /** La plataforma tiene credenciales de conectividad cargadas. */
@@ -242,7 +249,16 @@ export function computeOnboardingSteps(e: OnboardingEstado): PasoOnboarding[] {
   if (!e.hotelCode) {
     pasos.push(paso('vincular', 'bloqueado', 'Requiere el mapping externo.'));
   } else if (e.unidades > 0 && e.unidadesVinculadas >= e.unidades) {
-    pasos.push(paso('vincular', 'completado', `${e.unidadesVinculadas} unidad(es) vinculadas.`));
+    pasos.push(
+      paso(
+        'vincular',
+        'completado',
+        `${e.unidadesVinculadas} unidad(es) vinculadas.` +
+          (e.vinculosPendientesRevision > 0
+            ? ` ${e.vinculosPendientesRevision} vínculo(s) automáticos esperan revisión.`
+            : '')
+      )
+    );
   } else {
     pasos.push(
       paso(
@@ -304,6 +320,15 @@ export function puedeActivar(e: OnboardingEstado): { ok: boolean; faltantes: str
   if (!e.hotelCode) faltantes.push(PASO_TITULOS.mapping_externo.titulo);
   if (e.unidades > 0 && e.unidadesVinculadas < e.unidades) {
     faltantes.push(PASO_TITULOS.vincular.titulo);
+  }
+  // Peaje de revisión: los vínculos automáticos del webhook nacen
+  // `pendiente_revision` y no publican (ver vinculo-revision.ts). Activar con
+  // una pendiente sería empezar a vender una habitación que nunca revisó una
+  // persona: se exige pasar por el cotejo del wizard antes de producción.
+  if (e.vinculosPendientesRevision > 0) {
+    faltantes.push(
+      `Revise ${e.vinculosPendientesRevision} vínculo(s) automáticos (${MOTIVO_PENDIENTE_DOTACION})`
+    );
   }
   if (e.pruebas.disponibilidad !== 'exito') faltantes.push(PASO_TITULOS.probar_disponibilidad.titulo);
   if (e.pruebas.tarifas !== 'exito') faltantes.push(PASO_TITULOS.probar_tarifas.titulo);

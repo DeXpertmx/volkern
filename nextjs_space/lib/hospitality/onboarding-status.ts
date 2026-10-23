@@ -18,6 +18,10 @@ import {
   type PasoOnboarding,
   type ResultadoPrueba,
 } from './onboarding';
+import {
+  VINCULO_PENDIENTE_REVISION,
+  vinculoPendienteDeRevision,
+} from './vinculo-revision';
 
 export interface UnidadOnboarding {
   id: string;
@@ -36,6 +40,11 @@ export interface UnidadOnboarding {
   rateplanCode: string | null;
   /** El vínculo lo creó el sistema (webhook) y conviene que alguien lo revise. */
   vinculoAutomatico: boolean;
+  /**
+   * El vínculo está `pendiente_revision`: no publica y bloquea la activación
+   * hasta que alguien lo confirme (o lo deshaga) desde el wizard.
+   */
+  vinculoPendiente: boolean;
   /** Motivo con el que el sistema eligió la unidad (si fue automático). */
   vinculoMotivo: string | null;
 }
@@ -103,8 +112,16 @@ export async function loadOnboardingSnapshot(
         moneda: true,
         estado: true,
         mappings: {
-          where: { provider: 'channel_connectivity', estado: 'activo' },
+          // Incluye los pendientes de revisión: el wizard debe mostrarlos
+          // (banda «por revisar») y el peaje de activación los cuenta;
+          // excluirlos escondería justamente lo bloqueante (ver
+          // vinculo-revision.ts).
+          where: {
+            provider: 'channel_connectivity',
+            estado: { in: ['activo', VINCULO_PENDIENTE_REVISION] },
+          },
           select: {
+            estado: true,
             externalPropertyId: true,
             externalUnitCode: true,
             externalRatePlanCode: true,
@@ -157,6 +174,10 @@ export async function loadOnboardingSnapshot(
       vinculada: !!mapping,
       roomCode: mapping?.externalUnitCode ?? null,
       rateplanCode: mapping?.externalRatePlanCode ?? null,
+      // NUEVO esquema: el estado del vínculo lo dice la fila. VIEJO (mappings
+      // automáticos de antes del peaje): metadata webhook con estado activo —
+      // se muestran en la banda, pero no bloquean la activación.
+      vinculoPendiente: !!mapping && vinculoPendienteDeRevision(mapping.estado),
       vinculoAutomatico: metadata?.origen === 'vinculacion_automatica_webhook',
       vinculoMotivo: typeof metadata?.motivo === 'string' ? metadata.motivo : null,
     };
@@ -203,6 +224,9 @@ export async function loadOnboardingSnapshot(
     unidades: unidades.length,
     unidadesConDatosOperativos,
     unidadesVinculadas: unidades.filter((u) => u.vinculada).length,
+    // Peaje del paso 10: solo los NUEVOS automáticos (`pendiente_revision`)
+    // bloquean; los metadata-webhook viejos siguen `activo` y solo avisan.
+    vinculosPendientesRevision: unidades.filter((u) => u.vinculoPendiente).length,
     hotelCode,
     conectividadConfigurada,
     pruebas: resultados,

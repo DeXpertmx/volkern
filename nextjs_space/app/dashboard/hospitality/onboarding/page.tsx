@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import {
   AlertTriangle,
   Building2,
+  Check,
   CheckCircle2,
   DoorOpen,
   Loader2,
@@ -79,6 +80,8 @@ interface UnidadOnboarding {
   /** El vínculo lo creó el sistema al recibir una reserva. */
   vinculoAutomatico: boolean;
   vinculoMotivo: string | null;
+  /** `pendiente_revision`: no publicó nada y bloquea la activación. */
+  vinculoPendiente: boolean;
 }
 
 type EstadoPaso = 'completado' | 'pendiente' | 'error' | 'bloqueado';
@@ -111,6 +114,87 @@ interface Snapshot {
   pruebas: { disponibilidad: string | null; tarifas: string | null; reserva: string | null };
   pasos: PasoOnboarding[];
   puedeActivar: { ok: boolean; faltantes: string[] };
+}
+
+/* ── Cotejo de precios (modal del peaje, lib/hospitality/cotejo-vinculo.ts) ── */
+
+type VeredictoCotejo = 'ok' | 'canal_bajo' | 'sin_reserva' | 'sin_precio';
+
+interface CotejoVinculo {
+  unitId: string | null;
+  unit: string | null;
+  roomCode: string | null;
+  rateplanCode: string | null;
+  motivo: string | null;
+  creadoEn: string;
+  soloInformativo: boolean;
+  canal: {
+    bookingId: string | null;
+    channel: string | null;
+    checkIn: string | null;
+    checkOut: string | null;
+    noches: number | null;
+    importe: number | null;
+    moneda: string | null;
+    porNoche: number | null;
+  } | null;
+  nuestro: {
+    porNoche: number | null;
+    total: number | null;
+    moneda: string | null;
+    fuente: 'plan_vinculado' | 'plan_activo' | 'tarifa_base' | 'sin_precio';
+  };
+  porcentaje: number | null;
+  veredicto: VeredictoCotejo;
+}
+
+interface ResultadoCotejo {
+  ok: boolean;
+  propertyId: string;
+  hotelCode: string | null;
+  vinculos: CotejoVinculo[];
+  conAlerta: number;
+}
+
+/** Etiqueta del veredicto, con la alarma explícita cuando el canal vendió abajo. */
+const ETIQUETA_VEREDICTO: Record<VeredictoCotejo, { texto: string; clase: string; titulo: string }> = {
+  ok: {
+    texto: 'Encaja',
+    clase: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+    titulo: 'El canal vendió a (o por encima de) nuestra tarifa.',
+  },
+  canal_bajo: {
+    texto: 'Vendió por debajo',
+    clase: 'border-red-200 bg-red-100 text-red-800',
+    titulo: 'El canal vendió por debajo de nuestra tarifa: revisa si conviene asumirlo o subir el precio antes de confirmar.',
+  },
+  sin_reserva: {
+    texto: 'Sin reserva que cotejar',
+    clase: 'border-slate-200 bg-slate-50 text-slate-600',
+    titulo: 'No hay reserva del canal para esta unidad: se cambia solo la habitación, no hay precio que comparar.',
+  },
+  sin_precio: {
+    texto: 'Sin precio configurado',
+    clase: 'border-amber-200 bg-amber-100 text-amber-900',
+    titulo: 'La unidad no tiene plan de tarifa activo ni tarifa base: cota y confirma con la tarifa antes de publicar.',
+  },
+};
+
+/** Etiquetas de la fuente del precio, en lenguaje de operador. */
+const ETIQUETA_FUENTE: Record<CotejoVinculo['nuestro']['fuente'], string> = {
+  plan_vinculado: 'plan vinculado (con temporada)',
+  plan_activo: 'plan activo de la unidad',
+  tarifa_base: 'tarifa base de la unidad',
+  sin_precio: 'sin precio',
+};
+
+function dinero(valor: number | null | undefined, moneda: string | null | undefined) {
+  if (valor == null || !Number.isFinite(valor)) return '—';
+  try {
+    return new Intl.NumberFormat('es', { style: 'currency', currency: moneda || 'MXN', maximumFractionDigits: 0 }).format(valor);
+  } catch {
+    return `$${Math.round(valor).toLocaleString('es')}`;
+  }
 }
 
 interface RateplanCatalogo {
@@ -330,6 +414,15 @@ export default function HospitalityOnboardingPage() {
   // Clave del grupo que se está reenviando (hotelCode|roomCode|rateplanCode)
   const [reenviando, setReenviando] = useState<string | null>(null);
   /** Unidad cuyo vínculo automático se está a punto de deshacer (confirmación). */
+  // Cotejo de precios (modal del peaje): lo que el canal vendió contra la
+  // tarifa configurada, por vínculo automático sin confirmar.
+  const [cotejo, setCotejo] = useState<ResultadoCotejo | null>(null);
+  const [cargandoCotejo, setCargandoCotejo] = useState(false);
+  const [cotejoError, setCotejoError] = useState<string | null>(null);
+  /** Vínculo que abrió el modal (null = abierto desde la banda del paso 6). */
+  const [cotejoEnUnidad, setCotejoEnUnidad] = useState<string | null>(null);
+  const [cargandoModalCotejo, setCargandoModalCotejo] = useState(false);
+
   const [unidadADeshacer, setUnidadADeshacer] = useState<UnidadOnboarding | null>(null);
   /** Reservas vivas de esa unidad (preview mientras se confirma el deshacer). */
   const [reservasDeshacer, setReservasDeshacer] = useState<ReservaAfectada[] | null>(null);
@@ -702,6 +795,94 @@ export default function HospitalityOnboardingPage() {
       await cargarIncidencias(snapshot.propiedad.id);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Error guardando el mapping');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  /**
+   * Confirmación del cotejo de un vínculo automático: manda SOLO esa asignación
+   * (la que ya tenía, precargada) al mismo endpoint del paso 6. La validación
+   * contra el catálogo real la hace el servidor, así que «aceptar» y «guardar»
+   * comparten la misma regla; el vínculo sale `activo` con `metadataConfirmado`
+   * y vuelve a publicar (ver vinculo-revision.ts).
+   */
+  /**
+   * Cotejo de precios (server-side): lo que el canal vendió contra nuestra
+   * tarifa. Lo carga el modal de revisión; reglas en cotejo-vinculo.ts.
+   */
+  const cargarCotejo = async (idPropiedad: string) => {
+    setCargandoCotejo(true);
+    try {
+      const res = await fetch(
+        `/api/hospitality/onboarding/cotejo?propertyId=${encodeURIComponent(idPropiedad)}`
+      );
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'No se pudo cotejar los precios');
+      setCotejo(data);
+      setCotejoError(null);
+    } catch (e) {
+      setCotejo(null);
+      setCotejoError(e instanceof Error ? e.message : 'Error al cotejar los precios');
+    } finally {
+      setCargandoCotejo(false);
+    }
+  };
+
+  /**
+   * Abre el MODAL de revisión con el cotejo: habitación correcta Y precio
+   * aceptable — las dos preguntas de la revisión. Al confirmar se re-cota
+   * para que el veredicto del vínculo revisado desaparezca al instante.
+   */
+  const abrirCotejo = async (unidadId?: string) => {
+    if (!snapshot) return;
+    setCotejoEnUnidad(unidadId ?? null);
+    setCargandoModalCotejo(true);
+    try {
+      await cargarCotejo(snapshot.propiedad.id);
+    } finally {
+      setCargandoModalCotejo(false);
+    }
+  };
+
+  /** Confirmar DENTRO del cotejo (el modal ya validó contra el catálogo). */
+  const confirmarDesdeCotejo = async (c: CotejoVinculo) => {
+    if (!snapshot || !c.unitId) return;
+    const unidad = snapshot.unidades.find((u) => u.id === c.unitId);
+    if (!unidad) {
+      toast.error('La unidad del vínculo ya no existe');
+      return;
+    }
+    await confirmarVinculo(unidad);
+    await cargarCotejo(snapshot.propiedad.id);
+  };
+
+  const confirmarVinculo = async (u: UnidadOnboarding) => {
+    if (!snapshot) return;
+    const asignacion = asignaciones[u.id];
+    if (!asignacion?.roomCode) {
+      toast.error('Asigna primero la habitación del proveedor para esa unidad');
+      return;
+    }
+    setBusy(`confirmar-${u.id}`);
+    try {
+      const res = await fetch('/api/hospitality/onboarding/mapping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          propertyId: snapshot.propiedad.id,
+          hotelCode: hotelCodeInput.trim() || snapshot.hotelCode,
+          asignaciones: [
+            { unitId: u.id, roomCode: asignacion.roomCode, rateplanCode: asignacion.rateplanCode || null },
+          ],
+        }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'No se pudo confirmar el vínculo');
+      toast.success(`Vínculo de "${u.nombre}" confirmado: ya publica`);
+      await cargar(snapshot.propiedad.id);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error confirmando el vínculo');
     } finally {
       setBusy(null);
     }
@@ -1238,6 +1419,35 @@ export default function HospitalityOnboardingPage() {
                 </p>
               ) : (
                 <>
+                  {/* Banda del peaje: los automáticos sin revisar existen solo
+                      en la ENTRADA. Hasta que alguien los confirme aquí (o los
+                      deshaga), el canal no vende esas habitaciones y activar
+                      producción queda bloqueado (paso 10). */}
+                  {snapshot.unidades.some((u) => u.vinculoPendiente || u.vinculoAutomatico) && (
+                    <div className="rounded-md border border-amber-200 border-l-4 border-l-amber-400 bg-amber-50 p-3 text-sm">
+                      <p className="font-medium text-amber-900">
+                        {snapshot.unidades.filter((u) => u.vinculoPendiente).length > 0
+                          ? `${snapshot.unidades.filter((u) => u.vinculoPendiente).length} vínculo(s) automáticos esperan revisión`
+                          : 'Hay vínculos automáticos para revisar'}
+                      </p>
+                      <div className="mt-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => void abrirCotejo()}
+                          disabled={busy !== null}
+                        >
+                          Revisar vínculos y precios
+                        </Button>
+                      </div>
+                      <p className="mt-0.5 text-amber-800">
+                        Los creó el sistema al entrar una reserva. Mientras nadie los confirme no publican:
+                        el canal no vende esas habitaciones. Revisa abajo que cada unidad apunta a la
+                        habitación correcta del catálogo y confirma (o deshaz): no se inventa nada (§0.1).
+                      </p>
+                    </div>
+                  )}
                   <div className="space-y-3">
                     {snapshot.unidades.map((u) => (
                       <div key={u.id} className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr] sm:items-end">
@@ -1246,17 +1456,47 @@ export default function HospitalityOnboardingPage() {
                           <p className="text-slate-500">
                             {u.codigo || 'sin código'} · {u.capacidad} huésped(es)
                           </p>
-                          {u.vinculoAutomatico && (
+                          {(u.vinculoAutomatico || u.vinculoPendiente) && (
                             <div className="mt-1 flex flex-wrap items-center gap-2">
-                              <Badge
-                                variant="outline"
-                                className="border-amber-200 bg-amber-100 text-amber-800"
-                                title={`Vínculo creado por el sistema al recibir una reserva${
-                                  u.vinculoMotivo ? ` (${u.vinculoMotivo})` : ''
-                                }`}
-                              >
-                                Vínculo automático
-                              </Badge>
+                              {u.vinculoPendiente && (
+                                <Badge
+                                  variant="outline"
+                                  className="border-red-200 bg-red-100 text-red-800"
+                                  title={`Creó el sistema al recibir una reserva y aún nadie lo confirmó: no publica hasta que revises el cotejo${
+                                    u.vinculoMotivo ? ` (${u.vinculoMotivo})` : ''
+                                  }`}
+                                >
+                                  Pendiente de revisión
+                                </Badge>
+                              )}
+                              {!u.vinculoPendiente && (
+                                <Badge
+                                  variant="outline"
+                                  className="border-amber-200 bg-amber-100 text-amber-800"
+                                  title={`Vínculo creado por el sistema al recibir una reserva${
+                                    u.vinculoMotivo ? ` (${u.vinculoMotivo})` : ''
+                                  }`}
+                                >
+                                  Vínculo automático
+                                </Badge>
+                              )}
+                              {u.vinculoPendiente && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 px-2 text-xs border-emerald-300 text-emerald-800 hover:bg-emerald-50"
+                                  onClick={() => void abrirCotejo(u.id)}
+                                  disabled={busy !== null}
+                                  title="Abre el cotejo: habitación correcta Y precio del canal contra tu tarifa. Confirmar aquí sin mirar no se puede."
+                                >
+                                  {busy === `confirmar-${u.id}` ? (
+                                    <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <Check className="mr-1 h-3 w-3" />
+                                  )}
+                                  Revisar precios
+                                </Button>
+                              )}
                               <Button
                                 size="sm"
                                 variant="ghost"
@@ -1513,6 +1753,146 @@ export default function HospitalityOnboardingPage() {
                 Deshacer vínculo
               </AlertDialogAction>
             </AccionHospitality>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Modal del peaje: el cotejo de los vínculos automáticos. Dos preguntas
+          por vínculo: ¿es ESTA la habitación del catálogo? y ¿el precio que el
+          canal ya vendió encaja con nuestra tarifa? Confirmar sin mirar se
+          puede, pero el veredicto queda delante (canal_bajo, sin_precio…). */}
+      <AlertDialog
+        open={cargandoModalCotejo || cotejo !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCotejo(null);
+            setCotejoEnUnidad(null);
+          }
+        }}
+      >
+        <AlertDialogContent className="max-w-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Revisar vínculos automáticos</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-1 text-sm text-slate-500">
+                <p>
+                  Los creó el sistema al recibir una reserva. El cotejo compara lo que el canal
+                  cobró en esa reserva con la tarifa que tienes configurada para la unidad (la
+                  misma que empujas al canal). Confirmar los apunta a publicar; deshacer los deja
+                  fuera y no se vuelven a crear solos.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="max-h-[50vh] space-y-3 overflow-y-auto pr-1">
+            {cargandoCotejo && (
+              <p className="flex items-center gap-2 text-sm text-slate-500">
+                <Loader2 className="h-4 w-4 animate-spin" /> Cotejando precios…
+              </p>
+            )}
+            {!cargandoCotejo && cotejoError && (
+              <p className="text-sm text-destructive">{cotejoError}</p>
+            )}
+            {!cargandoCotejo && !cotejoError && cotejo && cotejo.vinculos.length === 0 && (
+              <p className="text-sm text-slate-500">No quedan vínculos automáticos por revisar.</p>
+            )}
+            {!cargandoCotejo && !cotejoError && cotejo && (
+              <>
+                {cotejo.vinculos.filter((c) => !c.soloInformativo).length === 0 && (
+                  <p className="text-sm text-slate-500">No quedan vínculos automáticos por revisar.</p>
+                )}
+                {cotejo.vinculos
+                  .filter((c) => !c.soloInformativo)
+                  .map((c) => (
+                    <div key={`${c.unitId}-${c.roomCode}`} className="rounded-md border border-slate-200 p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm font-medium text-slate-800">
+                          {c.unit || 'Unidad'} <span className="text-slate-400">↔</span> {c.roomCode || '?'}
+                          {c.rateplanCode ? <span className="text-slate-500"> · {c.rateplanCode}</span> : null}
+                        </p>
+                        <Badge
+                          variant="outline"
+                          className={ETIQUETA_VEREDICTO[c.veredicto].clase}
+                          title={ETIQUETA_VEREDICTO[c.veredicto].titulo}
+                        >
+                          {ETIQUETA_VEREDICTO[c.veredicto].texto}
+                          {c.veredicto === 'canal_bajo' && c.porcentaje != null
+                            ? ` (${c.porcentaje}%)`
+                            : ''}
+                        </Badge>
+                      </div>
+                      <div className="mt-2 grid gap-1 text-xs text-slate-600">
+                        {c.canal ? (
+                          <p>
+                            <span className="font-medium text-slate-700">Canal</span> · {c.canal.channel || '—'} ·{' '}
+                            {c.canal.noches} noche(s) ·{' '}
+                            <span className="font-medium">
+                              {dinero(c.canal.importe, c.canal.moneda)} total ({dinero(c.canal.porNoche, c.canal.moneda)}/noche)
+                            </span>
+                            {c.canal.bookingId ? ` · ${c.canal.bookingId}` : ''}
+                          </p>
+                        ) : (
+                          <p>
+                            <span className="font-medium text-slate-700">Canal</span> · sin reserva para cotejar
+                            (el vínculo se creó por el roomCode, no por el precio)
+                          </p>
+                        )}
+                        <p>
+                          <span className="font-medium text-slate-700">Tu tarifa</span> ·{' '}
+                          {ETIQUETA_FUENTE[c.nuestro.fuente]} ·{' '}
+                          <span className="font-medium">
+                            {dinero(c.nuestro.porNoche, c.nuestro.moneda)}/noche
+                            {c.nuestro.total != null ? ` · ${dinero(c.nuestro.total, c.nuestro.moneda)} el rango de la reserva` : ''}
+                          </span>
+                        </p>
+                        {c.canal?.moneda && c.nuestro.moneda && c.canal.moneda !== c.nuestro.moneda && (
+                          <p className="text-amber-700">
+                            Ojo: el canal vendió en {c.canal.moneda} y tu tarifa está en {c.nuestro.moneda}.
+                          </p>
+                        )}
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <Button
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => void confirmarDesdeCotejo(c)}
+                          disabled={busy !== null}
+                        >
+                          {busy === `confirmar-${c.unitId}` ? (
+                            <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                          ) : (
+                            <Check className="mr-1 h-3 w-3" />
+                          )}
+                          Confirmar tal cual
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+                          onClick={() => {
+                            const unidad = snapshot?.unidades.find((u) => u.id === c.unitId);
+                            if (unidad) {
+                              setCotejo(null);
+                              setUnidadADeshacer(unidad);
+                              setReservasDeshacer(null);
+                              void cargarReservasADeshacer(unidad);
+                            }
+                          }}
+                          disabled={busy !== null}
+                        >
+                          <Undo2 className="mr-1 h-3 w-3" />
+                          Deshacer
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+              </>
+            )}
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cerrar</AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

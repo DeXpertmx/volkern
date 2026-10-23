@@ -50,6 +50,7 @@ import { fetchReservations } from './connectivity';
 // (el barrido no importa este módulo): nada de ciclos.
 import { normalizePayload } from './reconciliation';
 import { resolveMapping } from './reservations';
+import { VINCULO_PENDIENTE_REVISION } from './vinculo-revision';
 import {
   DIAS_BARRIDO_RESERVAS_ADELANTE,
   DIAS_BARRIDO_RESERVAS_ATRAS,
@@ -183,18 +184,28 @@ export async function detectarReservasFaltantes(input?: {
   };
 
   // Solo propiedades VINCULADAS: sin hotelCode no hay nada que preguntar.
+  // Lectura de ENTRADA (recuperación de reservas): un vínculo pendiente de
+  // revisión también identifica al hotel (ver vinculo-revision.ts).
   const candidatas = await prisma.hospitalityProperty.findMany({
     where: {
       ...(input?.tenantId ? { tenantId: input.tenantId } : {}),
       ...(input?.propertyId ? { id: input.propertyId } : {}),
-      mappings: { some: { provider: 'channel_connectivity', estado: 'activo' } },
+      mappings: {
+        some: {
+          provider: 'channel_connectivity',
+          estado: { in: ['activo', VINCULO_PENDIENTE_REVISION] },
+        },
+      },
     },
     select: {
       id: true,
       nombre: true,
       tenantId: true,
       mappings: {
-        where: { provider: 'channel_connectivity', estado: 'activo' },
+        where: {
+          provider: 'channel_connectivity',
+          estado: { in: ['activo', VINCULO_PENDIENTE_REVISION] },
+        },
         select: { externalPropertyId: true },
         take: 1,
       },
