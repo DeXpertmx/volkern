@@ -449,7 +449,10 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
         setShowSkillModal(true);
         toast.success("Nueva llave de conexión generada");
       } else {
-        toast.error("Error al generar llave");
+        // El servidor explica el motivo real (p. ej. nivel insuficiente);
+        // un toast genérico dejaba al usuario sin saber qué hacer.
+        const data = await res.json().catch(() => ({}));
+        toast.error(data?.error || "Error al generar llave");
       }
     } catch (error) {
       toast.error("Error de conexión");
@@ -1170,6 +1173,25 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
                     * Esta URL sirve como el directorio raíz que expone el manifest.json y la especificación OpenAPI.
                   </p>
                 </div>
+
+                <div className="space-y-4">
+                  <Label className="text-[11px] font-black uppercase text-slate-400 tracking-wider">Endpoint MCP (Claude, Cursor, Gemma)</Label>
+                  <div className="flex gap-2">
+                     <div className="flex-1 h-12 bg-slate-900 text-slate-300 border border-slate-800 rounded-xl flex items-center px-4 font-mono text-xs overflow-hidden truncate">
+                       {mounted ? window.location.origin : ''}/mcp
+                     </div>
+                     <Button
+                      variant="outline"
+                      className="h-12 w-12 rounded-xl border-slate-200"
+                      onClick={() => copyToClipboard(`${mounted ? window.location.origin : ''}/mcp`)}
+                     >
+                       <Copy className="h-4 w-4" />
+                     </Button>
+                  </div>
+                  <p className="text-[10px] text-slate-500 font-medium italic">
+                    * La llave generada incluye los scopes agent:skill, mcp:read y mcp:execute: conecta el asistente por MCP o por el gateway de skills.
+                  </p>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -1216,6 +1238,18 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
                        </div>
 
                        <div className="space-y-2">
+                          <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Endpoint MCP (Claude, Cursor, Gemma)</Label>
+                          <div className="flex gap-2">
+                             <div className="flex-1 h-12 bg-slate-50 border border-slate-200 rounded-xl flex items-center px-4 font-mono text-[10px] text-slate-600 truncate">
+                                {mounted ? window.location.origin : ''}/mcp
+                             </div>
+                             <Button variant="outline" className="h-12 w-12 rounded-xl" onClick={() => copyToClipboard(`${mounted ? window.location.origin : ''}/mcp`)}>
+                                <Copy className="h-4 w-4" />
+                             </Button>
+                          </div>
+                       </div>
+
+                       <div className="space-y-2">
                           <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">API Key (Bearer Token)</Label>
                           <div className="flex gap-2">
                              <div className="flex-1 h-12 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center px-4 font-mono text-[10px] text-indigo-600 truncate">
@@ -1225,6 +1259,9 @@ export function PerfilDashboard({ activeSection }: PerfilDashboardProps) {
                                 <Copy className="h-4 w-4" />
                              </Button>
                           </div>
+                          <p className="text-[10px] text-slate-500 font-medium italic">
+                             Scopes incluidos: {(skillKey?.scopes || ['agent:skill', 'mcp:execute', 'mcp:read']).join(' · ')}. La misma llave sirve para el gateway de skills y para el servidor MCP.
+                          </p>
                        </div>
                      </div>
 

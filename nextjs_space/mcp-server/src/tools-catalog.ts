@@ -183,7 +183,11 @@ export const VOLKERN_TOOLS: VolkernTool[] = [
         empresa: { type: "string" },
         canal: { type: "string" },
         estado: { type: "string" },
-        etiquetas: { type: "array", items: { type: "string" } },
+        etiquetas: {
+          type: "array",
+          items: { type: "string" },
+          description: "Tags del lead. Se añaden a los que ya tiene; no los reemplaza"
+        },
         notas: { type: "string" }
       },
       required: ["leadId"]
@@ -486,7 +490,7 @@ export const VOLKERN_TOOLS: VolkernTool[] = [
         titulo: { type: "string", description: "Task title" },
         descripcion: { type: "string", description: "Task description/context" },
         fechaVencimiento: { type: "string", description: "Due date in ISO 8601 UTC" },
-        asignadoA: { type: "string", description: "User ID to assign the task to" }
+        asignadoA: { type: "string", description: "User ID to assign the task to (default: the authenticated user)" }
       },
       required: ["leadId", "tipo", "titulo", "fechaVencimiento"]
     }
@@ -604,7 +608,7 @@ export const VOLKERN_TOOLS: VolkernTool[] = [
       properties: {
         leadId: { type: "string", description: "ID of the lead" },
         contenido: { type: "string", description: "Note content" },
-        titulo: { type: "string", description: "Optional note title" }
+        titulo: { type: "string", description: "Optional note title (se antepone al contenido)" }
       },
       required: ["leadId", "contenido"]
     }

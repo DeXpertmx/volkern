@@ -421,8 +421,8 @@ const convertLeadWrapper = async (input: { email?: string; nombre?: string; tena
   return contactSkills.convertLead({ leadId: lead.id, tenantId, userId, source: 'webhook' });
 };
 
-const createNoteWrapper = async (input: { tenantId: string; leadId?: string; email?: string; nombre?: string; contenido: string; userId?: string }) => {
-  const { tenantId, leadId, email, nombre, contenido } = input;
+const createNoteWrapper = async (input: { tenantId: string; leadId?: string; email?: string; nombre?: string; contenido: string; titulo?: string; userId?: string }) => {
+  const { tenantId, leadId, email, nombre, contenido, titulo } = input;
   if (!contenido) throw new Error('contenido es requerido');
   const userId = await resolveRealUserId(tenantId, input.userId);
 
@@ -438,7 +438,11 @@ const createNoteWrapper = async (input: { tenantId: string; leadId?: string; ema
     resolvedLeadId = lead.id;
   }
 
-  return taskSkills.createNote({ tenantId, leadId: resolvedLeadId, contenido, userId, source: 'webhook' });
+  // El modelo Note no tiene columna de título: se antepone al contenido con
+  // el mismo formato que POST /api/leads/[id]/notes, para no perder el dato.
+  const contenidoFinal = titulo?.trim() ? `**${titulo.trim()}**\n\n${contenido}` : contenido;
+
+  return taskSkills.createNote({ tenantId, leadId: resolvedLeadId, contenido: contenidoFinal, userId, source: 'webhook' });
 };
 
 const getConversationWrapper = (input: { conversationId: string; tenantId: string }) => 
@@ -951,8 +955,9 @@ const prequalifyLeadWrapper = async (input: { tenantId: string; email?: string; 
   return dealSkills.prequalifyLead({ tenantId, leadId: lead.id, noteText: nota || '', userId, source: 'webhook' });
 };
 
-const updateLeadWrapper = async (input: { tenantId: string; email?: string; nombre?: string; telefono?: string; empresa?: string; contexto?: string; notas?: string; leadId?: string }) => {
-  const { tenantId, email, nombre, contexto, notas, leadId, ...dataToUpdate } = input;
+const updateLeadWrapper = async (input: { tenantId: string; email?: string; nombre?: string; telefono?: string; empresa?: string; contexto?: string; notas?: string; leadId?: string; etiquetas?: string[] | string; tags?: string[] | string }) => {
+  const { tenantId, email, nombre, contexto, notas, leadId, etiquetas, tags, ...dataToUpdate } = input;
+  const etiquetasPedidas = normalizarEtiquetas(etiquetas ?? tags);
   const { prisma } = await import('@/lib/db');
 
   // 0. Identificación directa por id (contrato del catálogo MCP:
@@ -969,6 +974,7 @@ const updateLeadWrapper = async (input: { tenantId: string; email?: string; nomb
           telefono: dataToUpdate.telefono !== undefined ? dataToUpdate.telefono : undefined,
           empresa: dataToUpdate.empresa !== undefined ? dataToUpdate.empresa : undefined,
           notas: (contexto || notas) !== undefined ? (contexto || notas) : undefined,
+          tags: etiquetasPedidas ? fusionarEtiquetas(porId.tags, etiquetasPedidas) : undefined,
         }
       });
     }
@@ -1005,7 +1011,8 @@ const updateLeadWrapper = async (input: { tenantId: string; email?: string; nomb
         nombre: targetNombre !== undefined ? targetNombre : undefined,
         telefono: dataToUpdate.telefono !== undefined ? dataToUpdate.telefono : undefined,
         empresa: dataToUpdate.empresa !== undefined ? dataToUpdate.empresa : undefined,
-        notas: finalNotas !== undefined ? finalNotas : undefined
+        notas: finalNotas !== undefined ? finalNotas : undefined,
+        tags: etiquetasPedidas ? fusionarEtiquetas(lead.tags, etiquetasPedidas) : undefined,
       }
     });
   }
@@ -1038,6 +1045,9 @@ const createLeadWrapper = async (input: { tenantId: string; nombre: string; emai
     fuente: origen || rest.fuente,
     cargo: cargo,
     notas: contexto || notas,
+    // El catálogo MCP llama «etiquetas» (array) a lo que el modelo guarda en
+    // `tags` (CSV). Sin este mapeo las etiquetas se perdían en silencio.
+    tags: normalizarEtiquetas(etiquetas),
     userId: realUserId,
     asignadoA: realUserId,
   } as any);
@@ -1266,10 +1276,12 @@ const createTaskWrapper = async (input: {
   prioridad?: string; 
   userId?: string; 
   asignadoAId?: string;
+  /** Nombre del catálogo MCP (volkern_create_task.asignadoA) */
+  asignadoA?: string;
   timezone?: string;
   tipo?: string;
 }) => {
-  const { tenantId, email, nombre, leadId, contactId, titulo, descripcion, fechaVencimiento, asignadoAId, timezone, tipo } = input;
+  const { tenantId, email, nombre, leadId, contactId, titulo, descripcion, fechaVencimiento, asignadoAId, asignadoA, timezone, tipo } = input;
   // Resuelve el userId REAL (id de User) para campos con FK. Los canales
   // externos pasan identificadores que NO son User (telegram:<chat>, leadId,
   // conv.id, sesión del widget): si no resuelven a un User real, `asignadoA`
@@ -1355,7 +1367,11 @@ const createTaskWrapper = async (input: {
       tipo: tipoFinal,
       descripcion,
       fechaVencimiento: fecha,
-      asignadoA: asignadoAId || realUserId || null,
+      // El catálogo MCP expone el campo como `asignadoA`; el wrapper del
+      // orquestador lo llama `asignadoAId`. Se valida que sea un User real
+      // del tenant para no violar la FK con un id inventado.
+      asignadoA:
+        (await resolveRealUserId(tenantId, asignadoAId || asignadoA || undefined)) || realUserId || null,
       completada: false,
     }
   });
@@ -1375,6 +1391,38 @@ const createTaskWrapper = async (input: {
 
   return task;
 };
+
+/**
+ * Normaliza las etiquetas del contrato MCP (array o texto separado por comas)
+ * al `tags` del CRM: un único string CSV, que es lo que guarda la ficha del
+ * lead y lo que la UI parte por comas. Devuelve undefined si no hay ninguna,
+ * para no borrar etiquetas con un `etiquetas: []` accidental.
+ */
+function normalizarEtiquetas(valor?: string[] | string | null): string | undefined {
+  const lista = (Array.isArray(valor) ? valor : (valor ?? '').split(','))
+    .map((t) => String(t).trim())
+    .filter(Boolean);
+  if (lista.length === 0) return undefined;
+  const vistas = new Set<string>();
+  const unicas: string[] = [];
+  for (const t of lista) {
+    const clave = t.toLowerCase();
+    if (vistas.has(clave)) continue;
+    vistas.add(clave);
+    unicas.push(t);
+  }
+  return unicas.join(',');
+}
+
+/**
+ * Añade etiquetas a las que ya tiene el lead sin pisarlas (comparación sin
+ * distinguir mayúsculas: «VIP» y «vip» son la misma etiqueta). Una tool de
+ * actualización no puede borrar en silencio lo que no le han pedido quitar.
+ */
+function fusionarEtiquetas(actuales: string | null | undefined, nuevas: string): string {
+  const previas = (actuales ?? '').split(',').map((t) => t.trim()).filter(Boolean);
+  return normalizarEtiquetas([...previas, ...nuevas.split(',')]) ?? '';
+}
 
 /**
  * Valida que un userId corresponda a un usuario REAL del tenant antes de usarlo

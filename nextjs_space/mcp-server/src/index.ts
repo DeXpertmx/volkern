@@ -69,6 +69,21 @@ async function volkernRequest(
 // ============================================
 // Tool Handlers
 // ============================================
+
+/**
+ * El catálogo llama «etiquetas» (array o texto) a lo que POST/PATCH /leads
+ * guarda en `tags` (CSV, el formato que parte la ficha del lead). Sin este
+ * mapeo el MCP standalone aceptaba el campo y lo descartaba en silencio.
+ */
+function conEtiquetasComoTags(args: Record<string, unknown>): Record<string, unknown> {
+  const { etiquetas, ...resto } = args;
+  if (etiquetas === undefined) return args;
+  const lista = (Array.isArray(etiquetas) ? etiquetas : String(etiquetas).split(","))
+    .map((t) => String(t).trim())
+    .filter(Boolean);
+  return lista.length > 0 ? { ...resto, tags: lista.join(",") } : resto;
+}
+
 async function handleToolCall(
   name: string,
   args: Record<string, unknown>
@@ -107,10 +122,10 @@ async function handleToolCall(
     case "volkern_get_lead":
       return volkernRequest(`/leads/${args.leadId}`);
     case "volkern_create_lead":
-      return volkernRequest("/leads", "POST", args);
+      return volkernRequest("/leads", "POST", conEtiquetasComoTags(args));
     case "volkern_update_lead": {
       const { leadId, ...data } = args;
-      return volkernRequest(`/leads/${leadId}`, "PATCH", data);
+      return volkernRequest(`/leads/${leadId}`, "PATCH", conEtiquetasComoTags(data));
     }
 
     // APPOINTMENTS

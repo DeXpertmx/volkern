@@ -58,6 +58,8 @@ export interface CreateLeadInput {
   empresa?: string;
   linkedin?: string;
   asignadoA?: string;
+  /** Etiquetas del lead en CSV (es el formato que guarda y parte la UI). */
+  tags?: string;
   // Metadata
   userId?: string;
   source?: 'api' | 'app' | 'automation' | 'mcp' | 'webhook';
@@ -202,7 +204,7 @@ export async function updateContact(input: UpdateContactInput) {
  * Crear un nuevo lead
  */
 export async function createLead(input: CreateLeadInput) {
-  const { tenantId, nombre, email, telefono, notas, fuente, cargo, empresa, linkedin, asignadoA, userId, source = 'app' } = input;
+  const { tenantId, nombre, email, telefono, notas, fuente, cargo, empresa, linkedin, tags, asignadoA, userId, source = 'app' } = input;
 
   // 1. Validación
   if (!tenantId) throw new Error('tenantId es requerido');
@@ -232,6 +234,7 @@ export async function createLead(input: CreateLeadInput) {
       cargo,
       empresa,
       linkedin,
+      tags,
       asignadoA: asignadoAValido,
       estado: 'nuevo',
     },

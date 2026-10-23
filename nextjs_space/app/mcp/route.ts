@@ -132,8 +132,15 @@ export async function POST(req: Request) {
     const toolName: string | undefined = body?.params?.name
     const toolArgs: Record<string, unknown> = body?.params?.arguments ?? {}
 
-    // Tool desconocida para este servidor — error de protocolo, no de ejecución
-    if (!toolName || !VOLKERN_TOOLS.some((t) => t.name === toolName)) {
+    // Tool desconocida para este servidor — error de protocolo, no de ejecución.
+    // Se acepta también el nombre legacy sin prefijo (create_task, create_note,
+    // update_lead…), que es el que publica la documentación de /api/mcp: la
+    // misma operación no puede fallar según la superficie MCP que la invoque.
+    const catalogTool = toolName
+      ? VOLKERN_TOOLS.find((t) => t.name === toolName)
+        ?? VOLKERN_TOOLS.find((t) => t.name === `volkern_${toolName}`)
+      : undefined
+    if (!catalogTool) {
       return jsonRpcError(id, -32602, `Tool desconocida: ${toolName ?? '(vacía)'}`, 400)
     }
 
@@ -153,7 +160,7 @@ export async function POST(req: Request) {
     // Todas las tools del catálogo son ejecutables: handleCallTool valida
     // contra el inputSchema del catálogo y captura errores como isError.
     const { handleCallTool, resolveSkillName } = await import('@/lib/mcp/mcp-handler')
-    const skillName = resolveSkillName(toolName)
+    const skillName = resolveSkillName(catalogTool.name)
 
     // Inyección de contexto de seguridad: el tenant autenticado manda
     // (evita cross-tenant aunque el cliente envíe otro tenantId).
@@ -176,10 +183,11 @@ export async function POST(req: Request) {
           userId: auth.user?.id,
           accion: 'MCP_tool_execution',
           entidad: 'MCP',
-          entidadId: toolName,
-          descripcion: `MCP /mcp tools/call: ${toolName}`,
+          entidadId: catalogTool.name,
+          descripcion: `MCP /mcp tools/call: ${catalogTool.name}`,
           metadata: {
-            tool: toolName,
+            tool: catalogTool.name,
+            requestedTool: toolName,
             skill: skillName,
             status: result.isError ? 'error' : 'success',
           },
