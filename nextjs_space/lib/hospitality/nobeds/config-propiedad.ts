@@ -7,11 +7,18 @@
  * aquí**: ni en mensajes de error, ni en logs, ni en una respuesta de API.
  *
  * Todavía no lo usa el sincronizador: es la pieza que permite leer una propiedad
- * real en cuanto el hotel pase su token, sin tocar el camino vivo.
+ * real en cuanto el hotel pase su token, sin tocar el camino vivo. Guardar es
+ * cosa de `guardarCredencialPropiedad`, que cifra antes de escribir y devuelve
+ * el estado —nunca el token— para que la API no tenga que acordarse de quitarlo.
  */
 
 import { prisma } from '@/lib/db';
-import { decrypt } from '@/lib/core/crypto';
+import { decrypt, encrypt } from '@/lib/core/crypto';
+import {
+  decidirEscritor,
+  describirDecision,
+  type ModoProveedor,
+} from '../conectividad-proveedores';
 import {
   crearClienteNobeds,
   ErrorNobeds,
@@ -127,5 +134,182 @@ export async function estadoConfiguracionNobeds(
     activo: fila.activo,
     estado: fila.estado,
     externalPropertyId: fila.externalPropertyId,
+  };
+}
+
+// ─── Guardado de la credencial ────────────────────────────────────────────
+
+/** Máximos de longitud: un token es un segmento de URL, no un documento. */
+const MAX_CODIGO_EXTERNO = 64;
+const MAX_TOKEN = 512;
+
+/** Espacios, saltos de línea o controles romperían la URL y los logs. */
+const CON_ESPACIOS = /\s/;
+
+const MODOS: ReadonlyArray<ModoProveedor> = ['escritura', 'lectura'];
+
+export type CampoInvalido =
+  | 'propertyId'
+  | 'externalPropertyId'
+  | 'token'
+  | 'modo';
+
+export interface EntradaGuardado {
+  tenantId: string;
+  propertyId: string;
+  /** Código de la propiedad en el proveedor (`hotel_id` en NOBEDS). */
+  externalPropertyId: string;
+  /**
+   * Token **nuevo**. Si se omite se conserva el guardado: rotarlo y cambiar
+   * solo `activo` o `modo` no obliga a volver a pegarlo en la pantalla.
+   */
+  token?: string;
+  activo?: boolean;
+  modo?: ModoProveedor;
+}
+
+export interface ResultadoGuardado {
+  ok: boolean;
+  /** Campo que hay que corregir; la API lo usa para señalar el input. */
+  campo?: CampoInvalido;
+  error?: string;
+  /** Convivencia entre proveedores. No impide guardar: es un aviso. */
+  avisos: string[];
+  /** Estado sin secretos, listo para devolver tal cual. */
+  estado?: EstadoConfiguracionPropiedad;
+}
+
+function texto(valor: unknown): string {
+  return typeof valor === 'string' ? valor.trim() : '';
+}
+
+function fallo(campo: CampoInvalido, error: string): ResultadoGuardado {
+  return { ok: false, campo, error, avisos: [] };
+}
+
+/**
+ * Guarda (o rota) la credencial de **esta** propiedad.
+ *
+ * Tres decisiones que importan:
+ *
+ * - El token se **cifra aquí**, en el servidor, antes de tocar la base. La API
+ *   recibe texto plano una vez y no vuelve a verlo: el resultado trae
+ *   `configurado: true`, no el valor.
+ * - Sin token en la petición se **conserva** el existente. Borrarlo no es un
+ *   efecto colateral de cambiar `activo` o `modo`.
+ * - Si con esto quedan dos proveedores activos en escritura, se guarda igual y
+ *   se devuelve el aviso de la política: rechazarlo dejaría al hotel sin poder
+ *   registrar su credencial por un conflicto que se resuelve en otro sitio.
+ *
+ * La pertenencia de la propiedad al tenant la comprueba quien llama: aquí solo
+ * se escribe la clave (tenantId, propertyId, provider).
+ */
+export async function guardarCredencialPropiedad(
+  entrada: EntradaGuardado
+): Promise<ResultadoGuardado> {
+  const propertyId = texto(entrada.propertyId);
+  if (!propertyId) return fallo('propertyId', 'Falta la propiedad.');
+
+  const externalPropertyId = texto(entrada.externalPropertyId);
+  if (!externalPropertyId) {
+    return fallo('externalPropertyId', 'Falta el código de la propiedad en el proveedor.');
+  }
+  if (externalPropertyId.length > MAX_CODIGO_EXTERNO || CON_ESPACIOS.test(externalPropertyId)) {
+    return fallo(
+      'externalPropertyId',
+      `El código de la propiedad no puede llevar espacios ni pasar de ${MAX_CODIGO_EXTERNO} caracteres.`
+    );
+  }
+
+  const tokenNuevo = entrada.token === undefined ? undefined : texto(entrada.token);
+  if (tokenNuevo !== undefined) {
+    if (!tokenNuevo) return fallo('token', 'El token no puede estar vacío.');
+    if (tokenNuevo.length > MAX_TOKEN || CON_ESPACIOS.test(tokenNuevo)) {
+      return fallo(
+        'token',
+        `El token no puede llevar espacios ni pasar de ${MAX_TOKEN} caracteres.`
+      );
+    }
+  }
+
+  if (entrada.modo !== undefined && !MODOS.includes(entrada.modo)) {
+    return fallo('modo', "El modo debe ser 'escritura' o 'lectura'.");
+  }
+
+  const existente = await prisma.hospitalityConnectivityPropertyConfig.findUnique({
+    where: {
+      tenantId_propertyId_provider: {
+        tenantId: entrada.tenantId,
+        propertyId,
+        provider: NOBEDS_PROVIDER_KEY,
+      },
+    },
+    select: { tokenEnc: true, modo: true, activo: true },
+  });
+
+  // Guardar sin token solo vale si ya hay uno: si no, quedaría una fila
+  // «configurada» que en realidad no puede leer nada.
+  if (tokenNuevo === undefined && !existente?.tokenEnc) {
+    return fallo('token', 'Falta el token de la propiedad.');
+  }
+
+  const modoExistente = existente?.modo as ModoProveedor | undefined;
+  const modo: ModoProveedor =
+    entrada.modo ?? (modoExistente && MODOS.includes(modoExistente) ? modoExistente : 'escritura');
+  // Rotar un token no reactiva por sorpresa una credencial que estaba apagada.
+  const activo = entrada.activo ?? existente?.activo ?? true;
+  const tokenEnc = tokenNuevo === undefined ? undefined : encrypt(tokenNuevo);
+
+  await prisma.hospitalityConnectivityPropertyConfig.upsert({
+    where: {
+      tenantId_propertyId_provider: {
+        tenantId: entrada.tenantId,
+        propertyId,
+        provider: NOBEDS_PROVIDER_KEY,
+      },
+    },
+    create: {
+      tenantId: entrada.tenantId,
+      propertyId,
+      provider: NOBEDS_PROVIDER_KEY,
+      externalPropertyId,
+      tokenEnc: tokenEnc ?? null,
+      activo,
+      modo,
+      estado: 'configurado',
+    },
+    update: {
+      externalPropertyId,
+      ...(tokenEnc === undefined ? {} : { tokenEnc }),
+      activo,
+      modo,
+      // Guardar no es haber probado: el chequeo real lo marca la sonda de
+      // salud. Se limpia el error anterior para no arrastrar uno ya resuelto.
+      estado: 'configurado',
+      ultimoError: null,
+    },
+  });
+
+  const avisos: string[] = [];
+  const configs = await prisma.hospitalityConnectivityPropertyConfig.findMany({
+    where: { tenantId: entrada.tenantId, propertyId },
+    select: { provider: true, activo: true, modo: true },
+  });
+  const decision = decidirEscritor(
+    configs.map((c) => ({
+      provider: c.provider,
+      activo: c.activo,
+      // La columna es texto libre; la política solo entiende dos modos.
+      modo: c.modo === 'lectura' ? ('lectura' as const) : ('escritura' as const),
+    }))
+  );
+  if (decision.motivo === 'dos_escritores' || decision.motivo === 'desconocido') {
+    avisos.push(describirDecision(decision));
+  }
+
+  return {
+    ok: true,
+    avisos,
+    estado: await estadoConfiguracionNobeds({ tenantId: entrada.tenantId, propertyId }),
   };
 }

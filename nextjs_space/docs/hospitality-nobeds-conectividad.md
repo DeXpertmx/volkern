@@ -519,12 +519,13 @@ un hotel en producción.
 | `cliente.ts` | Solo **GET**: `estado`, `rentals`, `disponibilidad`, `reservas`. Token en la ruta, timeout, y clasificación de errores `token` / `peticion` / `servidor` / `tiempo` / `red` / `respuesta`. El token se **sanea** en mensajes y en la URL que se registra. |
 | `mapa.ts` | Puro: normalización de `status` (14 medidos + 16 documentados, sin adivinar), `referral` → canal (con `nobeds.app` separado de `direct`), ventana por **check-in** y cruce catálogo ↔ `ConnectivityMapping` con huérfanos y conflictos. |
 | `reservas.ts` | Diferencial puro (nuevas / modificadas / canceladas / desaparecidas) y **confirmación de desapariciones en dos ciclos**: una reserva que falta no se cancela ni reabre noches. |
-| `config-propiedad.ts` | Servidor: lee la credencial **de esta propiedad**, descifra el token y devuelve el cliente. Los tres casos de «no configuración» son error de credencial, no lectura vacía. |
+| `config-propiedad.ts` | Servidor: lee la credencial **de esta propiedad**, descifra el token y devuelve el cliente; y la guarda (`guardarCredencialPropiedad`) cifrando antes de escribir y sin devolver el secreto. Los tres casos de «no configuración» son error de credencial, no lectura vacía. |
 | `../conectividad-proveedores.ts` | Registro de proveedores + **política de un solo escritor**, con el actual como respaldo. |
 
 Guardias: `tests/nobeds-cliente.test.ts`, `tests/nobeds-mapa.test.ts`,
 `tests/nobeds-diferencial.test.ts`, `tests/nobeds-config-propiedad.test.ts` y
-`tests/conectividad-proveedores.test.ts` (**66 comprobaciones**), con payloads
+`tests/conectividad-proveedores.test.ts` (**86 comprobaciones**, con el guardado
+de la credencial y su endpoint), con payloads
 copiados del API real, incluidos el 404 de credencial y el 500 con HTML.
 
 ### 10.1 Credencial por propiedad, ya en el esquema
@@ -536,7 +537,28 @@ propiedad y proveedor**: `externalPropertyId`, `tokenEnc` cifrado, `activo`,
 no podía dar. **No está aplicada en producción**: la migración existe y está
 probada contra el DDL que genera Prisma, pero se aplica con el despliegue.
 
-### 10.2 El proveedor anterior queda como segunda opción
+### 10.2 Guardar la credencial desde el producto
+
+`PUT /api/hospitality/conectividad/propiedades` cifra y guarda (o rota) el token
+de **una propiedad de la cuenta**; `GET` devuelve el estado de todas sin el
+secreto. La pantalla es la tarjeta «Credencial por propiedad» de
+`app/dashboard/hospitality/conectividad/page.tsx`, junto al ID de socio.
+
+Tres reglas que la hacen segura de usar:
+
+- El token se cifra en el servidor antes de escribir y **no se devuelve nunca**:
+  la respuesta trae `configurado: true`, no el valor. La pantalla no lo pinta y
+  el campo queda vacío (si se deja vacío, se conserva el guardado).
+- La propiedad se comprueba contra el `tenantId` de la sesión: el id de otra
+  cuenta responde 404 y no escribe nada.
+- Si tras guardar quedan dos proveedores activos en escritura, **se guarda y se
+  avisa** con la frase de la política. Rechazarlo dejaría al hotel sin poder
+  registrar su credencial por un conflicto que se resuelve aparte.
+
+Guardar no es haber probado: `estado = 'configurado'` significa «hay token», y el
+chequeo real lo marcará la sonda de salud.
+
+### 10.3 El proveedor anterior queda como segunda opción
 
 La convivencia está en código, no en una nota:
 
@@ -553,9 +575,8 @@ La convivencia está en código, no en una nota:
 - **F2 (escritura)**: bloqueada por F0. Sin sandbox de escritura no se puede
   probar `POST /api/Bookings` ni `Availability/bulk`, y sin saber si el alta es
   atómica no se escribe una línea de esa parte.
-- **Guardar la credencial desde la UI**: la tabla y el lector existen; falta el
-  endpoint y la pantalla que cifran y guardan el token (y que no lo devuelven
-  nunca).
+- **Sonda de la credencial guardada**: guardar no llama al proveedor todavía;
+  falta que el panel de salud pruebe el token y marque `estado`/`ultimoError`.
 - **Panel de salud y wizard**: no tocados. El paso 5 del onboarding sigue
   hablando del proveedor actual hasta que se decida el orden del cutover.
 - **Mensajes y reseñas**: F4, sin empezar.
