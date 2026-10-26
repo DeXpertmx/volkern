@@ -530,6 +530,8 @@ model Tenant {
   hospitalityMirConfigs         HospitalityMirConfig[]            @relation("HospitalityMirConfigs")
   // ID de socio del proveedor de conectividad, por cliente (ver el modelo).
   hospitalityConnectivityConfig HospitalityConnectivityConfig?    @relation("HospitalityConnectivityConfigs")
+  // Credencial de conectividad POR PROPIEDAD (token por hotel; ver el modelo).
+  hospitalityConnectivityPropertyConfigs HospitalityConnectivityPropertyConfig[] @relation("HospitalityConnectivityPropertyConfigs")
   hospitalityComplianceConfigs  HospitalityComplianceConfig[]     @relation("HospitalityComplianceConfigs")
   hospitalityTravelers          HospitalityTraveler[]             @relation("HospitalityTravelers")
   hospitalityCompliances        HospitalityCompliance[]           @relation("HospitalityCompliances")
@@ -8320,6 +8322,8 @@ model HospitalityProperty {
   codigoEstablecimientoMIR String?
 
   reviews HospitalityReview[] @relation("HospitalityReviews")
+  // Credenciales de conectividad de esta propiedad, una por proveedor.
+  connectivityConfigs HospitalityConnectivityPropertyConfig[] @relation("HospitalityConnectivityPropertyConfigs")
   // Hilos de mensajería del canal de esta propiedad.
   canalConversaciones HospitalityCanalConversacion[] @relation("HospitalityCanalConversacionesProperty")
 
@@ -8472,6 +8476,52 @@ model HospitalityConnectivityConfig {
   tenant         Tenant   @relation("HospitalityConnectivityConfigs", fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@map("hospitality_connectivity_config")
+}
+
+// Credencial de conectividad POR PROPIEDAD y PROVEEDOR.
+//
+// Hace falta porque NOBEDS emite **un token por hotel** y lo exige en la ruta de
+// cada llamada, mientras que `HospitalityConnectivityConfig.partnerIdEnc` es un
+// único identificador **por tenant**: sirve para el proveedor actual y no para
+// multi-propiedad.
+//
+// Convive con el modelo anterior durante la migración (el campo `provider` de
+// `ConnectivityMapping` ya permitía dos proveedores a la vez). La regla de quién
+// escribe la decide `lib/hospitality/conectividad-proveedores.ts`, no esta tabla:
+// aquí se guarda la credencial, allí se prohíbe que haya dos escritores sobre la
+// misma propiedad.
+model HospitalityConnectivityPropertyConfig {
+  id                 String    @id @default(cuid())
+  tenantId           String
+  propertyId         String
+  /// `nobeds` | `channel_connectivity`. Ver `ProveedorConectividad`.
+  provider           String
+  /// Código de la propiedad en el proveedor (`hotel_id` / `hotelCode`).
+  externalPropertyId String
+  /// Token cifrado. En NOBEDS viaja en la URL de cada petición: nunca se
+  /// registra, ni se devuelve por API, ni se pinta en una pantalla.
+  tokenEnc           String?
+  /// `true` = esta credencial puede usarse. La política de escritura lo respeta
+  /// y, además, exige que no haya otro proveedor activo con escritura.
+  activo             Boolean   @default(false)
+  /// `escritura` | `lectura`. Un proveedor activo escribe salvo que se marque
+  /// `lectura`: es el modo en que el proveedor anterior se queda en paralelo
+  /// durante la migración (lee y reconcilia, no empuja).
+  modo               String    @default("escritura")
+  estado             String    @default("sin_configurar")
+  ultimoChequeo      DateTime?
+  /// Último error de la sonda, saneado (sin token ni URL con credenciales).
+  ultimoError        String?
+  configuracion      Json?
+  fechaCreacion      DateTime  @default(now())
+  fechaEdicion       DateTime  @updatedAt
+  tenant             Tenant    @relation("HospitalityConnectivityPropertyConfigs", fields: [tenantId], references: [id], onDelete: Cascade)
+  property           HospitalityProperty @relation("HospitalityConnectivityPropertyConfigs", fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, propertyId, provider])
+  @@index([tenantId])
+  @@index([provider, estado])
+  @@map("hospitality_connectivity_property_config")
 }
 
 model HospitalityReservation {

@@ -519,23 +519,43 @@ un hotel en producción.
 | `cliente.ts` | Solo **GET**: `estado`, `rentals`, `disponibilidad`, `reservas`. Token en la ruta, timeout, y clasificación de errores `token` / `peticion` / `servidor` / `tiempo` / `red` / `respuesta`. El token se **sanea** en mensajes y en la URL que se registra. |
 | `mapa.ts` | Puro: normalización de `status` (14 medidos + 16 documentados, sin adivinar), `referral` → canal (con `nobeds.app` separado de `direct`), ventana por **check-in** y cruce catálogo ↔ `ConnectivityMapping` con huérfanos y conflictos. |
 | `reservas.ts` | Diferencial puro (nuevas / modificadas / canceladas / desaparecidas) y **confirmación de desapariciones en dos ciclos**: una reserva que falta no se cancela ni reabre noches. |
+| `config-propiedad.ts` | Servidor: lee la credencial **de esta propiedad**, descifra el token y devuelve el cliente. Los tres casos de «no configuración» son error de credencial, no lectura vacía. |
+| `../conectividad-proveedores.ts` | Registro de proveedores + **política de un solo escritor**, con el actual como respaldo. |
 
-Guardias: `tests/nobeds-cliente.test.ts`, `tests/nobeds-mapa.test.ts` y
-`tests/nobeds-diferencial.test.ts` (**43 comprobaciones**), con payloads copiados
-del API real, incluidos el 404 de credencial y el 500 con HTML.
+Guardias: `tests/nobeds-cliente.test.ts`, `tests/nobeds-mapa.test.ts`,
+`tests/nobeds-diferencial.test.ts`, `tests/nobeds-config-propiedad.test.ts` y
+`tests/conectividad-proveedores.test.ts` (**66 comprobaciones**), con payloads
+copiados del API real, incluidos el 404 de credencial y el 500 con HTML.
+
+### 10.1 Credencial por propiedad, ya en el esquema
+
+`hospitality_connectivity_property_config` (migración
+`20261026120000_hospitality_connectivity_property_config`) guarda, **por
+propiedad y proveedor**: `externalPropertyId`, `tokenEnc` cifrado, `activo`,
+`modo` y el estado del último chequeo. Es la pieza que el `partnerId` por tenant
+no podía dar. **No está aplicada en producción**: la migración existe y está
+probada contra el DDL que genera Prisma, pero se aplica con el despliegue.
+
+### 10.2 El proveedor anterior queda como segunda opción
+
+La convivencia está en código, no en una nota:
+
+- `nobeds` es `principal`; `channel_connectivity` es `respaldo` y **sigue
+  pudiendo escribir si es el único activo** — es la vuelta atrás del cambio.
+- El respaldo puede quedarse activo en `modo: 'lectura'`: lee y reconcilia
+  mientras el nuevo escribe, sin empujar nada.
+- `decidirEscritor()` devuelve **`null`** si hay dos candidatos con escritura, o
+  si hay un proveedor activo de tipo desconocido (no se puede probar que no
+  empuje). Nunca «elige uno».
 
 **Lo que falta y por qué:**
 
 - **F2 (escritura)**: bloqueada por F0. Sin sandbox de escritura no se puede
   probar `POST /api/Bookings` ni `Availability/bulk`, y sin saber si el alta es
   atómica no se escribe una línea de esa parte.
-- **Persistencia del token por propiedad**: no se ha migrado el esquema. El plan
-  (§5.4) propone columna en `ConnectivityMapping` o modelo propio; hoy
-  `HospitalityConnectivityConfig.partnerIdEnc` es **uno por tenant** y no sirve
-  para multi-propiedad.
-- **Des-cablear `channel_connectivity`**: 21 referencias en 17 ficheros. Se hará
-  cuando exista adaptador de lectura completo (catálogo + panel de salud) y una
-  prueba contra un hotel real; hacerlo antes deja el camino vivo sin proveedor.
+- **Guardar la credencial desde la UI**: la tabla y el lector existen; falta el
+  endpoint y la pantalla que cifran y guardan el token (y que no lo devuelven
+  nunca).
 - **Panel de salud y wizard**: no tocados. El paso 5 del onboarding sigue
   hablando del proveedor actual hasta que se decida el orden del cutover.
 - **Mensajes y reseñas**: F4, sin empezar.
