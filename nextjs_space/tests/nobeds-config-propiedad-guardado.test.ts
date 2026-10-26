@@ -7,7 +7,7 @@
 // filtrado o una credencial rota. El cifrado se verifica descifrando lo que
 // llegó a la base, no confiando en que el código llame a `encrypt`.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { decrypt, encrypt } from '@/lib/core/crypto';
 
 const hoisted = vi.hoisted(() => ({
@@ -30,6 +30,21 @@ import { guardarCredencialPropiedad } from '@/lib/hospitality/nobeds/config-prop
 
 const TOKEN = 'tok_9f8e7d6c5b4a';
 const OTRO_TOKEN = 'tok_rotado_0001';
+
+const STATUS_OK = {
+  hotelName: 'Hotel Prueba',
+  isActive: true,
+  rentalsCount: 4,
+  subscriptionTill: '2027-01-31',
+};
+
+/** Respuesta JSON mínima, como la que devuelve el proveedor. */
+function json(cuerpo: unknown, status = 200) {
+  return new Response(JSON.stringify(cuerpo), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  });
+}
 
 function fila(parcial: Record<string, unknown> = {}) {
   return {
@@ -55,6 +70,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   hoisted.findMany.mockResolvedValue([]);
   hoisted.upsert.mockResolvedValue({});
+  // Guardar prueba la credencial: sin esto, cada test saldría al proveedor.
+  vi.stubGlobal('fetch', vi.fn(async () => json(STATUS_OK)));
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 describe('Credencial por propiedad — el token se cifra y no vuelve', () => {
@@ -226,6 +247,153 @@ describe('Credencial por propiedad — validaciones de campo', () => {
         modo: 'escribir',
       })
     ).resolves.toMatchObject({ ok: false, campo: 'modo' });
+  });
+});
+
+describe('Credencial por propiedad — guardar prueba la credencial en solo lectura', () => {
+  it('sondea con un GET de estado y deja la fila «conectado» en una sola escritura', async () => {
+    hoisted.findUnique.mockResolvedValue(null);
+    const fetchMock = vi.fn(async () => json(STATUS_OK));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const resultado = await guardarCredencialPropiedad({
+      tenantId: 't1',
+      propertyId: 'p1',
+      externalPropertyId: '4821',
+      token: TOKEN,
+    });
+
+    expect(resultado.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    // Solo lectura por construcción: el cliente no tiene verbos de escritura.
+    expect(init.method).toBe('GET');
+    expect(new URL(String(url)).pathname).toBe(`/api/Status/${TOKEN}`);
+
+    expect(capturaUpsert().create).toMatchObject({ estado: 'conectado', ultimoError: null });
+    expect(capturaUpsert().create.ultimoChequeo).toBeInstanceOf(Date);
+    expect(resultado.sondeo).toMatchObject({
+      probado: true,
+      ok: true,
+      estado: 'conectado',
+      hotel: 'Hotel Prueba',
+      rentals: 4,
+    });
+    expect(JSON.stringify(resultado)).not.toContain(TOKEN);
+  });
+
+  it('un token rechazado se guarda igual, marcado en error y sin el token en el motivo', async () => {
+    hoisted.findUnique.mockResolvedValue(null);
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 404 })));
+
+    const resultado = await guardarCredencialPropiedad({
+      tenantId: 't1',
+      propertyId: 'p1',
+      externalPropertyId: '4821',
+      token: TOKEN,
+    });
+
+    // El token tecleado no se pierde porque el proveedor lo rechace.
+    expect(resultado.ok).toBe(true);
+    expect(hoisted.upsert).toHaveBeenCalled();
+    const guardado = capturaUpsert().create;
+    expect(guardado.estado).toBe('error');
+    expect(guardado.ultimoError).toBeTypeOf('string');
+    expect(guardado.ultimoError).toBeTruthy();
+    expect(guardado.ultimoError as string).not.toContain(TOKEN);
+    expect(resultado.sondeo).toMatchObject({ probado: true, ok: false, estado: 'error' });
+    expect(JSON.stringify(resultado)).not.toContain(TOKEN);
+  });
+
+  it('sin token nuevo prueba el que ya estaba guardado, no uno inventado', async () => {
+    hoisted.findUnique.mockResolvedValue(fila());
+    const fetchMock = vi.fn(async () => json(STATUS_OK));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await guardarCredencialPropiedad({
+      tenantId: 't1',
+      propertyId: 'p1',
+      externalPropertyId: '4821',
+      activo: true,
+    });
+
+    expect(new URL(String(fetchMock.mock.calls[0]?.[0])).pathname).toBe(`/api/Status/${TOKEN}`);
+    expect(capturaUpsert().update).not.toHaveProperty('tokenEnc');
+    expect(capturaUpsert().update).toMatchObject({ estado: 'conectado' });
+  });
+
+  it('una credencial desactivada no se prueba y queda «sin probar»', async () => {
+    hoisted.findUnique.mockResolvedValue(null);
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const resultado = await guardarCredencialPropiedad({
+      tenantId: 't1',
+      propertyId: 'p1',
+      externalPropertyId: '4821',
+      token: TOKEN,
+      activo: false,
+    });
+
+    expect(resultado.ok).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(capturaUpsert().create).toMatchObject({ estado: 'configurado', ultimoError: null });
+    expect(resultado.sondeo).toBeUndefined();
+  });
+
+  it('apagar la credencial no borra la fecha del último chequeo', async () => {
+    hoisted.findUnique.mockResolvedValue(fila({ activo: true }));
+
+    await guardarCredencialPropiedad({
+      tenantId: 't1',
+      propertyId: 'p1',
+      externalPropertyId: '4821',
+      activo: false,
+    });
+
+    expect(capturaUpsert().update).not.toHaveProperty('ultimoChequeo');
+    expect(capturaUpsert().update).toMatchObject({ estado: 'configurado', ultimoError: null });
+  });
+
+  it('sanea el motivo aunque el fallo de red mencione el token', async () => {
+    hoisted.findUnique.mockResolvedValue(null);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error(`conexión cortada en /api/Status/${TOKEN}`);
+      })
+    );
+
+    const resultado = await guardarCredencialPropiedad({
+      tenantId: 't1',
+      propertyId: 'p1',
+      externalPropertyId: '4821',
+      token: TOKEN,
+    });
+
+    const motivo = capturaUpsert().create.ultimoError as string;
+    expect(motivo).toBeTruthy();
+    expect(motivo).not.toContain(TOKEN);
+    expect(motivo).toContain('•••');
+    expect(resultado.sondeo?.error).toBe(motivo);
+  });
+
+  it('acota el motivo guardado a una línea corta', async () => {
+    hoisted.findUnique.mockResolvedValue(null);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => json({ message: 'x'.repeat(2000) }, 500))
+    );
+
+    await guardarCredencialPropiedad({
+      tenantId: 't1',
+      propertyId: 'p1',
+      externalPropertyId: '4821',
+      token: TOKEN,
+    });
+
+    const motivo = capturaUpsert().create.ultimoError as string;
+    expect(motivo.length).toBeLessThanOrEqual(300);
   });
 });
 

@@ -78,6 +78,41 @@ interface PropiedadConectividad {
   conectividad: ConectividadPropiedad;
 }
 
+/** Lo que responde guardar: el estado y la prueba de la credencial. */
+interface SondeoCredencial {
+  probado?: boolean;
+  ok?: boolean;
+  error?: string | null;
+  hotel?: string | null;
+  hotelActivo?: boolean | null;
+  rentals?: number | null;
+}
+
+/**
+ * Cómo se lee el estado de la credencial. `conectado` lo escribe la sonda de
+ * guardado (o el chequeo de salud); `configurado` significa «hay token, sin
+ * probar» — no un problema, pero tampoco una promesa.
+ */
+const ESTADO_CREDENCIAL: Record<string, { texto: string; clase: string }> = {
+  conectado: { texto: 'Responde', clase: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
+  error: { texto: 'Falla', clase: 'bg-red-100 text-red-800 border-red-200' },
+  configurado: { texto: 'Sin probar', clase: 'bg-amber-100 text-amber-900 border-amber-200' },
+  sin_configurar: { texto: 'Sin token', clase: '' },
+};
+
+function fechaDeChequeo(iso: string | null): string {
+  if (!iso) return '';
+  const fecha = new Date(iso);
+  if (Number.isNaN(fecha.getTime())) return '';
+  return fecha.toLocaleString('es-MX', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 export default function ConectividadDelHotel() {
   const [estado, setEstado] = useState<EstadoConectividad | null>(null);
   const [cargando, setCargando] = useState(true);
@@ -182,7 +217,31 @@ export default function ConectividadDelHotel() {
         toast.warning(String(aviso));
       }
       setToken('');
-      toast.success('Credencial guardada');
+
+      // El guardado trae la prueba del proveedor: decir «guardado» y callar un
+      // token rechazado dejaría al hotel creyendo que ya está conectado.
+      const sonda: SondeoCredencial | null = data?.sondeo ?? null;
+      if (sonda?.probado && sonda.ok === false) {
+        toast.error(
+          `Credencial guardada, pero el proveedor no la aceptó: ${sonda.error || 'sin detalle'}`
+        );
+      } else if (sonda?.probado) {
+        const cuantos =
+          typeof sonda.rentals === 'number'
+            ? ` · ${sonda.rentals} alojamiento${sonda.rentals === 1 ? '' : 's'}`
+            : '';
+        toast.success(
+          sonda.hotel ? `Credencial verificada: ${sonda.hotel}${cuantos}` : 'Credencial verificada'
+        );
+        if (sonda.hotelActivo === false) {
+          toast.warning('El establecimiento figura inactivo en el proveedor.');
+        }
+      } else {
+        toast.success(
+          'Credencial guardada. Está desactivada, así que no se probó contra el proveedor.'
+        );
+      }
+
       await cargarPropiedades(propiedadId);
     } catch {
       toast.error('No se pudo guardar la credencial');
@@ -401,6 +460,18 @@ export default function ConectividadDelHotel() {
                   >
                     {seleccionada.conectividad.configurado ? 'Token guardado' : 'Sin token'}
                   </Badge>
+                  {seleccionada.conectividad.configurado && (
+                    <Badge
+                      variant="outline"
+                      className={
+                        (ESTADO_CREDENCIAL[seleccionada.conectividad.estado] ??
+                          ESTADO_CREDENCIAL.configurado).clase
+                      }
+                    >
+                      {(ESTADO_CREDENCIAL[seleccionada.conectividad.estado] ??
+                        ESTADO_CREDENCIAL.configurado).texto}
+                    </Badge>
+                  )}
                   <Badge variant={seleccionada.conectividad.activo ? 'secondary' : 'outline'}>
                     {seleccionada.conectividad.activo ? 'En uso' : 'Desactivada'}
                   </Badge>
@@ -408,6 +479,14 @@ export default function ConectividadDelHotel() {
                     {seleccionada.conectividad.modo === 'lectura' ? 'Solo lectura' : 'Escribe'}
                   </Badge>
                 </div>
+              )}
+
+              {seleccionada?.conectividad.ultimoChequeo && (
+                <p className="text-xs text-muted-foreground">
+                  Última comprobación con el proveedor:
+                  {' '}
+                  {fechaDeChequeo(seleccionada.conectividad.ultimoChequeo)}
+                </p>
               )}
 
               <div className="max-w-md space-y-2">
@@ -426,7 +505,8 @@ export default function ConectividadDelHotel() {
                 />
                 <p className="text-xs text-muted-foreground">
                   No se muestra de nuevo una vez guardado. Déjalo vacío para cambiar solo el estado o
-                  el modo.
+                  el modo: al guardar se prueba contra el proveedor en solo lectura y el resultado
+                  queda en la tarjeta.
                 </p>
               </div>
 
@@ -473,7 +553,9 @@ export default function ConectividadDelHotel() {
                   ) : (
                     <Save className="h-4 w-4" />
                   )}
-                  <span className="ml-2">Guardar credencial</span>
+                  <span className="ml-2">
+                    {guardandoToken ? 'Guardando y probando…' : 'Guardar credencial'}
+                  </span>
                 </Button>
               </AccionHospitality>
             </>

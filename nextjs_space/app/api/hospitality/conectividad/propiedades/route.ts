@@ -18,6 +18,14 @@ export const dynamic = 'force-dynamic';
  *   (o rota) el token. Sin `token` se conserva el que hubiera: cambiar `activo`
  *   o `modo` no obliga a volver a pegarlo.
  *
+ *   Guardar **prueba** la credencial que queda en uso con un `GET /api/Status`
+ *   (solo lectura) y escribe el resultado en la fila: `estado`, `ultimoChequeo`
+ *   y `ultimoError`. El cuerpo devuelve ese `sondeo` para que la pantalla diga
+ *   al instante si el proveedor la acepta. Un fallo de la prueba **no** invalida
+ *   el guardado (200 con `ok: true` y `sondeo.ok: false`): perder el token
+ *   tecleado porque el proveedor está caído sería peor. Una credencial
+ *   desactivada no se prueba y queda en `configurado`.
+ *
  * La respuesta incluye `avisos` de la política de un solo escritor (dos
  * proveedores activos empujando la misma noche). Se guarda igual: el conflicto
  * se resuelve donde se decide quién escribe, no rechazando la credencial.
@@ -189,6 +197,8 @@ export async function PUT(req: NextRequest) {
       // Redundante a propósito: `estado` es la forma que ya usa el lector y
       // confirma que lo guardado es lo que se leyó. Tampoco lleva el token.
       estado: resultado.estado,
+      // Lo que dijo el proveedor al probarla. Null cuando no se probó.
+      sondeo: resultado.sondeo ?? null,
     });
   } catch (error: unknown) {
     console.error('[Conectividad] Error en PUT de credencial por propiedad:', error);

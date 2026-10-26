@@ -519,12 +519,12 @@ un hotel en producción.
 | `cliente.ts` | Solo **GET**: `estado`, `rentals`, `disponibilidad`, `reservas`. Token en la ruta, timeout, y clasificación de errores `token` / `peticion` / `servidor` / `tiempo` / `red` / `respuesta`. El token se **sanea** en mensajes y en la URL que se registra. |
 | `mapa.ts` | Puro: normalización de `status` (14 medidos + 16 documentados, sin adivinar), `referral` → canal (con `nobeds.app` separado de `direct`), ventana por **check-in** y cruce catálogo ↔ `ConnectivityMapping` con huérfanos y conflictos. |
 | `reservas.ts` | Diferencial puro (nuevas / modificadas / canceladas / desaparecidas) y **confirmación de desapariciones en dos ciclos**: una reserva que falta no se cancela ni reabre noches. |
-| `config-propiedad.ts` | Servidor: lee la credencial **de esta propiedad**, descifra el token y devuelve el cliente; y la guarda (`guardarCredencialPropiedad`) cifrando antes de escribir y sin devolver el secreto. Los tres casos de «no configuración» son error de credencial, no lectura vacía. |
+| `config-propiedad.ts` | Servidor: lee la credencial **de esta propiedad**, descifra el token y devuelve el cliente; y la guarda (`guardarCredencialPropiedad`) cifrando antes de escribir, probándola con un GET de estado y sin devolver el secreto. Los tres casos de «no configuración» son error de credencial, no lectura vacía. |
 | `../conectividad-proveedores.ts` | Registro de proveedores + **política de un solo escritor**, con el actual como respaldo. |
 
 Guardias: `tests/nobeds-cliente.test.ts`, `tests/nobeds-mapa.test.ts`,
 `tests/nobeds-diferencial.test.ts`, `tests/nobeds-config-propiedad.test.ts` y
-`tests/conectividad-proveedores.test.ts` (**86 comprobaciones**, con el guardado
+`tests/conectividad-proveedores.test.ts` (**95 comprobaciones**, con el guardado
 de la credencial y su endpoint), con payloads
 copiados del API real, incluidos el 404 de credencial y el 500 con HTML.
 
@@ -555,8 +555,23 @@ Tres reglas que la hacen segura de usar:
   avisa** con la frase de la política. Rechazarlo dejaría al hotel sin poder
   registrar su credencial por un conflicto que se resuelve aparte.
 
-Guardar no es haber probado: `estado = 'configurado'` significa «hay token», y el
-chequeo real lo marcará la sonda de salud.
+**Guardar es probar.** Con la credencial que queda en uso se hace un
+`GET /api/Status` —solo lectura: el cliente no tiene verbos de escritura— y el
+resultado se escribe en la misma operación: `estado` (`conectado` / `error`),
+`ultimoChequeo` y `ultimoError` saneado (sin token, en una línea y acotado).
+
+- Un fallo de la prueba **no** invalida el guardado: responde 200 con
+  `ok: true` y `sondeo.ok: false`. Perder el token tecleado porque el proveedor
+  está caído sería peor que guardarlo marcado en rojo, y el motivo queda a la
+  vista en la tarjeta.
+- Una credencial **desactivada** no se prueba (no se gastan peticiones con un
+  secreto que el hotel acaba de apagar) y queda en `configurado`, que significa
+  «hay token, sin probar» — no un problema, pero tampoco una promesa.
+- Se prueba lo que va a **quedar** guardado: si el cuerpo no trae token, se usa
+  el que ya estaba, no uno inventado.
+- La prueba dice que el token responde, **no** que el `externalPropertyId` sea
+  el suyo: `Status` no devuelve ese código. Esa correspondencia se ve al
+  vincular unidades.
 
 ### 10.3 El proveedor anterior queda como segunda opción
 
@@ -575,8 +590,9 @@ La convivencia está en código, no en una nota:
 - **F2 (escritura)**: bloqueada por F0. Sin sandbox de escritura no se puede
   probar `POST /api/Bookings` ni `Availability/bulk`, y sin saber si el alta es
   atómica no se escribe una línea de esa parte.
-- **Sonda de la credencial guardada**: guardar no llama al proveedor todavía;
-  falta que el panel de salud pruebe el token y marque `estado`/`ultimoError`.
+- **Sonda periódica del token por propiedad**: guardar ya lo prueba y deja
+  `estado`/`ultimoChequeo`/`ultimoError`; falta que un job recorra las
+  credenciales activas para que el verde se renueve sin volver a guardar.
 - **Panel de salud y wizard**: no tocados. El paso 5 del onboarding sigue
   hablando del proveedor actual hasta que se decida el orden del cutover.
 - **Mensajes y reseñas**: F4, sin empezar.

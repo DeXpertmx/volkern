@@ -6,7 +6,7 @@
 // HTTP real (no sobre el módulo): el token no vuelve en ningún cuerpo, la
 // propiedad tiene que ser de la cuenta, y sin permiso no se escribe.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { decrypt, encrypt } from '@/lib/core/crypto';
 
 const mocks = vi.hoisted(() => ({
@@ -63,6 +63,22 @@ beforeEach(() => {
   mocks.hospitalityConnectivityPropertyConfig.findMany.mockResolvedValue([fila()]);
   mocks.hospitalityConnectivityPropertyConfig.findUnique.mockResolvedValue(fila());
   mocks.hospitalityConnectivityPropertyConfig.upsert.mockResolvedValue({});
+  // Guardar prueba la credencial: la respuesta del proveedor se simula entera,
+  // sin salir a la red.
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({ hotelName: 'Hotel Prueba', isActive: true, rentalsCount: 2 }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        )
+    )
+  );
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 describe('GET — estado de la credencial por propiedad', () => {
@@ -125,6 +141,41 @@ describe('PUT — guardar la credencial', () => {
     expect(guardado).toBeTypeOf('string');
     expect(guardado).not.toContain(TOKEN);
     expect(decrypt(guardado)).toBe(TOKEN);
+  });
+
+  it('devuelve el resultado de la prueba con el proveedor, sin el token', async () => {
+    const res = await PUT(
+      peticion('PUT', { propertyId: 'p1', externalPropertyId: '4821', token: TOKEN })
+    );
+    const cuerpo = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(cuerpo.sondeo).toMatchObject({
+      probado: true,
+      ok: true,
+      estado: 'conectado',
+      hotel: 'Hotel Prueba',
+      rentals: 2,
+    });
+    expect(JSON.stringify(cuerpo)).not.toContain(TOKEN);
+  });
+
+  it('un token rechazado responde 200 igual: se guarda marcado en error', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 404 })));
+
+    const res = await PUT(
+      peticion('PUT', { propertyId: 'p1', externalPropertyId: '4821', token: TOKEN })
+    );
+    const cuerpo = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(cuerpo.ok).toBe(true);
+    expect(cuerpo.sondeo).toMatchObject({ probado: true, ok: false });
+    expect(cuerpo.sondeo.error).toBeTruthy();
+    expect(JSON.stringify(cuerpo)).not.toContain(TOKEN);
+    // Lo guardado es lo que se probó, con su error.
+    const upsert = mocks.hospitalityConnectivityPropertyConfig.upsert.mock.calls[0][0];
+    expect(upsert.create?.estado ?? upsert.update?.estado).toBe('error');
   });
 
   it('la propiedad de otra cuenta no se toca (404)', async () => {
