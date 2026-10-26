@@ -1,9 +1,16 @@
 # Conectividad de Hospitality en NOBEDS — decisión, contrato medido y plan
 
-> Estado: **decisión tomada**, sin implementar. Fecha: 22 oct 2026.
+> Estado: **decisión tomada** (22 oct 2026). F1 de lectura **implementada** el
+> 26-oct-2026 (§10); F0 —contrato por escrito— **sigue abierto**.
 > Sustituye a Aiosell como proveedor principal de distribución y aporta lo que
 > Aiosell no daba: chat con el huésped, reseñas, contabilidad, tareas y salud
 > del canal.
+>
+> **Seguimiento del correo (26-oct-2026):** enviado, sin respuesta, y
+> **reenviado** ese día. El cuerpo está en
+> [`hospitality-nobeds-email-arranque.md`](./hospitality-nobeds-email-arranque.md).
+> F0 no se cierra hasta que contesten por escrito las bloqueantes de §8; el
+> recordatorio de los 5 días hábiles corre desde el reenvío.
 >
 > Todo lo que aquí se afirma del API de NOBEDS está **medido** contra
 > `https://api.nobeds.com` con el token público de demostración (`api_token`,
@@ -327,6 +334,24 @@ status ni cuerpo: «not specified»), semántica de `DELETE ...&date=` (C4), si
 puede responder a Booking.com/Airbnb por `Messages/send` (D1), rotación con
 solape (A3), proceso de partner (A5) y las cuatro nuevas (28–31).
 
+### 4.8 Tercera pasada de medición (26-oct-2026)
+
+Repetida **solo lectura** para escribir el cliente de F1, y corrige o afina tres
+cosas que el plan daba por supuestas:
+
+| Hecho medido | Dato |
+| --- | --- |
+| `GET /api/Status` | Responde **camelCase**: `hotelName`, `subscriptionTill`, `isActive`, `serverTime`, `rentalsCount` y `rentals[].roomId` / `.title` / `.active` (booleano) / `.integrations` con el estado por canal como texto (`"Disconnected"`). |
+| `GET /api/Rentals` | Responde **snake_case** y `active` como **`1`**, no booleano: `room_id`, `title`, `type`, `subtype`, `stars`, `guests`, `children`, `currencycode`, `checkin_time` (14), `checkout_time` (12), `images` separadas por coma y los ids por canal. **La API no es homogénea entre recursos.** |
+| `GET /api/Availability` | Parámetros que **sí** filtran: `room_id`, `fromdate`, `todate`. Con `from_date`/`to_date` los **ignora** y devuelve desde hoy. Cada fila trae `rid`, `room_id`, `date`, `price`, `quantity`, `comment`, `min_stay`, `max_stay`, `closed`, `coa`, `cod`, `mah`, `one`..`ten` y los strings por canal. |
+| `GET /api/Bookings` | Ventana `2026-10-01..2027-01-31` devolvió **42** filas con 7 estados distintos (`New` 23, `Approved` 10, `Registered` 5, `Cancelled` 1, `Paid` 1, `Checked-Out` 1, `Completed` 1), y `referral` con `Direct`, `Nobeds.app` y `Agoda.com` en la misma ventana. |
+| Token inválido | **404 JSON** `application/problem+json` con `title: "Not Found"` y `traceId`. Se confirma que un 404 de lectura es **credencial**, no recurso inexistente. |
+
+Consecuencias para el código (ya aplicadas en
+[`lib/hospitality/nobeds/`](../lib/hospitality/nobeds/)): un normalizador **por
+recurso**, no uno genérico de habitación; el filtro de disponibilidad con los
+nombres en snake_case; y el 404 clasificado como `token` en el cliente.
+
 ## 5. Diseño propuesto
 
 ### 5.1 Módulo
@@ -480,3 +505,37 @@ Estimación: ~5 semanas, con F0 como bloqueante (no es trabajo de código).
 - Las respuestas de su asistente (§4.7) **no son contrato**: cinco repiten
   literalmente nuestras hipótesis y dos son imposibles o falsas al probarlas.
   Solo tres cosas se aceptan, y porque las medimos nosotros.
+
+## 10. Estado de implementación (26-oct-2026)
+
+**F1 de lectura, hecho.** Vive en [`lib/hospitality/nobeds/`](../lib/hospitality/nobeds/)
+y **no toca el camino vivo** del proveedor actual: nada importa este módulo
+todavía, así que se puede revisar y desplegar sin cambiar el comportamiento de
+un hotel en producción.
+
+| Fichero | Contenido |
+| --- | --- |
+| `tipos.ts` | Contrato medido (Status, Rentals, Availability, Bookings) y dominio normalizado. Modela explícitamente que `status` mezcla reserva, cobro y limpieza. |
+| `cliente.ts` | Solo **GET**: `estado`, `rentals`, `disponibilidad`, `reservas`. Token en la ruta, timeout, y clasificación de errores `token` / `peticion` / `servidor` / `tiempo` / `red` / `respuesta`. El token se **sanea** en mensajes y en la URL que se registra. |
+| `mapa.ts` | Puro: normalización de `status` (14 medidos + 16 documentados, sin adivinar), `referral` → canal (con `nobeds.app` separado de `direct`), ventana por **check-in** y cruce catálogo ↔ `ConnectivityMapping` con huérfanos y conflictos. |
+| `reservas.ts` | Diferencial puro (nuevas / modificadas / canceladas / desaparecidas) y **confirmación de desapariciones en dos ciclos**: una reserva que falta no se cancela ni reabre noches. |
+
+Guardias: `tests/nobeds-cliente.test.ts`, `tests/nobeds-mapa.test.ts` y
+`tests/nobeds-diferencial.test.ts` (**43 comprobaciones**), con payloads copiados
+del API real, incluidos el 404 de credencial y el 500 con HTML.
+
+**Lo que falta y por qué:**
+
+- **F2 (escritura)**: bloqueada por F0. Sin sandbox de escritura no se puede
+  probar `POST /api/Bookings` ni `Availability/bulk`, y sin saber si el alta es
+  atómica no se escribe una línea de esa parte.
+- **Persistencia del token por propiedad**: no se ha migrado el esquema. El plan
+  (§5.4) propone columna en `ConnectivityMapping` o modelo propio; hoy
+  `HospitalityConnectivityConfig.partnerIdEnc` es **uno por tenant** y no sirve
+  para multi-propiedad.
+- **Des-cablear `channel_connectivity`**: 21 referencias en 17 ficheros. Se hará
+  cuando exista adaptador de lectura completo (catálogo + panel de salud) y una
+  prueba contra un hotel real; hacerlo antes deja el camino vivo sin proveedor.
+- **Panel de salud y wizard**: no tocados. El paso 5 del onboarding sigue
+  hablando del proveedor actual hasta que se decida el orden del cutover.
+- **Mensajes y reseñas**: F4, sin empezar.
