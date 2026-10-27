@@ -110,7 +110,23 @@ interface FranchiseData {
     totalProperties: number;
     totalDeals: number;
     totalLeads: number;
-    totalComisiones: number;
+    /**
+     * Cifra única **solo** si toda la red cobra en la misma divisa. Con varias el
+     * servidor devuelve `null`: sumarlas daría un número sin significado, y el
+     * desglose está en `totalesPorMoneda`.
+     */
+    totalComisiones: number | null;
+    monedaTotal: string | null;
+    multiDivisa: boolean;
+    /** Comisiones consolidadas, agrupadas por divisa. */
+    totalesPorMoneda: Array<{
+      moneda: string;
+      total: number;
+      pendientes: number;
+      aprobadas: number;
+      pagadas: number;
+      cantidad: number;
+    }>;
     totalComisionesCount: number;
     childTenants: Array<{ id: string; nombre: string; moneda: string }>;
   };
@@ -135,7 +151,10 @@ interface FranchiseData {
   dealsByStage: Array<{
     etapa: string;
     cantidad: number;
-    valorTotal: number;
+    /** Cifra única solo si la etapa está íntegramente en una divisa. */
+    valorTotal: number | null;
+    multiDivisa: boolean;
+    porMoneda: Array<{ moneda: string; valorTotal: number }>;
   }>;
 }
 
@@ -473,7 +492,7 @@ export default function RealEstateDashboardPage() {
       {franchiseAvailable && franchiseData && franchiseData.commissions.length > 0 && (
         <CommissionSection
           franchiseData={franchiseData}
-          formatCurrency={(v: number) => formatCurrency(v, moneda)}
+          formatCurrency={(v: number, divisa?: string) => formatCurrency(v, divisa ?? moneda)}
         />
       )}
 
@@ -638,25 +657,70 @@ export default function RealEstateDashboardPage() {
 
 // ─── Commission Section ────────────────────────────────────────────────────────
 
+/**
+ * Importe consolidado de la franquicia.
+ *
+ * Las divisas las agrupa el servidor. Con una sola se enseña una cifra; con
+ * varias, una línea por divisa, porque cada oficina cobra en la suya y sumarlas
+ * daría un número sin significado.
+ */
+function ImporteConsolidado({
+  totales,
+  unaSolaDivisa,
+  campo,
+  className,
+}: {
+  totales: FranchiseData['globalStats']['totalesPorMoneda'];
+  unaSolaDivisa: boolean;
+  campo: 'total' | 'pendientes' | 'pagadas';
+  className?: string;
+}) {
+  if (unaSolaDivisa) {
+    return (
+      <div className={cn('text-2xl font-bold', className)}>
+        {formatearImporte(totales[0]?.[campo] ?? 0, totales[0]?.moneda ?? '', 0)}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1">
+      {totales.map((t) => (
+        <div key={`${t.moneda}-${campo}`} className="flex items-baseline justify-between gap-2">
+          <span className={cn('text-xl font-bold', className)}>
+            {formatearImporte(t[campo], t.moneda, 0)}
+          </span>
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            {t.moneda}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function CommissionSection({
   franchiseData,
   formatCurrency,
 }: {
   franchiseData: FranchiseData;
-  formatCurrency: (v: number) => string;
+  formatCurrency: (v: number, moneda?: string) => string;
 }) {
   const { globalStats, commissions } = franchiseData;
   const [expandedOffice, setExpandedOffice] = useState<string | null>(null);
   const [showAllCommissions, setShowAllCommissions] = useState(false);
 
-  const totalAllCommissions = commissions.reduce((s, c) => s + c.totalComisiones, 0);
-  const totalPendientes = commissions.reduce((s, c) => s + c.pendientes, 0);
-  const totalPagadas = commissions.reduce((s, c) => s + c.pagadas, 0);
+  const totales = globalStats.totalesPorMoneda;
+  const unaSolaDivisa = !globalStats.multiDivisa;
+  const totalAllCommissions = totales[0]?.total ?? 0;
+  const totalPendientes = totales[0]?.pendientes ?? 0;
+  const totalPagadas = totales[0]?.pagadas ?? 0;
 
   // Datos para el gráfico de distribución por oficina
   const officeChartData = commissions.map((c, i) => ({
     name: c.tenantNombre,
     value: c.totalComisiones,
+    moneda: c.moneda,
     fill: COMMISSION_COLORS[i % COMMISSION_COLORS.length],
   }));
 
@@ -691,7 +755,7 @@ function CommissionSection({
             <Banknote className="h-4 w-4 text-purple-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(totalAllCommissions)}</div>
+            <ImporteConsolidado totales={totales} unaSolaDivisa={unaSolaDivisa} campo="total" />
             <p className="text-xs text-muted-foreground">
               {globalStats.totalComisionesCount} transacciones comisionadas
             </p>
@@ -704,13 +768,18 @@ function CommissionSection({
             <Wallet className="h-4 w-4 text-amber-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-amber-600">
-              {formatCurrency(totalPendientes)}
-            </div>
+            <ImporteConsolidado
+              totales={totales}
+              unaSolaDivisa={unaSolaDivisa}
+              campo="pendientes"
+              className="text-amber-600"
+            />
             <p className="text-xs text-muted-foreground">
-              {totalAllCommissions > 0
-                ? `${((totalPendientes / totalAllCommissions) * 100).toFixed(0)}% del total`
-                : '0% del total'}
+              {unaSolaDivisa
+                ? (totalAllCommissions > 0
+                    ? `${((totalPendientes / totalAllCommissions) * 100).toFixed(0)}% del total`
+                    : '0% del total')
+                : 'pendiente por divisa'}
             </p>
           </CardContent>
         </Card>
@@ -721,13 +790,18 @@ function CommissionSection({
             <ArrowUpRight className="h-4 w-4 text-emerald-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-emerald-600">
-              {formatCurrency(totalPagadas)}
-            </div>
+            <ImporteConsolidado
+              totales={totales}
+              unaSolaDivisa={unaSolaDivisa}
+              campo="pagadas"
+              className="text-emerald-600"
+            />
             <p className="text-xs text-muted-foreground">
-              {totalAllCommissions > 0
-                ? `${((totalPagadas / totalAllCommissions) * 100).toFixed(0)}% del total`
-                : '0% del total'}
+              {unaSolaDivisa
+                ? (totalAllCommissions > 0
+                    ? `${((totalPagadas / totalAllCommissions) * 100).toFixed(0)}% del total`
+                    : '0% del total')
+                : 'pagado por divisa'}
             </p>
           </CardContent>
         </Card>
@@ -776,7 +850,10 @@ function CommissionSection({
                       ))}
                     </Pie>
                     <Tooltip
-                      formatter={((value: number) => [formatCurrency(value), 'Comisiones']) as any}
+                      formatter={((value: number, _nombre: string, item: { payload?: { moneda?: string } }) => [
+                        formatCurrency(value, item?.payload?.moneda),
+                        'Comisiones',
+                      ]) as any}
                       contentStyle={{
                         borderRadius: '12px',
                         border: 'none',
@@ -925,18 +1002,20 @@ function CommissionSection({
               <div className="grid grid-cols-3 gap-3 mb-3">
                 <div>
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Total</p>
-                  <p className="text-sm font-bold">{formatCurrency(office.totalComisiones)}</p>
+                  <p className="text-sm font-bold">
+                    {formatCurrency(office.totalComisiones, office.moneda)}
+                  </p>
                 </div>
                 <div>
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Pendiente</p>
                   <p className="text-sm font-bold text-amber-600">
-                    {formatCurrency(office.pendientes)}
+                    {formatCurrency(office.pendientes, office.moneda)}
                   </p>
                 </div>
                 <div>
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Pagado</p>
                   <p className="text-sm font-bold text-emerald-600">
-                    {formatCurrency(office.pagadas)}
+                    {formatCurrency(office.pagadas, office.moneda)}
                   </p>
                 </div>
               </div>

@@ -14,20 +14,42 @@ const mockPrisma = vi.hoisted(() => ({
   lead: { count: vi.fn(), findMany: vi.fn() },
   cita: { count: vi.fn() },
   comision: { findMany: vi.fn(), aggregate: vi.fn() },
-  deal: { count: vi.fn(), groupBy: vi.fn() },
+  deal: { count: vi.fn(), findMany: vi.fn(), groupBy: vi.fn() },
   tenant: { findMany: vi.fn(), findUnique: vi.fn() },
   $queryRawUnsafe: vi.fn(),
 }));
 
+// La tabla `Tenant` vive en el control plane: la leen `oficinasDeFranquicia`
+// (hijas por `parentId`) y `enCadaConexion` (la conexión de cada id).
+const mockGlobalPrisma = vi.hoisted(() => ({
+  tenant: { findUnique: vi.fn(), findMany: vi.fn() },
+}));
+
 vi.mock('@/lib/db', () => ({
   prisma: mockPrisma,
-  globalPrisma: {
-    tenant: { findUnique: vi.fn() },
-  },
+  globalPrisma: mockGlobalPrisma,
   getTenantDb: vi.fn().mockResolvedValue({}),
   dbContext: { run: vi.fn((_ctx: any, cb: () => any) => cb()) },
   getCurrentTenantId: vi.fn().mockReturnValue('test-tenant-id'),
 }));
+
+/**
+ * Simula la lectura del control plane: primero las oficinas de la matriz (por
+ * `parentId`) y después la conexión de los ids a consultar. Sin `dbUrl`, todo
+ * comparte la base global, que es como nacen las oficinas (`SlotManager`).
+ */
+function simularFranquicia(
+  oficinas: Array<{ id: string; nombre: string; moneda?: string; dbUrl?: string | null }> = [],
+) {
+  const porId = new Map(oficinas.map((o) => [o.id, o]));
+  mockGlobalPrisma.tenant.findMany.mockImplementation(async (args: any) => {
+    if (args?.where?.parentId) {
+      return oficinas.map((o) => ({ id: o.id, nombre: o.nombre, moneda: o.moneda ?? 'EUR' }));
+    }
+    const ids: string[] = args?.where?.id?.in ?? [];
+    return ids.map((id) => ({ id, dbUrl: porId.get(id)?.dbUrl ?? null }));
+  });
+}
 
 // Mock withTenantAuth
 vi.mock('@/lib/api-key-auth', () => {
@@ -183,6 +205,7 @@ describe('GET /api/real-estate/dashboard-stats', () => {
 describe('GET /api/real-estate/franchise/overview', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    simularFranquicia();
   });
 
   it('debe retornar overview completo de la franquicia', async () => {
@@ -242,9 +265,10 @@ describe('GET /api/real-estate/franchise/overview', () => {
       },
     ]);
 
-    mockPrisma.deal.groupBy.mockResolvedValue([
-      { etapa: 'negociacion', _count: { id: 5 }, _sum: { valor: 750000 } },
-      { etapa: 'cerrado', _count: { id: 3 }, _sum: { valor: 450000 } },
+    mockPrisma.deal.findMany.mockResolvedValue([
+      { etapa: 'negociacion', valor: 400000, moneda: 'EUR' },
+      { etapa: 'negociacion', valor: 350000, moneda: 'EUR' },
+      { etapa: 'cerrado', valor: 450000, moneda: 'EUR' },
     ]);
 
     const res = await OverviewGET(mockRequest('https://volkern.app/api/real-estate/franchise/overview'));
@@ -256,6 +280,8 @@ describe('GET /api/real-estate/franchise/overview', () => {
     expect(json.topProperties).toHaveLength(1);
     expect(json.recentLeads).toHaveLength(1);
     expect(json.dealsByStage).toHaveLength(2);
+    expect(json.dealsByStage.find((d: any) => d.etapa === 'negociacion').cantidad).toBe(2);
+    expect(json.dealsByStage.find((d: any) => d.etapa === 'negociacion').valorTotal).toBe(750000);
   });
 
   it('debe retornar 500 si getFranchiseGlobalStats falla', async () => {
@@ -271,10 +297,10 @@ describe('GET /api/real-estate/franchise/overview', () => {
 describe('GET /api/real-estate/franchise/commissions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    simularFranquicia();
   });
 
   it('debe retornar lista de comisiones sin filtros', async () => {
-    mockPrisma.tenant.findMany.mockResolvedValue([]); // sin hijos
     mockPrisma.comision.findMany.mockResolvedValue([
       {
         id: 'com-1',
@@ -308,7 +334,6 @@ describe('GET /api/real-estate/franchise/commissions', () => {
   });
 
   it('debe filtrar por agenteId', async () => {
-    mockPrisma.tenant.findMany.mockResolvedValue([]);
     mockPrisma.comision.findMany.mockResolvedValue([]);
 
     await CommissionsGET(mockRequest('https://volkern.app/api/real-estate/franchise/commissions?agenteId=user-a'));
@@ -323,7 +348,6 @@ describe('GET /api/real-estate/franchise/commissions', () => {
   });
 
   it('debe filtrar por rango de fechas', async () => {
-    mockPrisma.tenant.findMany.mockResolvedValue([]);
     mockPrisma.comision.findMany.mockResolvedValue([]);
 
     await CommissionsGET(mockRequest('https://volkern.app/api/real-estate/franchise/commissions?desde=2026-01-01&hasta=2026-06-30'));
@@ -334,7 +358,6 @@ describe('GET /api/real-estate/franchise/commissions', () => {
   });
 
   it('debe filtrar por estado', async () => {
-    mockPrisma.tenant.findMany.mockResolvedValue([]);
     mockPrisma.comision.findMany.mockResolvedValue([]);
 
     await CommissionsGET(mockRequest('https://volkern.app/api/real-estate/franchise/commissions?estado=pendiente'));
@@ -347,7 +370,7 @@ describe('GET /api/real-estate/franchise/commissions', () => {
   });
 
   it('debe incluir hijos cuando incluirHijas=true', async () => {
-    mockPrisma.tenant.findMany.mockResolvedValue([
+    simularFranquicia([
       { id: 'child-1', nombre: 'Oficina Norte' },
       { id: 'child-2', nombre: 'Oficina Sur' },
     ]);
@@ -365,9 +388,35 @@ describe('GET /api/real-estate/franchise/commissions', () => {
   });
 
   it('debe retornar 500 si hay error de DB', async () => {
-    mockPrisma.tenant.findMany.mockRejectedValueOnce(new Error('DB timeout'));
+    mockGlobalPrisma.tenant.findMany.mockRejectedValueOnce(new Error('DB timeout'));
 
     const res = await CommissionsGET(mockRequest('https://volkern.app/api/real-estate/franchise/commissions'));
     expect(res.status).toBe(500);
+  });
+
+  it('no suma divisas distintas en una sola cifra', async () => {
+    simularFranquicia([
+      { id: 'oficina-mx', nombre: 'Oficina CDMX', moneda: 'MXN' },
+      { id: 'oficina-es', nombre: 'Oficina Madrid', moneda: 'EUR' },
+    ]);
+    mockPrisma.comision.findMany.mockResolvedValue([
+      { id: 'com-mx', dealId: 'd1', userId: 'u1', montoCalculado: 10000, tipo: 'porcentaje_venta',
+        porcentaje: 3, montoFijo: null, moneda: 'MXN', estado: 'pendiente', fechaCreacion: new Date(),
+        fechaAprobacion: null, fechaPago: null, tenantId: 'test-tenant-id',
+        usuario: { id: 'u1', name: 'Ana', email: 'ana@test.com' }, deal: { titulo: 'A', valor: 1, valorReal: null, moneda: 'MXN' } },
+      { id: 'com-es', dealId: 'd2', userId: 'u1', montoCalculado: 5000, tipo: 'porcentaje_venta',
+        porcentaje: 3, montoFijo: null, moneda: 'EUR', estado: 'pendiente', fechaCreacion: new Date(),
+        fechaAprobacion: null, fechaPago: null, tenantId: 'oficina-es',
+        usuario: { id: 'u1', name: 'Ana', email: 'ana@test.com' }, deal: { titulo: 'B', valor: 1, valorReal: null, moneda: 'EUR' } },
+    ]);
+
+    const res = await CommissionsGET(mockRequest('https://volkern.app/api/real-estate/franchise/commissions'));
+    const json = await res.json();
+
+    expect(json.totals.multiDivisa).toBe(true);
+    expect(json.totals.total).toBeNull();
+    expect(json.totals.porMoneda).toHaveLength(2);
+    expect(json.totals.porMoneda.find((t: any) => t.moneda === 'MXN').total).toBe(10000);
+    expect(json.totals.porMoneda.find((t: any) => t.moneda === 'EUR').total).toBe(5000);
   });
 });

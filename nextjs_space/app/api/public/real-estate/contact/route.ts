@@ -65,20 +65,21 @@ export async function POST(req: NextRequest) {
 
     return await dbContext.run({ tenantId: tenant.id, client: tenantClient }, async () => {
       // 3. Obtener propiedad (si se especificó)
-      let propertyName = "";
-      if (propertyId) {
-        const property = await prisma.catalogoItem.findFirst({
-          where: {
-            id: propertyId,
-            tenantId: tenant.id,
-            tipo: "inmueble",
-          },
-          select: { id: true, nombre: true, precioBase: true },
-        });
-        if (property) {
-          propertyName = property.nombre;
-        }
-      }
+      //
+      // El `id` llega del formulario público, así que la búsqueda va acotada al
+      // tenant y el resultado es lo único que autoriza a escribir después: si la
+      // propiedad es de otra cuenta, `property` es null y no se toca nada.
+      const property = propertyId
+        ? await prisma.catalogoItem.findFirst({
+            where: {
+              id: propertyId,
+              tenantId: tenant.id,
+              tipo: "inmueble",
+            },
+            select: { id: true, nombre: true, metadata: true },
+          })
+        : null;
+      const propertyName = property?.nombre || "";
 
       // 4. Crear lead desde la skill existente
       const { executeSkill } = await import("@/lib/skills");
@@ -100,19 +101,16 @@ export async function POST(req: NextRequest) {
         } as any,
       } as any);
 
-      // 5. Si hay propiedad, registrar interés en metadata
-      if (propertyId && lead) {
+      // 5. Si la propiedad es de este tenant, registrar el interés en su metadata
+      if (property && lead) {
         try {
-          const currentMetadata = await prisma.catalogoItem.findUnique({
-            where: { id: propertyId },
-            select: { metadata: true },
-          });
-          const existingMetadata = typeof currentMetadata?.metadata === "object" && currentMetadata.metadata !== null
-            ? currentMetadata.metadata
-            : {};
+          const existingMetadata =
+            typeof property.metadata === "object" && property.metadata !== null
+              ? property.metadata
+              : {};
 
-          await prisma.catalogoItem.update({
-            where: { id: propertyId },
+          await prisma.catalogoItem.updateMany({
+            where: { id: property.id, tenantId: tenant.id },
             data: {
               metadata: {
                 ...(existingMetadata as Record<string, unknown>),
@@ -120,10 +118,16 @@ export async function POST(req: NextRequest) {
               },
             },
           });
-          // Incremento atómico
-          await prisma.$executeRawUnsafe(
-            `UPDATE "CatalogoItem" SET "metadata" = jsonb_set(COALESCE("metadata", '{}'::jsonb), '{totalLeads}', COALESCE(("metadata"->>'totalLeads')::int::text::jsonb, '0'::jsonb) + '1'::jsonb) WHERE id = $1`,
-            propertyId
+
+          // Incremento atómico, en la conexión de este tenant y acotado por
+          // `tenantId`: el SQL crudo del proxy sale siempre por la conexión
+          // global, así que el filtro tiene que ir en la propia sentencia.
+          await (tenantClient as unknown as {
+            $executeRawUnsafe: (sql: string, ...args: unknown[]) => Promise<unknown>;
+          }).$executeRawUnsafe(
+            `UPDATE "CatalogoItem" SET "metadata" = jsonb_set(COALESCE("metadata", '{}'::jsonb), '{totalLeads}', COALESCE(("metadata"->>'totalLeads')::int::text::jsonb, '0'::jsonb) + '1'::jsonb) WHERE id = $1 AND "tenantId" = $2`,
+            property.id,
+            tenant.id
           );
         } catch {
           // No crítico si falla

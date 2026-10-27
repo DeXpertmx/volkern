@@ -6,6 +6,7 @@ import {
   listCaptaciones,
   createCaptacion,
   getCaptacionStats,
+  ReferenciaAjenaError,
   type CaptacionEstado,
   type CaptacionTipo,
 } from '@/lib/real-estate/captacion-helpers';
@@ -102,6 +103,10 @@ export const POST = withTenantAuth(async (req, auth) => {
 
     return NextResponse.json(captacion, { status: 201 });
   } catch (error) {
+    if (error instanceof ReferenciaAjenaError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
     console.error('[Captaciones API] Error creating:', error);
     return NextResponse.json(
       { error: 'Error al crear la captación' },

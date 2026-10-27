@@ -6,9 +6,15 @@
  * entre agentes/inmobiliaria/franquicia.
  */
 
-import { prisma } from '@/lib/db';
+import { prisma, globalPrisma } from '@/lib/db';
 import type { Comision, Deal, User } from '@prisma/client';
 import { formatearImporte, monedaEscritura } from '@/lib/moneda';
+import {
+  oficinasDeFranquicia,
+  enCadaConexion,
+  sumarPorMoneda,
+  type TotalPorMoneda,
+} from './franquicia';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -210,127 +216,151 @@ export async function createCommissionFromDeal(
 /**
  * Obtiene resumen de comisiones para un tenant (agencia/franquicia)
  * Incluye las comisiones de todos los sub-tenants si aplica
+ *
+ * Cada oficina se consulta en su propia conexión: una matriz con base de datos
+ * dedicada no ve las filas de sus oficinas, que viven en la base compartida.
  */
 export async function getFranchiseCommissionSummary(
   tenantId: string,
   includeChildren: boolean = false
 ): Promise<FranchiseCommissionSummary[]> {
-  const tenantIds = [tenantId];
-
-  if (includeChildren) {
-    const children = await prisma.tenant.findMany({
-      where: { parentId: tenantId },
-      select: { id: true, nombre: true },
-    });
-    tenantIds.push(...children.map(c => c.id));
-  }
-
-  // Conseguir nombres de tenants
-  const tenants = await prisma.tenant.findMany({
-    where: { id: { in: tenantIds } },
+  const matriz = await globalPrisma.tenant.findUnique({
+    where: { id: tenantId },
     select: { id: true, nombre: true, moneda: true },
   });
 
-  const tenantMap = new Map(tenants.map(t => [t.id, t]));
+  const oficinas = includeChildren ? await oficinasDeFranquicia(tenantId) : [];
 
-  const result: FranchiseCommissionSummary[] = [];
+  const objetivos = [
+    {
+      id: tenantId,
+      nombre: matriz?.nombre ?? '—',
+      moneda: monedaEscritura(matriz?.moneda),
+    },
+    ...oficinas,
+  ];
 
-  for (const tid of tenantIds) {
-    const tInfo = tenantMap.get(tid);
-    if (!tInfo) continue;
+  const resumenesPorConexion = await enCadaConexion(
+    objetivos.map(o => o.id),
+    async (idsDeLaConexion) => {
+      const comisiones = await prisma.comision.findMany({
+        where: { tenantId: { in: idsDeLaConexion } },
+        include: {
+          deal: { select: { titulo: true } },
+          usuario: { select: { name: true, email: true } },
+        },
+        orderBy: { fechaCreacion: 'desc' },
+      });
 
-    const comisiones = await prisma.comision.findMany({
-      where: { tenantId: tid },
-      include: {
-        deal: { select: { titulo: true } },
-        usuario: { select: { name: true, email: true } },
-      },
-      orderBy: { fechaCreacion: 'desc' },
-    });
+      return idsDeLaConexion
+        .map((tid): FranchiseCommissionSummary | null => {
+          const info = objetivos.find(o => o.id === tid);
+          if (!info) return null;
 
-    const totalComisiones = comisiones.reduce((s, c) => s + c.montoCalculado, 0);
-    const pendientes = comisiones
-      .filter(c => c.estado === 'pendiente')
-      .reduce((s, c) => s + c.montoCalculado, 0);
-    const pagadas = comisiones
-      .filter(c => c.estado === 'pagada')
-      .reduce((s, c) => s + c.montoCalculado, 0);
+          const propias = comisiones.filter(c => c.tenantId === tid);
 
-    result.push({
-      tenantId: tid,
-      tenantNombre: tInfo.nombre,
-      totalComisiones,
-      pendientes,
-      pagadas,
-      moneda: monedaEscritura(tInfo.moneda),
-      desglose: comisiones.map(c => ({
-        dealId: c.dealId,
-        dealTitulo: c.deal?.titulo || '—',
-        agente: c.usuario?.name || c.usuario?.email || '—',
-        monto: c.montoCalculado,
-        estado: c.estado,
-        fecha: c.fechaCreacion,
-      })),
-    });
-  }
+          return {
+            tenantId: tid,
+            tenantNombre: info.nombre,
+            totalComisiones: propias.reduce((s, c) => s + c.montoCalculado, 0),
+            pendientes: propias
+              .filter(c => c.estado === 'pendiente')
+              .reduce((s, c) => s + c.montoCalculado, 0),
+            pagadas: propias
+              .filter(c => c.estado === 'pagada')
+              .reduce((s, c) => s + c.montoCalculado, 0),
+            moneda: info.moneda,
+            desglose: propias.map(c => ({
+              dealId: c.dealId,
+              dealTitulo: c.deal?.titulo || '—',
+              agente: c.usuario?.name || c.usuario?.email || '—',
+              monto: c.montoCalculado,
+              estado: c.estado,
+              fecha: c.fechaCreacion,
+            })),
+          };
+        })
+        .filter((r): r is FranchiseCommissionSummary => r !== null);
+    },
+  );
 
-  return result;
+  // Orden estable por nombre de oficina, para que el panel no salte entre cargas.
+  return resumenesPorConexion.flat().sort((a, b) => a.tenantNombre.localeCompare(b.tenantNombre));
 }
 
 /**
  * Obtiene estadísticas globales para el dashboard de franquicia
+ *
+ * Cada conexión implicada se consulta por separado y después se suman los
+ * recuentos. Las comisiones NO se suman en una sola cifra: se agrupan por divisa,
+ * porque una red puede tener oficinas en divisas distintas.
  */
 export async function getFranchiseGlobalStats(tenantId: string) {
-  const childTenants = await prisma.tenant.findMany({
-    where: { parentId: tenantId },
-    select: { id: true, nombre: true, moneda: true },
-  });
-
+  const childTenants = await oficinasDeFranquicia(tenantId);
   const allTenantIds = [tenantId, ...childTenants.map(t => t.id)];
 
-  // Totales agregados
-  const [totalProperties, totalDeals, totalLeads, commissionStats] = await Promise.all([
-    // Propiedades (CatalogoItem tipo inmueble)
-    prisma.catalogoItem.count({
-      where: {
-        tenantId: { in: allTenantIds },
-        tipo: 'inmueble',
-        activo: true,
-      },
+  const porConexion = await enCadaConexion(allTenantIds, async (idsDeLaConexion) => {
+    const alcance = { tenantId: { in: idsDeLaConexion } };
+
+    const [totalProperties, totalDeals, totalLeads, comisiones] = await Promise.all([
+      // Propiedades (CatalogoItem tipo inmueble)
+      prisma.catalogoItem.count({
+        where: { ...alcance, tipo: 'inmueble', activo: true },
+      }),
+      // Deals activos
+      prisma.deal.count({ where: { ...alcance, estado: 'activo' } }),
+      // Leads del portal
+      prisma.lead.count({ where: { ...alcance, fuente: 'portal_inmobiliario' } }),
+      // Comisiones (con su divisa, para poder agrupar)
+      prisma.comision.findMany({
+        where: alcance,
+        select: { moneda: true, montoCalculado: true, estado: true },
+      }),
+    ]);
+
+    return [{ totalProperties, totalDeals, totalLeads, comisiones }];
+  });
+
+  const totales = porConexion.flat().reduce(
+    (acc, parte) => ({
+      totalProperties: acc.totalProperties + parte.totalProperties,
+      totalDeals: acc.totalDeals + parte.totalDeals,
+      totalLeads: acc.totalLeads + parte.totalLeads,
+      comisiones: acc.comisiones.concat(parte.comisiones),
     }),
-    // Deals activos
-    prisma.deal.count({
-      where: {
-        tenantId: { in: allTenantIds },
-        estado: 'activo',
-      },
-    }),
-    // Leads del portal
-    prisma.lead.count({
-      where: {
-        tenantId: { in: allTenantIds },
-        fuente: 'portal_inmobiliario',
-      },
-    }),
-    // Comisiones
-    prisma.comision.aggregate({
-      where: { tenantId: { in: allTenantIds } },
-      _sum: { montoCalculado: true },
-      _count: true,
-    }),
-  ]);
+    {
+      totalProperties: 0,
+      totalDeals: 0,
+      totalLeads: 0,
+      comisiones: [] as Array<{ moneda: string; montoCalculado: number; estado: string }>,
+    },
+  );
+
+  const totalesPorMoneda: TotalPorMoneda[] = sumarPorMoneda(
+    totales.comisiones.map(c => ({
+      moneda: c.moneda,
+      monto: c.montoCalculado,
+      estado: c.estado,
+    })),
+  );
+
+  const unaSolaDivisa = totalesPorMoneda.length <= 1;
 
   return {
-    totalProperties,
-    totalDeals,
-    totalLeads,
-    totalComisiones: commissionStats._sum.montoCalculado || 0,
-    totalComisionesCount: commissionStats._count,
-    childTenants: childTenants.map(t => ({
-      id: t.id,
-      nombre: t.nombre,
-      moneda: monedaEscritura(t.moneda),
-    })),
+    totalProperties: totales.totalProperties,
+    totalDeals: totales.totalDeals,
+    totalLeads: totales.totalLeads,
+    /**
+     * Cifra única de comisiones **solo** cuando toda la red cobra en la misma
+     * divisa. Con varias divisas vale `null`: sumarlas daría un número sin
+     * significado. En ese caso el desglose está en `totalesPorMoneda`.
+     */
+    totalComisiones: unaSolaDivisa ? (totalesPorMoneda[0]?.total ?? 0) : null,
+    monedaTotal: unaSolaDivisa ? (totalesPorMoneda[0]?.moneda ?? null) : null,
+    multiDivisa: !unaSolaDivisa,
+    totalesPorMoneda,
+    totalComisionesCount: totalesPorMoneda.reduce((s, t) => s + t.cantidad, 0),
+    childTenants,
   };
 }
 

@@ -57,6 +57,44 @@ export interface CaptacionResponse extends Captacion {
   creador?: { id: string; name: string | null; email: string } | null;
 }
 
+/**
+ * Los ids relacionados (`propiedadId`, `contactoPropietarioId`) llegan en el
+ * cuerpo de la petición, así que un cliente puede indicar el de otra cuenta y
+ * dejar la captación enlazada a un inmueble o a un contacto ajenos. Se lanza al
+ * intentarlo; la ruta lo traduce a un 400 con el campo en el mensaje.
+ */
+export class ReferenciaAjenaError extends Error {
+  constructor(readonly campo: string) {
+    super(`El ${campo} indicado no pertenece a esta cuenta`);
+    this.name = 'ReferenciaAjenaError';
+  }
+}
+
+/**
+ * Comprueba que las relaciones del cuerpo apunten a registros de la misma
+ * cuenta antes de guardarlas.
+ */
+async function exigirRelacionesDeLaCuenta(
+  tenantId: string,
+  data: { propiedadId?: string | null; contactoPropietarioId?: string | null }
+): Promise<void> {
+  if (data.propiedadId) {
+    const propia = await prisma.catalogoItem.findFirst({
+      where: { id: data.propiedadId, tenantId, tipo: 'inmueble' },
+      select: { id: true },
+    });
+    if (!propia) throw new ReferenciaAjenaError('propiedad');
+  }
+
+  if (data.contactoPropietarioId) {
+    const propio = await prisma.contact.findFirst({
+      where: { id: data.contactoPropietarioId, tenantId },
+      select: { id: true },
+    });
+    if (!propio) throw new ReferenciaAjenaError('contacto del propietario');
+  }
+}
+
 export interface CaptacionStats {
   total: number;
   activas: number;
@@ -71,17 +109,33 @@ export interface CaptacionStats {
 
 // ─── Serializer ───────────────────────────────────────────────────────────────
 
+/**
+ * Devuelve la relación solo si es de la misma cuenta que la captación. Las
+ * relaciones se resuelven por clave foránea, sin filtro de tenant, así que una
+ * fila ya enlazada a otra cuenta (creada antes de validar el cuerpo) no debe
+ * salir por la API. Se descarta `tenantId` del resultado para no cambiar el
+ * formato de la respuesta.
+ */
+function relacionDeLaCuenta<T extends { tenantId: string }>(
+  relacion: T | null | undefined,
+  tenantId: string
+): Omit<T, 'tenantId'> | null {
+  if (!relacion || relacion.tenantId !== tenantId) return null;
+  const { tenantId: _tenantId, ...resto } = relacion;
+  return resto;
+}
+
 export function serializeCaptacion(
   c: Captacion & {
-    propiedad?: Pick<CatalogoItem, 'id' | 'nombre' | 'precioBase' | 'moneda' | 'media'> | null;
-    contactoPropietario?: Pick<Contact, 'id' | 'nombre' | 'email' | 'telefono'> | null;
+    propiedad?: Pick<CatalogoItem, 'id' | 'nombre' | 'precioBase' | 'moneda' | 'media' | 'tenantId'> | null;
+    contactoPropietario?: Pick<Contact, 'id' | 'nombre' | 'email' | 'telefono' | 'tenantId'> | null;
     creador?: { id: string; name: string | null; email: string } | null;
   }
 ): CaptacionResponse {
   return {
     ...c,
-    propiedad: c.propiedad || null,
-    contactoPropietario: c.contactoPropietario || null,
+    propiedad: relacionDeLaCuenta(c.propiedad, c.tenantId),
+    contactoPropietario: relacionDeLaCuenta(c.contactoPropietario, c.tenantId),
     creador: c.creador || null,
   };
 }
@@ -104,7 +158,8 @@ export async function getCaptacionesActivasPorPropiedad(
       fechaFin: { gte: new Date() },
     },
     include: {
-      contactoPropietario: { select: { id: true, nombre: true, email: true, telefono: true } },
+      propiedad: { select: { id: true, nombre: true, precioBase: true, moneda: true, media: true, tenantId: true } },
+      contactoPropietario: { select: { id: true, nombre: true, email: true, telefono: true, tenantId: true } },
       creador: { select: { id: true, name: true, email: true } },
     },
     orderBy: { fechaCreacion: 'desc' },
@@ -115,9 +170,11 @@ export async function getCaptacionesActivasPorPropiedad(
 
 // ─── Queries ──────────────────────────────────────────────────────────────────
 
+// `tenantId` viaja en cada relación para que el serializador pueda descartar lo
+// que no sea de la misma cuenta que la captación.
 const CAPTACION_INCLUDE = {
-  propiedad: { select: { id: true, nombre: true, precioBase: true, moneda: true, media: true } },
-  contactoPropietario: { select: { id: true, nombre: true, email: true, telefono: true } },
+  propiedad: { select: { id: true, nombre: true, precioBase: true, moneda: true, media: true, tenantId: true } },
+  contactoPropietario: { select: { id: true, nombre: true, email: true, telefono: true, tenantId: true } },
   creador: { select: { id: true, name: true, email: true } },
 } as const;
 
@@ -219,6 +276,11 @@ export async function createCaptacion(
   creadoPor: string,
   data: CaptacionInput
 ): Promise<CaptacionResponse> {
+  await exigirRelacionesDeLaCuenta(tenantId, {
+    propiedadId: data.propiedadId,
+    contactoPropietarioId: data.contactoPropietarioId,
+  });
+
   const captacion = await prisma.captacion.create({
     data: {
       tenantId,
@@ -294,6 +356,13 @@ export async function updateCaptacion(
   if (data.notasCliente !== undefined) updateData.notasCliente = data.notasCliente;
   if (data.notasInternas !== undefined) updateData.notasInternas = data.notasInternas;
   if (data.metadata !== undefined) updateData.metadata = data.metadata;
+
+  // Solo se validan las relaciones que este PATCH cambia; si se envían, tienen
+  // que ser de la cuenta.
+  await exigirRelacionesDeLaCuenta(tenantId, {
+    propiedadId: updateData.propiedadId,
+    contactoPropietarioId: updateData.contactoPropietarioId,
+  });
 
   const captacion = await prisma.captacion.update({
     where: { id: captacionId },

@@ -6,6 +6,7 @@ import {
   getCaptacionById,
   updateCaptacion,
   deleteCaptacion,
+  ReferenciaAjenaError,
 } from '@/lib/real-estate/captacion-helpers';
 
 /**
@@ -70,6 +71,10 @@ export const PATCH = withTenantAuth(async (req, auth, { params }) => {
 
     return NextResponse.json(captacion);
   } catch (error) {
+    if (error instanceof ReferenciaAjenaError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
     console.error('[Captaciones API] Error updating captacion:', error);
     return NextResponse.json(
       { error: 'Error al actualizar la captación' },

@@ -3,13 +3,25 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
-import { monedaEfectiva } from '@/lib/moneda';
+import {
+  oficinasDeFranquicia,
+  enCadaConexion,
+  sumarPorMoneda,
+} from '@/lib/real-estate/franquicia';
 
 /**
  * GET /api/real-estate/franchise/commissions
  *
  * Reporte de comisiones de la franquicia.
  * Filtros: ?agenteId, ?desde, ?hasta, ?estado, ?incluirHijas
+ *
+ * Las comisiones se leen en la conexión de cada oficina (`enCadaConexion`): una
+ * matriz con base de datos propia no ve las filas de sus oficinas, que viven en
+ * la base compartida, y la consulta devolvería el reporte vacío sin dar error.
+ *
+ * Los totales van agrupados por divisa. `totals` es una cifra única solo cuando
+ * toda la red cobra en la misma divisa; con varias vale `null` y el desglose
+ * está en `totalesPorMoneda`.
  */
 export const GET = withTenantAuth(async (req, auth) => {
   const tenantId = auth.tenant!.id;
@@ -22,61 +34,48 @@ export const GET = withTenantAuth(async (req, auth) => {
     const estado = searchParams.get('estado');
     const incluirHijas = searchParams.get('incluirHijas') !== 'false';
 
-    // Determinar qué tenants incluir
-    const tenantIds = [tenantId];
-    if (incluirHijas) {
-      const children = await prisma.tenant.findMany({
-        where: { parentId: tenantId },
-        select: { id: true, nombre: true },
-      });
-      tenantIds.push(...children.map(c => c.id));
-    }
+    // Qué tenants entran en el reporte: la matriz y, si se piden, sus oficinas
+    // vigentes (las suspendidas o eliminadas no aportan cifras).
+    const oficinas = incluirHijas ? await oficinasDeFranquicia(tenantId) : [];
+    const nombres = new Map(oficinas.map(o => [o.id, o.nombre]));
+    nombres.set(tenantId, auth.tenant!.nombre);
+    const alcanceIds = [tenantId, ...oficinas.map(o => o.id)];
 
-    // Construir filtros
-    const where: any = {
-      tenantId: { in: tenantIds },
-    };
+    const comisiones = (
+      await enCadaConexion(alcanceIds, async (idsDeLaConexion) => {
+        const where: Record<string, unknown> = {
+          tenantId: { in: idsDeLaConexion },
+        };
 
-    if (agenteId) {
-      where.userId = agenteId;
-    }
+        if (agenteId) where.userId = agenteId;
+        if (estado) where.estado = estado;
 
-    if (estado) {
-      where.estado = estado;
-    }
+        if (desde || hasta) {
+          const rango: Record<string, Date> = {};
+          if (desde) rango.gte = new Date(desde);
+          if (hasta) {
+            const hastaDate = new Date(hasta);
+            hastaDate.setHours(23, 59, 59, 999);
+            rango.lte = hastaDate;
+          }
+          where.fechaCreacion = rango;
+        }
 
-    if (desde || hasta) {
-      where.fechaCreacion = {};
-      if (desde) where.fechaCreacion.gte = new Date(desde);
-      if (hasta) {
-        const hastaDate = new Date(hasta);
-        hastaDate.setHours(23, 59, 59, 999);
-        where.fechaCreacion.lte = hastaDate;
-      }
-    }
+        return prisma.comision.findMany({
+          where: where as never,
+          include: {
+            usuario: { select: { id: true, name: true, email: true } },
+            deal: { select: { titulo: true, valor: true, valorReal: true, moneda: true } },
+          },
+          orderBy: { fechaCreacion: 'desc' },
+        });
+      })
+    ).flat();
 
-    // Obtener todas las comisiones (una sola query)
-    const comisiones = await prisma.comision.findMany({
-      where,
-      include: {
-        usuario: { select: { id: true, name: true, email: true } },
-        deal: { select: { titulo: true, valor: true, valorReal: true, moneda: true } },
-        tenant: { select: { id: true, nombre: true } },
-      },
-      orderBy: { fechaCreacion: 'desc' },
-    });
-
-    // Calcular totales
-    const totalMonto = comisiones.reduce((s, c) => s + c.montoCalculado, 0);
-    const pendientes = comisiones
-      .filter(c => c.estado === 'pendiente')
-      .reduce((s, c) => s + c.montoCalculado, 0);
-    const aprobadas = comisiones
-      .filter(c => c.estado === 'aprobada')
-      .reduce((s, c) => s + c.montoCalculado, 0);
-    const pagadas = comisiones
-      .filter(c => c.estado === 'pagada')
-      .reduce((s, c) => s + c.montoCalculado, 0);
+    const totalesPorMoneda = sumarPorMoneda(
+      comisiones.map(c => ({ moneda: c.moneda, monto: c.montoCalculado, estado: c.estado })),
+    );
+    const unaSolaDivisa = totalesPorMoneda.length <= 1;
 
     // Agrupar por agente (en memoria, usando los mismos datos filtrados)
     const agentMap = new Map<string, {
@@ -116,7 +115,10 @@ export const GET = withTenantAuth(async (req, auth) => {
         dealTitulo: c.deal?.titulo || '—',
         agenteId: c.userId,
         agenteNombre: c.usuario?.name || c.usuario?.email || 'Desconocido',
-        oficina: c.tenant?.nombre || '—',
+        // El nombre de la oficina sale de la lista global de tenants: así no hace
+        // falta unir con la tabla `Tenant` desde la conexión del tenant.
+        oficina: nombres.get(c.tenantId) || '—',
+        tenantId: c.tenantId,
         tipo: c.tipo,
         porcentaje: c.porcentaje,
         montoFijo: c.montoFijo,
@@ -128,14 +130,14 @@ export const GET = withTenantAuth(async (req, auth) => {
         fechaPago: c.fechaPago,
       })),
       totals: {
-        total: totalMonto,
-        pendientes,
-        aprobadas,
-        pagadas,
+        total: unaSolaDivisa ? (totalesPorMoneda[0]?.total ?? 0) : null,
+        pendientes: unaSolaDivisa ? (totalesPorMoneda[0]?.pendientes ?? 0) : null,
+        aprobadas: unaSolaDivisa ? (totalesPorMoneda[0]?.aprobadas ?? 0) : null,
+        pagadas: unaSolaDivisa ? (totalesPorMoneda[0]?.pagadas ?? 0) : null,
         cantidad: comisiones.length,
-        // Divisa del resumen: la de las comisiones listadas y, si aún no hay
-        // ninguna, la de reporte del tenant. Antes caía siempre a 'EUR'.
-        moneda: monedaEfectiva([comisiones[0]?.moneda], auth.tenant?.moneda),
+        moneda: unaSolaDivisa ? (totalesPorMoneda[0]?.moneda ?? null) : null,
+        multiDivisa: !unaSolaDivisa,
+        porMoneda: totalesPorMoneda,
       },
       byAgent,
     });

@@ -4,12 +4,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { getFranchiseGlobalStats, getFranchiseCommissionSummary } from '@/lib/real-estate/commission-calculator';
+import { enCadaConexion, sumarPorMoneda } from '@/lib/real-estate/franquicia';
 
 /**
  * GET /api/real-estate/franchise/overview
  *
  * Dashboard consolidado para el franquiciatario master.
  * Muestra estadísticas agregadas de todas las oficinas (sub-tenants).
+ *
+ * Toda lectura consolidada pasa por `enCadaConexion`: cada oficina puede estar en
+ * una base de datos distinta de la matriz, y consultar con un `IN` sobre una sola
+ * conexión devolvería ceros sin dar error.
  */
 export const GET = withTenantAuth(async (req, auth) => {
   const tenantId = auth.tenant!.id;
@@ -23,64 +28,98 @@ export const GET = withTenantAuth(async (req, auth) => {
   }
 
   try {
-    // 1. Estadísticas globales (agregadas de todos los sub-tenants)
+    // 1. Estadísticas globales (agregadas por conexión)
     const globalStats = await getFranchiseGlobalStats(tenantId);
 
-    // Obtener todos los tenant IDs desde globalStats (evita query duplicada)
     const childTenantIds = globalStats.childTenants.map(t => t.id);
     const allTenantIds = [tenantId, ...childTenantIds];
 
     // 2. Resumen de comisiones por oficina
     const commissionSummary = await getFranchiseCommissionSummary(tenantId, true);
 
-    // 3. Top propiedades más vistas
-    const topProperties = await prisma.catalogoItem.findMany({
-      where: {
-        tenantId: { in: allTenantIds },
-        tipo: 'inmueble',
-        activo: true,
-      },
-      orderBy: { fechaCreacion: 'desc' },
-      take: 10,
-      select: {
-        id: true,
-        nombre: true,
-        precioBase: true,
-        tenantId: true,
-        customFieldValues: true,
-        media: true,
-        fechaCreacion: true,
-      },
-    });
+    // 3. Top propiedades más recientes (se toma el top de cada conexión y se
+    //    vuelve a recortar: el top global está contenido en la unión)
+    const propiedades = (
+      await enCadaConexion(allTenantIds, (idsDeLaConexion) =>
+        prisma.catalogoItem.findMany({
+          where: {
+            tenantId: { in: idsDeLaConexion },
+            tipo: 'inmueble',
+            activo: true,
+          },
+          orderBy: { fechaCreacion: 'desc' },
+          take: 10,
+          select: {
+            id: true,
+            nombre: true,
+            precioBase: true,
+            tenantId: true,
+            customFieldValues: true,
+            media: true,
+            fechaCreacion: true,
+          },
+        }),
+      )
+    ).flat();
+    const topProperties = propiedades
+      .sort((a, b) => b.fechaCreacion.getTime() - a.fechaCreacion.getTime())
+      .slice(0, 10);
 
     // 4. Leads recientes
-    const recentLeads = await prisma.lead.findMany({
-      where: {
-        tenantId: { in: allTenantIds },
-        fuente: 'portal_inmobiliario',
-      },
-      orderBy: { fechaCreacion: 'desc' },
-      take: 10,
-      select: {
-        id: true,
-        nombre: true,
-        email: true,
-        empresa: true,
-        tenantId: true,
-        fechaCreacion: true,
-      },
-    });
+    const leads = (
+      await enCadaConexion(allTenantIds, (idsDeLaConexion) =>
+        prisma.lead.findMany({
+          where: {
+            tenantId: { in: idsDeLaConexion },
+            fuente: 'portal_inmobiliario',
+          },
+          orderBy: { fechaCreacion: 'desc' },
+          take: 10,
+          select: {
+            id: true,
+            nombre: true,
+            email: true,
+            empresa: true,
+            tenantId: true,
+            fechaCreacion: true,
+          },
+        }),
+      )
+    ).flat();
+    const recentLeads = leads
+      .sort((a, b) => b.fechaCreacion.getTime() - a.fechaCreacion.getTime())
+      .slice(0, 10);
 
-    // 5. Deals por etapa
-    const dealsByStage = await prisma.deal.groupBy({
-      by: ['etapa'],
-      where: {
-        tenantId: { in: allTenantIds },
-        estado: 'activo',
-      },
-      _count: { id: true },
-      _sum: { valor: true },
-    });
+    // 5. Deals por etapa. El valor se agrupa por divisa: sumar pesos y euros en
+    //    una cifra daría un número sin significado.
+    const deals = (
+      await enCadaConexion(allTenantIds, (idsDeLaConexion) =>
+        prisma.deal.findMany({
+          where: { tenantId: { in: idsDeLaConexion }, estado: 'activo' },
+          select: { etapa: true, valor: true, moneda: true },
+        }),
+      )
+    ).flat();
+
+    const etapas = new Map<string, Array<{ moneda: string; monto: number; estado: string }>>();
+    for (const deal of deals) {
+      const filas = etapas.get(deal.etapa) ?? [];
+      filas.push({ moneda: deal.moneda, monto: deal.valor, estado: 'activo' });
+      etapas.set(deal.etapa, filas);
+    }
+
+    const dealsByStage = [...etapas.entries()].map(([etapa, filas]) => {
+      const porMoneda = sumarPorMoneda(filas);
+      const cantidad = filas.length;
+      return {
+        etapa,
+        cantidad,
+        // Cifra única solo si la etapa está íntegramente en una divisa.
+        valorTotal: porMoneda.length <= 1 ? (porMoneda[0]?.total ?? 0) : null,
+        multiDivisa: porMoneda.length > 1,
+        porMoneda: porMoneda.map(p => ({ moneda: p.moneda, valorTotal: p.total })),
+      };
+    }).sort((a, b) => b.cantidad - a.cantidad);
 
     // Mapear nombres de tenants (incluye el tenant principal + hijos de globalStats)
     const tenantNames = new Map(
@@ -95,19 +134,15 @@ export const GET = withTenantAuth(async (req, auth) => {
         nombre: p.nombre,
         precio: p.precioBase,
         oficina: tenantNames.get(p.tenantId) || '—',
-        ciudad: (p.customFieldValues as any)?.zona || '',
-        imagen: Array.isArray(p.media) ? (p.media[0] as any)?.url || '' : '',
+        ciudad: (p.customFieldValues as Record<string, unknown>)?.zona || '',
+        imagen: Array.isArray(p.media) ? ((p.media[0] as { url?: string })?.url || '') : '',
         fechaCreacion: p.fechaCreacion,
       })),
       recentLeads: recentLeads.map(l => ({
         ...l,
         oficina: tenantNames.get(l.tenantId ?? '') || '—',
       })),
-      dealsByStage: dealsByStage.map(d => ({
-        etapa: d.etapa,
-        cantidad: d._count.id,
-        valorTotal: d._sum.valor || 0,
-      })),
+      dealsByStage,
     });
   } catch (error) {
     console.error('[Franchise Overview] Error:', error);

@@ -10,19 +10,30 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ─── Mocks ─────────────────────────────────────────────────────────────────
 
-vi.mock('@/lib/db', () => ({
-  prisma: {
-    comision: {
-      create: vi.fn(),
-      findMany: vi.fn(),
-      aggregate: vi.fn(),
-      update: vi.fn(),
-    },
-    tenant: { findMany: vi.fn() },
-    catalogoItem: { count: vi.fn() },
-    deal: { count: vi.fn() },
-    lead: { count: vi.fn() },
+const mockPrisma = vi.hoisted(() => ({
+  comision: {
+    create: vi.fn(),
+    findMany: vi.fn(),
+    aggregate: vi.fn(),
+    update: vi.fn(),
   },
+  tenant: { findMany: vi.fn() },
+  catalogoItem: { count: vi.fn() },
+  deal: { count: vi.fn() },
+  lead: { count: vi.fn() },
+}));
+
+// La consolidación de franquicia lee `Tenant` del control plane y abre el
+// contexto de conexión de cada oficina (lib/real-estate/franquicia.ts).
+const mockGlobalPrisma = vi.hoisted(() => ({
+  tenant: { findUnique: vi.fn(), findMany: vi.fn() },
+}));
+
+vi.mock('@/lib/db', () => ({
+  prisma: mockPrisma,
+  globalPrisma: mockGlobalPrisma,
+  getTenantDb: vi.fn().mockResolvedValue({ client: {} }),
+  dbContext: { run: vi.fn((_ctx: unknown, cb: () => unknown) => cb()) },
 }));
 
 // ─── Imports ───────────────────────────────────────────────────────────────
@@ -288,11 +299,17 @@ describe('getFranchiseCommissionSummary', () => {
   });
 
   it('debe retornar resumen para un solo tenant sin hijos', async () => {
-    (prisma.tenant.findMany as any)
-      .mockResolvedValue([{ id: 'tenant-1', nombre: 'Oficina Central', moneda: 'EUR' }]);
+    // Nombre y divisa de la oficina salen del control plane.
+    mockGlobalPrisma.tenant.findUnique.mockResolvedValue({
+      id: 'tenant-1',
+      nombre: 'Oficina Central',
+      moneda: 'EUR',
+    });
+    mockGlobalPrisma.tenant.findMany.mockResolvedValue([{ id: 'tenant-1', dbUrl: null }]);
 
     (prisma.comision.findMany as any).mockResolvedValue([
       {
+        tenantId: 'tenant-1',
         montoCalculado: 5000,
         estado: 'pendiente',
         dealId: 'deal-1',
@@ -301,6 +318,7 @@ describe('getFranchiseCommissionSummary', () => {
         fechaCreacion: new Date('2026-06-01'),
       },
       {
+        tenantId: 'tenant-1',
         montoCalculado: 3000,
         estado: 'pagada',
         dealId: 'deal-2',
@@ -321,12 +339,19 @@ describe('getFranchiseCommissionSummary', () => {
   });
 
   it('debe incluir sub-tenants cuando includeChildren es true', async () => {
-    (prisma.tenant.findMany as any)
-      .mockResolvedValueOnce([{ id: 'child-1', nombre: 'Oficina Norte' }])  // hijos
-      .mockResolvedValueOnce([
-        { id: 'tenant-1', nombre: 'Central', moneda: 'EUR' },
-        { id: 'child-1', nombre: 'Oficina Norte', moneda: 'EUR' },
-      ]);
+    mockGlobalPrisma.tenant.findUnique.mockResolvedValue({
+      id: 'tenant-1',
+      nombre: 'Central',
+      moneda: 'EUR',
+    });
+    // Primero las oficinas (por `parentId`) y después la conexión de cada id.
+    mockGlobalPrisma.tenant.findMany.mockImplementation(async (args: any) => {
+      if (args?.where?.parentId) {
+        return [{ id: 'child-1', nombre: 'Oficina Norte', moneda: 'EUR' }];
+      }
+      const ids: string[] = args?.where?.id?.in ?? [];
+      return ids.map((id) => ({ id, dbUrl: null }));
+    });
 
     (prisma.comision.findMany as any).mockResolvedValue([]);
 
