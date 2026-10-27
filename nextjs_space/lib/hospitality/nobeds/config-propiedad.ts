@@ -29,6 +29,17 @@ import {
 } from './cliente';
 import type { ModoAutenticacionNobeds } from './tipos';
 
+/**
+ * Token público de su hotel de demostración: es el que se usa en pruebas de
+ * lectura porque no exige credencial de un cliente. Es **de solo lectura** —en
+ * esa cuenta `UPDATE`/`DELETE` están *strictly forbidden* y devuelven 500 HTML— y
+ * no identifica ninguna propiedad nuestra.
+ *
+ * Se compara por igualdad exacta con el valor documentado, no por heurística: no
+ * se intenta adivinar si un token «parece» demo por su forma.
+ */
+export const TOKEN_DEMO_NOBEDS = 'api_token';
+
 /** URL base del proveedor; configurable para sandbox sin tocar código. */
 export function baseUrlNobeds(): string {
   return (process.env.NOBEDS_BASE_URL ?? NOBEDS_BASE_URL_POR_DEFECTO).replace(/\/+$/, '');
@@ -433,6 +444,15 @@ export async function guardarCredencialPropiedad(
   });
 
   const avisos: string[] = [];
+
+  // Un hotel que guarda la credencial de demostración ve verde y lee un hotel de
+  // ejemplo: se avisa sin repetir el valor tecleado.
+  if (tokenEnUso === TOKEN_DEMO_NOBEDS) {
+    avisos.push(
+      'La credencial guardada es la de demostración del proveedor: lee un hotel de ejemplo, no esta propiedad.'
+    );
+  }
+
   const configs = await prisma.hospitalityConnectivityPropertyConfig.findMany({
     where: { tenantId: entrada.tenantId, propertyId },
     select: { provider: true, activo: true, modo: true },

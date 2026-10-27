@@ -642,6 +642,25 @@ resultado se escribe en la misma operación: `estado` (`conectado` / `error`),
   el suyo: `Status` no devuelve ese código. Esa correspondencia se ve al
   vincular unidades.
 
+### 10.2.1 Credencial de pruebas
+
+El hotel de demostración se abre con el token público **`api_token`** (hotel 0) y
+no hace falta pedirle nada a nadie para probar el circuito completo de lectura.
+Comprobado el 27-oct-2026 de punta a punta con ese token y la cabecera: `Status`
+(Hotel de Demo, 5 alojamientos), `Rentals` (5 filas, una con 6 ids de canal),
+`Availability` (8 noches) y `Bookings` (8 reservas próximas).
+
+Lo que ese token **no** sirve para probar:
+
+- **Escritura.** En la cuenta demo `UPDATE`/`DELETE` están *strictly forbidden*:
+  toda escritura responde 500 HTML (§4.4.1). F2 necesita un token real.
+- **Pertenencia de la propiedad.** El token es de su hotel de ejemplo, no del
+  nuestro: el `externalPropertyId` que se guarde junto a él no está verificado.
+- **Verde con sentido.** Como sin token la API también responde 200 con ese mismo
+  hotel (§4.1), un token vacío y `api_token` producen la misma respuesta. Por eso
+  el guardado **avisa** cuando la credencial es la de demostración, y por eso el
+  cliente no se construye sin token.
+
 ### 10.3 El proveedor anterior queda como segunda opción
 
 La convivencia está en código, no en una nota:

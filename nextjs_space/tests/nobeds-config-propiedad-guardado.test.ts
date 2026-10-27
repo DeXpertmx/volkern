@@ -234,6 +234,40 @@ describe('Credencial por propiedad — validaciones de campo', () => {
     expect(hoisted.upsert).not.toHaveBeenCalled();
   });
 
+  it('acepta el token de demostración que se usa en pruebas', async () => {
+    // `api_token` es la credencial pública de su hotel demo: 9 caracteres, sin
+    // espacios y sin forma de UUID. Si alguien endurece la validación con un
+    // patrón, este test avisa de que rompe la forma de probar el circuito.
+    hoisted.findUnique.mockResolvedValue(null);
+
+    const resultado = await guardarCredencialPropiedad({
+      tenantId: 't1',
+      propertyId: 'p1',
+      externalPropertyId: '0',
+      token: 'api_token',
+    });
+
+    expect(resultado.ok).toBe(true);
+    expect(hoisted.upsert).toHaveBeenCalled();
+  });
+
+  it('avisa de que la credencial es la de demostración, sin repetir el valor', async () => {
+    hoisted.findUnique.mockResolvedValue(null);
+
+    const resultado = await guardarCredencialPropiedad({
+      tenantId: 't1',
+      propertyId: 'p1',
+      externalPropertyId: '0',
+      token: 'api_token',
+    });
+
+    // Verde sí, pero nadie debe creer que está leyendo el hotel del cliente.
+    expect(resultado.sondeo).toMatchObject({ probado: true, ok: true });
+    const aviso = resultado.avisos.find((a) => a.includes('demostración'));
+    expect(aviso).toBeTruthy();
+    expect(aviso ?? '').not.toContain('api_token');
+  });
+
   it('rechaza un modo que no existe', async () => {
     hoisted.findUnique.mockResolvedValue(null);
 
