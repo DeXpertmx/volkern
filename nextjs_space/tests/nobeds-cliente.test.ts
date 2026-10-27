@@ -28,11 +28,17 @@ function clienteCon(fetchImpl: typeof fetch, timeoutMs?: number) {
 
 function espia(respuesta: () => Response) {
   const llamadas: string[] = [];
-  const fetchImpl = (async (url: string | URL | Request) => {
+  const inits: RequestInit[] = [];
+  const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
     llamadas.push(String(url));
+    inits.push(init ?? {});
     return respuesta();
   }) as typeof fetch;
-  return { fetchImpl, llamadas };
+  return { fetchImpl, llamadas, inits };
+}
+
+function cabecera(init: RequestInit | undefined): string {
+  return String((init?.headers as Record<string, string> | undefined)?.authorization ?? '');
 }
 
 // Payloads copiados del API real (26-oct-2026) con el token de demostración.
@@ -125,28 +131,32 @@ describe('NOBEDS — cliente HTTP', () => {
     expect(NOBEDS_PROVIDER_KEY).toBe('nobeds');
   });
 
-  it('pone el token en la ruta y los parámetros con los nombres medidos', async () => {
-    const { fetchImpl, llamadas } = espia(() => json([NOCHE_REAL]));
+  it('manda el token en la cabecera, no en la URL, con los parámetros medidos', async () => {
+    const { fetchImpl, llamadas, inits } = espia(() => json([NOCHE_REAL]));
     const cliente = clienteCon(fetchImpl);
 
     await cliente.disponibilidad({ roomId: 2531705, desde: '2026-11-01', hasta: '2026-11-05' });
 
     expect(llamadas).toHaveLength(1);
     const url = new URL(llamadas[0]);
-    expect(url.pathname).toBe(`/api/Availability/${TOKEN}`);
+    // Lo que recomienda su spec: la clave no acaba en la URL ni en sus logs.
+    expect(url.pathname).toBe('/api/Availability');
+    expect(url.toString()).not.toContain(TOKEN);
+    expect(cabecera(inits[0])).toBe(`Bearer ${TOKEN}`);
     expect(url.searchParams.get('room_id')).toBe('2531705');
     expect(url.searchParams.get('fromdate')).toBe('2026-11-01');
     expect(url.searchParams.get('todate')).toBe('2026-11-05');
   });
 
   it('reservas pide fromdate/todate, que filtran por check-in', async () => {
-    const { fetchImpl, llamadas } = espia(() => json([RESERVA_REAL]));
+    const { fetchImpl, llamadas, inits } = espia(() => json([RESERVA_REAL]));
     const cliente = clienteCon(fetchImpl);
 
     await cliente.reservas({ desde: '2026-10-20', hasta: '2026-11-05' });
 
     const url = new URL(llamadas[0]);
-    expect(url.pathname).toBe(`/api/Bookings/${TOKEN}`);
+    expect(url.pathname).toBe('/api/Bookings');
+    expect(cabecera(inits[0])).toBe(`Bearer ${TOKEN}`);
     expect(url.searchParams.get('fromdate')).toBe('2026-10-20');
     expect(url.searchParams.get('todate')).toBe('2026-11-05');
   });
@@ -305,7 +315,7 @@ describe('NOBEDS — cliente HTTP', () => {
     await expect(cliente.estado()).rejects.toMatchObject({ tipo: 'tiempo' });
   });
 
-  it('el token nunca aparece en el mensaje ni en la URL saneada del error', async () => {
+  it('el token nunca aparece en el mensaje ni en la URL del error (modo cabecera)', async () => {
     const { fetchImpl } = espia(() => html('<html>boom</html>', 500));
     const cliente = clienteCon(fetchImpl);
 
@@ -319,7 +329,37 @@ describe('NOBEDS — cliente HTTP', () => {
     expect(error).not.toBeNull();
     expect(error?.message).not.toContain(TOKEN);
     expect(error?.urlSaneada ?? '').not.toContain(TOKEN);
+  });
+
+  it('en modo ruta (heredado) el token viaja en la URL y el error lo enmascara', async () => {
+    const { fetchImpl, llamadas, inits } = espia(() => html('<html>boom</html>', 500));
+    const cliente = crearClienteNobeds({
+      token: TOKEN,
+      baseUrl: BASE,
+      fetchImpl,
+      autenticacion: 'ruta',
+    });
+
+    await expect(cliente.estado()).rejects.toMatchObject({ tipo: 'servidor' });
+    expect(new URL(llamadas[0]).pathname).toBe(`/api/Status/${TOKEN}`);
+    expect(cabecera(inits[0])).toBe('');
+
+    let error: ErrorNobeds | null = null;
+    try {
+      await cliente.estado();
+    } catch (e) {
+      error = e as ErrorNobeds;
+    }
+    expect(error?.urlSaneada ?? '').not.toContain(TOKEN);
     expect(error?.urlSaneada ?? '').toContain('•••');
+  });
+
+  it('no se construye sin token: su API devolvería los datos del hotel demo', async () => {
+    // Medido el 27-oct-2026: sin credencial la respuesta es 200 con el hotel de
+    // demostración, no 404. Un token vacío no falla, miente.
+    expect(() =>
+      crearClienteNobeds({ token: '   ', baseUrl: BASE, fetchImpl: (async () => json({})) as typeof fetch })
+    ).toThrow(/token/i);
   });
 
   it('rechaza fechas mal formadas sin llamar al proveedor', async () => {

@@ -31,14 +31,16 @@ function fila(parcial: Record<string, unknown> = {}) {
 
 function fetchQueCaptura(respuesta: unknown) {
   const llamadas: string[] = [];
-  const fetchImpl = (async (url: string | URL | Request) => {
+  const inits: RequestInit[] = [];
+  const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
     llamadas.push(String(url));
+    inits.push(init ?? {});
     return new Response(JSON.stringify(respuesta), {
       status: 200,
       headers: { 'content-type': 'application/json' },
     });
   }) as typeof fetch;
-  return { fetchImpl, llamadas };
+  return { fetchImpl, llamadas, inits };
 }
 
 beforeEach(() => {
@@ -73,9 +75,13 @@ describe('NOBEDS — credencial por propiedad', () => {
     });
   });
 
-  it('descifra el token y lo pone en la ruta contra la URL configurada', async () => {
+  it('descifra el token y lo manda en la cabecera contra la URL configurada', async () => {
     hoisted.findUnique.mockResolvedValue(fila());
-    const { fetchImpl, llamadas } = fetchQueCaptura({ hotelName: 'H', isActive: true, rentals: [] });
+    const { fetchImpl, llamadas, inits } = fetchQueCaptura({
+      hotelName: 'H',
+      isActive: true,
+      rentals: [],
+    });
 
     const cliente = await crearClienteNobedsDePropiedad({
       tenantId: 'tenant-1',
@@ -86,7 +92,9 @@ describe('NOBEDS — credencial por propiedad', () => {
 
     const url = new URL(llamadas[0]);
     expect(url.origin).toBe(BASE);
-    expect(url.pathname).toBe(`/api/Status/${TOKEN}`);
+    expect(url.pathname).toBe('/api/Status');
+    expect(url.toString()).not.toContain(TOKEN);
+    expect((inits[0].headers as Record<string, string>).authorization).toBe(`Bearer ${TOKEN}`);
   });
 
   it('una fila sin configuración no se confunde con «sin datos»', async () => {
@@ -129,7 +137,11 @@ describe('NOBEDS — credencial por propiedad', () => {
 
   it('tolera un token guardado sin cifrar (formato antiguo) sin romper', async () => {
     hoisted.findUnique.mockResolvedValue(fila({ tokenEnc: 'token-plano' }));
-    const { fetchImpl, llamadas } = fetchQueCaptura({ hotelName: 'H', isActive: true, rentals: [] });
+    const { fetchImpl, llamadas, inits } = fetchQueCaptura({
+      hotelName: 'H',
+      isActive: true,
+      rentals: [],
+    });
 
     const cliente = await crearClienteNobedsDePropiedad({
       tenantId: 't',
@@ -138,7 +150,8 @@ describe('NOBEDS — credencial por propiedad', () => {
     });
     await cliente.estado();
 
-    expect(new URL(llamadas[0]).pathname).toBe('/api/Status/token-plano');
+    expect(new URL(llamadas[0]).pathname).toBe('/api/Status');
+    expect((inits[0].headers as Record<string, string>).authorization).toBe('Bearer token-plano');
   });
 });
 

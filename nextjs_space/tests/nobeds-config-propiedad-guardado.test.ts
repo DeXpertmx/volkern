@@ -268,7 +268,10 @@ describe('Credencial por propiedad — guardar prueba la credencial en solo lect
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     // Solo lectura por construcción: el cliente no tiene verbos de escritura.
     expect(init.method).toBe('GET');
-    expect(new URL(String(url)).pathname).toBe(`/api/Status/${TOKEN}`);
+    // La sonda usa la cabecera: el token tecleado no queda en la URL.
+    expect(new URL(String(url)).pathname).toBe('/api/Status');
+    expect(String(url)).not.toContain(TOKEN);
+    expect((init.headers as Record<string, string>).authorization).toBe(`Bearer ${TOKEN}`);
 
     expect(capturaUpsert().create).toMatchObject({ estado: 'conectado', ultimoError: null });
     expect(capturaUpsert().create.ultimoChequeo).toBeInstanceOf(Date);
@@ -317,7 +320,9 @@ describe('Credencial por propiedad — guardar prueba la credencial en solo lect
       activo: true,
     });
 
-    expect(new URL(String(fetchMock.mock.calls[0]?.[0])).pathname).toBe(`/api/Status/${TOKEN}`);
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(new URL(String(url)).pathname).toBe('/api/Status');
+    expect(((init.headers ?? {}) as Record<string, string>).authorization).toBe(`Bearer ${TOKEN}`);
     expect(capturaUpsert().update).not.toHaveProperty('tokenEnc');
     expect(capturaUpsert().update).toMatchObject({ estado: 'conectado' });
   });

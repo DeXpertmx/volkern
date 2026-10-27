@@ -27,10 +27,24 @@ import {
   NOBEDS_PROVIDER_KEY,
   type ClienteNobeds,
 } from './cliente';
+import type { ModoAutenticacionNobeds } from './tipos';
 
 /** URL base del proveedor; configurable para sandbox sin tocar código. */
 export function baseUrlNobeds(): string {
   return (process.env.NOBEDS_BASE_URL ?? NOBEDS_BASE_URL_POR_DEFECTO).replace(/\/+$/, '');
+}
+
+/**
+ * Cómo se presenta el token. **Cabecera por defecto**: su spec la recomienda
+ * justamente para que la clave no acabe en URLs, logs de acceso ni historial.
+ *
+ * `NOBEDS_AUTH=ruta` devuelve la forma heredada sin tocar código. Existe porque
+ * lo medido durante semanas fue la ruta y lo recomendado es la cabecera: si un
+ * hotel concreto solo respondiera por ruta, la vuelta atrás tiene que ser una
+ * variable de entorno, no un despliegue.
+ */
+export function modoAutenticacionNobeds(): ModoAutenticacionNobeds {
+  return (process.env.NOBEDS_AUTH ?? '').trim().toLowerCase() === 'ruta' ? 'ruta' : 'cabecera';
 }
 
 export interface EntradaPropiedad {
@@ -99,6 +113,7 @@ export async function crearClienteNobedsDePropiedad(
     baseUrl: baseUrlNobeds(),
     fetchImpl: entrada.fetchImpl,
     timeoutMs: entrada.timeoutMs,
+    autenticacion: modoAutenticacionNobeds(),
   });
 }
 
@@ -257,6 +272,7 @@ async function sondearToken(
       baseUrl: baseUrlNobeds(),
       fetchImpl: entrada.fetchImpl,
       timeoutMs: entrada.timeoutMs ?? TIMEOUT_SONDEO_MS,
+      autenticacion: modoAutenticacionNobeds(),
     });
     const estado = await cliente.estado();
 

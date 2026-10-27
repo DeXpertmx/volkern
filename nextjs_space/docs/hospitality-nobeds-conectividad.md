@@ -12,6 +12,11 @@
 > F0 no se cierra hasta que contesten por escrito las bloqueantes de §8; el
 > recordatorio de los 5 días hábiles corre desde el reenvío.
 >
+> **Respuesta del 27-oct-2026:** llegó un resumen de **capacidades de producto**.
+> No contesta ninguna de las bloqueantes de §8 —ni el modelo de autenticación, ni
+> la atomicidad del bulk, ni la firma del webhook—, pero **sí corrige una
+> afirmación nuestra** sobre webhooks. Triage en §4.9. **F0 sigue abierto.**
+>
 > Todo lo que aquí se afirma del API de NOBEDS está **medido** contra
 > `https://api.nobeds.com` con el token público de demostración (`api_token`,
 > solo lectura) el 22-oct-2026, o leído en su spec real
@@ -78,9 +83,15 @@ una decisión comercial, y por eso va como pregunta 30 del correo.
   para no quedar fuera de comparativa).
 - **Promos, extras, fianza, estacionalidad, fin de semana**: intactos en la venta
   directa. Nunca viajan al canal.
-- **Webhooks**: desaparecen. Su portada anuncia «WebHooks (NEW)», pero no existe
-  superficie: `/api/Webhooks` responde 404, no está entre las 52 operaciones y no
-  es tool MCP. La ingesta pasa a **sondeo con diferencial**.
+- **Webhooks**: no desaparecen, pero **tampoco son un camino propio**. Existen
+  como función de producto: se registran a mano en su extranet (Configuración →
+  Desarrolladores → WebHook) y emiten `booking.created` / `booking.updated`. Lo
+  medido sigue en pie: `/api/Webhooks` responde **404**, no está entre las 52
+  operaciones y no es tool MCP, así que **no se dan de alta por API ni por
+  propiedad desde nuestro producto**, y la documentación pública no fija la
+  carga ni la firma (§4.9). Consecuencia: la ingesta sigue siendo **sondeo con
+  diferencial**, y el webhook, cuando el hotel lo configure, es un acelerador que
+  **relee por API antes de aplicar**.
 - **Mensajes**: mejora. `send_message` + `list_messages` (y `list_messages` en
   MCP) dan chat por reserva. Nuestro modelo de hilos usa
   `channel` + `conversation_id`; el suyo es mensaje/respuesta por `order`. Eso se
@@ -95,14 +106,31 @@ una decisión comercial, y por eso va como pregunta 30 del correo.
 
 ### 4.1 Autenticación
 
-Token **en la ruta**: `/api/{Recurso}/{api_token}`. Sin Basic, sin OAuth, sin
-cabeceras. Un token **por hotel**. Implica:
+Su spec (`/swagger/v2/swagger.json`) declara **tres formas** de presentar el mismo
+`api_token`, que es **uno por hotel**:
+
+| Forma | Cómo | Estado |
+| --- | --- | --- |
+| **Cabecera** (recomendada) | `Authorization: Bearer <token>`, `X-Api-Key` o `NOBEDS-API-TOKEN` | **La que usamos.** Medida el 27-oct-2026: 200 con el mismo cuerpo que la ruta |
+| Ruta | `/api/{Recurso}/{api_token}` | *Legacy / backward-compatible*. Sigue respondiendo; es la vuelta atrás (`NOBEDS_AUTH=ruta`) |
+| Query | `?api_token=<token>` | No se usa: misma fuga que la ruta, y encima queda en el `Referer` |
+
+Lo dice su propia descripción: *«passing credentials in headers is recommended to
+prevent private keys from appearing in URLs, web server access logs, and browser
+history»*. Implica:
 
 - Un token cifrado por propiedad, no un `partnerId` por tenant. El modelo actual
   (`HospitalityConnectivityConfig.partnerIdEnc`, uno por tenant) no sirve para
   multi-propiedad.
-- El token viaja en la URL: aparece en logs de terceros (Cloudflare delante).
-  Hay que asumirlo y poder rotarlo.
+- **La URL ya no lleva el secreto.** Con cabecera, un log de Cloudflare o un
+  `traceId` de `application/problem+json` no exponen nada; en modo ruta vuelve el
+  riesgo y el saneado del cliente pasa a ser obligatorio.
+- **Sin token no hay error: hay demo.** Medido el 27-oct-2026: `GET /api/Status`
+  **sin credencial responde 200** con el hotel de demostración. Por eso el cliente
+  **se niega a construirse sin token** —una credencial vacía no falla, devuelve
+  otro hotel— y por eso tampoco se acepta un token en blanco al guardar. Su spec
+  añade que en la cuenta demo `UPDATE`/`DELETE` están *strictly forbidden*, que es
+  el origen de los 500 HTML de §4.4.1.
 
 ### 4.2 Escritura de disponibilidad
 
@@ -187,7 +215,7 @@ más escrituras de sondeo que no pueden alterar nada porque no entran:
 | `Logs` | 200/200 entradas son `demo :)` con `url: /api/demo`. **No sirve como prueba de escritura.** |
 | Auditoría real | El campo `comment` de la fila de disponibilidad lleva el histórico: `"Availability modal SET quantity: 1\n2026-05-19 10:41:09-Owner => ..."`. Esa es la superficie de verificación de F2. |
 | Disponibilidad demo | `quantity: 1` en las 30 noches consultadas, `price` constante. Nada de `quantity > 1` en este hotel. |
-| Contrato de errores | Token inválido → **404 JSON** (no 401). Parámetro inválido → 400 JSON con `errors`. `room_id` inexistente → **200 `[]`**. Toda escritura → **500 HTML**. |
+| Contrato de errores | Token inválido → **404 JSON** (no 401). Parámetro inválido → 400 JSON con `errors`. `room_id` inexistente → **200 `[]`**. Toda escritura → **500 HTML** (su spec lo explica: en la cuenta demo `UPDATE`/`DELETE` están *strictly forbidden* — §4.1). |
 | Suscripción | `subscriptionTill` 2026-08-28 (vencida) e `isActive: true`: la API responde igual. El demo no prueba qué pasa al vencer. |
 | `updated` | Distinto de `created` en 276/305 filas: sirve como clave de diferencial. |
 
@@ -352,6 +380,33 @@ Consecuencias para el código (ya aplicadas en
 recurso**, no uno genérico de habitación; el filtro de disponibilidad con los
 nombres en snake_case; y el 404 clasificado como `token` en el cliente.
 
+### 4.9 Cuarta respuesta del proveedor (27-oct-2026): qué se acepta
+
+> Fuente: el resumen de capacidades que enviaron, contrastado con su
+> `openapi.json` público, sus guías de ayuda y **nuestra propia medición**
+> (§4.4.1, §4.8). Se clasifica con la regla de §4.7 —lo que no esté medido o
+> firmado por ingeniería no entra en código—, con un matiz: esta vez una de sus
+> frases **corrige un error nuestro** y se acepta aunque no la hayamos medido.
+
+| Lo que dicen | Estado | Consecuencia |
+| --- | --- | --- |
+| El token es un **Bearer maestro** por cuenta de hotel, compartido por todas sus unidades | **Confirmado, y corrige §4.1.** Su spec lista `Authorization: Bearer <api_token>` —más `X-Api-Key` y `NOBEDS-API-TOKEN`— como método **recomendado**, y deja la ruta como *legacy / backward-compatible*. Medido el 27-oct-2026: cabecera y ruta devuelven 200 con el mismo cuerpo. El `openapi.json` público no lo declara, pero el spec real sí. | **El cliente pasa a cabecera** (`autenticacion: 'cabecera'` por defecto) y deja de poner el token en la URL; la ruta sigue disponible con `NOBEDS_AUTH=ruta`. Lo que **no** queda establecido es que el token sirva para varios hoteles de una misma cuenta: eso sigue en la pregunta 6. |
+| Varios usuarios del hotel comparten el token; se genera en Configuración → Desarrolladores | **Coherente** con §4.1 (un token por hotel) y **nuevo** en lo que importa: la rotación la puede hacer **el hotel**, no nosotros, y afecta a todos sus usuarios a la vez. | La rotación deja de ser una operación interna: hay que asumir que el token cambia sin avisarnos. El 404 clasificado como `token` y la sonda de guardado dejan de ser un detalle y pasan a ser la guardia. Refuerza la pregunta 6. |
+| Las unidades se crean y gestionan por `/api/rentals`, cada una con su disponibilidad y precios | **Cierto y fuera de alcance.** El schema documenta `GET /api/rentals` (y `GET /api/hotels` para el perfil); crear unidades no está documentado. | **No creamos unidades en su sistema.** El alta de propiedad y unidad sigue siendo nuestra (§5.4); duplicarla allí sería un segundo origen de verdad para el mismo `room_id`. |
+| `/api/bookings` permite crear, **modificar** y cancelar, y consultar el detalle de una reserva | **Parcial.** El schema documenta `GET`, `POST` y `DELETE`; **no hay método de modificación** ni `GET` por id —solo consulta por ventana de fechas—. Lo que anuncian como «modificar» es una tool MCP, no una ruta REST. | Un cambio de reserva **no se escribe**: se trata como cancelación + alta, o se espera. No se implementa `PUT` a ciegas. Hoy Aiosell sí modifica, así que el cutover **pierde** esa capacidad hasta que lo confirmen. Pregunta 15. |
+| `/api/availability` empuja tarifas, disponibilidad y restricciones: estancia mínima y máxima, cierre de ventas, cerrado a llegada y a salida | **Parcial, y con un dato nuevo que sirve.** El schema documenta `POST /api/availability/{api_token}` con `room_id`, `date`, `available`, `price`, `min_stay` y **200** al actualizar. **No** documenta `max_stay`, `closed`, `coa` ni `cod`. Nuestro `Availability/bulk` (§4.2) sí los tiene, pero toda escritura con el token demo devuelve **500 HTML**. | F2 no se desbloquea: sigue faltando sandbox de escritura. La novedad es que la escritura **por celda única** está documentada con 200, así que con el primer token real se sondea **una noche, una unidad, reversible**, antes de tocar el bulk. Las restricciones más allá de `min_stay` siguen sin verificar. |
+| Webhooks HTTP POST en tiempo real para crear, modificar y cancelar, configurados en Configuración → Desarrolladores | **Confirmado como producto** (su guía de cerraduras lo nombra: `booking.created` / `booking.updated`). **No** hay ruta para registrarlos (`/api/Webhooks` → 404, medido) ni carga ni firma documentadas. | **Corrige §3**: no «desaparecen». Pero son de **alta manual en su extranet**, uno por hotel, y su cuerpo es **no confiable**: al recibir uno se relee por API antes de aplicar. El sondeo sigue siendo el camino principal. |
+| Para conectar OTAs hay que seleccionar NOBEDS como proveedor en la extranet de **cada** OTA | **Cierto para Booking.com** (su guía lo pide explícitamente: Connectivity provider → NOBEDS, activando Reservas y Tarifas). **No** para Airbnb ni Expedia, que según sus propias guías se conectan desde el lado de NOBEDS. | El checklist de alta da **una receta por canal**, no una instrucción única. Los canales por iCal siguen como en §4.6. |
+
+Lo que este correo **no** contesta y F0 sigue necesitando por escrito:
+atomicidad de `POST /api/Bookings` y del bulk, carga y firma del webhook, qué
+pasa con un ítem rechazado, y si un token cubre varios hoteles de una cuenta.
+Nada de eso se construye sobre un resumen.
+
+La autenticación **sí queda cerrada**, y no por el correo: por su spec y por
+medición (§4.1). Consecuencia inmediata, ya en código: el token viaja en
+`Authorization: Bearer`, no en la ruta.
+
 ## 5. Diseño propuesto
 
 ### 5.1 Módulo
@@ -420,7 +475,8 @@ nueva) y el panel admin.
 | Doble escritor → overbooking | Solo escribimos reservas directas y cierres (§2) |
 | Push tarde = noche reabierta | Nunca empujamos recuentos |
 | Desaparece una reserva y la damos por cancelada sin serlo | Diferencial con confirmación en el siguiente ciclo + incidencia visible |
-| Token en la URL | Cifrado en reposo, rotación, prohibido en logs y en la UI |
+| Token en la URL | **Cabecera por defecto**; `NOBEDS_AUTH=ruta` solo como vuelta atrás, con saneado de errores y prohibido en logs y en la UI (§4.1) |
+| Credencial vacía que no falla sino que lee el hotel demo | El cliente se niega a construirse sin token y el guardado rechaza un token en blanco (§4.1) |
 | `status` libre | Normalización con tabla explícita y tests de los 14 valores vistos y los 16 documentados (§4.6) |
 | Descarte silencioso en bulk | Diff petición/respuesta y atribución a la unidad del hotel |
 | 1.000 propiedades | Sondeo por cubos, no global |
@@ -460,8 +516,10 @@ Estimación: ~5 semanas, con F0 como bloqueante (no es trabajo de código).
 > (`Logs` no sirve, el rastro está en `comment`); la **16** queda **cerrada por
 > medición** (las canceladas siguen en la lista, con `canceled`).
 
-1. **Webhooks**: ¿existen? La portada los anuncia; el API no los tiene. Sin
-   ellos, la latencia de ingesta es la del sondeo.
+1. **Webhooks**: existen en la extranet (`booking.created` / `booking.updated`),
+   pero no hay ruta para registrarlos ni carga ni firma documentadas (§4.9).
+   Falta: qué campos trae la carga, si se puede apuntar a una URL por hotel y si
+   firma. Mientras tanto, la latencia de ingesta es la del sondeo.
 2. **Bulk**: límite de ítems, si hace upsert, y qué devuelve un ítem fallido
    (`action` nulo o ausente de la respuesta).
 3. **`one`..`ten`**: ¿precios/cierres por estancia de 1 a 10 noches? Es la única
@@ -471,6 +529,9 @@ Estimación: ~5 semanas, con F0 como bloqueante (no es trabajo de código).
    cancelación o desaparición.
 5. **Rate limit** y tamaño máximo de ventana en `/Availability`.
 6. **Token**: ¿uno por hotel o por cadena? ¿se puede rotar sin ventana de caída?
+   Y si una cuenta tiene varios hoteles: ¿el mismo token sirve para todos y cómo
+   se distingue la propiedad en la petición? Su correo del 27-oct habla de un
+   token «maestro» por cuenta (§4.9).
 7. **`POST /api/Bookings`**: ¿descuenta disponibilidad de forma atómica? ¿rechaza
    con 409 si no hay? Es lo que sustituye a nuestra guardia de disponibilidad.
 8. **Modo demo/errores**: en demo, un POST devuelve **500 con página HTML** de
@@ -487,6 +548,13 @@ Estimación: ~5 semanas, con F0 como bloqueante (no es trabajo de código).
     página de canales o la de tarifas por canal (que añade Trip.com)? (31)
 13. **Importación Excel para el cutover**: ¿la ejecutáis vosotros por nosotros,
     acepta nuestra referencia y qué hace con un duplicado? (24)
+14. **Autenticación**: ¿el `api_token` de la ruta vale también como
+    `Authorization: Bearer`, y cuál es el recomendado? Su correo del 27-oct dice
+    «Bearer maestro»; la medición dice ruta y el schema no declara cabecera
+    (§4.9).
+15. **Modificación de reserva**: el schema público solo documenta `GET`, `POST`
+    y `DELETE` en `/api/bookings`, y ningún `GET` por id. ¿Existe `PUT`/`PATCH`,
+    qué campos acepta y qué pasa con la disponibilidad al mover fechas? (§4.9)
 
 ## 9. Pendiente honesto
 
@@ -568,7 +636,8 @@ resultado se escribe en la misma operación: `estado` (`conectado` / `error`),
   secreto que el hotel acaba de apagar) y queda en `configurado`, que significa
   «hay token, sin probar» — no un problema, pero tampoco una promesa.
 - Se prueba lo que va a **quedar** guardado: si el cuerpo no trae token, se usa
-  el que ya estaba, no uno inventado.
+  el que ya estaba, no uno inventado. La sonda va con `Authorization: Bearer`, así
+  que el token tecleado no queda ni en la URL ni en el `traceId` de un error.
 - La prueba dice que el token responde, **no** que el `externalPropertyId` sea
   el suyo: `Status` no devuelve ese código. Esa correspondencia se ve al
   vincular unidades.
@@ -592,7 +661,12 @@ La convivencia está en código, no en una nota:
   atómica no se escribe una línea de esa parte.
 - **Sonda periódica del token por propiedad**: guardar ya lo prueba y deja
   `estado`/`ultimoChequeo`/`ultimoError`; falta que un job recorra las
-  credenciales activas para que el verde se renueve sin volver a guardar.
+  credenciales activas para que el verde se renueve sin volver a guardar. El
+  hotel puede rotar el token por su cuenta (§4.9), así que esa sonda es la única
+  forma de enterarse.
+- **Webhook entrante**: el hotel lo configura en su extranet (§4.9); falta una
+  ruta nuestra que reciba `booking.created`/`booking.updated`, relea la reserva
+  por API y la aplique. Hasta que exista, el sondeo es el único camino.
 - **Panel de salud y wizard**: no tocados. El paso 5 del onboarding sigue
   hablando del proveedor actual hasta que se decida el orden del cutover.
 - **Mensajes y reseñas**: F4, sin empezar.

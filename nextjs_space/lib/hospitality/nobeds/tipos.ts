@@ -179,6 +179,18 @@ export interface RangoFechasNobeds {
   hasta: string;
 }
 
+/**
+ * Cómo viaja el token al proveedor.
+ *
+ * `cabecera` es `Authorization: Bearer <token>`, que es lo que recomienda su
+ * spec —«passing credentials in headers is recommended to prevent private keys
+ * from appearing in URLs, web server access logs, and browser history»—;
+ * `ruta` es la forma heredada `/api/{Recurso}/{token}`, que su spec marca como
+ * *legacy / backward-compatible* y que **sigue respondiendo** (medido el
+ * 27-oct-2026: las dos dan 200 con el mismo cuerpo).
+ */
+export type ModoAutenticacionNobeds = 'cabecera' | 'ruta';
+
 export interface OpcionesClienteNobeds {
   /** Token **de la propiedad** (los suyos son por hotel). Obligatorio. */
   token: string;
@@ -188,4 +200,6 @@ export interface OpcionesClienteNobeds {
   fetchImpl?: typeof fetch;
   /** Por defecto 15 s. */
   timeoutMs?: number;
+  /** Por defecto `cabecera`. `ruta` es la vuelta atrás sin cambiar código. */
+  autenticacion?: ModoAutenticacionNobeds;
 }

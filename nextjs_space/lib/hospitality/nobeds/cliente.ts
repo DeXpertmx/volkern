@@ -1,7 +1,10 @@
 /**
  * Cliente HTTP de NOBEDS: lectura de estado, catálogo, disponibilidad y
- * reservas. Token **por propiedad** en la ruta (`/api/{Recurso}/{token}`), que
- * es como funciona su API; no hay Basic Auth ni OAuth.
+ * reservas. El token es **por hotel** y viaja en `Authorization: Bearer`, que es
+ * lo que recomienda su spec para no dejarlo en URLs ni en logs de proxies y
+ * navegador. La forma heredada (`/api/{Recurso}/{token}`) sigue viva y se
+ * recupera con `autenticacion: 'ruta'`; medido el 27-oct-2026: las dos responden
+ * 200 con el mismo cuerpo.
  *
  * Lo que este cliente hace y lo que no:
  *
@@ -10,9 +13,12 @@
  *   **500 con HTML de ASP.NET**— y su atomicidad está sin confirmar. Programar
  *   una escritura a ciegas es justo lo que produjo el overbooking que se quiere
  *   dejar atrás.
- * - **Nunca** registra el token: los errores llevan la URL saneada. El token
- *   viaja en la ruta, así que también aparece en logs de terceros; tratarlo como
- *   secreto es responsabilidad del llamador (cifrado en reposo y rotación).
+ * - **Nunca** registra el token: los errores llevan la URL saneada. Con la
+ *   cabecera, la URL ya no lo contiene; en modo `ruta` el saneado sigue siendo
+ *   lo único que impide que aparezca en un mensaje.
+ * - **Sin token, su API responde 200 con el hotel de demostración**, no 404
+ *   (medido). Por eso el cliente **se niega a construirse sin token**: una
+ *   credencial vacía no daría un error, daría los datos de otro hotel.
  * - Un **404 al leer significa token**, no «no existe» (medido). Por eso se
  *   clasifica como error de credencial y no como catálogo vacío.
  * - Un **500 con HTML** se clasifica como error del servidor con la marca de que
@@ -24,6 +30,7 @@
 import { canalDeReferral, normalizarEstadoReserva } from './mapa';
 import type {
   EstadoHotelNobeds,
+  ModoAutenticacionNobeds,
   NocheNobeds,
   OpcionesClienteNobeds,
   RangoFechasNobeds,
@@ -278,6 +285,7 @@ export function crearClienteNobeds(opciones: OpcionesClienteNobeds): ClienteNobe
   const base = (opciones.baseUrl ?? NOBEDS_BASE_URL_POR_DEFECTO).replace(/\/+$/, '');
   const timeoutMs = opciones.timeoutMs ?? TIMEOUT_POR_DEFECTO_MS;
   const hacerFetch: typeof fetch = opciones.fetchImpl ?? fetch;
+  const autenticacion: ModoAutenticacionNobeds = opciones.autenticacion ?? 'cabecera';
 
   /** Quita el token de cualquier texto que vaya a un log o a un mensaje. */
   function sanear(cadena: string): string {
@@ -288,8 +296,16 @@ export function crearClienteNobeds(opciones: OpcionesClienteNobeds): ClienteNobe
       .join('•••');
   }
 
+  /**
+   * En modo `cabecera` la URL no lleva credencial: si esta cadena acaba en un
+   * log de Cloudflare o en un `traceId` de problema, no hay nada que rotar.
+   */
   function construirUrl(recurso: string, params?: Record<string, string | number>): string {
-    const url = new URL(`${base}/api/${recurso}/${encodeURIComponent(token)}`);
+    const ruta =
+      autenticacion === 'ruta'
+        ? `${base}/api/${recurso}/${encodeURIComponent(token)}`
+        : `${base}/api/${recurso}`;
+    const url = new URL(ruta);
     for (const [clave, valor] of Object.entries(params ?? {})) {
       if (valor === undefined || valor === null || valor === '') continue;
       url.searchParams.set(clave, String(valor));
@@ -333,7 +349,10 @@ export function crearClienteNobeds(opciones: OpcionesClienteNobeds): ClienteNobe
     try {
       res = await hacerFetch(url, {
         method: 'GET',
-        headers: { accept: 'application/json' },
+        headers:
+          autenticacion === 'cabecera'
+            ? { accept: 'application/json', authorization: `Bearer ${token}` }
+            : { accept: 'application/json' },
         signal: control.signal,
         cache: 'no-store',
       });
