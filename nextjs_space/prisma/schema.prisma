@@ -601,6 +601,39 @@ model GlobalAuditCloud {
   @@index([action])
 }
 
+/// Alta guiada (descubrimiento → propuesta → elección).
+///
+/// Guarda el estado del proceso por tenant para que un alta abandonada se
+/// retome donde estaba y soporte sepa en qué punto está, sin relación Prisma
+/// (la FK vive en la migración, igual que `OnboardingProgress`).
+/// `recomendacion` se recalcula con el plan vigente en cada GET: si el cliente
+/// sube de plan, sus tarjetas no pueden quedarse con el estado anterior.
+model ImplantacionTenant {
+  id             String    @id @default(cuid())
+  tenantId       String    @unique
+  estado         String    @default("descubrimiento")
+  descubrimiento Json?
+  recomendacion  Json?
+  aceptados      String[]  @default([])
+  descartados    String[]  @default([])
+  // Informes y plantillas que el cliente se lleva: elegidos sobre la
+  // propuesta del motor, no impuestos por ella.
+  informes             String[]  @default([])
+  plantillas           String[]  @default([])
+  entregablesAplicadosEn DateTime?
+  // Personalización aprobada pieza a pieza: el embudo con sus etapas, el
+  // `pipelineId` que se creó al aplicarlo y cuándo se aplicó (o deshizo).
+  plan           Json?
+  // Firma del go-live: criterio de éxito, confirmación de que las plantillas se
+  // revisaron y quién firmó. Sin ella el alta no se da por cerrada.
+  firmaGoLive    Json?
+  completadoEn   DateTime?
+  fechaCreacion  DateTime  @default(now())
+  actualizadoEn  DateTime  @updatedAt
+
+  @@map("implantacion_tenant")
+}
+
 model OnboardingProgress {
   id                    String    @id @default(cuid())
   tenantId              String    @unique
