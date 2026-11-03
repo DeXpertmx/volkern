@@ -1,12 +1,16 @@
 /**
  * LinkedIn OAuth Helper — Social API (Posts & Profile)
  *
- * LinkedIn API v2 OAuth 2.0 flow for social posting (not LinkedIn Ads).
+ * LinkedIn v2 OAuth 2.0 + OpenID Connect para publicar y leer el perfil.
  *
- * Scopes necesarios:
- *   w_member_social  → Publicar posts en nombre del usuario
- *   r_liteprofile    → Leer nombre y foto de perfil
- *   r_emailaddress   → Leer email del usuario
+ * Scopes necesarios (productos que hay que añadir a la app en el portal):
+ *   openid profile email → "Sign In with LinkedIn using OpenID Connect"
+ *   w_member_social      → "Share on LinkedIn" (publicar en nombre del usuario)
+ *
+ * Los scopes clásicos `r_liteprofile` / `r_emailaddress` ya no se conceden a las
+ * apps creadas desde agosto de 2023 y LinkedIn no permite mezclarlos con OIDC,
+ * así que se piden los modernos siempre. Los tokens antiguos (app grandfathered)
+ * siguen leyéndose por `/v2/me` como respaldo.
  *
  * Variables de entorno:
  *   LINKEDIN_CLIENT_ID
@@ -17,7 +21,7 @@ const AUTH_URL = 'https://www.linkedin.com/oauth/v2/authorization';
 const TOKEN_URL = 'https://www.linkedin.com/oauth/v2/accessToken';
 const API_BASE = 'https://api.linkedin.com/v2';
 
-export const LINKEDIN_SCOPES = ['w_member_social', 'r_liteprofile', 'r_emailaddress'].join(' ');
+export const LINKEDIN_SCOPES = ['openid', 'profile', 'email', 'w_member_social'].join(' ');
 
 export interface LinkedInOAuthResult {
   success: boolean
@@ -92,20 +96,43 @@ async function exchangeCodeForToken(code: string, redirectUri: string): Promise<
 }
 
 /**
- * Obtiene el perfil básico del usuario de LinkedIn (id, name, picture).
+ * Obtiene el perfil básico del usuario.
+ *
+ * Con OIDC el endpoint es `/v2/userinfo` (`sub` es el id de miembro que se usa
+ * en `urn:li:person:...`). Si el token viene de una app antigua con scopes
+ * legacy, se recurre a `/v2/me`.
  */
 async function getProfile(accessToken: string): Promise<{
   id: string
   name: string
   picture?: string
 }> {
-  // Obtener datos básicos del perfil
-  const profileRes = await fetch(`${API_BASE}/me?projection=(id,localizedFirstName,localizedLastName,profilePicture(displayImage~:playableStreams))`, {
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'X-Restli-Protocol-Version': '2.0.0',
-    },
+  const userinfoRes = await fetch(`${API_BASE}/userinfo`, {
+    headers: { 'Authorization': `Bearer ${accessToken}` },
   });
+
+  if (userinfoRes.ok) {
+    const perfil = await userinfoRes.json();
+    const nombre = perfil.name
+      || `${perfil.given_name || ''} ${perfil.family_name || ''}`.trim();
+
+    return {
+      id: perfil.sub,
+      name: nombre || 'LinkedIn User',
+      picture: perfil.picture || undefined,
+    };
+  }
+
+  // Respaldo para tokens con scopes clásicos (r_liteprofile).
+  const profileRes = await fetch(
+    `${API_BASE}/me?projection=(id,localizedFirstName,localizedLastName,profilePicture(displayImage~:playableStreams))`,
+    {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'X-Restli-Protocol-Version': '2.0.0',
+      },
+    },
+  );
 
   if (!profileRes.ok) {
     throw new Error('No se pudo obtener el perfil de LinkedIn');
@@ -116,7 +143,6 @@ async function getProfile(accessToken: string): Promise<{
   const id = profile.id;
   const name = `${profile.localizedFirstName || ''} ${profile.localizedLastName || ''}`.trim() || 'LinkedIn User';
 
-  // Obtener foto de perfil
   let picture: string | undefined;
   try {
     const pictureData = profile.profilePicture?.['displayImage~']?.elements;
