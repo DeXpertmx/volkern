@@ -1,6 +1,6 @@
 export type ImportSource = 'sage' | 'microdata' | 'generic_csv' | 'generic_xlsx'
 export type ImportType = 'clients' | 'accounting' | 'catalog'
-export type ImportStatus = 'completed' | 'partial' | 'failed'
+export type ImportStatus = 'completed' | 'partial' | 'failed' | 'preview' | 'reverted'
 
 export interface ColumnDef {
   key: string
@@ -28,6 +28,11 @@ export interface ImportResult {
   total: number
   errors: { row: number; field: string; message: string }[]
   logId?: string
+  /**
+   * Trazas para poder deshacer el lote: los asientos creados, que no se pueden
+   * deducir después sin adivinar por descripción y fecha.
+   */
+  meta?: { entryIds?: string[] }
 }
 
 export interface SourceTemplate {

@@ -14,6 +14,7 @@ export async function importOpeningBalances(
   const map = new Map(columnMap.map(m => [m.targetField, m.sourceField]))
   const year = fiscalYear || new Date().getFullYear()
   const openingDate = new Date(year, 0, 1)
+  const entryIds: string[] = []
 
   const lines: { accountId: string; debit: number; credit: number }[] = []
 
@@ -96,12 +97,14 @@ export async function importOpeningBalances(
     const { createHash } = await import('./hash-utils')
     const hash = createHash(entryData, previousEntry?.entryHash || null)
 
-    await prisma.accountingEntry.create({
+    const entry = await prisma.accountingEntry.create({
       data: {
         ...entryData,
         entryHash: hash,
       },
+      select: { id: true },
     })
+    entryIds.push(entry.id)
   }
 
   return {
@@ -110,6 +113,7 @@ export async function importOpeningBalances(
     failed: errors.length,
     total: rows.length,
     errors,
+    meta: { entryIds },
   }
 }
 
@@ -123,6 +127,7 @@ export async function importJournalEntries(
   let imported = 0
 
   const entryGroups = groupRowsByDate(rows, map)
+  const entryIds: string[] = []
 
   for (const [key, groupRows] of Object.entries(entryGroups)) {
     try {
@@ -198,9 +203,11 @@ export async function importJournalEntries(
       const { createHash } = await import('./hash-utils')
       const hash = createHash(entryData, previousEntry?.entryHash || null)
 
-      await prisma.accountingEntry.create({
+      const entry = await prisma.accountingEntry.create({
         data: { ...entryData, entryHash: hash },
+        select: { id: true },
       })
+      entryIds.push(entry.id)
 
       imported++
     } catch (err) {
@@ -218,6 +225,7 @@ export async function importJournalEntries(
     failed: errors.length,
     total: rows.length,
     errors,
+    meta: { entryIds },
   }
 }
 

@@ -27,7 +27,8 @@ export function ImportHistory() {
   }, [])
 
   const typeLabels: Record<string, string> = { clients: 'Clientes', accounting: 'Contabilidad', catalog: 'Servicios' }
-  const statusColors: Record<string, string> = { completed: 'bg-green-100 text-green-700', partial: 'bg-amber-100 text-amber-700', failed: 'bg-red-100 text-red-700' }
+  const statusColors: Record<string, string> = { completed: 'bg-green-100 text-green-700', partial: 'bg-amber-100 text-amber-700', failed: 'bg-red-100 text-red-700', reverted: 'bg-gray-200 text-gray-600' }
+  const statusLabels: Record<string, string> = { completed: 'completada', partial: 'con rechazos', failed: 'fallida', reverted: 'deshecha' }
 
   if (loading) return <div className="text-sm text-gray-400 p-4 text-center">Cargando historial...</div>
   if (logs.length === 0) return null
@@ -46,7 +47,7 @@ export function ImportHistory() {
               <span className="text-gray-500">{log.recordsImported}/{log.recordsTotal} registros</span>
             </div>
             <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[log.status] || 'bg-gray-100 text-gray-600'}`}>
-              {log.status}
+              {statusLabels[log.status] || log.status}
             </span>
           </div>
         ))}

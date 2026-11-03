@@ -7438,10 +7438,18 @@ model ImportLog {
   errors          Json?
   columnMapping   Json?
   status          String   @default("completed")
+  /// 'commit' escribe datos; 'preview' solo analiza y no debe ofrecerse para deshacer.
+  mode            String   @default("commit")
+  /// Identificador del lote, común a la previsualización y a su confirmación.
+  batchId         String?
+  /// Trazas del lote (`creados`, `actualizados` y el resumen) para deshacerlo.
+  report          Json?
+  revertedAt      DateTime?
   createdAt       DateTime @default(now())
   createdBy       String?
 
   @@index([tenantId])
+  @@index([tenantId, mode, createdAt])
   @@map("import_logs")
 }
 

@@ -22,4 +22,4 @@ export const POST = withTenantAuth(async (req: Request, auth) => {
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Error' }, { status: 500 })
   }
-})
+}, ['import:write'])

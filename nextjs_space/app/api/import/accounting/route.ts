@@ -1,31 +1,14 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { withTenantAuth } from '@/lib/api-key-auth'
-import { executeImport } from '@/lib/import/import-service'
+import { importarDesdeFormData } from '../_comun'
 
 export const POST = withTenantAuth(async (req, auth) => {
   try {
-    const formData = await req.formData()
-    const file = formData.get('file') as File | null
-    const mapping = formData.get('mapping')
-    const fiscalYear = formData.get('fiscalYear')
-
-    if (!file || !mapping) return NextResponse.json({ error: 'Archivo y mapping requeridos' }, { status: 400 })
-
-    const buffer = Buffer.from(await file.arrayBuffer())
-    const columnMapping = JSON.parse(mapping as string)
-
-    const result = await executeImport(
-      auth.tenant!.id,
-      auth.user?.id || 'system',
-      'accounting',
-      'generic_csv',
-      buffer,
-      file.type,
-      columnMapping
-    )
-
-    return NextResponse.json(result)
+    // El año fiscal se lee en `_comun` y llega hasta `importOpeningBalances`.
+    // Antes la ruta lo leía y lo tiraba: el asiento de apertura iba siempre al
+    // 1 de enero del año en curso.
+    return await importarDesdeFormData(req, auth, 'accounting')
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Error' }, { status: 500 })
   }
-})
+}, ['accounting:write'])
