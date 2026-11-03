@@ -84,7 +84,10 @@ export async function tenantActivo(): Promise<ResultadoTenantActivo> {
 
   let suplantadoId: string | null = null
   try {
-    suplantadoId = cookies().get(COOKIE_SUPLANTACION)?.value || null
+    // Next 15+ entrega `cookies()` como promesa: sin el await, `.get` no existe
+    // y la suplantación se perdía en silencio (el catch se la tragaba).
+    const cookieStore = await cookies()
+    suplantadoId = cookieStore.get(COOKIE_SUPLANTACION)?.value || null
   } catch {
     // Fuera de una petición no hay cookies: se sigue con el tenant propio.
   }

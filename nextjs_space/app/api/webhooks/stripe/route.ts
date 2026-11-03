@@ -260,7 +260,9 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.text()
-    const signature = headers().get('stripe-signature')
+    // Next 15+ entrega `headers()` como promesa; sin await, `.get` revienta con
+    // «is not a function» y el webhook responde 500.
+    const signature = (await headers()).get('stripe-signature')
 
     if (!signature) {
       return NextResponse.json(
