@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { encrypt } from '@/lib/core/crypto';
+import { disponibilidadPorPlataforma } from '@/lib/social/platform-env';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,13 +26,16 @@ export const GET = withTenantAuth(async (req, auth) => {
       },
     });
 
-    const metaOauthConfigured = !!process.env.FACEBOOK_APP_ID;
+    // Qué plataformas pueden conectarse ya: la UI lo usa para no mandar al
+    // usuario a un OAuth sin credenciales.
+    const platforms = disponibilidadPorPlataforma();
+    const metaOauthConfigured = platforms.facebook.configured;
 
-    return NextResponse.json({ success: true, configs, metaOauthConfigured });
+    return NextResponse.json({ success: true, configs, metaOauthConfigured, platforms });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-});
+}, ['social:read']);
 
 // POST /api/social/configs - Guardar/Actualizar configuración manual (token directo)
 export const POST = withTenantAuth(async (req, auth) => {
@@ -74,7 +78,7 @@ export const POST = withTenantAuth(async (req, auth) => {
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-});
+}, ['social:write']);
 
 // DELETE /api/social/configs?platform=facebook - Desconectar una plataforma
 export const DELETE = withTenantAuth(async (req, auth) => {
@@ -113,4 +117,4 @@ export const DELETE = withTenantAuth(async (req, auth) => {
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-});
+}, ['social:write']);

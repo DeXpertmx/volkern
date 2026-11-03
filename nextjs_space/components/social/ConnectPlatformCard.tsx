@@ -35,6 +35,8 @@ export interface PlatformConfig {
 interface ConnectPlatformCardProps {
   platform: SocialPlatform
   config?: PlatformConfig | null
+  /** Variables de entorno que faltan para poder abrir el OAuth de esta red. */
+  missingEnv?: string[]
   oauthEnabled?: boolean
   onConnected?: () => void
   onDisconnected?: () => void
@@ -101,6 +103,7 @@ const PLATFORM_META = {
 export function ConnectPlatformCard({
   platform,
   config,
+  missingEnv,
   oauthEnabled = true,
   onConnected,
   onDisconnected,
@@ -113,6 +116,8 @@ export function ConnectPlatformCard({
 
   const meta = PLATFORM_META[platform as keyof typeof PLATFORM_META]
   const { Icon } = meta
+  const faltantes = missingEnv ?? []
+  const sinCredenciales = faltantes.length > 0
   const isConnected = !!(config?.isActive && config?.profileId)
   
   // LinkedIn está en beta pero ya se puede mostrar
@@ -291,12 +296,29 @@ export function ConnectPlatformCard({
           <div className="flex flex-col gap-2 w-full">
             <Button
               onClick={handleConnect}
-              className={`rounded-xl h-9 text-[10px] font-black uppercase tracking-widest gap-2 w-full text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-100`}
+              disabled={sinCredenciales}
+              title={sinCredenciales ? `Faltan credenciales en el servidor: ${faltantes.join(', ')}` : undefined}
+              className={`rounded-xl h-9 text-[10px] font-black uppercase tracking-widest gap-2 w-full text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-100 disabled:bg-slate-300 disabled:text-slate-600 disabled:shadow-none`}
             >
               <Link2 className="h-3.5 w-3.5" />
-              Conectar {meta.name}
-              <ExternalLink className="h-3 w-3 opacity-50" />
+              {sinCredenciales ? 'Sin credenciales OAuth' : `Conectar ${meta.name}`}
+              {!sinCredenciales && <ExternalLink className="h-3 w-3 opacity-50" />}
             </Button>
+            {sinCredenciales && (
+              <p className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-100 rounded-xl p-2.5 leading-relaxed">
+                Falta en el servidor:{' '}
+                <span className="font-mono">{faltantes.join(', ')}</span>. Crea la app en{' '}
+                <a
+                  href={meta.helpUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline decoration-dotted"
+                >
+                  {new URL(meta.helpUrl).hostname}
+                </a>{' '}
+                y define esas variables en el entorno.
+              </p>
+            )}
             <button
               onClick={() => setShowManual(!showManual)}
               className="text-[9px] font-bold text-slate-400 hover:text-indigo-600 transition-colors text-center uppercase tracking-widest"

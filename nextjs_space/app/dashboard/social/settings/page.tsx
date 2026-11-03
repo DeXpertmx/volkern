@@ -3,28 +3,48 @@
 import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import {
-  Share2,
   Settings2,
   AlertCircle,
   CheckCircle2,
-  Info,
   ArrowLeft,
   ShieldCheck,
-  ExternalLink,
 } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from 'sonner'
 import { ConnectPlatformCard, type PlatformConfig, type SocialPlatform } from '@/components/social/ConnectPlatformCard'
 
 const PLATFORMS: SocialPlatform[] = ['facebook', 'instagram', 'linkedin', 'youtube', 'tiktok']
 
+interface PlatformAvailability {
+  configured: boolean
+  missing: string[]
+}
+
+const ERRORES_OAUTH: Record<string, string> = {
+  setup_required: 'Esta red no tiene credenciales OAuth configuradas en el servidor.',
+  cancelled: 'Has cancelado la autorización en la plataforma.',
+  csrf_mismatch: 'La sesión de autorización caducó. Vuelve a intentarlo.',
+  invalid_callback: 'La plataforma no devolvió el código de autorización.',
+  no_tenant: 'Tu usuario no tiene ninguna empresa asignada.',
+  oauth_failed: 'La plataforma rechazó la conexión.',
+  db_error: 'No se pudo guardar la conexión.',
+  unsupported: 'Plataforma no soportada.',
+}
+
+function nombrePlataforma(platform: string | null): string {
+  if (!platform) return 'La red social'
+  return platform.charAt(0).toUpperCase() + platform.slice(1)
+}
+
 function SocialSettingsContent() {
   const searchParams = useSearchParams()
   const [configs, setConfigs] = useState<Record<string, PlatformConfig>>({})
+  const [availability, setAvailability] = useState<Record<string, PlatformAvailability>>({})
   const [loading, setLoading] = useState(true)
   const [oauthEnabled, setOauthEnabled] = useState(true)
+  const [oauthError, setOauthError] = useState<string | null>(null)
 
   const fetchConfigs = useCallback(async () => {
     try {
@@ -39,6 +59,7 @@ function SocialSettingsContent() {
         }
         setConfigs(map)
         setOauthEnabled(!!data.metaOauthConfigured)
+        setAvailability(data.platforms || {})
       }
     } catch (err) {
       toast.error('Error cargando configuraciones')
@@ -54,16 +75,41 @@ function SocialSettingsContent() {
   useEffect(() => {
     const connected = searchParams.get('connected')
     const error = searchParams.get('error')
-    
+    const platform = searchParams.get('platform')
+    const mensaje = searchParams.get('message')
+
     if (connected) {
-      toast.success(`✅ Conexión exitosa`)
+      toast.success('✅ Conexión exitosa')
       fetchConfigs()
     }
 
-    if (error) {
-      toast.error(`Error: ${error}`)
+    if (!error) {
+      setOauthError(null)
+      return
     }
+
+    const red = nombrePlataforma(platform)
+
+    if (error === 'oauth_failed' && mensaje) {
+      // El mensaje viene de la API de la plataforma: es el que explica de verdad qué falló.
+      setOauthError(`${red}: ${mensaje}`)
+      return
+    }
+
+    if (error === 'setup_required') {
+      const faltantes = (searchParams.get('missing') || '').split(',').filter(Boolean)
+      setOauthError(
+        faltantes.length
+          ? `${red} no se puede conectar todavía: falta ${faltantes.join(' y ')} en el servidor.`
+          : `${red} no se puede conectar todavía: faltan sus credenciales OAuth en el servidor.`,
+      )
+      return
+    }
+
+    setOauthError(`${red}: ${ERRORES_OAUTH[error] || `error de conexión (${error})`}`)
   }, [searchParams, fetchConfigs])
+
+  const pendientes = PLATFORMS.filter((p) => availability[p] && !availability[p].configured)
 
   return (
     <div className="flex flex-col gap-8 p-2 md:p-6 max-w-4xl mx-auto animate-in fade-in duration-700">
@@ -90,6 +136,38 @@ function SocialSettingsContent() {
           </div>
         </div>
       </div>
+
+      {oauthError && (
+        <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4">
+          <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-red-600 mb-0.5">
+              No se pudo conectar
+            </p>
+            <p className="text-xs font-bold text-red-700 leading-relaxed">{oauthError}</p>
+          </div>
+        </div>
+      )}
+
+      {pendientes.length > 0 && (
+        <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">
+              Redes sin credenciales OAuth
+            </p>
+            <p className="text-xs font-bold text-amber-800 leading-relaxed">
+              {pendientes
+                .map((p) => `${nombrePlataforma(p)} (${availability[p].missing.join(', ')})`)
+                .join(' · ')}
+            </p>
+            <p className="text-[11px] text-amber-700 leading-relaxed">
+              Cada red necesita su propia app registrada en su portal de desarrolladores. Mientras falten esas
+              variables de entorno solo se puede usar el token manual.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div>
         <div className="flex items-center justify-between mb-4">
@@ -120,6 +198,7 @@ function SocialSettingsContent() {
                 key={platform}
                 platform={platform}
                 config={configs[platform] || null}
+                missingEnv={availability[platform]?.missing ?? []}
                 oauthEnabled={oauthEnabled}
                 onConnected={fetchConfigs}
                 onDisconnected={fetchConfigs}

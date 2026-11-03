@@ -6,18 +6,9 @@ import { getLinkedInAuthUrl } from '@/lib/oauth/linkedin-oauth';
 import { getGoogleAuthUrl } from '@/lib/oauth/google-oauth';
 import { getTikTokAuthUrl } from '@/lib/oauth/tiktok-oauth';
 import { randomUUID } from 'crypto';
+import { SOCIAL_PLATFORMS, disponibilidad, type SocialPlatformKey } from '@/lib/social/platform-env';
 
 export const dynamic = 'force-dynamic';
-
-const SUPPORTED_PLATFORMS = ['facebook', 'instagram', 'linkedin', 'youtube', 'tiktok'] as const;
-
-const PLATFORM_ENV_REQUIREMENTS: Record<string, string[]> = {
-  facebook: ['FACEBOOK_APP_ID'],
-  instagram: ['FACEBOOK_APP_ID'],
-  linkedin: ['LINKEDIN_CLIENT_ID'],
-  youtube: ['GOOGLE_CLIENT_ID'],
-  tiktok: ['TIKTOK_CLIENT_ID'],
-};
 
 /**
  * GET /api/social/connect/[platform]
@@ -33,22 +24,22 @@ export async function GET(
     return NextResponse.redirect(new URL('/auth/login', process.env.NEXTAUTH_URL || 'https://volkern.app'));
   }
 
-  const platform = params.platform;
+  const platform = params.platform as SocialPlatformKey;
 
-  if (!SUPPORTED_PLATFORMS.includes(platform as any)) {
+  if (!SOCIAL_PLATFORMS.includes(platform)) {
     return NextResponse.json(
-      { error: `Plataforma no soportada: ${platform}. Las plataformas válidas son: ${SUPPORTED_PLATFORMS.join(', ')}` },
+      { error: `Plataforma no soportada: ${params.platform}. Las plataformas válidas son: ${SOCIAL_PLATFORMS.join(', ')}` },
       { status: 400 },
     );
   }
 
-  // Verificar que las variables de entorno necesarias están configuradas
-  const requiredEnvVars = PLATFORM_ENV_REQUIREMENTS[platform] || [];
-  for (const envVar of requiredEnvVars) {
-    if (!process.env[envVar]) {
-      const settingsUrl = `${process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard/social/settings`;
-      return NextResponse.redirect(`${settingsUrl}?error=setup_required&platform=${platform}`);
-    }
+  // Sin las credenciales OAuth de la app no hay diálogo de autorización al que ir.
+  // Se devuelve qué falta para que la pantalla pueda explicarlo.
+  const { configured, missing } = disponibilidad(platform);
+  if (!configured) {
+    const settingsUrl = `${process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard/social/settings`;
+    const faltantes = encodeURIComponent(missing.join(','));
+    return NextResponse.redirect(`${settingsUrl}?error=setup_required&platform=${platform}&missing=${faltantes}`);
   }
 
   const state = randomUUID();
