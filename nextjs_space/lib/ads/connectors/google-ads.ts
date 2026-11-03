@@ -33,7 +33,11 @@ import type {
   AdCampaignOutput,
 } from '../types';
 
-const API_VERSION = 'v16';
+// Versión de la API de Google Ads. Google retira cada versión alrededor de un
+// año después de publicarla (la v22 dejó de funcionar en octubre de 2026), así
+// que esta constante hay que revisarla cada cierto tiempo; con una versión
+// retirada toda llamada falla aunque el token sea válido.
+const API_VERSION = 'v26';
 const BASE_URL = `https://googleads.googleapis.com/${API_VERSION}`;
 const OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const OAUTH_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
@@ -176,6 +180,12 @@ async function googleFetch<T>(
     'Developer-Token': developerToken,
     'Content-Type': 'application/json',
   };
+
+  // Obligatoria cuando la cuenta se opera a través de una cuenta administrador
+  // (MCC), que es el caso de las cuentas de prueba: sin ella la API responde
+  // USER_PERMISSION_DENIED. Debe ser el id del manager, sin guiones.
+  const loginCustomerId = process.env.ADS_GOOGLE_LOGIN_CUSTOMER_ID?.replace(/-/g, '').trim();
+  if (loginCustomerId) headers['login-customer-id'] = loginCustomerId;
 
   const options: RequestInit = { headers, method: body ? 'POST' : 'GET' };
   if (body) {
@@ -442,9 +452,11 @@ export class GoogleAdsConnector implements AdPlatformConnector {
 
     // 2. Listar customers accesibles
     const customersUrl = `https://googleads.googleapis.com/${API_VERSION}/customers:listAccessibleCustomers`;
+    // `customers:listAccessibleCustomers` es POST en la API REST: con GET
+    // devuelve 404 y el fallo se veía como «sin cuentas accesibles».
     const customersData = await googleFetch<{
       resourceNames?: string[];
-    }>(customersUrl, tokenData.access_token, developerToken);
+    }>(customersUrl, tokenData.access_token, developerToken, {});
 
     if (!customersData.resourceNames || customersData.resourceNames.length === 0) {
       throw new Error('No se encontraron cuentas de Google Ads accesibles');
@@ -453,7 +465,7 @@ export class GoogleAdsConnector implements AdPlatformConnector {
     // Extraer customer ID del resourceName: "customers/1234567890"
     const customerResource = customersData.resourceNames[0];
     const customerId = customerResource.replace('customers/', '');
-    const loginCustomerId = customerId;
+    const loginCustomerId = process.env.ADS_GOOGLE_LOGIN_CUSTOMER_ID?.replace(/-/g, '').trim() || customerId;
 
     // 3. Obtener información del customer
     const customerInfoQuery = `
@@ -494,8 +506,9 @@ export class GoogleAdsConnector implements AdPlatformConnector {
         refreshToken: encryptedRefreshToken,
         tokenExpiresAt: new Date(Date.now() + tokenData.expires_in * 1000),
         status: 'CONNECTED',
+        // Sin el developer token: es un secreto y ya se lee del entorno, no hay
+        // razón para guardarlo en claro en la base de datos.
         metadata: {
-          developerToken,
           loginCustomerId,
           currencyCode: 'USD',
           timeZone: 'America/Mexico_City',
@@ -738,9 +751,9 @@ export class GoogleAdsConnector implements AdPlatformConnector {
         let creativeType: string = 'TEXT';
         let headline: string | null = null;
         let primaryText: string | null = null;
-        let callToAction: string | null = null;
+        const callToAction: string | null = null;
         let creativeUrl: string | null = null;
-        let thumbnailUrl: string | null = null;
+        const thumbnailUrl: string | null = null;
         let videoId: string | null = null;
         let destinationUrl: string | null = null;
 
