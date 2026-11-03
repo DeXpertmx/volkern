@@ -95,7 +95,7 @@ const PLATFORM_META = {
     border: 'border-slate-100',
     activeBg: 'bg-slate-900',
     description: 'Publica contenido nativo en TikTok',
-    scope: 'user.info.basic,video.upload,video.publish',
+    scope: 'user.info.basic,video.publish',
     helpUrl: 'https://developers.tiktok.com/',
   },
 }
