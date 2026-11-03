@@ -23,6 +23,7 @@
 import { prisma } from '@/lib/db';
 import { VaultService } from '@/lib/security/vault';
 import { logger } from '@/lib/logger';
+import { credencialesAds } from '../platform-env';
 import type {
   AdPlatformConnector,
   AdConnectionInput,
@@ -150,13 +151,12 @@ async function refreshTokenIfNeeded(platformId: string): Promise<string> {
   });
 
   if (!config) throw new Error(`Platform connection not found: ${platformId}`);
-  if (!config.tenant.vaultSeed) throw new Error('vaultSeed missing');
-
-  const clientId = process.env.ADS_META_CLIENT_ID;
-  const clientSecret = process.env.ADS_META_CLIENT_SECRET;
-  if (!clientId || !clientSecret) {
-    throw new Error('ADS_META_CLIENT_ID y ADS_META_CLIENT_SECRET requeridos para renovar token');
-  }
+  if (!config.tenant.vaultSeed) throw new Error('vaultSeed missing');    // Misma app de Facebook que el módulo social: sirve para anuncios cuando
+    // tiene los productos de Marketing API aprobados (ver ../platform-env.ts).
+    const { clientId, clientSecret } = credencialesAds('META');
+    if (!clientId || !clientSecret) {
+      throw new Error('ADS_META_CLIENT_ID y ADS_META_CLIENT_SECRET requeridos para renovar token');
+    }
 
   const currentRefreshToken = config.refreshToken
     ? VaultService.decrypt(config.refreshToken, config.tenantId, config.tenant.vaultSeed)
@@ -218,8 +218,7 @@ export class MetaAdsConnector implements AdPlatformConnector {
    * obtiene el ad account ID y guarda la conexión cifrada en Vault.
    */
   async connect(tenantId: string, input: AdConnectionInput): Promise<void> {
-    const clientId = process.env.ADS_META_CLIENT_ID;
-    const clientSecret = process.env.ADS_META_CLIENT_SECRET;
+    const { clientId, clientSecret } = credencialesAds('META');
     if (!clientId || !clientSecret) {
       throw new Error('ADS_META_CLIENT_ID y ADS_META_CLIENT_SECRET son requeridos en .env');
     }
@@ -302,7 +301,7 @@ export class MetaAdsConnector implements AdPlatformConnector {
    * Obtiene la URL de autorización OAuth.
    */
   async getAuthUrl(tenantId: string, redirectUri: string): Promise<AdConnectionAuthUrl> {
-    const clientId = process.env.ADS_META_CLIENT_ID;
+    const { clientId } = credencialesAds('META');
     if (!clientId) throw new Error('ADS_META_CLIENT_ID no configurado');
 
     const scopes = [
