@@ -494,14 +494,15 @@ export class LinkedInAdsConnector implements AdPlatformConnector {
     const clientId = process.env.ADS_LINKEDIN_CLIENT_ID;
     if (!clientId) throw new Error('ADS_LINKEDIN_CLIENT_ID no configurado');
 
-    // LinkedIn scopes for Marketing API
+    // Solo scopes de Marketing API. `r_liteprofile` y `r_emailaddress` están
+    // retirados desde 2023 (LinkedIn los sustituyó por OpenID Connect) y este
+    // conector no lee el perfil: al pedirlos, LinkedIn rechaza la autorización
+    // entera con unauthorized_scope_error. `w_member_social` publica en el feed
+    // y tampoco se usa aquí.
     const scopes = [
       'rw_ads',
       'r_ads',
       'r_ads_reporting',
-      'r_emailaddress',
-      'r_liteprofile',
-      'w_member_social',
     ].join(' ');
 
     const url = `${OAUTH_AUTH_URL}?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}&response_type=code&state=${tenantId}`;
@@ -552,7 +553,7 @@ export class LinkedInAdsConnector implements AdPlatformConnector {
 
         // LinkedIn budgets are in a nested object with amount as string
         let dailyBudget: number | null = null;
-        let lifetimeBudget: number | null = null;
+        const lifetimeBudget: number | null = null;
         if (camp.dailyBudget?.amount) {
           dailyBudget = parseFloat(camp.dailyBudget.amount);
         }
@@ -719,7 +720,7 @@ export class LinkedInAdsConnector implements AdPlatformConnector {
           let callToAction: string | null = null;
           let destinationUrl: string | null = null;
           let creativeUrl: string | null = null;
-          let thumbnailUrl: string | null = null;
+          const thumbnailUrl: string | null = null;
           let videoId: string | null = null;
 
           if (creative.variables) {
