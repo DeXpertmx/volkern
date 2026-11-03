@@ -17,18 +17,19 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { platform: string } },
+  { params }: { params: Promise<{ platform: string }> },
 ) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.redirect(new URL('/auth/login', process.env.NEXTAUTH_URL || 'https://volkern.app'));
   }
 
-  const platform = params.platform as SocialPlatformKey;
+  const { platform: plataformaSolicitada } = await params;
+  const platform = plataformaSolicitada as SocialPlatformKey;
 
   if (!SOCIAL_PLATFORMS.includes(platform)) {
     return NextResponse.json(
-      { error: `Plataforma no soportada: ${params.platform}. Las plataformas válidas son: ${SOCIAL_PLATFORMS.join(', ')}` },
+      { error: `Plataforma no soportada: ${plataformaSolicitada}. Las plataformas válidas son: ${SOCIAL_PLATFORMS.join(', ')}` },
       { status: 400 },
     );
   }
