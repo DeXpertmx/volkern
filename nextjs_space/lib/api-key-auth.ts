@@ -320,7 +320,7 @@ export async function authenticateRequest(
       // --- APLICAR REGLA DE ORO ---
       let impersonatedId = null;
       try {
-        const cookieStore = cookies();
+        const cookieStore = await cookies();
         impersonatedId = (cookieStore as any).get('volkern_impersonate_id')?.value;
       } catch (e) {}
 

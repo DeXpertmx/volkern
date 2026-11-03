@@ -126,7 +126,7 @@ export async function extractTenantFromRequest(request: NextRequest): Promise<{
   } catch {}
 
   try {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const subdomain = cookieStore.get('x-tenant-subdomain')?.value ||
                     cookieStore.get('TenantSubdomain')?.value;
     if (subdomain) {

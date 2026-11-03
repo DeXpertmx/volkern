@@ -70,7 +70,7 @@ export async function resolveTenantFromRequest(
 
   if (!tenantId) {
     try {
-      const cookieStore = cookies();
+      const cookieStore = await cookies();
       const subdomain = cookieStore.get('x-tenant-subdomain')?.value;
       if (subdomain) {
         const tenant = await prisma.tenant.findFirst({

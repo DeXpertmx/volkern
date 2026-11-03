@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { tenantId, action } = body;
 
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
 
     if (action === 'stop') {
       // Eliminar cookie de suplantación
@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
  * Obtiene el estado actual de la suplantación
  */
 export async function GET() {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const session = await getServerSession(authOptions);
   const impersonatedId = cookieStore.get('volkern_impersonate_id')?.value;
 
