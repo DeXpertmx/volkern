@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { getConnector } from '@/lib/ads/connectors';
 import { AdConnectSchema } from '@/lib/validation/schemas/ads';
+import { disponibilidadAds, ADS_PLATFORM_ENV, type AdsPlatformKey } from '@/lib/ads/platform-env';
 import type { AdPlatform } from '@/lib/ads/types';
 
 /**
@@ -31,8 +32,28 @@ export const POST = withTenantAuth(async (req: Request, auth) => {
 
     const { platform, redirectUri } = parsed.data;
 
-    // Obtener la URL de autorización del conector correspondiente
-    const authUrl = await getConnector(platform as AdPlatform).getAuthUrl(tenantId, redirectUri);
+    // Sin credenciales de la app de anuncios no hay diálogo al que ir: se dice
+    // qué falta en vez de devolver el error crudo del conector.
+    const disponibilidad = disponibilidadAds(platform as AdsPlatformKey);
+    if (!disponibilidad.configured) {
+      return NextResponse.json(
+        {
+          code: 'setup_required',
+          platform,
+          missing: disponibilidad.missing,
+          error: `${ADS_PLATFORM_ENV[platform as AdsPlatformKey].nombre} no tiene credenciales OAuth configuradas: falta ${disponibilidad.missing.join(', ')}`,
+        },
+        { status: 400 },
+      );
+    }
+
+    // El `state` viaja con la plataforma además del tenant: el callback la
+    // necesita después, y así el redirect_uri puede ser exactamente la URL
+    // registrada en el proveedor (sin query string, que Google rechaza).
+    const authUrl = await getConnector(platform as AdPlatform).getAuthUrl(
+      `${tenantId}~${platform}`,
+      redirectUri,
+    );
 
     return NextResponse.json({ authUrl: authUrl.url, platform });
   } catch (error: any) {

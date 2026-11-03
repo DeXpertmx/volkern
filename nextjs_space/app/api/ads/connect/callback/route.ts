@@ -30,19 +30,30 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(dashboardUrl);
     }
 
-    // Validar plataforma
-    const platformValidation = AdPlatformSchema.safeParse(platformParam);
-    if (!platformValidation.success || !code || !state) {
+    // El `state` llega como «tenantId~PLATAFORMA» (ver /api/ads/connect). Se
+    // admite también el formato antiguo (solo tenantId) con `platform` en la URL.
+    const [tenantDesdeEstado, plataformaDesdeEstado] = (state || '').split('~');
+
+    const desdeEstado = AdPlatformSchema.safeParse(plataformaDesdeEstado);
+    const desdeUrl = AdPlatformSchema.safeParse(platformParam);
+    const plataforma = desdeEstado.success
+      ? desdeEstado.data
+      : desdeUrl.success
+        ? desdeUrl.data
+        : null;
+
+    if (!plataforma || !code || !state) {
       const dashboardUrl = new URL('/dashboard/ads', process.env.NEXTAUTH_URL || 'https://volkern.app');
       dashboardUrl.searchParams.set('oauth_error', 'invalid_params');
       return NextResponse.redirect(dashboardUrl);
     }
 
-    const platform = platformValidation.data;
-    const tenantId = state;
+    const tenantId = tenantDesdeEstado;
+    const platform = plataforma;
 
-    // Determinar redirectUri a partir de la URL pública (no de request.url,
-    // que en el standalone de Next.js se reconstruye como 0.0.0.0:3000)
+    // Misma URL que se envió al proveedor al autorizar: debe coincidir al
+    // canjear el código. Sin query string, para que Google la acepte tal cual
+    // está registrada.
     const redirectUri = `${process.env.NEXTAUTH_URL || 'https://volkern.app'}/api/ads/connect/callback`;
 
     // Completar la conexión con el código de autorización

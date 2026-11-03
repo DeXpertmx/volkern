@@ -1,11 +1,20 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { useState, useEffect, useCallback } from 'react'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, AlertTriangle, CheckCircle, XCircle, ExternalLink, RefreshCw, Plus } from 'lucide-react'
-import { useToast } from '@/components/ui/use-toast'
+import { Loader2, AlertTriangle, CheckCircle, XCircle, Plus } from 'lucide-react'
+import { toast } from 'sonner'
+
+/**
+ * Conexión de plataformas de ADS.
+ *
+ * El feedback va por `sonner`, que es el único Toaster montado en el layout
+ * raíz. Antes usaba el hook de shadcn (`components/ui/use-toast`), cuyo Toaster
+ * no existe en la app: los errores se creaban y se descartaban, y el botón
+ * parecía no hacer nada.
+ */
 
 interface Platform {
   id: string
@@ -17,6 +26,12 @@ interface Platform {
   lastSyncAt: string | null
 }
 
+interface Disponibilidad {
+  configured: boolean
+  missing: string[]
+  warnings: string[]
+}
+
 const PLATFORM_CONFIG: Record<string, { name: string; color: string; icon: string }> = {
   meta: { name: 'Meta Ads', color: 'text-blue-600', icon: '📘' },
   google: { name: 'Google Ads', color: 'text-green-600', icon: '📊' },
@@ -24,24 +39,26 @@ const PLATFORM_CONFIG: Record<string, { name: string; color: string; icon: strin
   tiktok: { name: 'TikTok Ads', color: 'text-rose-500', icon: '🎵' },
 }
 
+/** URL de callback: idéntica a la registrada en el proveedor, sin query string. */
+function urlCallback(): string {
+  return `${window.location.origin}/api/ads/connect/callback`
+}
+
 export function AdsPlatformsSection() {
   const [platforms, setPlatforms] = useState<Platform[]>([])
+  const [availability, setAvailability] = useState<Record<string, Disponibilidad>>({})
   const [loading, setLoading] = useState(true)
   const [connecting, setConnecting] = useState<string | null>(null)
   const [disconnecting, setDisconnecting] = useState<string | null>(null)
-  const { toast } = useToast()
 
-  useEffect(() => {
-    fetchPlatforms()
-  }, [])
-
-  async function fetchPlatforms() {
+  const fetchPlatforms = useCallback(async () => {
     try {
       setLoading(true)
       const res = await fetch('/api/ads/platforms')
       if (!res.ok) throw new Error('Error al cargar plataformas')
       const data = await res.json()
       const list = Array.isArray(data.platforms) ? data.platforms : Array.isArray(data) ? data : []
+
       setPlatforms(list.map((p: any) => ({
         id: p.id,
         platform: String(p.platform || '').toLowerCase(),
@@ -51,43 +68,92 @@ export function AdsPlatformsSection() {
         connectedAt: p.createdAt || null,
         lastSyncAt: p.lastSyncedAt || p.lastSyncAt || null,
       })))
-    } catch {
+
+      if (data.availability && typeof data.availability === 'object') {
+        const mapa: Record<string, Disponibilidad> = {}
+        for (const [clave, valor] of Object.entries(data.availability as Record<string, Disponibilidad>)) {
+          mapa[clave.toLowerCase()] = valor
+        }
+        setAvailability(mapa)
+      }
+    } catch (err) {
       setPlatforms([])
+      toast.error(err instanceof Error ? err.message : 'No se pudieron cargar las plataformas de anuncios')
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    fetchPlatforms()
+  }, [fetchPlatforms])
+
+  // Vuelta del OAuth: el callback redirige aquí con oauth_success/oauth_error.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const exito = params.get('oauth_success')
+    const error = params.get('oauth_error')
+    const detalle = params.get('oauth_error_description')
+
+    if (exito) {
+      toast.success(`${PLATFORM_CONFIG[exito.toLowerCase()]?.name || exito} conectado`)
+      fetchPlatforms()
+    }
+
+    if (error) {
+      toast.error(
+        error === 'invalid_params'
+          ? 'La plataforma no devolvió el código de autorización. Inténtalo de nuevo.'
+          : `No se pudo conectar: ${detalle || error}`,
+      )
+    }
+
+    if (exito || error) {
+      const limpia = window.location.pathname
+      window.history.replaceState({}, '', limpia)
+    }
+  }, [fetchPlatforms])
 
   async function handleConnect(platform: string) {
+    const estado = availability[platform]
+    if (estado && !estado.configured) {
+      toast.error(`Faltan credenciales: ${estado.missing.join(', ')}`)
+      return
+    }
+
     try {
       setConnecting(platform)
       const res = await fetch('/api/ads/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          // Backend espera MAYÚSCULAS (META, GOOGLE, LINKEDIN, TIKTOK) + redirectUri obligatorio
+          // El backend espera MAYÚSCULAS (META, GOOGLE, LINKEDIN, TIKTOK).
           platform: platform.toUpperCase(),
-          redirectUri: window.location.origin + '/api/ads/connect/callback?platform=' + platform.toUpperCase(),
+          redirectUri: urlCallback(),
         }),
       })
+
+      const data = await res.json().catch(() => ({}))
+
       if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.error || 'Error al conectar')
+        const faltantes = Array.isArray(data.missing) && data.missing.length
+          ? ` (${data.missing.join(', ')})`
+          : ''
+        throw new Error(`${data.error || 'Error al conectar'}${faltantes}`)
       }
-      const data = await res.json()
+
       if (data.authUrl) {
-        window.open(data.authUrl, '_blank', 'width=600,height=700')
-        toast({ title: 'Redirigiendo para autenticación...' })
-      } else {
-        toast({ title: 'Plataforma conectada exitosamente' })
-        fetchPlatforms()
+        toast.info('Abriendo la autorización de la plataforma…')
+        // Misma pestaña: un window.open después de un await lo bloquea el
+        // navegador por no nacer del gesto del usuario.
+        window.location.assign(data.authUrl)
+        return
       }
+
+      toast.success('Plataforma conectada')
+      fetchPlatforms()
     } catch (err) {
-      toast({
-        title: 'Error al conectar',
-        description: err instanceof Error ? err.message : 'Error desconocido',
-        variant: 'destructive',
-      })
+      toast.error(err instanceof Error ? err.message : 'Error desconocido al conectar')
     } finally {
       setConnecting(null)
     }
@@ -101,14 +167,10 @@ export function AdsPlatformsSection() {
         method: 'DELETE',
       })
       if (!res.ok) throw new Error('Error al desconectar')
-      toast({ title: `Plataforma ${platformName} desconectada` })
+      toast.success(`${platformName} desconectada`)
       fetchPlatforms()
     } catch (err) {
-      toast({
-        title: 'Error al desconectar',
-        description: err instanceof Error ? err.message : 'Error desconocido',
-        variant: 'destructive',
-      })
+      toast.error(err instanceof Error ? err.message : 'Error desconocido al desconectar')
     } finally {
       setDisconnecting(null)
     }
@@ -126,9 +188,30 @@ export function AdsPlatformsSection() {
   const disconnectedPlatforms = Object.keys(PLATFORM_CONFIG).filter(
     p => !platforms.some(sp => sp.platform === p && sp.status === 'connected')
   )
+  const pendientes = disconnectedPlatforms.filter(p => availability[p] && !availability[p].configured)
 
   return (
     <div className="space-y-6">
+      {pendientes.length > 0 && (
+        <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">
+              Plataformas sin credenciales OAuth
+            </p>
+            <p className="text-xs font-bold text-amber-800 leading-relaxed">
+              {pendientes
+                .map(p => `${PLATFORM_CONFIG[p].name} (${availability[p].missing.join(', ')})`)
+                .join(' · ')}
+            </p>
+            <p className="text-[11px] text-amber-700 leading-relaxed">
+              Son apps de desarrollador de anuncios, distintas de las del módulo social: cada una se registra
+              en su propio portal y sus credenciales van en variables <span className="font-mono">ADS_*</span>.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Plataformas conectadas */}
       <div>
         <h3 className="text-sm font-semibold text-slate-700 mb-3">Plataformas Conectadas</h3>
@@ -196,24 +279,42 @@ export function AdsPlatformsSection() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {disconnectedPlatforms.map(platformKey => {
             const cfg = PLATFORM_CONFIG[platformKey] || { name: platformKey, color: 'text-gray-500', icon: '🔌' }
+            const estado = availability[platformKey]
+            const bloqueada = !!estado && !estado.configured
+            const avisos = estado?.warnings ?? []
             return (
-              <Card key={platformKey} className="border shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => handleConnect(platformKey)}>
+              <Card
+                key={platformKey}
+                className={`border shadow-sm transition-shadow ${bloqueada ? '' : 'hover:shadow-md cursor-pointer'}`}
+                onClick={() => { if (!bloqueada) handleConnect(platformKey) }}
+              >
                 <CardContent className="p-4 text-center space-y-2">
                   <span className="text-3xl block">{cfg.icon}</span>
                   <p className="font-semibold text-sm">{cfg.name}</p>
                   <Button
                     size="sm"
                     className="w-full"
-                    disabled={connecting === platformKey}
+                    disabled={connecting === platformKey || bloqueada}
                     onClick={(e) => { e.stopPropagation(); handleConnect(platformKey) }}
+                    title={bloqueada ? `Falta ${estado.missing.join(', ')}` : undefined}
                   >
                     {connecting === platformKey ? (
                       <Loader2 className="h-4 w-4 animate-spin mr-1" />
                     ) : (
                       <Plus className="h-4 w-4 mr-1" />
                     )}
-                    Conectar
+                    {bloqueada ? 'Sin credenciales' : 'Conectar'}
                   </Button>
+                  {bloqueada && (
+                    <p className="text-[10px] leading-snug text-amber-700">
+                      Falta <span className="font-mono">{estado.missing.join(', ')}</span>
+                    </p>
+                  )}
+                  {!bloqueada && avisos.length > 0 && (
+                    <p className="text-[10px] leading-snug text-amber-700">
+                      Para sincronizar campañas falta <span className="font-mono">{avisos.join(', ')}</span>
+                    </p>
+                  )}
                 </CardContent>
               </Card>
             )

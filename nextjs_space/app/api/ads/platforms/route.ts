@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { getConnector } from '@/lib/ads/connectors';
 import { AdDisconnectSchema } from '@/lib/validation/schemas/ads';
+import { disponibilidadPorPlataformaAds } from '@/lib/ads/platform-env';
 import type { AdPlatform } from '@/lib/ads/types';
 
 /**
@@ -32,7 +33,7 @@ export const GET = withTenantAuth(async (req: Request, auth) => {
       orderBy: { createdAt: 'desc' },
     });
 
-    return NextResponse.json({ platforms });
+    return NextResponse.json({ platforms, availability: disponibilidadPorPlataformaAds() });
   } catch (error: any) {
     console.error('[ADS Platforms] Error listing platforms:', error);
     return NextResponse.json({ error: 'Error al obtener plataformas conectadas' }, { status: 500 });
