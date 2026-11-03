@@ -5,9 +5,13 @@
  * NO es la API de TikTok Ads — esta es la Content Posting API para cuentas business.
  *
  * Scopes necesarios:
- *   user.info.basic      → Leer información del perfil
- *   video.upload         → Subir videos
- *   video.publish        → Publicar videos
+ *   user.info.basic      → Leer información del perfil (display_name, avatar)
+ *   video.publish        → Publicación directa (video y foto, PULL_FROM_URL)
+ *
+ * No se pide `video.upload` (subir a la bandeja, que no usamos: publicamos
+ * directamente) ni `user.info.profile`: TikTok exige en la revisión que solo se
+ * soliciten los permisos que la app demuestra, y los que sobran retrasan la
+ * aprobación.
  *
  * Variables de entorno:
  *   TIKTOK_CLIENT_ID
@@ -20,8 +24,6 @@ const API_BASE = 'https://open.tiktokapis.com/v2';
 
 export const TIKTOK_SCOPES = [
   'user.info.basic',
-  'user.info.profile',
-  'video.upload',
   'video.publish',
 ].join(',');
 
