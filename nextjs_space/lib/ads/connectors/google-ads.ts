@@ -177,9 +177,15 @@ async function googleFetch<T>(
 ): Promise<T> {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${accessToken}`,
-    'Developer-Token': developerToken,
     'Content-Type': 'application/json',
   };
+
+  // Los developer tokens se retiraron el 9 de septiembre de 2026: el nivel de
+  // acceso lo concede el proyecto de Google Cloud dueño del client OAuth y la
+  // cabecera pasó a ser opcional e ignorada. Se sigue enviando solo si existe,
+  // para no mandar una cabecera vacía mientras Google la acepta.
+  const legacyDeveloperToken = developerToken?.trim();
+  if (legacyDeveloperToken) headers['Developer-Token'] = legacyDeveloperToken;
 
   // Obligatoria cuando la cuenta se opera a través de una cuenta administrador
   // (MCC), que es el caso de las cuentas de prueba: sin ella la API responde
@@ -417,9 +423,11 @@ export class GoogleAdsConnector implements AdPlatformConnector {
   async connect(tenantId: string, input: AdConnectionInput): Promise<void> {
     const clientId = process.env.ADS_GOOGLE_CLIENT_ID;
     const clientSecret = process.env.ADS_GOOGLE_CLIENT_SECRET;
-    const developerToken = process.env.ADS_GOOGLE_DEVELOPER_TOKEN;
-    if (!clientId || !clientSecret || !developerToken) {
-      throw new Error('ADS_GOOGLE_CLIENT_ID, ADS_GOOGLE_CLIENT_SECRET y ADS_GOOGLE_DEVELOPER_TOKEN son requeridos en .env');
+    // Ya no es requisito: sin developer token se conecta igual, porque el
+    // acceso lo determina el proyecto de Google Cloud del client OAuth.
+    const developerToken = process.env.ADS_GOOGLE_DEVELOPER_TOKEN?.trim() || '';
+    if (!clientId || !clientSecret) {
+      throw new Error('ADS_GOOGLE_CLIENT_ID y ADS_GOOGLE_CLIENT_SECRET son requeridos en .env');
     }
 
     // 1. Canjear auth code por tokens

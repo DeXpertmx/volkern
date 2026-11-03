@@ -44,7 +44,11 @@ export const ADS_PLATFORM_ENV: Record<AdsPlatformKey, RequisitoAds> = {
     nombre: 'Google Ads',
     id: ['ADS_GOOGLE_CLIENT_ID'],
     secret: ['ADS_GOOGLE_CLIENT_SECRET'],
-    extra: ['ADS_GOOGLE_DEVELOPER_TOKEN'],
+    // El developer token dejó de hacer falta: Google retiró los tokens el
+    // 9/9/2026 y el nivel de acceso lo concede el proyecto de Google Cloud al
+    // que pertenece el client id. Si sigue en el entorno, el conector lo envía
+    // y la API lo ignora.
+    extra: [],
     docsUrl: 'https://console.cloud.google.com/apis/credentials',
   },
   LINKEDIN: {
