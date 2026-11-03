@@ -27,6 +27,7 @@ export interface RespuestaImportacionApi {
   mode: 'preview' | 'commit'
   informe: InformeResumenApi
   logId: string
+  batchId?: string
   cuarentenaCsv: string
   puedeDeshacerse: boolean
   escritos: number
@@ -44,6 +45,8 @@ export function ImportWizard() {
   const [columnMapping, setColumnMapping] = useState<ColumnMap[]>([])
   const [informe, setInforme] = useState<InformeResumenApi | null>(null)
   const [cuarentenaCsv, setCuarentenaCsv] = useState('')
+  // Lote de la previsualización: al confirmar se reenvía para no abrir otro.
+  const [batchId, setBatchId] = useState<string | null>(null)
   const [resultado, setResultado] = useState<RespuestaImportacionApi | null>(null)
   const [incluirPosibles, setIncluirPosibles] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -63,6 +66,7 @@ export function ImportWizard() {
     formData.append('mapping', JSON.stringify(mapping))
     formData.append('mode', mode)
     formData.append('incluirPosiblesDuplicados', incluirPosibles ? 'true' : 'false')
+    if (mode === 'commit' && batchId) formData.append('batchId', batchId)
 
     const res = await fetch(`/api/import/${tipo}`, { method: 'POST', body: formData })
     const data = await res.json().catch(() => ({}))
@@ -90,6 +94,7 @@ export function ImportWizard() {
       const data = await enviar('preview', mapping)
       setInforme(data.informe)
       setCuarentenaCsv(data.cuarentenaCsv)
+      setBatchId(data.batchId ?? null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo analizar el archivo')
     } finally {
@@ -120,6 +125,7 @@ export function ImportWizard() {
       setInforme(null)
       setFile(null)
       setDetectResult(null)
+      setBatchId(null)
       setError(null)
     }
   }

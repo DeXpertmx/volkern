@@ -41,6 +41,8 @@ export interface EntradaProceso {
   incluirPosiblesDuplicados?: boolean
   fiscalYear?: number
   fileName?: string
+  /** Batch de la previsualización que se confirma; si falta, se abre uno nuevo. */
+  batchId?: string
 }
 
 export interface InformeResumen {
@@ -149,7 +151,9 @@ export async function procesarImportacion(entrada: EntradaProceso): Promise<Resp
   })
 
   const cuarentenaCsv = construirCsvCuarentena(informe)
-  const batchId = crypto.randomUUID()
+  // Confirmar una previsualización no abre lote nuevo: el `batchId` viaja en el
+  // formulario para que el informe revisado y lo escrito sean el mismo lote.
+  const batchId = entrada.batchId?.trim() || crypto.randomUUID()
 
   if (mode === 'preview') {
     const log = await prisma.importLog.create({

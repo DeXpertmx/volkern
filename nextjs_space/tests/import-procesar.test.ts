@@ -170,6 +170,22 @@ describe('commit: escribe y guarda trazas para deshacer', () => {
     ])
   })
 
+  it('reutiliza el batchId de la previsualización que se confirma', async () => {
+    mocks.importLogCreate
+      .mockResolvedValueOnce({ id: 'log-preview' })
+      .mockResolvedValueOnce({ id: 'log-commit' })
+
+    const preview = await procesarImportacion(entrada('preview'))
+    const commit = await procesarImportacion({ ...entrada('commit'), batchId: preview.batchId })
+
+    expect(preview.mode).toBe('preview')
+    expect(commit.batchId).toBe(preview.batchId)
+    expect(mocks.importLogCreate.mock.calls[1][0].data).toMatchObject({
+      mode: 'commit',
+      batchId: preview.batchId,
+    })
+  })
+
   it('guarda la instantánea del cliente que actualiza', async () => {
     mocks.leadFindMany.mockResolvedValue([{ id: 'lead-1', nombre: 'Ana', email: 'ana@empresa.es' }])
     mocks.leadFindUnique.mockResolvedValue({

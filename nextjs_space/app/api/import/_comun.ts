@@ -44,6 +44,10 @@ export async function importarDesdeFormData(
   const yearBruto = formData.get('fiscalYear')
   const year = yearBruto ? Number.parseInt(String(yearBruto), 10) : undefined
 
+  const batchBruto = formData.get('batchId')
+  const batchId =
+    typeof batchBruto === 'string' && batchBruto.trim() ? batchBruto.trim().slice(0, 64) : undefined
+
   const buffer = Buffer.from(await file.arrayBuffer())
 
   const resultado = await procesarImportacion({
@@ -58,6 +62,7 @@ export async function importarDesdeFormData(
     incluirPosiblesDuplicados,
     fiscalYear: Number.isFinite(year) ? year : undefined,
     fileName: file.name,
+    batchId,
   })
 
   return NextResponse.json(resultado)
