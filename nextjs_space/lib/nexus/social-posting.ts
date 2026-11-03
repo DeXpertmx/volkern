@@ -328,6 +328,13 @@ class SocialPostingService {
 
       const firstUrl = mediaUrls[0];
 
+      // Una app de TikTok sin auditar solo puede publicar como SELF_ONLY, y
+      // TikTok lo exige para grabar el vídeo de la revisión. Se deja PUBLIC por
+      // defecto (comportamiento actual) y se conmuta con TIKTOK_PRIVACY_LEVEL.
+      const nivelesValidos = ['PUBLIC', 'SELF_ONLY', 'MUTUAL_FOLLOW_FRIENDS', 'FOLLOWER_OF_CREATOR'];
+      const nivelPedido = (process.env.TIKTOK_PRIVACY_LEVEL || 'PUBLIC').trim().toUpperCase();
+      const privacyLevel = nivelesValidos.includes(nivelPedido) ? nivelPedido : 'PUBLIC';
+
       // Detectar si es video o imagen por extensión/content-type
       const ext = firstUrl.split('.').pop()?.toLowerCase() || '';
       const isVideo = ['mp4', 'mov', 'avi', 'webm', 'mkv'].includes(ext);
@@ -340,7 +347,7 @@ class SocialPostingService {
           body: JSON.stringify({
             post_info: {
               title: content.slice(0, 2200),
-              privacy_level: 'PUBLIC',
+              privacy_level: privacyLevel,
               disable_duet: false,
               disable_stitch: false,
               disable_comment: false,
@@ -374,7 +381,7 @@ class SocialPostingService {
           post_mode: 'DIRECT_POST',
           photo_info: {
             title: content.slice(0, 2200),
-            privacy_level: 'PUBLIC',
+            privacy_level: privacyLevel,
           },
           source_info: {
             source: 'PULL_FROM_URL',
