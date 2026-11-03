@@ -61,11 +61,22 @@ export function autoMapColumns(headers: string[], template: SourceTemplate): Col
 }
 
 export async function parseFile(fileBuffer: Buffer, mimeType: string): Promise<{ headers: string[]; rows: Record<string, string>[] }> {
-  if (mimeType.includes('spreadsheet') || mimeType.includes('excel') || fileBuffer.toString('utf8', 0, 4) !== '----') {
+  // Decide el formato el contenido, no el MIME: un .xlsx llega como ZIP (`PK`) y
+  // un .xls como OLE (`d0cf11e0`). Un CSV es texto aunque el navegador lo mande
+  // como hoja de cálculo, y pasarlo por SheetJS lo releía en cp1252: «Gestión»
+  // entraba como «GestiÃ³n» y el cliente no reconocía ni su propio catálogo.
+  const primeros = fileBuffer.subarray(0, 4)
+  const esZip = primeros[0] === 0x50 && primeros[1] === 0x4b
+  const esOle = primeros.toString('hex') === 'd0cf11e0'
+  const declaradoExcel = /spreadsheet|excel/i.test(mimeType || '')
+  const traeBytesNulos = fileBuffer.subarray(0, 1024).includes(0)
+
+  if (esZip || esOle || (declaradoExcel && traeBytesNulos)) {
     try {
       // Import diferido: xlsx pesa ~7M y solo se necesita al parsear un fichero.
       const XLSX = await import('xlsx');
-      const workbook = XLSX.read(fileBuffer, { type: 'buffer' })
+      // 65001: un libro de texto dentro de Excel también viene en UTF-8.
+      const workbook = XLSX.read(fileBuffer, { type: 'buffer', codepage: 65001 })
       const sheet = workbook.Sheets[workbook.SheetNames[0]]
       const json = XLSX.utils.sheet_to_json<any>(sheet, { defval: '' })
       if (json.length === 0) return { headers: [], rows: [] }
@@ -78,11 +89,16 @@ export async function parseFile(fileBuffer: Buffer, mimeType: string): Promise<{
   }
 
   const text = fileBuffer.toString('utf-8')
+  // Exportar con punto y coma es lo normal en el Excel en español; sin esto el
+  // fichero entero cae en una sola columna.
+  const cabecera = text.split(/\r?\n/, 1)[0] ?? ''
+  const puntoYComa = (cabecera.match(/;/g)?.length ?? 0) > (cabecera.match(/,/g)?.length ?? 0)
   const records = parse(text, {
     columns: true,
     skip_empty_lines: true,
     relax_column_count: true,
     bom: true,
+    delimiter: puntoYComa ? ';' : ',',
   })
 
   if (records.length === 0) return { headers: [], rows: [] }

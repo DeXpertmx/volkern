@@ -63,8 +63,10 @@ export async function deshacerLote(
   if (log.revertedAt) return { ok: false, motivo: 'ya_deshecho', detalle: MENSAJES.ya_deshecho }
   if (log.mode !== 'commit') return { ok: false, motivo: 'no_es_lote', detalle: MENSAJES.no_es_lote }
 
+  // Un lote ya deshecho no bloquea: sus cambios se revirtieron, así que el
+  // estado es el de antes de ese lote y deshacer el anterior sigue siendo seguro.
   const posteriores = await prisma.importLog.count({
-    where: { tenantId, mode: 'commit', createdAt: { gt: log.createdAt } },
+    where: { tenantId, mode: 'commit', revertedAt: null, createdAt: { gt: log.createdAt } },
   })
   if (posteriores > 0) {
     return { ok: false, motivo: 'hay_lotes_posteriores', detalle: MENSAJES.hay_lotes_posteriores }
