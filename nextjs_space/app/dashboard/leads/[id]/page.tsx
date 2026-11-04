@@ -110,6 +110,8 @@ function isBooleanTrue(value: unknown): boolean {
 
 export default function LeadDetailPage() {
   const params = useParams<{ id: string }>();
+  // Un id ausente o literalmente "undefined" (enlace roto) no debe llegar a la API.
+  const leadId = params?.id && params.id !== 'undefined' ? params.id : null;
   const router = useRouter();
   const [lead, setLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
@@ -136,9 +138,14 @@ export default function LeadDetailPage() {
   const [isFiscalModalOpen, setIsFiscalModalOpen] = useState(false);
 
   useEffect(() => {
+    if (!leadId) {
+      toast.error('Lead no encontrado');
+      router.replace('/dashboard/leads');
+      return;
+    }
     fetchLead();
     fetchFieldDefinitions();
-  }, [params.id]);
+  }, [leadId]);
 
   const fetchFieldDefinitions = async () => {
     try {
@@ -153,8 +160,9 @@ export default function LeadDetailPage() {
   };
 
   const fetchLead = async () => {
+    if (!leadId) return;
     try {
-      const res = await fetch(`/api/leads/${params.id}`);
+      const res = await fetch(`/api/leads/${leadId}`);
       if (!res.ok) {
         if (res.status === 404) {
           toast.error('Lead no encontrado');
@@ -190,7 +198,7 @@ export default function LeadDetailPage() {
 
   const handleSave = async () => {
     try {
-      const res = await fetch(`/api/leads/${params.id}`, {
+      const res = await fetch(`/api/leads/${leadId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
@@ -213,7 +221,7 @@ export default function LeadDetailPage() {
     }
 
     try {
-      const res = await fetch(`/api/leads/${params.id}`, {
+      const res = await fetch(`/api/leads/${leadId}`, {
         method: 'DELETE'
       });
 
@@ -234,7 +242,7 @@ export default function LeadDetailPage() {
   const handleFiscalConfirm = async (fiscalData: any) => {
     setIsConverting(true);
     try {
-      const res = await fetch(`/api/leads/${params.id}/convert`, {
+      const res = await fetch(`/api/leads/${leadId}/convert`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
