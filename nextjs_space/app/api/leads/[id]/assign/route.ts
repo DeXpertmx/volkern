@@ -9,8 +9,9 @@ import { logAction } from '@/lib/permissions'
 // PATCH /api/leads/[id]/assign - Asignar un lead a un usuario
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
@@ -22,7 +23,7 @@ export async function PATCH(
     
     // Obtener el lead actual para comparar
     const currentLead = await prisma.lead.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: { 
         asignadoUsuario: { 
           select: { name: true, email: true } 
@@ -36,7 +37,7 @@ export async function PATCH(
 
     // Actualizar el lead
     const lead = await prisma.lead.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         asignadoA: asignadoA || null
       },
@@ -63,7 +64,7 @@ export async function PATCH(
       userId: session.user.id,
       action: 'lead.assign',
       entity: 'Lead',
-      entityId: params.id,
+      entityId: id,
       details: {
         previous: previousUser,
         new: newUser

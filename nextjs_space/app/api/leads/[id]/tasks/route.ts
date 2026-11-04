@@ -12,8 +12,9 @@ import { createGoogleTask } from '@/lib/google-tasks';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const auth = await authenticateRequest(request, ['leads:read', 'tasks:read']);
     
@@ -27,7 +28,7 @@ export async function GET(
     // Verificar que el lead pertenece al tenant
     const lead = await prisma.lead.findFirst({
       where: {
-        id: params.id,
+        id: id,
         tenantId: auth.tenant.id
       }
     });
@@ -41,7 +42,7 @@ export async function GET(
 
     const tasks = await prisma.task.findMany({
       where: {
-        leadId: params.id,
+        leadId: id,
         tenantId: auth.tenant.id
       },
       include: {
@@ -85,8 +86,9 @@ export async function GET(
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const auth = await authenticateRequest(request, ['leads:write', 'tasks:write', 'tasks:create']);
     
@@ -136,7 +138,7 @@ export async function POST(
     // Verificar que el lead pertenece al tenant
     const lead = await prisma.lead.findFirst({
       where: {
-        id: params.id,
+        id: id,
         tenantId: auth.tenant.id
       }
     });
@@ -165,7 +167,7 @@ export async function POST(
     const task = await prisma.task.create({
       data: {
         tenantId: auth.tenant.id,
-        leadId: params.id,
+        leadId: id,
         tipo: tipoNormalizado,
         titulo: data.titulo,
         descripcion: data.descripcion || null,

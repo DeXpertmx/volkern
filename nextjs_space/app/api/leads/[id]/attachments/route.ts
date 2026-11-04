@@ -6,8 +6,9 @@ import { authenticateRequest } from '@/lib/api-key-auth';
 // GET - Listar adjuntos de un lead
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const auth = await authenticateRequest(request, ['leads:read']);
     if (!auth.valid) {
@@ -16,7 +17,7 @@ export async function GET(
 
     const attachments = await prisma.leadAttachment.findMany({
       where: {
-        leadId: params.id,
+        leadId: id,
         tenantId: auth.tenant!.id
       },
       orderBy: {
@@ -42,8 +43,9 @@ export async function GET(
 // POST - Registrar un nuevo adjunto
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const auth = await authenticateRequest(request, ['leads:write']);
     if (!auth.valid) {
@@ -59,7 +61,7 @@ export async function POST(
 
     const attachment = await prisma.leadAttachment.create({
       data: {
-        leadId: params.id,
+        leadId: id,
         tenantId: auth.tenant!.id,
         userId: auth.user!.id,
         nombre,
@@ -80,8 +82,9 @@ export async function POST(
 // DELETE - Eliminar un adjunto
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const auth = await authenticateRequest(request, ['leads:write']);
     if (!auth.valid) {
@@ -98,7 +101,7 @@ export async function DELETE(
     await prisma.leadAttachment.delete({
       where: {
         id: attachmentId,
-        leadId: params.id,
+        leadId: id,
         tenantId: auth.tenant!.id
       }
     });

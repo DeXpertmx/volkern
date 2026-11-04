@@ -8,15 +8,16 @@ import { ScoringEngine } from '@/lib/scoring-engine';
 
 export async function POST(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
     try {
         const session = await getServerSession(authOptions);
         if (!session?.user) {
             return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
         }
 
-        const leadId = params.id;
+        const leadId = id;
 
         if (!leadId) {
             return NextResponse.json({ error: 'ID de lead requerido' }, { status: 400 });

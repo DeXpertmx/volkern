@@ -8,8 +8,9 @@ import { authOptions } from '@/lib/auth';
 // POST /api/leads/[id]/convert - Convertir Lead a Contact + Deal (+ Gobernanza Fiscal)
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
@@ -31,7 +32,7 @@ export async function POST(
     // Obtener el lead
     const lead = await prisma.lead.findFirst({
       where: {
-        id: params.id,
+        id: id,
         tenantId: user.tenantId
       }
     });
@@ -265,7 +266,7 @@ export async function POST(
 
     // Actualizar el lead
     await prisma.lead.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         status: 'converted',
         estado: 'convertido',

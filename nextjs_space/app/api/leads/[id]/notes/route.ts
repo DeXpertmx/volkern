@@ -9,8 +9,9 @@ import { triggerAutomation } from '@/lib/automation-engine'
 // GET /api/leads/[id]/notes - Obtener todas las notas de un lead
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     // Autenticación dual: sesión o API key
     const auth = await authenticateRequest(request, ['leads:read'])
@@ -21,7 +22,7 @@ export async function GET(
       }, { status: 401 })
     }
 
-    const leadId = params.id
+    const leadId = id
     const tenantId = auth.tenant.id
 
     // Verificar que el lead pertenece al tenant
@@ -63,8 +64,9 @@ export async function GET(
 // POST /api/leads/[id]/notes - Crear una nueva nota
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     // Autenticación dual: sesión o API key
     const auth = await authenticateRequest(request, ['leads:write'])
@@ -75,7 +77,7 @@ export async function POST(
       }, { status: 401 })
     }
 
-    const leadId = params.id
+    const leadId = id
     const tenantId = auth.tenant.id
     const userId = auth.user?.id
 

@@ -7,13 +7,14 @@ import { triggerAutomation } from '@/lib/automation-engine';
 // PATCH /api/leads/[id]/stage - Actualizar el estado/pipeline del lead
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const data = await request.json();
     
     const lead = await prisma.lead.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         estado: data.estado,
         tiempoEnEstado: new Date() // Reset el tiempo en el stage

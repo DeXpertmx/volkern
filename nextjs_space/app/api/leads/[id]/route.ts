@@ -10,8 +10,9 @@ import { triggerAutomation } from '@/lib/automation-engine'
 // GET - Obtener un lead específico
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     // Autenticación dual: sesión o API key
     const auth = await authenticateRequest(request, ['leads:read'])
@@ -24,7 +25,7 @@ export async function GET(
 
     let lead = await (prisma as any).lead.findUnique({
       where: {
-        id: params.id,
+        id,
         tenantId: auth.tenant!.id
       },
       include: {
@@ -97,7 +98,7 @@ export async function GET(
 // Función compartida para actualizar leads (usada por PUT y PATCH)
 async function updateLeadHandler(
   request: NextRequest,
-  params: { id: string }
+  { id }: { id: string }
 ) {
   try {
     // Autenticación dual: sesión o API key
@@ -115,7 +116,7 @@ async function updateLeadHandler(
     // Verificar que el lead existe y pertenece al tenant
     const existingLead = await prisma.lead.findUnique({
       where: {
-        id: params.id,
+        id,
         tenantId: auth.tenant!.id
       }
     })
@@ -129,7 +130,7 @@ async function updateLeadHandler(
 
     // Actualizar lead
     const lead = await prisma.lead.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         ...(nombre !== undefined && { nombre }),
         ...(email !== undefined && { email }),
@@ -203,38 +204,46 @@ async function updateLeadHandler(
 // PUT - Actualizar lead (REST estándar)
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  return updateLeadHandler(request, params)
+  const { id } = await params
+  return updateLeadHandler(request, { id })
 }
 
 // PATCH - Actualizar lead (compatibilidad)
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  return updateLeadHandler(request, params)
+  const { id } = await params
+  return updateLeadHandler(request, { id })
 }
 
 // DELETE - Eliminar lead
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     // Autenticación dual: sesión o API key
     const auth = await authenticateRequest(request, ['leads:delete'])
     if (!auth.valid) {
+      // 403 si el gate REST denegó la operación; 401 si la credencial no sirve.
       return NextResponse.json(
-        { error: 'No autorizado' },
-        { status: 401 }
+        {
+          error: auth.error || 'No autorizado',
+          ...(auth.capability ? { capability: auth.capability } : {}),
+          ...(auth.risk ? { risk: auth.risk } : {}),
+        },
+        { status: auth.status ?? 401 }
       )
     }
 
     // Verificar que el lead existe y pertenece al tenant
     const existingLead = await prisma.lead.findUnique({
       where: {
-        id: params.id,
+        id,
         tenantId: auth.tenant!.id
       }
     })
@@ -247,7 +256,7 @@ export async function DELETE(
     }
 
     await prisma.lead.delete({
-      where: { id: params.id }
+      where: { id }
     })
 
     // Audit log
@@ -257,7 +266,7 @@ export async function DELETE(
         userId: auth.user!.id,
         accion: 'DELETE',
         entidad: 'Lead',
-        entidadId: params.id,
+        entidadId: id,
         descripcion: auth.authMethod === 'apikey'
           ? `Lead eliminado vía API por ${auth.user!.name || auth.user!.email}`
           : `Lead eliminado por ${auth.user!.name || auth.user!.email}`,
