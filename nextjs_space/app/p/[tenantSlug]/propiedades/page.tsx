@@ -11,22 +11,23 @@ import HeroCarousel from './HeroCarousel';
 export const revalidate = 60;
 
 interface Props {
-  params: { tenantSlug: string };
-  searchParams: {
+  params: Promise<{ tenantSlug: string }>;
+  searchParams: Promise<{
     q?: string;
     operacion?: string;
     tipo?: string;
     ciudad?: string;
     minPrecio?: string;
     maxPrecio?: string;
-  };
+  }>;
 }
 
 /**
  * Metadatos SEO dinámicos
  */
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const tenant = await resolveTenantBySlug(params.tenantSlug);
+  const { tenantSlug } = await params;
+  const tenant = await resolveTenantBySlug(tenantSlug);
 
   if (!tenant) return { title: 'Propiedades no encontradas' };
 
@@ -154,7 +155,9 @@ async function getHeroProperties(tenantId: string) {
 }
 
 export default async function PropertyListingPage({ params, searchParams }: Props) {
-  const tenant = await resolveTenantBySlug(params.tenantSlug);
+  const { tenantSlug } = await params;
+  const filters = await searchParams;
+  const tenant = await resolveTenantBySlug(tenantSlug);
 
   if (!tenant) {
     notFound();
@@ -162,12 +165,12 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
 
   const [properties, heroProperties] = await Promise.all([
     getProperties(tenant.id, {
-      search: searchParams.q,
-      operacion: searchParams.operacion,
-      tipo: searchParams.tipo,
-      ciudad: searchParams.ciudad,
-      minPrecio: searchParams.minPrecio ? Number(searchParams.minPrecio) : undefined,
-      maxPrecio: searchParams.maxPrecio ? Number(searchParams.maxPrecio) : undefined,
+      search: filters.q,
+      operacion: filters.operacion,
+      tipo: filters.tipo,
+      ciudad: filters.ciudad,
+      minPrecio: filters.minPrecio ? Number(filters.minPrecio) : undefined,
+      maxPrecio: filters.maxPrecio ? Number(filters.maxPrecio) : undefined,
     }),
     getHeroProperties(tenant.id),
   ]);
@@ -183,7 +186,7 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
       {heroProperties.length > 0 && (
         <HeroCarousel
           properties={heroProperties}
-          tenantSlug={params.tenantSlug}
+          tenantSlug={tenantSlug}
           brandingColor={brandingColor}
           logoUrl={logoUrl}
           companyName={companyName}
@@ -209,14 +212,14 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
                 name="q"
                 placeholder="Buscar por nombre o descripción..."
                 className="w-full border rounded-lg pl-9 pr-3 py-2 text-sm focus:ring-2 focus:outline-none focus:border-transparent"
-                defaultValue={searchParams.q || ''}
+                defaultValue={filters.q || ''}
               />
             </div>
 
             <select
               name="operacion"
               className="border rounded-lg px-3 py-2 text-sm bg-white"
-              defaultValue={searchParams.operacion || ''}
+              defaultValue={filters.operacion || ''}
             >
               <option value="">Todas las ops.</option>
               <option value="venta">En Venta</option>
@@ -228,7 +231,7 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
             <select
               name="tipo"
               className="border rounded-lg px-3 py-2 text-sm bg-white"
-              defaultValue={searchParams.tipo || ''}
+              defaultValue={filters.tipo || ''}
             >
               <option value="">Todos los tipos</option>
               <option value="Casa">Casa</option>
@@ -243,7 +246,7 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
               name="ciudad"
               placeholder="Ciudad o zona..."
               className="border rounded-lg px-3 py-2 text-sm w-36"
-              defaultValue={searchParams.ciudad || ''}
+              defaultValue={filters.ciudad || ''}
             />
 
             <div className="flex items-center gap-1">
@@ -253,7 +256,7 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
               inputMode="numeric"
               placeholder="Mín"
               className="border rounded-lg px-3 py-2 text-sm w-24"
-              defaultValue={searchParams.minPrecio || ''}
+              defaultValue={filters.minPrecio || ''}
             />
             <span className="text-gray-400">—</span>
             <input
@@ -262,7 +265,7 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
               inputMode="numeric"
               placeholder="Máx"
               className="border rounded-lg px-3 py-2 text-sm w-24"
-              defaultValue={searchParams.maxPrecio || ''}
+              defaultValue={filters.maxPrecio || ''}
             />
             </div>
 
@@ -282,7 +285,7 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
             {/* Active filters count */}
             {Object.values(searchParams).some(v => v) && (
               <a
-                href={`/p/${params.tenantSlug}/propiedades`}
+                href={`/p/${tenantSlug}/propiedades`}
                 className="text-xs text-gray-500 hover:text-gray-700 underline ml-1"
               >
                 Limpiar filtros
@@ -326,7 +329,7 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
               return (
                 <a
                   key={property.id}
-                  href={`/p/${params.tenantSlug}/propiedades/${property.id}`}
+                  href={`/p/${tenantSlug}/propiedades/${property.id}`}
                   className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden group flex flex-col"
                 >
                   {/* Image */}

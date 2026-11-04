@@ -10,14 +10,15 @@ import PropertyDetailClient from './PropertyDetailClient';
 export const revalidate = 60;
 
 interface Props {
-  params: { tenantSlug: string; id: string };
+  params: Promise<{ tenantSlug: string; id: string }>;
 }
 
 /**
  * Metadatos SEO dinámicos
  */
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const tenant = await resolveTenantBySlug(params.tenantSlug);
+  const { tenantSlug, id } = await params;
+  const tenant = await resolveTenantBySlug(tenantSlug);
 
   let title = 'Propiedad | Volkern';
   let description = 'Detalle de propiedad inmobiliaria';
@@ -25,7 +26,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (tenant) {
     const property = await globalPrisma.catalogoItem.findFirst({
       where: {
-        id: params.id,
+        id,
         tipo: 'inmueble',
         activo: true,
       },
@@ -90,13 +91,14 @@ async function getRelatedProperties(tenantId: string, property: any, limit = 3) 
 }
 
 export default async function PropertyDetailPage({ params }: Props) {
-  const tenant = await resolveTenantBySlug(params.tenantSlug);
+  const { tenantSlug, id } = await params;
+  const tenant = await resolveTenantBySlug(tenantSlug);
 
   if (!tenant) {
     notFound();
   }
 
-  const property = await getProperty(tenant.id, params.id);
+  const property = await getProperty(tenant.id, id);
 
   if (!property) {
     notFound();
@@ -122,7 +124,7 @@ export default async function PropertyDetailPage({ params }: Props) {
     <PropertyDetailClient
       property={property}
       tenant={tenant}
-      tenantSlug={params.tenantSlug}
+      tenantSlug={tenantSlug}
       brandingColor={brandingColor}
       images={images}
       mainImage={mainImage}

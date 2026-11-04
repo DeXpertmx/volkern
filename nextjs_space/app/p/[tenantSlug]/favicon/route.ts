@@ -9,10 +9,11 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(
   _request: Request,
-  { params }: { params: { tenantSlug: string } }
+  { params }: { params: Promise<{ tenantSlug: string }> }
 ) {
+  const { tenantSlug } = await params;
   const tenant = await globalPrisma.tenant.findUnique({
-    where: { slug: params.tenantSlug },
+    where: { slug: tenantSlug },
     select: { id: true, nombre: true },
   });
 

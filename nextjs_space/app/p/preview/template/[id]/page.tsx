@@ -7,11 +7,12 @@ export const revalidate = 0;
 export default async function TemplatePreviewPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
+  const { id } = await params;
   try {
     const template = await prisma.pageTemplate.findUnique({
-      where: { id: params.id },
+      where: { id },
     });
 
     if (!template) {

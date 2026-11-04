@@ -8,17 +8,18 @@ import { notFound } from 'next/navigation';
 export const revalidate = 60;
 
 interface PageProps {
-  params: {
+  params: Promise<{
     tenantSlug: string;
     pageSlug: string;
-  };
+  }>;
 }
 
 /**
  * Generar Metadatos Dinámicos para SEO
  */
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const page = await getPageData(params.tenantSlug, params.pageSlug);
+  const { tenantSlug, pageSlug } = await params;
+  const page = await getPageData(tenantSlug, pageSlug);
   
   if (!page) return { title: 'Página no encontrada' };
 
@@ -68,7 +69,8 @@ async function getPageData(tenantSlug: string, pageSlug: string) {
 }
 
 export default async function PublicPage({ params }: PageProps) {
-  const page = await getPageData(params.tenantSlug, params.pageSlug);
+  const { tenantSlug, pageSlug } = await params;
+  const page = await getPageData(tenantSlug, pageSlug);
 
   if (!page) {
     notFound();
