@@ -8,7 +8,8 @@ import { withTenantAuth } from '@/lib/api-key-auth';
  * GET /api/cms/pages/[id] - Obtener página por ID (Aislamiento por Tenant)
  */
 export const GET = withTenantAuth(async (req, auth, context) => {
-  const id = context?.params?.id || (context as any)?.id;
+  // Next 16 entrega `params` como promesa: sin await, `id` siempre era undefined.
+  const { id } = ((await context?.params) ?? {}) as { id?: string };
   
   if (!id) {
     console.error('[CMS Page GET] Missing id param, context:', context);
@@ -65,13 +66,14 @@ export const GET = withTenantAuth(async (req, auth, context) => {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json({ error: 'Error al obtener página', details: errorMessage }, { status: 500 });
   }
-});
+}, ['cms:read']);
 
 /**
  * PUT /api/cms/pages/[id] - Actualizar página
  */
 export const PUT = withTenantAuth(async (req, auth, context) => {
-  const id = context?.params?.id || (context as any)?.id;
+  // Next 16 entrega `params` como promesa: sin await, `id` siempre era undefined.
+  const { id } = ((await context?.params) ?? {}) as { id?: string };
   
   if (!id) {
     return NextResponse.json({ error: 'ID de página requerido' }, { status: 400 });
@@ -171,13 +173,14 @@ export const PUT = withTenantAuth(async (req, auth, context) => {
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     }, { status: 500 });
   }
-});
+}, ['cms:write']);
 
 /**
  * DELETE /api/cms/pages/[id] - Eliminar página
  */
 export const DELETE = withTenantAuth(async (req, auth, context) => {
-  const id = context?.params?.id || (context as any)?.id;
+  // Next 16 entrega `params` como promesa: sin await, `id` siempre era undefined.
+  const { id } = ((await context?.params) ?? {}) as { id?: string };
   
   if (!id) {
     return NextResponse.json({ error: 'ID de página requerido' }, { status: 400 });
@@ -221,4 +224,4 @@ export const DELETE = withTenantAuth(async (req, auth, context) => {
     console.error('[CMS Page] Error al eliminar:', error);
     return NextResponse.json({ error: 'Error al eliminar página' }, { status: 500 });
   }
-});
+}, ['cms:write']);

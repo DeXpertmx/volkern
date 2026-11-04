@@ -1,18 +1,18 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import EditorWorkspace from "@/components/webcreator/EditorWorkspace";
 import { dedupeProjectData } from "@/components/webcreator/dedupe";
 import { Loader2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
-interface EditorPageProps {
-  params: { id: string };
-}
-
-export default function WebcreatorEditorPage({ params }: EditorPageProps) {
+export default function WebcreatorEditorPage() {
+  const params = useParams<{ id: string }>();
+  // En Next 16 `params` es una promesa: el prop síncrono llegaba vacío y el
+  // editor acababa pidiendo /api/cms/pages/undefined.
+  const pageId = params?.id && params.id !== 'undefined' ? params.id : null;
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
@@ -46,8 +46,13 @@ export default function WebcreatorEditorPage({ params }: EditorPageProps) {
   );
 
   const loadPage = useCallback(async () => {
+    if (!pageId) {
+      setError("No se indicó qué proyecto abrir.");
+      setLoading(false);
+      return;
+    }
     try {
-      const response = await fetch(`/api/cms/pages/${params.id}`);
+      const response = await fetch(`/api/cms/pages/${pageId}`);
       if (!response.ok) {
         throw new Error("Página no encontrada");
       }
@@ -93,7 +98,7 @@ export default function WebcreatorEditorPage({ params }: EditorPageProps) {
     } finally {
       setLoading(false);
     }
-  }, [params.id]);
+  }, [pageId]);
 
   useEffect(() => {
     loadPage();
@@ -144,7 +149,7 @@ export default function WebcreatorEditorPage({ params }: EditorPageProps) {
         scriptsBody: data.seo?.scriptsBody,
       };
 
-      const response = await fetch(`/api/cms/pages/${params.id}`, {
+      const response = await fetch(`/api/cms/pages/${pageId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
