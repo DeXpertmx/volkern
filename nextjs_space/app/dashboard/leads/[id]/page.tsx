@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -108,11 +108,8 @@ function isBooleanTrue(value: unknown): boolean {
   return ['true', '1', 'si', 'sí', 'yes', 'on'].includes(String(value ?? '').trim().toLowerCase());
 }
 
-export default function LeadDetailPage({
-  params,
-}: {
-  params: { id: string }
-}) {
+export default function LeadDetailPage() {
+  const params = useParams<{ id: string }>();
   const router = useRouter();
   const [lead, setLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
