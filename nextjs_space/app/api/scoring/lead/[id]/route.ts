@@ -11,15 +11,16 @@ const prisma = new PrismaClient();
 // GET - Obtener el score de un lead específico
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
 
-    const leadId = params.id;
+    const leadId = id;
 
     // Obtener el score del lead
     const score = await ScoringEngine.getLeadScore(leadId);
@@ -47,15 +48,16 @@ export async function GET(
 // POST - Recalcular el score de un lead
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
 
-    const leadId = params.id;
+    const leadId = id;
 
     const result = await ScoringEngine.recalculateLeadScore(leadId);
 
