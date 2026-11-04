@@ -635,11 +635,9 @@ function ProductionReadiness() {
     }
   }
 
-  const displayReports = reports || [
-    { id: '1', workOrder: { batchNumber: '1028' }, coveragePercent: 100, readyToProduce: true },
-    { id: '2', workOrder: { batchNumber: '1029' }, coveragePercent: 82, readyToProduce: false, blockedReason: 'Falta Componente Electrónico S2' },
-    { id: '3', workOrder: { batchNumber: '1030' }, coveragePercent: 45, readyToProduce: false, blockedReason: 'Falta Acero Estructural' },
-  ]
+  // Si la API devuelve un error (objeto, no lista), pintar vacío en vez de
+  // reventar el dashboard entero con `undefined.map`.
+  const displayReports: any[] = Array.isArray(reports) ? reports : []
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

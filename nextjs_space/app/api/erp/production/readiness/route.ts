@@ -17,7 +17,9 @@ export const GET = withTenantAuth(async (request, auth) => {
           include: {
             bom: { include: { catalogoItem: true } },
             erp_material_requirements: {
-              include: { catalogItem: true }
+              // La relación en el schema se llama `catalogo_items`; con
+              // `catalogItem` Prisma rechaza la consulta entera.
+              include: { catalogo_items: true }
             }
           }
         }
