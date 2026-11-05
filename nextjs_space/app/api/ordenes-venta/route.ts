@@ -234,7 +234,8 @@ export async function POST(req: NextRequest) {
       const item = items[i]
       const cantidad = parseFloat(item.cantidad as any) || 1
       const precioUnitario = parseFloat(item.precioUnitario as any) || 0
-      const descuentoItem = parseFloat(item.descuento as any) || 0
+      // Descuento por partida en porcentaje: fuera de 0–100 daría bases negativas
+      const descuentoItem = Math.min(100, Math.max(0, parseFloat(item.descuento as any) || 0))
 
       // Calcular subtotal del item
       let subtotalItem = cantidad * precioUnitario

@@ -143,11 +143,17 @@ export default function NuevaOrdenVentaPage() {
         }
         if (emisoresRes.ok) {
           const data = await emisoresRes.json();
-          const emisoresList = data.emisores || [];
+          // El endpoint devuelve { emisores } pero aceptamos también la lista pelada
+          const emisoresList: Emisor[] = Array.isArray(data?.emisores)
+            ? data.emisores
+            : Array.isArray(data) ? data : [];
           setEmisores(emisoresList);
           // Seleccionar emisor principal por defecto
           const principal = emisoresList.find((e: Emisor) => e.esPrincipal);
           if (principal) setSelectedEmisorId(principal.id);
+        } else {
+          // Antes se tragaba el fallo y el desplegable quedaba vacío sin explicación
+          toast.error('No se pudieron cargar las entidades emisoras');
         }
       } catch (error) {
         console.error('Error loading data:', error);
@@ -472,20 +478,24 @@ export default function NuevaOrdenVentaPage() {
                         <Building2 className="h-5 w-5 text-primary" /> Entidad Emisora
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-4">
-                      <Select value={selectedEmisorId} onValueChange={setSelectedEmisorId}>
-                        <SelectTrigger className="bg-muted/30">
-                          <SelectValue placeholder="Seleccionar emisor" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {emisores.map(emisor => (
-                            <SelectItem key={emisor.id} value={emisor.id}>
-                              {emisor.nombreComercial || emisor.razonSocial}
-                              {emisor.esPrincipal && ' (Principal)'}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                    <CardContent className="space-y-4">                          <Select value={selectedEmisorId} onValueChange={setSelectedEmisorId}>
+                            <SelectTrigger className="bg-muted/30">
+                              <SelectValue placeholder="Seleccionar emisor" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {emisores.length === 0 && (
+                                <div className="px-2 py-3 text-xs text-muted-foreground">
+                                  No hay entidades emisoras. Crea una en Configuración → Fiscal.
+                                </div>
+                              )}
+                              {emisores.map(emisor => (
+                                <SelectItem key={emisor.id} value={emisor.id}>
+                                  {emisor.nombreComercial || emisor.razonSocial}
+                                  {emisor.esPrincipal && ' (Principal)'}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
 
                       {config.emisor && (
                         <div className="p-4 rounded-xl bg-muted/50 border border-muted space-y-1 text-sm">
@@ -594,7 +604,7 @@ export default function NuevaOrdenVentaPage() {
                             </div>
                           )}
 
-                          <div className="grid grid-cols-4 gap-4">
+                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
                             <div className="space-y-1">
                               <Label className="text-[10px] uppercase text-muted-foreground font-bold">Cant.</Label>
                               <Input
@@ -611,6 +621,18 @@ export default function NuevaOrdenVentaPage() {
                                 value={item.precioUnitario}
                                 onChange={(e) => updateItem(item.id, 'precioUnitario', parseFloat(e.target.value) || 0)}
                                 className="h-8 bg-background"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-[10px] uppercase text-muted-foreground font-bold">Desc. %</Label>
+                              <Input
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="0.5"
+                                value={item.descuento}
+                                onChange={(e) => updateItem(item.id, 'descuento', Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)))}
+                                className="h-8 bg-background text-emerald-600 font-bold"
                               />
                             </div>
                             <div className="space-y-1">
@@ -692,7 +714,15 @@ export default function NuevaOrdenVentaPage() {
 
             {step < steps.length ? (
               <Button
-                onClick={() => setStep(prev => prev + 1)}
+                onClick={() => {
+                  // La entidad emisora no es opcional: sin ella no hay serie fiscal
+                  // ni numeración de la orden, así que no se avanza sin elegirla.
+                  if (step === 1 && !selectedEmisorId) {
+                    toast.error('Selecciona la entidad emisora para continuar');
+                    return;
+                  }
+                  setStep(prev => prev + 1);
+                }}
                 className="px-8 bg-primary rounded-full hover:bg-primary/90 shadow-lg shadow-primary/20"
               >
                 Siguiente <ArrowRight className="h-4 w-4 ml-2" />
