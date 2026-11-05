@@ -53,7 +53,7 @@ export const PATCH = withTenantAuth(async (request, auth) => {
     console.error('[UserLayoutAPI PATCH] Error:', error);
     return NextResponse.json({ error: 'Error al persistir el layout' }, { status: 500 });
   }
-});
+}, ['settings:write']);
 
 export const GET = withTenantAuth(async (request, auth) => {
   try {
@@ -89,4 +89,4 @@ export const GET = withTenantAuth(async (request, auth) => {
     console.error('[UserLayoutAPI GET] Error:', error);
     return NextResponse.json({ error: 'Error al recuperar el layout' }, { status: 500 });
   }
-});
+}, ['settings:read']);

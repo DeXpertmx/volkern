@@ -37,15 +37,40 @@ const fetcher = (url: string) => apiFetch(url).then(res => {
   return res.json()
 })
 
+/**
+ * Estados reales que escribe este ERP (ver `SalesOrderService.transitionStatus`
+ * y `LogisticsService`): DRAFT → CONFIRMED → PROCESSING → SHIPPED → DELIVERED.
+ * Los cuatro KPI se derivan de esos estados; nada se inventa. Antes estos
+ * contadores eran literales (14/8/12/5) y una cuenta recién creada los mostraba
+ * como si fueran suya.
+ */
+function kpisDePedidos(orders: any[]) {
+  const hoy = new Date().toDateString()
+  const porEstado = (estado: string) => orders.filter((o) => o?.status === estado).length
+  return {
+    pedidosHoy: orders.filter((o) => o?.createdAt && new Date(o.createdAt).toDateString() === hoy).length,
+    enProduccion: porEstado('PROCESSING'),
+    enRuta: porEstado('SHIPPED'),
+    entregados: porEstado('DELIVERED'),
+  }
+}
+
 export default function VentasDashboard() {
   const [section, setSection] = useState('pedidos')
   const { data: orders, mutate } = useSWR('/api/erp/sales/orders', fetcher)
 
+  // Sin pedidos no hay nada que contar: se muestra el estado vacío, no cifras
+  // que parecen actividad real (docs: «si no hay actividad propia, usar un
+  // estado vacío y explicar el primer paso»).
+  const lista = Array.isArray(orders) ? orders : null
+  const sinActividad = lista !== null && lista.length === 0
+  const kpis = kpisDePedidos(lista ?? [])
+
   const stats = [
-    { label: 'Pedidos Hoy', value: '14', icon: ShoppingCart, color: 'text-blue-600', bg: 'bg-blue-50' },
-    { label: 'En Producción', value: '8', icon: Cpu, color: 'text-indigo-600', bg: 'bg-indigo-50' },
-    { label: 'Listos Despacho', value: '12', icon: Package, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { label: 'En Ruta', value: '5', icon: Truck, color: 'text-amber-600', bg: 'bg-amber-50' },
+    { label: 'Pedidos Hoy', value: String(kpis.pedidosHoy), icon: ShoppingCart, color: 'text-blue-600', bg: 'bg-blue-50' },
+    { label: 'En Producción', value: String(kpis.enProduccion), icon: Cpu, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+    { label: 'En Ruta', value: String(kpis.enRuta), icon: Truck, color: 'text-amber-600', bg: 'bg-amber-50' },
+    { label: 'Entregados', value: String(kpis.entregados), icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50' },
   ]
 
   return (
@@ -67,23 +92,35 @@ export default function VentasDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((stat, i) => (
-          <Card key={i} className="border-none shadow-sm hover:shadow-md transition-all">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className={`p-2.5 rounded-xl ${stat.bg} ${stat.color}`}>
-                  <stat.icon className="w-5 h-5" />
+      {sinActividad && (
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
+          <Package className="w-8 h-8 mx-auto text-slate-300 mb-3" />
+          <p className="font-bold text-slate-900">Aún no tienes actividad</p>
+          <p className="text-sm text-slate-500 mt-1">
+            Crea tu primer pedido para empezar a ver aquí el estado de tu operación.
+          </p>
+        </div>
+      )}
+
+      {lista !== null && lista.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {stats.map((stat, i) => (
+            <Card key={i} className="border-none shadow-sm hover:shadow-md transition-all">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className={`p-2.5 rounded-xl ${stat.bg} ${stat.color}`}>
+                    <stat.icon className="w-5 h-5" />
+                  </div>
                 </div>
-              </div>
-              <div className="space-y-1">
-                <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">{stat.label}</p>
-                <p className="text-2xl font-black tracking-tighter">{stat.value}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">{stat.label}</p>
+                  <p className="text-2xl font-black tracking-tighter">{stat.value}</p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       <div className="flex bg-slate-100 p-1 rounded-2xl w-fit">
         {[
@@ -114,40 +151,26 @@ export default function VentasDashboard() {
         >
           {section === 'pedidos' && <SalesOrderList orders={orders} />}
           {section === 'orquestacion' && <OrchestrationMonitor orders={orders} />}
-          {section === 'logistica' && <LogisticsMonitor />}
+          {section === 'logistica' && <LogisticsMonitor orders={orders} />}
         </motion.div>
       </AnimatePresence>
     </div>
   )
 }
 
-function SalesOrderList({ orders }: { orders: any[] }) {
-  const displayOrders = Array.isArray(orders) ? orders : [
-    { 
-      id: '1', 
-      batchNumber: 'SO-8921', 
-      contact: { nombre: 'TechCorp Solutions' }, 
-      totalPrice: 12500, 
-      status: 'PROCESSING', 
-      priority: 'URGENT', 
-      createdAt: new Date().toISOString(), 
-      grossMargin: 24.5,
-      marginAlert: false,
-      promise: { promisedDate: new Date(Date.now() + 259200000).toISOString(), confidenceScore: 0.98 } 
-    },
-    { 
-      id: '2', 
-      batchNumber: 'SO-8922', 
-      contact: { nombre: 'Solar Dynamics' }, 
-      totalPrice: 4500, 
-      status: 'QUOTED', 
-      priority: 'NORMAL', 
-      createdAt: new Date().toISOString(), 
-      grossMargin: 8.2,
-      marginAlert: true,
-      promise: { promisedDate: new Date(Date.now() + 86400000).toISOString(), confidenceScore: 0.92 } 
-    },
-  ]
+function SalesOrderList({ orders }: { orders: any[] | undefined }) {
+  const cargando = !Array.isArray(orders)
+  const displayOrders: any[] = Array.isArray(orders) ? orders : []
+  const vacio = !cargando && displayOrders.length === 0
+  const kpisSales = kpisDePedidos(displayOrders)
+  const conMargenAlerta = displayOrders.filter((o) => o?.marginAlert).length
+  const margenes = displayOrders
+    .map((o) => o?.grossMargin)
+    .filter((m): m is number => typeof m === 'number')
+  const margenMedio = margenes.length ? margenes.reduce((a, b) => a + b, 0) / margenes.length : null
+  const resumenGemma = `${displayOrders.length} pedidos en cartera: ${kpisSales.enProduccion} en producción, ${kpisSales.enRuta} en ruta y ${kpisSales.entregados} entregados.${
+    conMargenAlerta > 0 ? ` ${conMargenAlerta} con alerta de margen: conviene revisarlos.` : ''
+  }`
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -155,7 +178,9 @@ function SalesOrderList({ orders }: { orders: any[] }) {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-lg font-bold uppercase">Cartera de Pedidos</CardTitle>
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-lg font-bold uppercase">Cartera de Pedidos</CardTitle>
+              </div>
               <CardDescription>Seguimiento de cumplimiento y compromisos.</CardDescription>
             </div>
             <div className="flex gap-2">
@@ -166,6 +191,20 @@ function SalesOrderList({ orders }: { orders: any[] }) {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
+            {cargando && (
+              <div className="p-8 rounded-2xl border border-dashed border-slate-200 text-center">
+                <Loader2 className="w-5 h-5 mx-auto text-slate-300 mb-2 animate-spin" />
+                <p className="text-xs text-slate-500">Cargando cartera de pedidos…</p>
+              </div>
+            )}
+            {vacio && (
+              <div className="p-8 rounded-2xl border border-dashed border-slate-200 text-center">
+                <p className="font-bold text-sm text-slate-700">Aún no tienes pedidos</p>
+                <p className="text-xs text-slate-500 mt-1">
+                  Crea tu primer pedido con el botón «Nuevo Pedido» para empezar.
+                </p>
+              </div>
+            )}
             {displayOrders.map((order: any) => (
               <div key={order.id} className="p-5 rounded-2xl bg-white border border-slate-100 group hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-50/50 transition-all">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -175,7 +214,7 @@ function SalesOrderList({ orders }: { orders: any[] }) {
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <h4 className="font-bold text-sm tracking-tight">{order.contact?.nombre}</h4>
+                        <h4 className="font-bold text-sm tracking-tight">{order.contacts?.nombre}</h4>
                         <Badge className={`text-[8px] font-black uppercase ${
                           order.priority === 'URGENT' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'
                         }`}>{order.priority}</Badge>
@@ -244,21 +283,37 @@ function SalesOrderList({ orders }: { orders: any[] }) {
              <CardTitle className="text-xl font-bold tracking-tight">Análisis de Demanda</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-             <div className="p-4 rounded-xl bg-white/5 border border-white/10">
-                <p className="text-xs text-slate-300 leading-relaxed italic">
-                   "He detectado un pico de demanda en Inversores Smart. Sugiero adelantar la producción de 20 unidades antes del viernes para evitar retrasos en SO-8921."
-                </p>
-             </div>
-             <div className="space-y-3">
-                <div className="flex items-center justify-between text-[10px] font-black uppercase">
-                   <span className="text-slate-400">Nivel de Servicio Est.</span>
-                   <span className="text-emerald-400">98.2%</span>
+             {displayOrders.length === 0 ? (
+                <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                   <p className="text-xs text-slate-300 leading-relaxed">
+                      {cargando
+                        ? 'Cargando tu cartera…'
+                        : 'Aún no tienes pedidos: Gemma empezará a analizar tu operación cuando crees el primero.'}
+                   </p>
                 </div>
-                <div className="flex items-center justify-between text-[10px] font-black uppercase">
-                   <span className="text-slate-400">Riesgo de Quiebre</span>
-                   <span className="text-red-400">BAJO</span>
-                </div>
-             </div>
+             ) : (
+                <>
+                   <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                      <p className="text-xs text-slate-300 leading-relaxed italic">{resumenGemma}</p>
+                   </div>
+                   <div className="space-y-3">
+                      <div className="flex items-center justify-between text-[10px] font-black uppercase">
+                         <span className="text-slate-400">Pedidos en Cartera</span>
+                         <span className="text-white">{displayOrders.length}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] font-black uppercase">
+                         <span className="text-slate-400">Alertas de Margen</span>
+                         <span className={conMargenAlerta > 0 ? 'text-red-400' : 'text-emerald-400'}>{conMargenAlerta}</span>
+                      </div>
+                      {margenMedio !== null && (
+                         <div className="flex items-center justify-between text-[10px] font-black uppercase">
+                            <span className="text-slate-400">Margen Bruto Medio</span>
+                            <span className="text-emerald-400">{margenMedio.toFixed(1)}%</span>
+                         </div>
+                      )}
+                   </div>
+                </>
+             )}
           </CardContent>
         </Card>
       </div>
@@ -267,8 +322,8 @@ function SalesOrderList({ orders }: { orders: any[] }) {
 }
 
 function OrchestrationMonitor({ orders }: { orders: any[] }) {
-  const allItems = (Array.isArray(orders) ? orders : []).flatMap(order => 
-    (order.items || []).map((item: any) => ({
+  const allItems = (Array.isArray(orders) ? orders : []).flatMap(order =>
+    (order.erp_sales_order_items || []).map((item: any) => ({
       ...item,
       orderBatch: order.batchNumber
     }))
@@ -290,7 +345,7 @@ function OrchestrationMonitor({ orders }: { orders: any[] }) {
                   <div className="absolute left-[-9px] top-0 h-4 w-4 rounded-full bg-white border-2 border-indigo-600 shadow-sm" />
                   <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex items-center justify-between">
                     <div>
-                      <h4 className="font-bold text-sm">{item.catalogItem?.nombre || 'Ítem'}</h4>
+                      <h4 className="font-bold text-sm">{item.catalogo_items?.nombre || 'Ítem'}</h4>
                       <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
                         Pedido {item.orderBatch} • Cantidad: {item.quantity} unidades
                       </p>
@@ -339,7 +394,30 @@ function OrchestrationMonitor({ orders }: { orders: any[] }) {
   )
 }
 
-function LogisticsMonitor() {
+function LogisticsMonitor({ orders }: { orders: any[] | undefined }) {
+  const cargando = !Array.isArray(orders)
+  const lista = Array.isArray(orders) ? orders : []
+  const envios = lista.flatMap((order) =>
+    (Array.isArray(order?.erp_shipments) ? order.erp_shipments : []).map((shp: any) => ({
+      ...shp,
+      orderBatch: order.batchNumber,
+      destino: order.shippingAddress,
+    }))
+  )
+  const direcciones = lista
+    .map((o) => o?.shippingAddress)
+    .filter((d): d is string => typeof d === 'string' && d.trim().length > 0)
+  const zonas = Object.entries(
+    direcciones.reduce<Record<string, number>>((acc, d) => {
+      const clave = d.trim()
+      acc[clave] = (acc[clave] || 0) + 1
+      return acc
+    }, {})
+  )
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([zona, n]) => ({ zona, n, pct: Math.round((n / direcciones.length) * 100) }))
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <Card className="lg:col-span-2 border-none shadow-sm">
@@ -349,24 +427,37 @@ function LogisticsMonitor() {
         </CardHeader>
         <CardContent>
            <div className="space-y-4">
-              {[
-                { id: 'SHP-1234', order: 'SO-8921', carrier: 'Volkern Fleet', status: 'SHIPPED', dest: 'Veracruz, MX' },
-                { id: 'SHP-1235', order: 'SO-8922', carrier: 'DHL Express', status: 'DELIVERED', dest: 'Madrid, ES' },
-              ].map((shp, i) => (
-                <div key={i} className="p-4 rounded-2xl bg-white border border-slate-100 flex items-center justify-between group">
+              {cargando && (
+                <div className="p-8 rounded-2xl border border-dashed border-slate-200 text-center">
+                  <Loader2 className="w-5 h-5 mx-auto text-slate-300 mb-2 animate-spin" />
+                  <p className="text-xs text-slate-500">Cargando despachos…</p>
+                </div>
+              )}
+              {!cargando && envios.length === 0 && (
+                <div className="p-8 rounded-2xl border border-dashed border-slate-200 text-center">
+                  <p className="font-bold text-sm text-slate-700">Aún no hay despachos</p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Los envíos aparecerán aquí cuando saques pedidos a ruta.
+                  </p>
+                </div>
+              )}
+              {envios.map((shp, i) => (
+                <div key={shp.id || i} className="p-4 rounded-2xl bg-white border border-slate-100 flex items-center justify-between group">
                   <div className="flex items-center gap-4">
                     <div className="h-10 w-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400">
                        <Truck className="w-5 h-5" />
                     </div>
                     <div>
-                      <h4 className="font-bold text-sm tracking-tight">{shp.id}</h4>
-                      <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest">Pedido {shp.order} • {shp.dest}</p>
+                      <h4 className="font-bold text-sm tracking-tight">{shp.batchNumber}</h4>
+                      <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest">
+                        Pedido {shp.orderBatch}{shp.destino ? ` • ${shp.destino}` : ''}
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-6">
                     <div className="text-right hidden md:block">
                        <p className="text-[9px] font-black text-slate-400 uppercase">Transportista</p>
-                       <p className="text-[10px] font-bold text-slate-900">{shp.carrier}</p>
+                       <p className="text-[10px] font-bold text-slate-900">{shp.carrier || 'Sin transportista'}</p>
                     </div>
                     <Badge className={`text-[9px] font-black uppercase ${
                       shp.status === 'DELIVERED' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'
@@ -381,22 +472,29 @@ function LogisticsMonitor() {
       
       <div className="space-y-6">
         <Card className="border-none shadow-sm overflow-hidden">
-           <div className="h-32 bg-slate-200 relative">
-              <div className="absolute inset-0 flex items-center justify-center text-slate-400 flex-col gap-2">
-                 <MapPin className="w-6 h-6" />
-                 <span className="text-[9px] font-black uppercase">Mapa de Entregas Activo</span>
-              </div>
-           </div>
            <CardContent className="p-6">
-              <h4 className="font-bold text-sm mb-2">Zonas de Mayor Actividad</h4>
+              <h4 className="font-bold text-sm mb-3 flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-slate-400" />
+                Zonas de Mayor Actividad
+              </h4>
+              {cargando && <p className="text-xs text-slate-500">Cargando…</p>}
+              {!cargando && zonas.length === 0 && (
+                <p className="text-xs text-slate-500">
+                  Cuando tengas envíos, aquí verás los destinos más frecuentes.
+                </p>
+              )}
               <div className="space-y-3">
-                 <div className="flex items-center justify-between text-[10px] font-black uppercase">
-                    <span className="text-slate-400">Ciudad de México</span>
-                    <span>42%</span>
-                 </div>
-                 <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-indigo-500 w-[42%]" />
-                 </div>
+                 {zonas.map((z) => (
+                    <div key={z.zona}>
+                       <div className="flex items-center justify-between gap-3 text-[10px] font-black uppercase">
+                          <span className="text-slate-400 truncate">{z.zona}</span>
+                          <span>{z.pct}%</span>
+                       </div>
+                       <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden mt-1">
+                          <div className="h-full bg-indigo-500" style={{ width: `${z.pct}%` }} />
+                       </div>
+                    </div>
+                 ))}
               </div>
            </CardContent>
         </Card>

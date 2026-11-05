@@ -10,7 +10,7 @@ import { completeCleaningTask } from '@/lib/hospitality/operations';
 // Body: { tipo: 'cleaning'|'maintenance', unitId, prioridad?, responsable?, notas?, incidencia? (solo maintenance) }
 export async function POST(req: NextRequest) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:write']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
 
     const body = await req.json();
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
 // Body: { estado?, responsable?, notas?, prioridad? }
 export async function PATCH(req: NextRequest) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:write']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
 
     const { searchParams } = new URL(req.url);
@@ -128,7 +128,7 @@ export async function PATCH(req: NextRequest) {
 // DELETE /api/hospitality/tasks?tipo=cleaning|maintenance&id=...
 export async function DELETE(req: NextRequest) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:write']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
 
     const { searchParams } = new URL(req.url);

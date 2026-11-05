@@ -27,6 +27,7 @@ import {
   Phone,
 } from 'lucide-react'
 import SetupBasico from '@/components/public/SetupBasico'
+import { passwordValida, requisitosPassword, PASSWORD_PLACEHOLDER } from '@/lib/validation/password'
 import {
   calcularPrecio,
   type PlanTipo,
@@ -295,8 +296,14 @@ function CheckoutForm() {
       toast.error('Las contraseñas no coinciden')
       return
     }
-    if (formData.password.length < 6) {
-      toast.error('La contraseña debe tener al menos 6 caracteres')
+    // Misma regla que el servidor de registro, mostrada mientras se escribe.
+    const incompletos = requisitosPassword(formData.password).filter(r => !r.ok).map(r => r.texto)
+    if (incompletos.length > 0) {
+      toast.error(`La contraseña todavía no cumple: ${incompletos.join(', ')}`)
+      return
+    }
+    if (!passwordValida(formData.password)) {
+      toast.error('La contraseña no cumple los requisitos de seguridad')
       return
     }
 
@@ -557,13 +564,24 @@ function CheckoutForm() {
                         <Input
                           id="password"
                           type="password"
-                          placeholder="Mínimo 6 caracteres"
+                          placeholder={PASSWORD_PLACEHOLDER}
                           className="pl-10 bg-slate-950 border-slate-800 text-white placeholder:text-slate-600"
                           value={formData.password}
                           onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                          aria-describedby="requisitos-password"
                           required
                         />
                       </div>
+                      {/* Requisitos visibles antes de escribir y validados en
+                          vivo: es la regla que aplica el servidor. */}
+                      <ul id="requisitos-password" className="grid grid-cols-1 gap-1">
+                        {requisitosPassword(formData.password).map(r => (
+                          <li key={r.id} className={`flex items-center gap-1.5 text-[11px] ${r.ok ? 'text-emerald-400' : 'text-slate-500'}`}>
+                            <Check className={`h-3 w-3 ${r.ok ? '' : 'text-slate-700'}`} />
+                            {r.texto}
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="confirmPassword" className="text-slate-300 text-xs">Confirmar contraseña</Label>

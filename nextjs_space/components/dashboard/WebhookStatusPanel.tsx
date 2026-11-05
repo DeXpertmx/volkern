@@ -1,10 +1,20 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Radio, RefreshCw, ShieldAlert, MessageSquare, Smartphone, RotateCcw } from 'lucide-react'
+import {
+  Radio,
+  RefreshCw,
+  ShieldAlert,
+  MessageSquare,
+  Smartphone,
+  RotateCcw,
+  Unlock,
+  Search,
+  X,
+} from 'lucide-react'
 
 interface ChatMetric {
   chatId: string
@@ -35,8 +45,51 @@ interface WebhookMetrics {
   lastRejected?: LastRejected | null
 }
 
+interface IpSecretLimitEntry {
+  ip: string
+  fallos: number
+  /** Segundos restantes del bloqueo o de la ventana de fallos. */
+  restanteSegundos: number | null
+}
+
+interface SecretLimitMetrics {
+  bloqueadas: IpSecretLimitEntry[]
+  fallos: IpSecretLimitEntry[]
+  totalBloqueadas: number
+  totalFallos: number
+}
+
+interface AccionReciente {
+  id: string
+  accion: 'telegram_secret_ip_desbloqueada' | 'webhook_metrics_reset'
+  /** IP desbloqueada, o 'rate-limit' en los reinicios. */
+  objetivo: string
+  descripcion: string
+  autor: string | null
+  fallosDescartados: number
+  fecha: string
+}
+
+type FiltroAccion = 'todo' | 'desbloqueo' | 'reinicio'
+
+const OPCIONES_FILTRO: { valor: FiltroAccion; etiqueta: string }[] = [
+  { valor: 'todo', etiqueta: 'Todo' },
+  { valor: 'desbloqueo', etiqueta: 'Desbloqueos' },
+  { valor: 'reinicio', etiqueta: 'Reinicios' },
+]
+
 interface WebhookStatusResponse {
   metrics: WebhookMetrics
+  /** Cortafuegos por IP de los secrets inválidos del webhook de Telegram. */
+  secretLimit?: SecretLimitMetrics
+  /** Desbloqueos y reinicios recientes leídos del audit log. */
+  historial?: AccionReciente[]
+  /** Cursor para pedir la página siguiente; `null` en la última. */
+  historialCursor?: string | null
+  /** Hay más páginas después de esta. */
+  historialHayMas?: boolean
+  /** Filtros que el servidor aplicó de verdad al historial. */
+  historialFiltros?: { accion: string | null; autor: string | null }
   isAdmin?: boolean
   processUptime: number
   processPid: number
@@ -59,6 +112,13 @@ function formatDate(date: string): string {
   // date viene en YYYY-MM-DD (UTC); se muestra tal cual con el día
   const [, m, d] = date.split('-')
   return `${d}/${m}`
+}
+
+function restante(segundos: number | null): string {
+  if (segundos === null) return '—'
+  if (segundos < 60) return `${segundos} s`
+  const mins = Math.ceil(segundos / 60)
+  return mins >= 60 ? `${Math.floor(mins / 60)} h ${mins % 60} min` : `${mins} min`
 }
 
 function shortChat(chatId: string): string {
@@ -89,12 +149,47 @@ export function WebhookStatusPanel() {
   const [data, setData] = useState<WebhookStatusResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Error de una acción (reset, desbloqueo): se muestra sin ocultar los datos,
+  // porque el estado cargado sigue siendo válido.
+  const [accionError, setAccionError] = useState<string | null>(null)
   const [resetting, setResetting] = useState(false)
+  const [desbloqueando, setDesbloqueando] = useState<string | null>(null)
+  const [filtroAccion, setFiltroAccion] = useState<FiltroAccion>('todo')
+  const [filtroAutor, setFiltroAutor] = useState('')
+  // Pila de cursores ya usados: `cursores[i]` es el cursor con el que se pidió la
+  // página i+1, así que la página actual es `cursores.length + 1`.
+  const [cursores, setCursores] = useState<string[]>([])
+  const cursorActual = cursores.length > 0 ? cursores[cursores.length - 1] : null
 
-  const fetchStatus = async () => {
+  // Los filtros y el cursor viajan al servidor: filtrar en el cliente la página
+  // ya recortada no encontraría casi nada. El ref permite que el sondeo
+  // periódico (creado una sola vez) use siempre la consulta vigente.
+  const consultaRef = useRef<{ accion: FiltroAccion; autor: string; cursor: string | null }>({
+    accion: 'todo',
+    autor: '',
+    cursor: null,
+  })
+  const primerRender = useRef(true)
+
+  useEffect(() => {
+    consultaRef.current = { accion: filtroAccion, autor: filtroAutor, cursor: cursorActual }
+  }, [filtroAccion, filtroAutor, cursorActual])
+
+  const urlEstado = () => {
+    const { accion, autor, cursor } = consultaRef.current
+    const params = new URLSearchParams()
+    if (accion !== 'todo') params.set('accion', accion)
+    const texto = autor.trim()
+    if (texto) params.set('autor', texto)
+    if (cursor) params.set('cursor', cursor)
+    const qs = params.toString()
+    return qs ? `/api/webhook-status?${qs}` : '/api/webhook-status'
+  }
+
+  const fetchStatus = async (silencioso = false) => {
     try {
-      setLoading(true)
-      const res = await fetch('/api/webhook-status')
+      if (!silencioso) setLoading(true)
+      const res = await fetch(urlEstado())
       if (res.ok) {
         const json = await res.json()
         setData(json)
@@ -112,28 +207,95 @@ export function WebhookStatusPanel() {
   const resetMetrics = async () => {
     if (!confirm('¿Reiniciar las métricas de rate-limit de hoy? Esta acción no se puede deshacer.')) return
     setResetting(true)
+    setAccionError(null)
     try {
       const res = await fetch('/api/webhook-status', { method: 'POST' })
       if (res.ok) {
         await fetchStatus()
       } else {
-        setError(`Reset: HTTP ${res.status}`)
+        setAccionError(`Reset: HTTP ${res.status}`)
       }
     } catch (e) {
-      setError('Error al reiniciar')
+      setAccionError('Error al reiniciar')
     } finally {
       setResetting(false)
     }
   }
 
+  const desbloquearIp = async (ip: string) => {
+    if (
+      !confirm(
+        `¿Desbloquear ${ip}? Volverá a poder enviar updates; si insiste con secrets inválidos se bloqueará otra vez.`
+      )
+    )
+      return
+    setDesbloqueando(ip)
+    setAccionError(null)
+    try {
+      const res = await fetch(`/api/webhook-status?ip=${encodeURIComponent(ip)}`, {
+        method: 'DELETE',
+      })
+      if (res.ok) {
+        await fetchStatus()
+      } else {
+        setAccionError(`Desbloquear: HTTP ${res.status}`)
+      }
+    } catch (e) {
+      setAccionError('Error al desbloquear')
+    } finally {
+      setDesbloqueando(null)
+    }
+  }
+
   useEffect(() => {
     fetchStatus()
-    const interval = setInterval(fetchStatus, 30000) // refresh cada 30s
+    const interval = setInterval(() => fetchStatus(true), 30000) // refresh cada 30s
     return () => clearInterval(interval)
   }, [])
 
+  // Al cambiar filtro o página se recarga sin parpadeo (el texto, con un
+  // pequeño retardo para no pedir en cada tecla). El primer render ya cargó.
+  useEffect(() => {
+    if (primerRender.current) {
+      primerRender.current = false
+      return
+    }
+    const t = setTimeout(() => fetchStatus(true), filtroAutor ? 350 : 0)
+    return () => clearTimeout(t)
+  }, [filtroAccion, filtroAutor, cursores])
+
+  // Cambiar de filtro invalida la paginación: los cursores son de otra lista.
+  const elegirFiltroAccion = (valor: FiltroAccion) => {
+    setCursores([])
+    setFiltroAccion(valor)
+  }
+
+  const cambiarAutor = (valor: string) => {
+    setCursores([])
+    setFiltroAutor(valor)
+  }
+
+  const quitarFiltros = () => {
+    setCursores([])
+    setFiltroAccion('todo')
+    setFiltroAutor('')
+  }
+
+  const paginaSiguiente = () => {
+    const cursor = data?.historialCursor
+    if (!cursor) return
+    setCursores((prev) => [...prev, cursor])
+  }
+
+  const paginaAnterior = () => {
+    setCursores((prev) => prev.slice(0, -1))
+  }
+
   const metrics = data?.metrics
   const maxDay = metrics?.byDay.reduce((max, d) => Math.max(max, d.total), 0) || 1
+  const hayFiltrosHistorial = filtroAccion !== 'todo' || filtroAutor.trim() !== ''
+  const numeroPagina = cursores.length + 1
+  const hayPaginaSiguiente = Boolean(data?.historialHayMas && data?.historialCursor)
 
   return (
     <Card className="border-none shadow-xl ring-1 ring-border/50 overflow-hidden">
@@ -146,7 +308,7 @@ export function WebhookStatusPanel() {
             <div>
               <CardTitle className="text-base font-bold">Estado del Webhook</CardTitle>
               <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
-                Mensajes rechazados con 429 por chat y día
+                Rechazos 429 por chat y bloqueos por IP
               </p>
             </div>
           </div>
@@ -167,7 +329,7 @@ export function WebhookStatusPanel() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={fetchStatus}
+              onClick={() => fetchStatus()}
               disabled={loading}
               className="h-8 w-8 p-0"
             >
@@ -187,6 +349,12 @@ export function WebhookStatusPanel() {
           </div>
         ) : (
           <div className="space-y-4">
+            {accionError && (
+              <div className="p-2.5 bg-red-50 border border-red-200 rounded-xl">
+                <p className="text-red-600 text-[11px] font-medium">{accionError}</p>
+              </div>
+            )}
+
             {/* Resumen de hoy */}
             <div className="grid grid-cols-3 gap-3">
               <div className="p-3 bg-slate-50 rounded-xl text-center">
@@ -238,6 +406,220 @@ export function WebhookStatusPanel() {
                 </div>
               )
             })()}
+
+            {/* Cortafuegos de secret por IP */}
+            <div>
+              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-2 px-1">
+                Secret del webhook (por IP)
+              </p>
+              {!data?.secretLimit ||
+              (data.secretLimit.bloqueadas.length === 0 && data.secretLimit.fallos.length === 0) ? (
+                <p className="text-xs text-slate-400 px-1">
+                  Sin secrets inválidos ni IPs bloqueadas.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {data.secretLimit.bloqueadas.map((entry) => (
+                    <div
+                      key={`bloqueada-${entry.ip}`}
+                      className="flex items-center gap-3 p-2.5 bg-rose-50 rounded-xl"
+                    >
+                      <ShieldAlert className="h-4 w-4 text-rose-500 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-rose-700 font-mono truncate">
+                          {entry.ip}
+                        </p>
+                        <p className="text-[10px] text-rose-500/80">
+                          bloqueada tras {entry.fallos} secrets inválidos
+                        </p>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className="bg-rose-100 text-rose-700 border-rose-200 text-[10px] font-semibold whitespace-nowrap"
+                      >
+                        {restante(entry.restanteSegundos)}
+                      </Badge>
+                      {data?.isAdmin && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => desbloquearIp(entry.ip)}
+                          disabled={desbloqueando === entry.ip}
+                          title={`Desbloquear ${entry.ip} (solo admin)`}
+                          className="h-7 px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-100 shrink-0"
+                        >
+                          <Unlock
+                            className={`h-3.5 w-3.5 ${desbloqueando === entry.ip ? 'animate-pulse' : ''}`}
+                          />
+                          <span className="text-[10px] font-semibold">Desbloquear</span>
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                  {data.secretLimit.fallos.map((entry) => (
+                    <div
+                      key={`fallos-${entry.ip}`}
+                      className="flex items-center gap-3 p-2.5 bg-slate-50 rounded-xl"
+                    >
+                      <ShieldAlert className="h-4 w-4 text-amber-500 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-slate-700 font-mono truncate">
+                          {entry.ip}
+                        </p>
+                        <p className="text-[10px] text-slate-400">
+                          aún sin bloquear · ventana {restante(entry.restanteSegundos)}
+                        </p>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] font-semibold whitespace-nowrap"
+                      >
+                        {entry.fallos} fallo{entry.fallos === 1 ? '' : 's'}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Últimas acciones del panel (audit log) */}
+            {data?.historial &&
+              (data.historial.length > 0 || hayFiltrosHistorial || Boolean(cursorActual)) && (
+              <div>
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-2 px-1">
+                  Últimas acciones (auditoría)
+                </p>
+
+                <div className="flex flex-wrap items-center gap-1.5 mb-2 px-1">
+                  {OPCIONES_FILTRO.map((opcion) => {
+                    const activo = filtroAccion === opcion.valor
+                    return (
+                      <button
+                        key={opcion.valor}
+                        type="button"
+                        onClick={() => elegirFiltroAccion(opcion.valor)}
+                        aria-pressed={activo}
+                        className={`px-2 py-1 rounded-lg text-[10px] font-semibold transition-colors ${
+                          activo
+                            ? 'bg-slate-800 text-white'
+                            : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                        }`}
+                      >
+                        {opcion.etiqueta}
+                      </button>
+                    )
+                  })}
+                  <div className="relative flex-1 min-w-[8rem]">
+                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
+                    <input
+                      value={filtroAutor}
+                      onChange={(e) => cambiarAutor(e.target.value)}
+                      placeholder="Filtrar por autor…"
+                      aria-label="Filtrar el historial por autor"
+                      className="w-full pl-7 pr-6 h-7 rounded-lg bg-slate-100 text-[11px] text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300"
+                    />
+                    {filtroAutor && (
+                      <button
+                        type="button"
+                        onClick={() => cambiarAutor('')}
+                        aria-label="Limpiar el filtro por autor"
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {data.historial.length === 0 ? (
+                  <div className="flex items-center justify-between gap-2 p-2.5 bg-slate-50 rounded-xl">
+                    <p className="text-[11px] text-slate-400">
+                      {hayFiltrosHistorial
+                        ? 'Sin acciones con esos filtros.'
+                        : 'Sin acciones en esta página.'}
+                    </p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={quitarFiltros}
+                      className="h-7 px-2 text-slate-600 hover:bg-slate-200 shrink-0"
+                    >
+                      <span className="text-[10px] font-semibold">Quitar filtros</span>
+                    </Button>
+                  </div>
+                ) : (
+                <div className="space-y-2">
+                  {data.historial.map((accion) => {
+                    const esDesbloqueo = accion.accion === 'telegram_secret_ip_desbloqueada'
+                    return (
+                      <div
+                        key={accion.id}
+                        className="flex items-center gap-3 p-2.5 bg-slate-50 rounded-xl"
+                      >
+                        <div
+                          className={`p-1.5 rounded-lg shrink-0 ${
+                            esDesbloqueo ? 'bg-sky-50' : 'bg-amber-50'
+                          }`}
+                        >
+                          {esDesbloqueo ? (
+                            <Unlock className="h-3.5 w-3.5 text-sky-600" />
+                          ) : (
+                            <RotateCcw className="h-3.5 w-3.5 text-amber-600" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-slate-700 truncate">
+                            {esDesbloqueo
+                              ? `Desbloqueo de ${accion.objetivo}`
+                              : 'Reinicio de métricas'}
+                          </p>
+                          <p className="text-[10px] text-slate-400 truncate">
+                            {accion.autor ?? 'Autor no registrado'}
+                            {esDesbloqueo && accion.fallosDescartados > 0
+                              ? ` · ${accion.fallosDescartados} fallo${
+                                  accion.fallosDescartados === 1 ? '' : 's'
+                                } descartado${accion.fallosDescartados === 1 ? '' : 's'}`
+                              : ''}
+                          </p>
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-mono whitespace-nowrap">
+                          {timeAgo(accion.fecha)}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+                )}
+
+                {(hayPaginaSiguiente || numeroPagina > 1) && (
+                  <div className="flex items-center justify-between gap-2 mt-2 px-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={paginaAnterior}
+                      disabled={numeroPagina === 1}
+                      aria-label="Página anterior del historial"
+                      className="h-7 px-2 text-slate-600 hover:bg-slate-200 disabled:opacity-40"
+                    >
+                      <span className="text-[10px] font-semibold">‹ Anterior</span>
+                    </Button>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      Página {numeroPagina}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={paginaSiguiente}
+                      disabled={!hayPaginaSiguiente}
+                      aria-label="Página siguiente del historial"
+                      className="h-7 px-2 text-slate-600 hover:bg-slate-200 disabled:opacity-40"
+                    >
+                      <span className="text-[10px] font-semibold">Siguiente ›</span>
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Top chats */}
             <div>

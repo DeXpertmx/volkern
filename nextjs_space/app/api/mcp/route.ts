@@ -22,7 +22,9 @@
  * 
  * Seguridad:
  * - Rate limiting: 100 req/min por API key
- * - Logging de auditoría en AiDecisionLog
+ * - tenantId y userId SOLO de la credencial: un valor distinto en el cuerpo
+ *   devuelve 403 y se audita (lib/mcp/request-identity.ts)
+ * - Logging de auditoría en AuditLog
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -37,6 +39,8 @@ import {
   MCPCallToolRequest,
   MCP_SERVER_INFO,
 } from '@/lib/mcp/mcp-handler';
+import { resolveMcpIdentity, auditMcpIdentityRejection } from '@/lib/mcp/request-identity';
+import { enforceToolGate } from '@/lib/mcp/tool-gate';
 
 export const dynamic = 'force-dynamic';
 
@@ -215,15 +219,80 @@ export async function POST(request: NextRequest) {
     }
 
     if (method === 'tools/call') {
+      const suppliedArgs: Record<string, unknown> = params?.arguments ?? {};
+
+      // Identidad: SOLO desde la credencial. Un tenantId/userId distinto en el
+      // cuerpo es un intento de cruce entre empresas → 403 auditado.
+      const identity = resolveMcpIdentity(auth, {
+        tenantId: suppliedArgs.tenantId,
+        userId: suppliedArgs.userId,
+      });
+      if (!identity.ok) {
+        await auditMcpIdentityRejection({
+          auth,
+          identity,
+          toolName: params?.name,
+          superficie: '/api/mcp',
+        });
+        return NextResponse.json(
+          {
+            jsonrpc: '2.0',
+            id: body.id || null,
+            error: { code: -32001, message: identity.message },
+          },
+          { status: 403 }
+        );
+      }
+
+      const argsResueltos = {
+        ...suppliedArgs,
+        tenantId: identity.tenantId,
+        userId: identity.userId,
+        source: 'mcp' as const,
+      };
+
+      const gate = await enforceToolGate({
+        tenantId: identity.tenantId,
+        userId: identity.userId,
+        roleName: auth.user?.role?.nombre ?? null,
+        toolName: params?.name,
+        args: argsResueltos,
+        via: '/api/mcp',
+      });
+
+      if (gate.kind === 'deny') {
+        return NextResponse.json(
+          {
+            jsonrpc: '2.0',
+            id: body.id || null,
+            error: { code: -32003, message: gate.reason },
+          },
+          { status: 403 }
+        );
+      }
+
+      if (gate.kind === 'ask') {
+        return NextResponse.json(
+          {
+            jsonrpc: '2.0',
+            id: body.id || null,
+            error: {
+              code: -32002,
+              message: gate.reason,
+              data: {
+                status: 'pending',
+                approvalId: gate.approvalId,
+                expiresAt: gate.expiresAt.toISOString(),
+              },
+            },
+          },
+          { status: 409 }
+        );
+      }
+
       const toolRequest: MCPCallToolRequest = {
         name: params?.name,
-        arguments: {
-          ...params?.arguments,
-          // Inyectar tenantId automáticamente si no viene
-          tenantId: params?.arguments?.tenantId || auth.tenant?.id,
-          userId: params?.arguments?.userId || auth.user?.id,
-          source: 'mcp',
-        },
+        arguments: argsResueltos,
       };
 
       const result = await handleCallTool(toolRequest);
@@ -237,15 +306,67 @@ export async function POST(request: NextRequest) {
 
     // Formato simplificado (compatibilidad)
     if (body.tool || body.name) {
+      const payload = body.arguments || body.payload || body.params || {};
+
+      // El tenant/usuario puede venir en la raíz o dentro de los argumentos:
+      // ambos son cuerpo del cliente y ambos se verifican contra la credencial.
+      const identity = resolveMcpIdentity(auth, {
+        tenantId: body.tenantId ?? payload.tenantId,
+        userId: body.userId ?? payload.userId,
+      });
+      if (!identity.ok) {
+        await auditMcpIdentityRejection({
+          auth,
+          identity,
+          toolName: body.tool || body.name,
+          superficie: '/api/mcp',
+        });
+        return NextResponse.json(
+          { error: identity.message, field: identity.field },
+          { status: 403 }
+        );
+      }
+
+      const argsResueltos = {
+        ...payload,
+        tenantId: identity.tenantId,
+        userId: identity.userId,
+        source: 'mcp' as const,
+      };
+
+      const gate = await enforceToolGate({
+        tenantId: identity.tenantId,
+        userId: identity.userId,
+        roleName: auth.user?.role?.nombre ?? null,
+        toolName: body.tool || body.name,
+        args: argsResueltos,
+        via: '/api/mcp',
+      });
+
+      if (gate.kind === 'deny') {
+        return NextResponse.json(
+          { success: false, error: gate.reason, tool: body.tool || body.name },
+          { status: 403 }
+        );
+      }
+
+      if (gate.kind === 'ask') {
+        return NextResponse.json(
+          {
+            success: false,
+            status: 'pending',
+            approvalId: gate.approvalId,
+            expiresAt: gate.expiresAt.toISOString(),
+            error: gate.reason,
+            tool: body.tool || body.name,
+          },
+          { status: 409 }
+        );
+      }
+
       const toolRequest: MCPCallToolRequest = {
         name: body.tool || body.name,
-        arguments: {
-          ...(body.arguments || body.payload || body.params || {}),
-          // Inyectar tenantId automáticamente
-          tenantId: body.tenantId || auth.tenant?.id,
-          userId: body.userId || auth.user?.id,
-          source: 'mcp',
-        },
+        arguments: argsResueltos,
       };
 
       const result = await handleCallTool(toolRequest);

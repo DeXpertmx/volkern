@@ -38,7 +38,7 @@ export const GET = withTenantAuth(async (request, auth) => {
       { status: 500 }
     )
   }
-})
+}, ['citas:read'])
 
 // PUT /api/disponibilidad - Actualizar horarios de disponibilidad
 export const PUT = withTenantAuth(async (request, auth) => {
@@ -72,4 +72,4 @@ export const PUT = withTenantAuth(async (request, auth) => {
       { status: 500 }
     )
   }
-})
+}, ['citas:write'])

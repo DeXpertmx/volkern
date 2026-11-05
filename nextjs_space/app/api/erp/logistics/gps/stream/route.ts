@@ -179,4 +179,4 @@ export const GET = withTenantAuth(async (request, auth) => {
       'X-Accel-Buffering': 'no',  // Deshabilitar buffering de nginx
     },
   })
-})
+}, ['erp:read'])

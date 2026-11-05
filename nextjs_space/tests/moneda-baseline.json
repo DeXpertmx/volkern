@@ -167,10 +167,6 @@
     "divisa": 9,
     "formato": 2
   },
-  "app/dashboard/cotizaciones/page.tsx": {
-    "divisa": 2,
-    "formato": 2
-  },
   "app/dashboard/cursos/[id]/page.tsx": {
     "divisa": 16,
     "formato": 0
@@ -206,10 +202,6 @@
   "app/dashboard/ventas/ordenes/page.tsx": {
     "divisa": 9,
     "formato": 1
-  },
-  "app/dashboard/ventas/pronosticos/page.tsx": {
-    "divisa": 1,
-    "formato": 2
   },
   "app/firma/[token]/FirmaPortalView.tsx": {
     "divisa": 1,

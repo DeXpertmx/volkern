@@ -14,4 +14,4 @@ export const POST = withTenantAuth(async (request, auth, { params }) => {
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
-});
+}, ['erp:write']);

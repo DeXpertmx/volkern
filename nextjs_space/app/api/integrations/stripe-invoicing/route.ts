@@ -17,7 +17,7 @@ export const GET = withTenantAuth(async (request, auth) => {
   } catch (error) {
     return NextResponse.json({ error: 'Error al obtener la integración' }, { status: 500 })
   }
-})
+}, ['settings:read'])
 
 export const POST = withTenantAuth(async (request, auth) => {
   try {
@@ -49,4 +49,4 @@ export const POST = withTenantAuth(async (request, auth) => {
   } catch (error) {
     return NextResponse.json({ error: 'Error al guardar la integración' }, { status: 500 })
   }
-})
+}, ['settings:write'])

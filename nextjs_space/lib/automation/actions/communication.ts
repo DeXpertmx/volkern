@@ -97,12 +97,18 @@ export async function sendTelegram(config: any, ctx: ActionContext, attempt = 1)
 
   try {
     const creds = await loadTelegramCredentials(tenantId)
-    const finalChatId = chatId || creds?.admin_chat_id
+    // Solo el bot PROPIO del tenant: sin él no se envía (el bot del sistema
+    // no lleva datos de tenants).
+    if (!creds?.bot_token) {
+      console.error('[Automation] El tenant no tiene bot de Telegram propio; no se envía')
+      return false
+    }
+    const finalChatId = chatId || creds.admin_chat_id
     if (!finalChatId) {
       console.error('[Automation] No chatId provided for sendTelegram')
       return false
     }
-    await sendTelegramMessage(finalChatId, processedMessage, creds?.bot_token)
+    await sendTelegramMessage(finalChatId, processedMessage, creds.bot_token)
     return true
   } catch (error) {
     console.error(`Error enviando Telegram (intento ${attempt}/${maxRetries + 1}):`, error)

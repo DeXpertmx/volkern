@@ -67,239 +67,89 @@ async function volkernRequest(
 }
 
 // ============================================
-// Tool Handlers
+// Ejecución de tools
 // ============================================
+//
+// El standalone NO ejecuta nada por su cuenta: reenvía `tools/call` al
+// endpoint MCP de Volkern (`/mcp`) con la API key del usuario.
+//
+// Antes llamaba a la API REST tool por tool (`/contacts`, `/leads`…). Eso era
+// un segundo camino de ejecución que no pasaba por ninguna decisión: la misma
+// credencial podía borrar un contacto desde Claude Desktop sin que el gate de
+// permisos lo supiera, y sin dejar la misma auditoría que `/mcp`.
+//
+// Reenviar a `/mcp` hace que herede, sin duplicar nada: identidad derivada de
+// la credencial, decisión por herramienta y rol, aprobación con bloqueo de
+// fila y registro en AuditLog.
 
-/**
- * El catálogo llama «etiquetas» (array o texto) a lo que POST/PATCH /leads
- * guarda en `tags` (CSV, el formato que parte la ficha del lead). Sin este
- * mapeo el MCP standalone aceptaba el campo y lo descartaba en silencio.
- */
-function conEtiquetasComoTags(args: Record<string, unknown>): Record<string, unknown> {
-  const { etiquetas, ...resto } = args;
-  if (etiquetas === undefined) return args;
-  const lista = (Array.isArray(etiquetas) ? etiquetas : String(etiquetas).split(","))
-    .map((t) => String(t).trim())
-    .filter(Boolean);
-  return lista.length > 0 ? { ...resto, tags: lista.join(",") } : resto;
+const VOLKERN_MCP_URL =
+  process.env.VOLKERN_MCP_URL ||
+  `${VOLKERN_API_URL.replace(/\/api\/?$/, "")}/mcp`;
+
+interface McpToolResult {
+  // La firma de índice es lo que exige el callback de `registerTool` del SDK
+  // v2 (resultado MCP abierto); sin ella el tipo concreto no es asignable.
+  [clave: string]: unknown;
+  content: Array<{ type: "text"; text: string }>;
+  isError?: boolean;
 }
 
 async function handleToolCall(
   name: string,
   args: Record<string, unknown>
-): Promise<unknown> {
-  switch (name) {
-    // CONTACTS
-    case "volkern_list_contacts": {
-      const params = new URLSearchParams();
-      if (args.tipo) params.append("tipo", String(args.tipo));
-      if (args.search) params.append("search", String(args.search));
-      if (args.page) params.append("page", String(args.page));
-      if (args.limit) params.append("limit", String(args.limit));
-      return volkernRequest(`/contacts?${params.toString()}`);
-    }
-    case "volkern_get_contact":
-      return volkernRequest(`/contacts/${args.contactId}`);
-    case "volkern_create_contact":
-      return volkernRequest("/contacts", "POST", args);
-    case "volkern_update_contact": {
-      const { contactId, ...data } = args;
-      return volkernRequest(`/contacts/${contactId}`, "PATCH", data);
-    }
-    case "volkern_delete_contact":
-      return volkernRequest(`/contacts/${args.contactId}`, "DELETE");
+): Promise<McpToolResult> {
+  const response = await fetch(VOLKERN_MCP_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${VOLKERN_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: { name, arguments: args },
+    }),
+  });
 
-    // LEADS
-    case "volkern_list_leads": {
-      const params = new URLSearchParams();
-      if (args.estado) params.append("estado", String(args.estado));
-      if (args.canal) params.append("canal", String(args.canal));
-      if (args.search) params.append("search", String(args.search));
-      if (args.page) params.append("page", String(args.page));
-      if (args.limit) params.append("limit", String(args.limit));
-      return volkernRequest(`/leads?${params.toString()}`);
-    }
-    case "volkern_get_lead":
-      return volkernRequest(`/leads/${args.leadId}`);
-    case "volkern_create_lead":
-      return volkernRequest("/leads", "POST", conEtiquetasComoTags(args));
-    case "volkern_update_lead": {
-      const { leadId, ...data } = args;
-      return volkernRequest(`/leads/${leadId}`, "PATCH", conEtiquetasComoTags(data));
-    }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const payload: any = await response.json().catch(() => null);
 
-    // APPOINTMENTS
-    case "volkern_check_disponibilidad": {
-      const params = new URLSearchParams();
-      params.append("fecha", String(args.fecha));
-      if (args.duracion) params.append("duracion", String(args.duracion));
-      return volkernRequest(`/citas/disponibilidad?${params.toString()}`);
-    }
-    case "volkern_list_citas": {
-      const params = new URLSearchParams();
-      if (args.estado) params.append("estado", String(args.estado));
-      if (args.tipo) params.append("tipo", String(args.tipo));
-      if (args.fecha) params.append("fecha", String(args.fecha));
-      if (args.fechaInicio) params.append("fechaInicio", String(args.fechaInicio));
-      if (args.fechaFin) params.append("fechaFin", String(args.fechaFin));
-      return volkernRequest(`/citas?${params.toString()}`);
-    }
-    case "volkern_create_cita":
-      return volkernRequest("/citas", "POST", args);
-    case "volkern_update_cita": {
-      const { citaId, ...data } = args;
-      return volkernRequest(`/citas/${citaId}`, "PATCH", data);
-    }
-    case "volkern_cita_accion":
-      return volkernRequest("/citas/accion", "POST", args);
-
-    // CATALOG (ENHANCED)
-    case "volkern_list_catalogo": {
-      const params = new URLSearchParams();
-      if (args.tipo) params.append("tipo", String(args.tipo));
-      if (args.activo !== undefined) params.append("activo", String(args.activo));
-      if (args.categoria) params.append("categoria", String(args.categoria));
-      if (args.etiqueta) params.append("etiqueta", String(args.etiqueta));
-      if (args.search) params.append("search", String(args.search));
-      if (args.page) params.append("page", String(args.page));
-      if (args.limit) params.append("limit", String(args.limit));
-      return volkernRequest(`/catalogo?${params.toString()}`);
-    }
-    case "volkern_get_catalogo_item":
-      return volkernRequest(`/catalogo/${args.itemId}`);
-    case "volkern_create_catalogo_item":
-      return volkernRequest("/catalogo", "POST", args);
-    case "volkern_update_catalogo_item": {
-      const { itemId, ...data } = args;
-      return volkernRequest(`/catalogo/${itemId}`, "PATCH", data);
-    }
-    case "volkern_search_catalogo": {
-      const params = new URLSearchParams();
-      params.append("search", String(args.query));
-      if (args.tipo) params.append("tipo", String(args.tipo));
-      if (args.limit) params.append("limit", String(args.limit));
-      return volkernRequest(`/catalogo?${params.toString()}`);
-    }
-
-    // SERVICES (LEGACY)
-    case "volkern_list_servicios": {
-      const params = new URLSearchParams();
-      if (args.activo !== undefined) params.append("activo", String(args.activo));
-      return volkernRequest(`/servicios?${params.toString()}`);
-    }
-    case "volkern_get_servicio":
-      return volkernRequest(`/servicios/${args.servicioId}`);
-
-    // TASKS
-    case "volkern_create_task": {
-      const { leadId, ...taskData } = args;
-      return volkernRequest(`/leads/${leadId}/tasks`, "POST", taskData);
-    }
-    case "volkern_list_tasks":
-      return volkernRequest(`/leads/${args.leadId}/tasks`);
-    case "volkern_complete_task":
-      return volkernRequest(`/tasks/${args.taskId}`, "PATCH", { completada: true });
-
-    // MESSAGING
-    case "volkern_send_whatsapp":
-      return volkernRequest("/mensajes/enviar", "POST", args);
-    case "volkern_list_conversaciones": {
-      const params = new URLSearchParams();
-      if (args.leadId) params.append("leadId", String(args.leadId));
-      if (args.page) params.append("page", String(args.page));
-      if (args.limit) params.append("limit", String(args.limit));
-      return volkernRequest(`/mensajes/conversaciones?${params.toString()}`);
-    }
-
-    // INTERACTIONS
-    case "volkern_list_interactions":
-      return volkernRequest(`/leads/${args.leadId}/interactions`);
-    case "volkern_create_interaction": {
-      const { leadId, ...interactionData } = args;
-      return volkernRequest(`/leads/${leadId}/interactions`, "POST", interactionData);
-    }
-
-    // NOTES
-    case "volkern_list_notes":
-      return volkernRequest(`/leads/${args.leadId}/notes`);
-    case "volkern_create_note": {
-      const { leadId: noteLeadId, ...noteData } = args;
-      return volkernRequest(`/leads/${noteLeadId}/notes`, "POST", noteData);
-    }
-
-    // DEALS
-    case "volkern_list_deals": {
-      const params = new URLSearchParams();
-      if (args.etapa) params.append("etapa", String(args.etapa));
-      if (args.prioridad) params.append("prioridad", String(args.prioridad));
-      if (args.leadId) params.append("leadId", String(args.leadId));
-      if (args.contactId) params.append("contactId", String(args.contactId));
-      if (args.search) params.append("search", String(args.search));
-      if (args.page) params.append("page", String(args.page));
-      if (args.limit) params.append("limit", String(args.limit));
-      return volkernRequest(`/deals?${params.toString()}`);
-    }
-    case "volkern_create_deal":
-      return volkernRequest("/deals", "POST", args);
-
-    // COTIZACIONES
-    case "volkern_create_cotizacion":
-      return volkernRequest("/cotizaciones/from-catalog", "POST", args);
-
-    // ÓRDENES DE VENTA
-    case "volkern_list_ordenes_venta": {
-      const params = new URLSearchParams();
-      if (args.estado) params.append("estado", String(args.estado));
-      if (args.leadId) params.append("leadId", String(args.leadId));
-      if (args.contactId) params.append("contactId", String(args.contactId));
-      if (args.dealId) params.append("dealId", String(args.dealId));
-      if (args.contratoId) params.append("contratoId", String(args.contratoId));
-      if (args.fechaDesde) params.append("fechaDesde", String(args.fechaDesde));
-      if (args.fechaHasta) params.append("fechaHasta", String(args.fechaHasta));
-      if (args.search) params.append("search", String(args.search));
-      if (args.page) params.append("page", String(args.page));
-      if (args.limit) params.append("limit", String(args.limit));
-      return volkernRequest(`/ordenes-venta?${params.toString()}`);
-    }
-    case "volkern_get_orden_venta":
-      return volkernRequest(`/ordenes-venta/${args.ordenId}`);
-    case "volkern_create_orden_from_cotizacion":
-      return volkernRequest("/ordenes-venta/from-cotizacion", "POST", args);
-
-    // CONTRATOS
-    case "volkern_create_contrato_from_cotizacion":
-      return volkernRequest("/contratos/from-cotizacion", "POST", args);
-
-    // FINANCE (ERP)
-    case "volkern_get_financial_dashboard": {
-      const params = new URLSearchParams();
-      if (args.months) params.append("months", String(args.months));
-      return volkernRequest(`/erp/finance/consolidation?${params.toString()}`);
-    }
-    case "volkern_verify_vault_integrity":
-      return volkernRequest("/erp/finance/integrity");
-    case "volkern_calculate_tax_provisions": {
-      const params = new URLSearchParams();
-      params.append("country", String(args.country));
-      return volkernRequest(`/erp/finance/taxes?${params.toString()}`);
-    }
-
-    // INVENTORY (MRP)
-    case "volkern_process_inventory_consumption":
-      return volkernRequest("/erp/inventory/consumption", "POST", args);
-    case "volkern_get_inventory_health": {
-      const params = new URLSearchParams();
-      if (args.itemId) params.append("catalogoItemId", String(args.itemId));
-      return volkernRequest(`/erp/inventory?${params.toString()}`);
-    }
-
-    // PRODUCTION
-    case "volkern_report_production_scrap":
-      return volkernRequest("/erp/production/scrap", "POST", args);
-
-    default:
-      throw new Error(`Unknown tool: ${name}`);
+  if (response.ok && payload?.result) {
+    return payload.result as McpToolResult;
   }
+
+  // 409: hace falta aprobación humana y NO se ha ejecutado nada. Se devuelve
+  // como resultado legible en vez de como error de transporte, para que el
+  // modelo lo explique en lugar de reintentar en bucle.
+  if (response.status === 409) {
+    const data = payload?.error?.data ?? {};
+    return {
+      content: [
+        {
+          type: "text",
+          text:
+            "Requiere aprobación de un responsable. No se ha ejecutado nada.\n" +
+            `Solicitud: ${data.approvalId ?? "(sin id)"}\n` +
+            `Motivo: ${payload?.error?.message ?? "acción sensible"}\n` +
+            `Caduca: ${data.expiresAt ?? "(sin fecha)"}\n` +
+            "Un responsable debe resolverla en Volkern; reintentar no la ejecuta.",
+        },
+      ],
+    };
+  }
+
+  const message =
+    payload?.error?.message ?? `Volkern MCP error (${response.status})`;
+  return {
+    content: [
+      {
+        type: "text",
+        text: `${response.status === 403 ? "Denegado" : "Error"}: ${message}`,
+      },
+    ],
+    isError: true,
+  };
 }
 
 // ============================================
@@ -326,10 +176,9 @@ function createVolkernServer(): McpServer {
       async (args: unknown) => {
         const toolArgs = (args ?? {}) as Record<string, unknown>;
         try {
-          const result = await handleToolCall(tool.name, toolArgs);
-          return {
-            content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-          };
+          // El resultado ya viene con la forma MCP ({content, isError}): el
+          // endpoint /mcp de Volkern decide, ejecuta y audita.
+          return await handleToolCall(tool.name, toolArgs);
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error);
           return {

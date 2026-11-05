@@ -12,4 +12,4 @@ export const POST = withTenantAuth(async (req, auth, params) => {
     console.error('[Expense Classify] Error:', error);
     return NextResponse.json({ error: error.message || 'Error al clasificar gasto' }, { status: 500 });
   }
-});
+}, ['accounting:write']);

@@ -18,7 +18,7 @@ const ESTADOS_VALIDOS = ['pendiente', 'pagado', 'parcial', 'reembolsado', 'falli
 // Marca un pago como cobrado, pendiente o reembolsado (y ajusta su importe).
 export async function PATCH(req: NextRequest, ctx: Params) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:write']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     const sinPermiso = exigirPermisoHospitality(auth, 'finanzas.gestionar');
     if (sinPermiso) return sinPermiso;
@@ -99,7 +99,7 @@ export async function PATCH(req: NextRequest, ctx: Params) {
 // porque se deriva de los pagos que quedan.
 export async function DELETE(req: NextRequest, ctx: Params) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:write']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     const sinPermiso = exigirPermisoHospitality(auth, 'finanzas.gestionar');
     if (sinPermiso) return sinPermiso;

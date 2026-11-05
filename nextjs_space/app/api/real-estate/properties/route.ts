@@ -105,7 +105,7 @@ export const GET = withTenantAuth(async (req, auth) => {
       { status: 500 }
     );
   }
-});
+}, ['real-estate:read']);
 
 /**
  * Valida un mapa de contadores para `habitaciones_detalle`/`camas_detalle`.
@@ -283,4 +283,4 @@ export const POST = withTenantAuth(async (req, auth) => {
       { status: 500 }
     );
   }
-});
+}, ['real-estate:write']);

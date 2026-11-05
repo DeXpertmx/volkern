@@ -25,4 +25,4 @@ export const PATCH = withTenantAuth(async (request, auth, { params }) => {
       { status: error.message?.includes('no encontrado') ? 404 : 400 }
     )
   }
-})
+}, ['erp:write'])

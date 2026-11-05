@@ -16,7 +16,7 @@ const TIPOS_VALIDOS = ['alojamiento', 'limpieza', 'extra', 'otro'];
 // GET /api/hospitality/reservations/[id]/items — líneas de desglose
 export async function GET(req: NextRequest, ctx: Params) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:read']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     const sinPermiso = exigirPermisoHospitality(auth, 'finanzas.ver');
     if (sinPermiso) return sinPermiso;
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest, ctx: Params) {
 // Body: { tipo, concepto, cantidad?, importeUnitario }
 export async function POST(req: NextRequest, ctx: Params) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:write']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     const sinPermiso = exigirPermisoHospitality(auth, 'finanzas.gestionar');
     if (sinPermiso) return sinPermiso;

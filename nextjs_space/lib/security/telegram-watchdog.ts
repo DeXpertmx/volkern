@@ -1,5 +1,30 @@
-import { sendTelegramMessage, loadTelegramCredentials } from '../telegram';
+import { loadTelegramCredentials } from '../telegram';
 import { prisma } from '../db';
+import { chatVinculadoSoloA } from '../telegram/context-resolver';
+import { sendBotMessage } from '../telegram/quick-replies';
+
+/**
+ * Credenciales con las que este watchdog puede avisar a un tenant.
+ *
+ * Solo el bot y el chat del PROPIO tenant: un security brief lleva nombre de
+ * empleado y datos de nómina de una empresa, así que ni sale por el bot del
+ * sistema ni puede acabar en el chat de otra (TELEGRAM_ARQUITECTURA.md §1).
+ */
+async function credencialesDelTenant(tenantId: string) {
+  const creds = await loadTelegramCredentials(tenantId);
+  const botToken = creds.bot_token;
+  const chatId = creds.admin_chat_id;
+
+  if (!botToken) return { ok: false as const, motivo: 'sin bot propio' };
+  if (!chatId) return { ok: false as const, motivo: 'sin chat de administración' };
+
+  // Un chat = un tenant: si el chat ya está vinculado a otra empresa, no se envía.
+  if (!(await chatVinculadoSoloA(chatId, tenantId))) {
+    return { ok: false as const, motivo: 'el chat está vinculado a otro tenant' };
+  }
+
+  return { ok: true as const, botToken, chatId };
+}
 
 export class TelegramWatchdog {
   /**
@@ -27,10 +52,12 @@ export class TelegramWatchdog {
     const config = (tenant?.configuracion as any) || {};
     if (config?.notifications?.disableTelegramWatchdog) return;
 
-    // 3. Cargar credenciales del tenant
-    const creds = await (loadTelegramCredentials as any)();
-    if (!(creds as any)?.chatId) {
-      console.warn(`[Watchdog] No se pudo enviar alerta de Telegram: Sin chatId configurado para tenant ${tenantId}`);
+    // 3. Credenciales del propio tenant (nunca las de plataforma)
+    const destino = await credencialesDelTenant(tenantId);
+    if (!destino.ok) {
+      console.warn(
+        `[Watchdog] Security Brief no enviado (${destino.motivo}) para tenant ${tenantId}`
+      );
       return;
     }
 
@@ -71,12 +98,17 @@ ${icon} *VOLKERN SECURITY BRIEFING* ${icon}
 
     // 5. Enviar
     try {
-      await (sendTelegramMessage as any)({
-        tenantId,
-        text: message,
-        parseMode: 'Markdown'
-      });
-      
+      // `sendBotMessage` manda en Markdown (el brief usa *negrita* e _cursiva_) y
+      // reintenta en texto plano si Telegram rechaza el parseo. Antes se llamaba
+      // a `sendTelegramMessage` con la firma equivocada —un objeto como `chatId`—
+      // y, de haber llegado, el `parse_mode` sería HTML: las marcas saldrían
+      // literales.
+      const envio = await sendBotMessage(destino.chatId, message, destino.botToken);
+      if (!envio.success) {
+        console.error('[Watchdog] Error al enviar Security Brief:', envio.error);
+        return;
+      }
+
       // Registrar en el Trust Protocol
       await prisma.systemAlert.create({
         data: {
@@ -94,8 +126,13 @@ ${icon} *VOLKERN SECURITY BRIEFING* ${icon}
    */
   static async sendLeadAlert(tenantId: string, lead: { name: string, email: string, source: string }) {
     try {
-      const creds = await (loadTelegramCredentials as any)();
-      if (!(creds as any)?.chatId) return;
+      const destino = await credencialesDelTenant(tenantId);
+      if (!destino.ok) {
+        console.warn(
+          `[Watchdog] Aviso de lead no enviado (${destino.motivo}) para tenant ${tenantId}`
+        );
+        return;
+      }
 
       const message = `
 🎯 *NUEVO LEAD CAPTURADO* 🎯
@@ -106,11 +143,10 @@ ${icon} *VOLKERN SECURITY BRIEFING* ${icon}
 _Acción Requerida: Inicia secuencia de Nurturing en el Marketing Hub._
 `.trim();
 
-      await (sendTelegramMessage as any)({
-        tenantId,
-        text: message,
-        parseMode: 'Markdown'
-      });
+      const envio = await sendBotMessage(destino.chatId, message, destino.botToken);
+      if (!envio.success) {
+        console.error('[Watchdog] Error al enviar alerta de lead:', envio.error);
+      }
     } catch (error) {
       console.error('[Watchdog] Error al enviar alerta de lead:', error);
     }

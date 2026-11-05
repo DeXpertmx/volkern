@@ -76,6 +76,13 @@ const h = vi.hoisted(() => {
       findMany: async () => [],
     },
     auditLog: { create: async () => ({ id: 'audit-1' }) },
+    // Gate MCP: sin overrides y sin aprobaciones en este fixture.
+    mcpToolCapability: { findMany: async () => [] },
+    mcpApprovalRequest: {
+      create: async (a: any) => ({ id: 'ap-test', ...a.data }),
+      findFirst: async () => null,
+      update: async () => ({}),
+    },
   }
 
   return { TENANT, USER_ID, lead, capturado, prisma }
@@ -95,10 +102,13 @@ vi.mock('@/lib/db', () => ({
 
 vi.mock('@/lib/api-key-auth', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
+  // Una credencial real siempre trae el rol (authenticateRequest lo incluye
+  // en el select, por sesión y por API key): sin él, el gate trataría al
+  // usuario como rol personalizado y pediría aprobación para escribir.
   authenticateRequest: vi.fn(async () => ({
     valid: true,
     tenant: { id: h.TENANT },
-    user: { id: h.USER_ID },
+    user: { id: h.USER_ID, role: { nombre: 'Admin' } },
     apiKey: null,
   })),
 }))

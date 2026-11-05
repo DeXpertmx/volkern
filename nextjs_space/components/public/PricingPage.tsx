@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { VERTICAL_PLANS, getVerticalPlanPrice } from '@/lib/vertical-plans';
 import {
+  CRM_ENTRY_PRICE,
   CRM_LADDER_SEATS,
   CRM_MAX_SELF_SERVE_SEATS,
   CRM_TIERS,
@@ -13,7 +14,13 @@ import {
   type CrmInterval,
   type CrmPriceResult,
 } from '@/lib/crm-pricing';
-import { MONEDA_PLATAFORMA, formatearImporte } from '@/lib/moneda';
+import {
+  MONEDA_PLATAFORMA,
+  formatearImporte,
+  formatearMedida,
+  formatearNumero,
+  simboloMoneda,
+} from '@/lib/moneda';
 import { Button } from '@/components/ui/button';
 import {
   ArrowRight, Zap, Home, GraduationCap, Calculator,
@@ -53,12 +60,15 @@ const TABLA_VOLUMEN: Array<{
   ),
 }));
 
+/** Signo del euro de la plataforma, sin escribirlo a mano en cada etiqueta. */
+const SIGNO = simboloMoneda(MONEDA_PLATAFORMA);
+
+/** Precio medio por usuario de un equipo de mil, con facturación anual. */
+const PRECIO_MEDIO_MIL = calcularPrecioCrm({ tier: 'esencial', interval: 'yearly', seats: 1000 }).perUser;
+
 /** Precio por usuario en formato español: 12 → «12», 8.36 → «8,36». */
 function formatearPorUsuario(valor: number): string {
-  return new Intl.NumberFormat('es-ES', {
-    minimumFractionDigits: Number.isInteger(valor) ? 0 : 2,
-    maximumFractionDigits: 2,
-  }).format(valor);
+  return formatearMedida(valor, 2);
 }
 
 /* ─── Vertical definitions ─────────────────────────────────────────────── */
@@ -214,7 +224,9 @@ export default function PricingPage() {
                     Precio por usuario, <span className="text-cyan-400">no por empresa</span>
                   </h2>
                   <p className="text-slate-400 leading-relaxed">
-                    Elige cuántos comerciales van a usar el CRM y qué necesitan hacer. Pagas por usuario: 12 € con un comercial y unos 8 € de media con mil, en facturación anual.
+                    Elige cuántos comerciales van a usar el CRM y qué necesitan hacer. Pagas por usuario:{' '}
+                    {formatearImporte(CRM_ENTRY_PRICE, MONEDA_PLATAFORMA, 0)} con un comercial y unos{' '}
+                    {formatearImporte(PRECIO_MEDIO_MIL, MONEDA_PLATAFORMA, 0)} de media con mil, en facturación anual.
                   </p>
                 </div>
 
@@ -274,7 +286,7 @@ export default function PricingPage() {
 
                       <div className="flex items-baseline gap-1">
                         <span className="text-4xl font-black text-white">{formatearPorUsuario(precio.perUser)}</span>
-                        <span className="text-sm text-slate-400">€ /usuario/mes</span>
+                        <span className="text-sm text-slate-400">{SIGNO} /usuario/mes</span>
                       </div>
                       <p className="text-xs text-slate-500 mt-1">
                         {precio.custom
@@ -351,12 +363,12 @@ export default function PricingPage() {
                                 onClick={() => setCrmSeats(seats)}
                                 className={`font-bold tabular-nums hover:text-cyan-400 transition-colors ${activo ? 'text-cyan-400' : 'text-white'}`}
                               >
-                                {seats.toLocaleString('es-ES')}
+                                {formatearNumero(seats)}
                               </button>
                             </td>
                             {precios.map((precio) => (
                               <td key={precio.tier.id} className="px-4 py-3 text-right tabular-nums text-slate-300">
-                                {precio.perUser.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                                {formatearImporte(precio.perUser, MONEDA_PLATAFORMA, 2)}
                               </td>
                             ))}
                             <td className="px-6 py-3 text-right tabular-nums text-emerald-400">
@@ -371,7 +383,7 @@ export default function PricingPage() {
               </div>
 
               <p className="text-xs text-slate-500 mt-5 leading-relaxed">
-                Precios sin IVA. La facturación anual equivale a diez mensualidades del precio mensual. El descuento por volumen se aplica por tramos: 10 % de 10 a 24 usuarios, 15 % de 25 a 49, 20 % de 50 a 99, 25 % de 100 a 249, 30 % de 250 a 499, 35 % de 500 a 999 y 40 % a partir de mil. Hasta {CRM_MAX_SELF_SERVE_SEATS.toLocaleString('es-ES')} usuarios se contrata en línea; por encima, precio a medida.
+                Precios sin IVA. La facturación anual equivale a diez mensualidades del precio mensual. El descuento por volumen se aplica por tramos: 10 % de 10 a 24 usuarios, 15 % de 25 a 49, 20 % de 50 a 99, 25 % de 100 a 249, 30 % de 250 a 499, 35 % de 500 a 999 y 40 % a partir de mil. Hasta {formatearNumero(CRM_MAX_SELF_SERVE_SEATS)} usuarios se contrata en línea; por encima, precio a medida.
               </p>
             </div>
           </div>

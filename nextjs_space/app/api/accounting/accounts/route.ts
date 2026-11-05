@@ -19,4 +19,4 @@ export const GET = withTenantAuth(async (req, auth) => {
   });
 
   return NextResponse.json(accounts);
-});
+}, ['accounting:read']);

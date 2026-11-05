@@ -33,4 +33,4 @@ export const GET = withTenantAuth(async (req, auth) => {
     console.error('Error in Playbook API:', error);
     return NextResponse.json({ success: false, error: 'Internal Server Error' }, { status: 500 });
   }
-});
+}, ['analytics:read']);

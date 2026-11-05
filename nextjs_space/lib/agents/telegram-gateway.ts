@@ -365,10 +365,12 @@ export class TelegramGatewayAgent {
   ): Promise<boolean> {
     try {
       const config = await this.getChatbotConfig(tenantId);
-      const botToken = config?.botToken || process.env.TELEGRAM_BOT_TOKEN;
+      // Solo el bot del propio tenant: el TELEGRAM_BOT_TOKEN del sistema no
+      // contesta datos de tenants (TELEGRAM_ARQUITECTURA.md §1).
+      const botToken = config?.botToken || null;
 
       if (!botToken) {
-        console.error('[TelegramGateway] No bot token found');
+        console.error(`[TelegramGateway] Tenant ${tenantId} sin bot de Telegram propio; no se envía el mensaje`);
         return false;
       }
 

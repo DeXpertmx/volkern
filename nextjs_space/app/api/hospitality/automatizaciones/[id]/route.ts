@@ -9,7 +9,7 @@ import { HOSPITALITY_TRIGGERS, HOSPITALITY_ACTION_TYPES } from '../route';
 /** PATCH /api/hospitality/automatizaciones/[id] — editar/activar/desactivar. */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:write']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
     const sinPermiso = exigirPermisoHospitality(auth, 'automatizaciones.gestionar');
@@ -64,7 +64,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 /** DELETE /api/hospitality/automatizaciones/[id] — eliminar una regla del tenant. */
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:write']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
     const sinPermiso = exigirPermisoHospitality(auth, 'automatizaciones.gestionar');

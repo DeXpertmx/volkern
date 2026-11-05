@@ -390,4 +390,4 @@ export const POST = withTenantAuth(async (req, auth) => {
     console.error('[ExpenseScan] Error:', error)
     return NextResponse.json({ error: 'Error al procesar la imagen' }, { status: 500 })
   }
-})
+}, ['erp:write'])

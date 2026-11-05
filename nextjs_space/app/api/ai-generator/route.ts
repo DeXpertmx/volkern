@@ -100,4 +100,4 @@ export const POST = withTenantAuth(async (req, auth) => {
     console.error('[Gemini AI] Error:', error);
     return NextResponse.json({ error: 'Error interno en el generador de IA' }, { status: 500 });
   }
-});
+}, ['skills:execute']);

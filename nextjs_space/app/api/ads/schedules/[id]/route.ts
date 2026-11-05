@@ -20,7 +20,7 @@ export const GET = withTenantAuth(async (req, auth, { params }: any) => {
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-});
+}, ['ads:read']);
 
 export const PATCH = withTenantAuth(async (req, auth, { params }: any) => {
   try {
@@ -50,7 +50,7 @@ export const PATCH = withTenantAuth(async (req, auth, { params }: any) => {
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-});
+}, ['ads:write']);
 
 export const DELETE = withTenantAuth(async (req, auth, { params }: any) => {
   try {
@@ -65,4 +65,4 @@ export const DELETE = withTenantAuth(async (req, auth, { params }: any) => {
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-});
+}, ['ads:write']);

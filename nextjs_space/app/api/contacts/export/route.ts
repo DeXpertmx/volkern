@@ -66,4 +66,4 @@ export const GET = withTenantAuth(async (request, auth) => {
     console.error('[GET /api/contacts/export] Error:', error)
     return NextResponse.json({ error: 'Error al exportar contactos' }, { status: 500 })
   }
-})
+}, ['contacts:read'])

@@ -27,4 +27,4 @@ export const GET = withTenantAuth(async (request, auth) => {
     console.error('[InventoryHealthAPI] Error:', error);
     return NextResponse.json({ error: 'Error al auditar inventario' }, { status: 500 });
   }
-});
+}, ['inventory:read']);

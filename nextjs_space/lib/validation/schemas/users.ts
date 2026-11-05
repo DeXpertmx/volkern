@@ -1,13 +1,9 @@
 import { z } from 'zod';
 import { CommonSchemas } from '../common';
-
-/**
- * Regex para contraseña segura: mayúsculas, minúsculas, caracter especial, mínimo 8 chars
- */
-const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$/;
+import { PASSWORD_MIN_LENGTH, PASSWORD_REGEX } from '../password';
 
 const PasswordSchema = z.string()
-  .min(8, 'La contraseña debe tener al menos 8 caracteres')
+  .min(PASSWORD_MIN_LENGTH, `La contraseña debe tener al menos ${PASSWORD_MIN_LENGTH} caracteres`)
   .regex(PASSWORD_REGEX, 'La contraseña debe incluir mayúsculas, minúsculas y al menos un carácter especial');
 
 // ─────────────────────────────────────────────

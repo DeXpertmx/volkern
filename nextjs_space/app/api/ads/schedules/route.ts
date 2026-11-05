@@ -27,7 +27,7 @@ export const GET = withTenantAuth(async (req, auth) => {
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-});
+}, ['ads:read']);
 
 export const POST = withTenantAuth(async (req, auth) => {
   try {
@@ -55,4 +55,4 @@ export const POST = withTenantAuth(async (req, auth) => {
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-});
+}, ['ads:write']);

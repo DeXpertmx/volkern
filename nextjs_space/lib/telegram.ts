@@ -74,13 +74,21 @@ export async function sendTelegramMessage(
 /**
  * Carga las credenciales de Telegram para un tenant.
  *
- * Resolución en cascada:
+ * Resolución en cascada (solo credenciales DEL PROPIO tenant):
  * 1) Integration legacy (credenciales.bot_token en texto plano)
  * 2) Channel moderno (config.botToken cifrado con AES)
- * 3) Variables de entorno como último recurso
+ * 3) Nada → `bot_token` y `admin_chat_id` a `null`
  *
- * Si no se pasa tenantId, se devuelven solo las variables de entorno
- * (compatibilidad con llamadores históricos).
+ * **No hay fallback a las variables de entorno cuando hay tenantId**: ese
+ * fallback era lo que hacía que notificaciones de cualquier tenant sin bot
+ * propio cayeran en el chat personal `TELEGRAM_ADMIN_CHAT_ID` y salieran por
+ * el bot del sistema, que según `documentacion_tecnica/TELEGRAM_ARQUITECTURA.md`
+ * nunca debe recibir datos de un tenant. Un tenant sin Telegram propio no
+ * envía por Telegram.
+ *
+ * Si NO se pasa tenantId (uso de plataforma: avisos de sistema, colas de
+ * infraestructura) se devuelven las variables de entorno, que no llevan datos
+ * de tenants.
  */
 export async function loadTelegramCredentials(tenantId?: string | null) {
   if (tenantId) {
@@ -116,8 +124,13 @@ export async function loadTelegramCredentials(tenantId?: string | null) {
     } catch (e) {
       console.error('[telegram] Error resolviendo credenciales del tenant:', e);
     }
+
+    // Tenant sin bot/chat propios: nada de entorno. Quien llame con tenantId
+    // debe comprobar el resultado y no enviar por Telegram.
+    return { bot_token: null, admin_chat_id: null };
   }
 
+  // Sin tenantId → solo entorno (uso de plataforma, sin datos de tenants).
   return {
     bot_token: process.env.TELEGRAM_BOT_TOKEN,
     admin_chat_id: process.env.TELEGRAM_ADMIN_CHAT_ID,

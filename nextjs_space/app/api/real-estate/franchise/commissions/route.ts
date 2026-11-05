@@ -148,4 +148,4 @@ export const GET = withTenantAuth(async (req, auth) => {
       { status: 500 }
     );
   }
-});
+}, ['real-estate:read']);

@@ -15,7 +15,7 @@ export const GET = withTenantAuth(async (request, auth) => {
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-});
+}, ['erp:read']);
 
 export const POST = withTenantAuth(async (request, auth) => {
   try {
@@ -25,4 +25,4 @@ export const POST = withTenantAuth(async (request, auth) => {
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
-});
+}, ['erp:write']);

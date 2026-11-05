@@ -36,7 +36,7 @@ export const GET = withTenantAuth(async (req, auth, { params }) => {
       { status: 500 }
     );
   }
-});
+}, ['real-estate:read']);
 
 /**
  * PATCH /api/real-estate/captaciones/[id]
@@ -81,7 +81,7 @@ export const PATCH = withTenantAuth(async (req, auth, { params }) => {
       { status: 500 }
     );
   }
-});
+}, ['real-estate:write']);
 
 /**
  * DELETE /api/real-estate/captaciones/[id]
@@ -110,4 +110,4 @@ export const DELETE = withTenantAuth(async (req, auth, { params }) => {
       { status: 500 }
     );
   }
-});
+}, ['real-estate:write']);

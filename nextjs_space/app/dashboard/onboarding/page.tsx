@@ -37,23 +37,6 @@ export default function OnboardingGenesisPage() {
   const [masterKey, setMasterKey] = useState('');
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [detectingGps, setDetectingGps] = useState(false);
-  const [user, setUser] = useState<any>(null);
-
-  useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const res = await fetch('/api/users/me');
-        if (res.ok) {
-          const data = await res.json();
-          setUser(data);
-        }
-      } catch (err) {
-        console.error('Error al cargar info de usuario:', err);
-      }
-    };
-    fetchUser();
-  }, []);
-
   const [botToken, setBotToken] = useState('');
   const [botUsername, setBotUsername] = useState('');
   const [botConfigured, setBotConfigured] = useState(false);
@@ -62,13 +45,46 @@ export default function OnboardingGenesisPage() {
   const [isSubdomainAvailable, setIsSubdomainAvailable] = useState(true);
   const [checkingSubdomain, setCheckingSubdomain] = useState(false);
 
-  // Derivados
-  const watchdogUrl = botUsername 
-    ? `tg://resolve?domain=${botUsername.replace('@', '')}&start=${user?.tenant?.id}`
-    : null;
+  // Enlace de vinculación: token de un solo uso generado en el servidor.
+  // Antes el QR llevaba el id del tenant (`?start=<tenantId>`), que no es un
+  // secreto: cualquiera con ese id podía quedarse con los avisos de la cuenta.
+  const [enlaceVinculo, setEnlaceVinculo] = useState<string | null>(null);
+  const [expiraEnlace, setExpiraEnlace] = useState<string | null>(null);
+  const [generandoEnlace, setGenerandoEnlace] = useState(false);
 
-  const qrUrl = botUsername 
-    ? `https://t.me/${botUsername.replace('@', '')}?start=${user?.tenant?.id}`
+  const generarEnlaceVinculo = async () => {
+    setGenerandoEnlace(true);
+    try {
+      const res = await fetch('/api/integraciones/telegram/enlace-admin', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.enlace) {
+        toast.error(data?.error || 'No se pudo generar el enlace de vinculación', {
+          description: data?.detalle,
+        });
+        setEnlaceVinculo(null);
+        setExpiraEnlace(null);
+        return;
+      }
+      setEnlaceVinculo(data.enlace);
+      setExpiraEnlace(data.expiraEn || null);
+    } catch {
+      toast.error('No se pudo generar el enlace de vinculación');
+    } finally {
+      setGenerandoEnlace(false);
+    }
+  };
+
+  useEffect(() => {
+    if (botConfigured) void generarEnlaceVinculo();
+    // El token se regenera solo cuando cambia el estado del bot: cada enlace
+    // invalida el anterior y caduca a los 15 minutos.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [botConfigured]);
+
+  // Derivados
+  const qrUrl = enlaceVinculo;
+  const watchdogUrl = qrUrl
+    ? qrUrl.replace('https://t.me/', 'tg://resolve?domain=').replace('?', '&')
     : null;
 
 
@@ -455,29 +471,50 @@ export default function OnboardingGenesisPage() {
               ) : (
                 <Card className="border-4 border-dashed border-green-200 bg-green-50/30 p-12 text-center shadow-inner rounded-3xl">
                   <div className="space-y-8">
-                    <a 
-                      href={watchdogUrl || '#'} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="mx-auto w-48 h-48 bg-white border-2 border-green-100 rounded-2xl flex items-center justify-center shadow-2xl relative group p-4"
-                    >
-                      <QRCodeSVG 
-                        value={qrUrl || ''}
-                        size={160}
-                        level="H"
-                        includeMargin={false}
-                        className="transition-transform group-hover:scale-95 duration-500"
-                      />
-                      <div className="absolute inset-0 bg-[#1A365D]/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl flex items-center justify-center">
-                        <span className="text-[10px] font-black uppercase tracking-tighter text-[#1A365D]">Escanear o Tocar</span>
+                    {qrUrl ? (
+                      <a 
+                        href={watchdogUrl || '#'} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="mx-auto w-48 h-48 bg-white border-2 border-green-100 rounded-2xl flex items-center justify-center shadow-2xl relative group p-4"
+                      >
+                        <QRCodeSVG 
+                          value={qrUrl}
+                          size={160}
+                          level="H"
+                          includeMargin={false}
+                          className="transition-transform group-hover:scale-95 duration-500"
+                        />
+                        <div className="absolute inset-0 bg-[#1A365D]/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl flex items-center justify-center">
+                          <span className="text-[10px] font-black uppercase tracking-tighter text-[#1A365D]">Escanear o Tocar</span>
+                        </div>
+                      </a>
+                    ) : (
+                      <div className="mx-auto w-48 h-48 bg-white border-2 border-dashed border-green-200 rounded-2xl flex items-center justify-center p-4">
+                        <span className="text-xs font-bold text-slate-400">
+                          {generandoEnlace ? 'Generando enlace…' : 'El enlace caducó'}
+                        </span>
                       </div>
-                    </a>
+                    )}
                     
                     <div className="space-y-4">
                       <p className="font-bold text-green-700">¡Bot @{botUsername} vinculado!</p>
                       <p className="text-slate-500 text-sm leading-relaxed max-w-sm mx-auto">
-                        Haz clic en el QR o tócalo para abrir tu bot y presiona <strong>"INICIAR"</strong>.
+                        Haz clic en el QR o tócalo para abrir tu bot y presiona <strong>«INICIAR»</strong>.
                       </p>
+                      <p className="text-slate-400 text-xs leading-relaxed max-w-sm mx-auto">
+                        Este enlace sirve una sola vez y caduca a los 15 minutos
+                        {expiraEnlace ? ` (válido hasta las ${new Date(expiraEnlace).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })})` : ''}.
+                        Cada vez que lo generas, el anterior deja de valer.
+                      </p>
+                      <Button
+                        variant="link"
+                        onClick={generarEnlaceVinculo}
+                        disabled={generandoEnlace}
+                        className="text-[#1A365D] text-xs font-bold uppercase tracking-tight"
+                      >
+                        {generandoEnlace ? 'Generando…' : 'Generar enlace nuevo'}
+                      </Button>
                     </div>
                   </div>
                 </Card>

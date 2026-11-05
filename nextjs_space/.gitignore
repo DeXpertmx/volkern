@@ -34,3 +34,6 @@ public/_shots/
 public/_login-debug.png
 documentacion_comercial/_check/
 tsconfig.tmp-*.tsbuildinfo
+/freebuff-sites-build/
+/.open-next/
+/.wrangler/

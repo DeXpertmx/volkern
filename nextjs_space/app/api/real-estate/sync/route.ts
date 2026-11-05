@@ -84,7 +84,7 @@ export const GET = withTenantAuth(async (request, auth) => {
       { status: 500 }
     );
   }
-});
+}, ['real-estate:read']);
 
 // ─── POST: Sincronización delta ──────────────────────────────────────────────
 
@@ -191,4 +191,4 @@ export const POST = withTenantAuth(async (request, auth) => {
       { status: 500 }
     );
   }
-});
+}, ['real-estate:write']);

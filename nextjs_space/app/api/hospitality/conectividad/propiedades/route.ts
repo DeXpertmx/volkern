@@ -82,7 +82,7 @@ const SELECCION: {
 
 export async function GET(req: NextRequest) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:read']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     const sinPermiso = exigirPermisoHospitality(auth, 'integraciones.ver');
     if (sinPermiso) return sinPermiso;
@@ -120,7 +120,7 @@ export async function GET(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:write']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     const sinPermiso = exigirPermisoHospitality(auth, 'integraciones.gestionar');
     if (sinPermiso) return sinPermiso;

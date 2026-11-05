@@ -27,7 +27,7 @@ export const GET = withTenantAuth(async (request, auth) => {
     console.error('[Formularios API] Error listing forms:', error);
     return NextResponse.json({ error: 'Error al listar formularios' }, { status: 500 });
   }
-});
+}, ['config:read']);
 
 // POST /api/formularios — Crear un nuevo formulario
 export const POST = withTenantAuth(async (request, auth) => {
@@ -67,4 +67,4 @@ export const POST = withTenantAuth(async (request, auth) => {
     console.error('[Formularios API] Error creating form:', error);
     return NextResponse.json({ error: 'Error al crear el formulario' }, { status: 500 });
   }
-});
+}, ['config:write']);

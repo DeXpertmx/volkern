@@ -47,7 +47,7 @@ export const GET = withTenantAuth(async (request, auth) => {
     const message = error instanceof Error ? error.message : "UNKNOWN";
     return NextResponse.json({ error: message }, { status: 500 });
   }
-});
+}, ['attendance:read']);
 
 // POST /api/erp/attendance/punch
 export const POST = withTenantAuth(async (request, auth) => {
@@ -196,4 +196,4 @@ export const POST = withTenantAuth(async (request, auth) => {
         return NextResponse.json({ error: code }, { status: 400 });
     }
   }
-});
+}, ['attendance:write']);

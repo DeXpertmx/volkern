@@ -463,12 +463,23 @@ async function sendDirectMessage(
         await sendWhatsAppMessage(destinatario.telefono, contenido, tenantId);
         return { success: true };
 
-      case 'telegram':
+      case 'telegram': {
         if (!destinatario.telefono) {
           return { success: false, error: 'Teléfono no disponible' };
         }
-        await sendTelegramMessage(destinatario.telefono, contenido);
+        // Solo el bot PROPIO del tenant: la campaña es del tenant, así que
+        // sale por su bot (el del sistema no lleva datos de tenants).
+        const { loadTelegramCredentials } = await import('@/lib/telegram');
+        const creds = await loadTelegramCredentials(tenantId);
+        if (!creds.bot_token) {
+          return { success: false, error: 'El tenant no tiene bot de Telegram propio' };
+        }
+        const envio = await sendTelegramMessage(destinatario.telefono, contenido, creds.bot_token);
+        if (!(envio as any)?.success) {
+          return { success: false, error: (envio as any)?.error || 'Error enviando por Telegram' };
+        }
         return { success: true };
+      }
 
       case 'sms':
         if (!destinatario.telefono) {

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, Send, MessageSquare } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { briefingPendienteHoy, EVENTO_BRIEFING_RESUELTO } from '@/lib/primer-uso';
 
 const PUSH_NOTIFICATION_KEY = 'push_notifications_enabled';
 
@@ -29,8 +30,21 @@ export function PushNotificationInit() {
   const [config, setConfig] = useState<NotificationConfigData>({ channels: {} });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Un solo paso activo en el primer uso: este pedido de permisos espera a que
+  // el resumen de Gemma se haya resuelto (ver lib/primer-uso.ts).
+  const [briefingListo, setBriefingListo] = useState(false);
 
   const isPublicPage = !session?.user;
+
+  useEffect(() => {
+    const sincronizar = () => setBriefingListo(!briefingPendienteHoy());
+    // Primero se comprueba el estado y después se escucha: si el briefing ya
+    // se resolvió antes de montar este componente, no hace falta esperar nada.
+    sincronizar();
+    if (!briefingPendienteHoy()) return;
+    window.addEventListener(EVENTO_BRIEFING_RESUELTO, sincronizar);
+    return () => window.removeEventListener(EVENTO_BRIEFING_RESUELTO, sincronizar);
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined' || isPublicPage) return;
@@ -177,6 +191,10 @@ export function PushNotificationInit() {
   }
 
   if (permission === 'default') {
+    // Aún no: el usuario está leyendo el resumen del primer día y ahora mismo
+    // sólo debería atender un mensaje.
+    if (!briefingListo) return null;
+
     return (
       <>
         <button

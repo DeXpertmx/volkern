@@ -63,7 +63,7 @@ export const GET = withTenantAuth(async (request, auth) => {
     console.error('[Reconciliation GET] Error:', error);
     return NextResponse.json({ error: 'Error al obtener datos de conciliación' }, { status: 500 });
   }
-});
+}, ['accounting:read']);
 
 // ─── POST ─────────────────────────────────────────────────────────────────────
 
@@ -215,4 +215,4 @@ export const POST = withTenantAuth(async (request, auth) => {
     }
     return NextResponse.json({ error: 'Error en la conciliación bancaria' }, { status: 500 });
   }
-});
+}, ['accounting:write']);

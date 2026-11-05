@@ -39,7 +39,6 @@ const GET_WRITE_EXCEPTIONS: GetWriteException[] = [
   { file: 'app/api/integrations/gocardless/callback/route.ts', method: 'upsert', reason: 'Flujo OAuth callback: guarda credenciales de GoCardless.' },
   { file: 'app/api/leads/external-search/apollo/route.ts', method: 'update', reason: 'Test de conexión: refresca conectado/ultimaSincronizacion al verificar la integración.' },
   { file: 'app/api/leads/external-search/linkedin/route.ts', method: 'update', reason: 'Test de conexión: refresca conectado/ultimaSincronizacion al verificar la integración.' },
-  { file: 'app/api/telegram/webhook/route.ts', method: 'update', reason: 'Webhook de Telegram (GET): actualiza el estado del bot al recibir updates.' },
 ];
 
 const WRITE_METHODS = ['updateMany', 'create', 'upsert', 'deleteMany', 'delete', 'update'] as const;

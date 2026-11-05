@@ -49,6 +49,17 @@ import {
   Building
 } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 
 interface Integration {
   id: string
@@ -442,6 +453,19 @@ export default function IntegracionesPage() {
   const [formData, setFormData] = useState<any>({})
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
+  // Enlace de un solo uso para vincular el chat de administración del bot.
+  // Se pide al servidor, no se compone aquí: el token es lo que autoriza el
+  // vínculo y el id de la empresa ya no sirve para eso.
+  const [enlaceTelegram, setEnlaceTelegram] = useState<string | null>(null)
+  const [expiraEnlaceTelegram, setExpiraEnlaceTelegram] = useState<string | null>(null)
+  const [generandoEnlaceTelegram, setGenerandoEnlaceTelegram] = useState(false)
+  const [estadoVinculoTelegram, setEstadoVinculoTelegram] = useState<{
+    vinculado: boolean
+    chatId: string | null
+    desde: string | null
+  } | null>(null)
+  const [cargandoEstadoVinculoTelegram, setCargandoEstadoVinculoTelegram] = useState(false)
+  const [desvinculandoChatTelegram, setDesvinculandoChatTelegram] = useState(false)
 
   useEffect(() => {
     cargarIntegraciones()
@@ -560,7 +584,16 @@ export default function IntegracionesPage() {
 
   const abrirDialog = (integracion: any) => {
     setSelectedIntegracion(integracion)
-    
+    // Nunca reutilizar un enlace de una apertura anterior: cada uno caduca a
+    // los 15 minutos y regenerarlo invalida el de la vez pasada.
+    setEnlaceTelegram(null)
+    setExpiraEnlaceTelegram(null)
+    setEstadoVinculoTelegram(null)
+
+    // El estado del vínculo se pide al servidor: el listado de integraciones no
+    // distingue «hay bot» de «hay un chat recibiendo los avisos».
+    if (integracion.tipo === 'telegram') void cargarEstadoVinculoTelegram()
+
     // Inicializar con valores por defecto
     const defaultValues: any = {}
     integracion.campos.forEach((campo: any) => {
@@ -610,6 +643,100 @@ export default function IntegracionesPage() {
     setDialogOpen(false)
     setSelectedIntegracion(null)
     setFormData({})
+    setEnlaceTelegram(null)
+    setExpiraEnlaceTelegram(null)
+    setEstadoVinculoTelegram(null)
+  }
+
+  const cargarEstadoVinculoTelegram = async () => {
+    setCargandoEstadoVinculoTelegram(true)
+    try {
+      const res = await fetch('/api/integraciones/telegram/enlace-admin')
+      if (!res.ok) {
+        // Sin permiso o sin bot: se deja el bloque informativo oculto y el
+        // botón seguirá explicando el motivo al pulsarlo.
+        setEstadoVinculoTelegram(null)
+        return
+      }
+      const data = await res.json().catch(() => ({}))
+      setEstadoVinculoTelegram({
+        vinculado: Boolean(data?.vinculado),
+        chatId: data?.chatId ?? null,
+        desde: data?.desde ?? null,
+      })
+    } catch {
+      setEstadoVinculoTelegram(null)
+    } finally {
+      setCargandoEstadoVinculoTelegram(false)
+    }
+  }
+
+  const generarEnlaceTelegram = async () => {
+    setGenerandoEnlaceTelegram(true)
+    try {
+      const res = await fetch('/api/integraciones/telegram/enlace-admin', { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data?.enlace) {
+        toast.error(data?.error || 'No se pudo generar el enlace de vinculación', {
+          description: data?.detalle,
+        })
+        setEnlaceTelegram(null)
+        setExpiraEnlaceTelegram(null)
+        return
+      }
+      setEnlaceTelegram(data.enlace)
+      setExpiraEnlaceTelegram(data.expiraEn || null)
+    } catch {
+      toast.error('No se pudo generar el enlace de vinculación')
+    } finally {
+      setGenerandoEnlaceTelegram(false)
+    }
+  }
+
+  const copiarEnlaceTelegram = () => {
+    if (!enlaceTelegram) return
+    navigator.clipboard.writeText(enlaceTelegram)
+    toast.success('Enlace copiado al portapapeles')
+  }
+
+  /** Fecha legible del vínculo, o `null` si el ISO no se puede interpretar. */
+  const fechaVinculoTelegram = (iso: string) => {
+    const fecha = new Date(iso)
+    return Number.isNaN(fecha.getTime())
+      ? null
+      : fecha.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })
+  }
+
+  /** Los ids de chat son identificadores personales: se muestran recortados. */
+  const chatEnmascarado = (chatId: string) =>
+    chatId.length <= 4 ? chatId : `${chatId.slice(0, 3)}…${chatId.slice(-2)}`
+
+  const desvincularChatTelegram = async () => {
+    setDesvinculandoChatTelegram(true)
+    try {
+      const res = await fetch('/api/integraciones/telegram/enlace-admin', { method: 'DELETE' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(data?.error || 'No se pudo desvincular el chat')
+        return
+      }
+      if (data?.desvinculado) {
+        toast.success('Chat desvinculado', {
+          description:
+            'La empresa dejará de recibir avisos hasta que vincules un chat nuevo.',
+        })
+      } else {
+        toast.info('No había ningún chat vinculado')
+      }
+      setEstadoVinculoTelegram({ vinculado: false, chatId: null, desde: null })
+      // El enlace que hubiera pendiente queda invalidado en el servidor.
+      setEnlaceTelegram(null)
+      setExpiraEnlaceTelegram(null)
+    } catch {
+      toast.error('No se pudo desvincular el chat')
+    } finally {
+      setDesvinculandoChatTelegram(false)
+    }
   }
 
   const handleInputChange = (campo: string, valor: string | boolean) => {
@@ -1592,6 +1719,155 @@ export default function IntegracionesPage() {
                 </AlertDescription>
               </Alert>
 
+              {/* Vinculación del chat de administración (solo Telegram) */}
+              {selectedIntegracion.tipo === 'telegram' && (
+                <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-4 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 rounded-lg bg-sky-500/10 text-sky-600 shrink-0">
+                      <Bot className="h-4 w-4" />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-slate-900">Vincular el chat de administración</p>
+                      <p className="text-xs text-slate-600 leading-relaxed">
+                        Genera un enlace de un solo uso y ábrelo en el móvil desde el que quieres recibir
+                        los avisos. Caduca a los 15 minutos y cada enlace nuevo anula el anterior.
+                      </p>
+                    </div>
+                  </div>
+
+                  {cargandoEstadoVinculoTelegram ? (
+                    <p className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Comprobando si ya hay un chat vinculado…
+                    </p>
+                  ) : estadoVinculoTelegram?.vinculado ? (
+                    <div className="flex items-start gap-2 rounded-lg border border-green-200 bg-green-50 p-2.5">
+                      <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-green-600" />
+                      <div className="space-y-1">
+                        <p className="text-[11px] leading-relaxed text-green-800">
+                          <span className="font-bold">Chat vinculado</span>
+                          {estadoVinculoTelegram.desde
+                            ? ` desde el ${fechaVinculoTelegram(estadoVinculoTelegram.desde) ?? 'una fecha desconocida'}`
+                            : ' (fecha de vínculo no registrada)'}
+                          {estadoVinculoTelegram.chatId
+                            ? ` · Chat ID ${chatEnmascarado(estadoVinculoTelegram.chatId)}`
+                            : ''}
+                          .
+                        </p>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <button
+                              type="button"
+                              className="text-[11px] font-bold text-red-600 hover:underline disabled:opacity-50"
+                              disabled={desvinculandoChatTelegram}
+                            >
+                              Desvincular este chat
+                            </button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>¿Desvincular el chat de administración?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Este chat dejará de recibir los avisos de la empresa —briefing,
+                                oportunidades en riesgo, tareas y avisos de compras— hasta que vincules
+                                otro. También se invalida cualquier enlace pendiente. Los chats
+                                personales de cada usuario no se tocan: se gestionan en su perfil.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={desvincularChatTelegram}
+                                className="bg-red-600 hover:bg-red-700"
+                              >
+                                Sí, desvincular
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </div>
+                  ) : estadoVinculoTelegram ? (
+                    <p className="text-[11px] text-slate-500">
+                      Todavía no hay ningún chat vinculado: los avisos de la empresa no le llegan a nadie.
+                    </p>
+                  ) : null}
+
+                  {enlaceTelegram ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Input
+                          readOnly
+                          value={enlaceTelegram}
+                          aria-label="Enlace de vinculación de Telegram"
+                          className="h-9 bg-white font-mono text-[11px]"
+                          onFocus={(e) => e.currentTarget.select()}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-9 shrink-0"
+                          onClick={copiarEnlaceTelegram}
+                          title="Copiar enlace"
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        {expiraEnlaceTelegram
+                          ? `Válido hasta las ${new Date(expiraEnlaceTelegram).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}.`
+                          : 'Caduca a los 15 minutos.'}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-4">
+                        <a
+                          href={enlaceTelegram}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs font-bold text-sky-700 hover:underline"
+                        >
+                          Abrir en Telegram <ExternalLink className="h-3 w-3" />
+                        </a>
+                        <Button
+                          type="button"
+                          variant="link"
+                          onClick={generarEnlaceTelegram}
+                          disabled={generandoEnlaceTelegram}
+                          className="h-auto p-0 text-xs font-bold text-sky-700"
+                        >
+                          {generandoEnlaceTelegram ? 'Generando…' : 'Generar enlace nuevo'}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={generarEnlaceTelegram}
+                      disabled={generandoEnlaceTelegram}
+                      className="bg-sky-600 hover:bg-sky-700 text-white font-bold"
+                    >
+                      {generandoEnlaceTelegram ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Generando…
+                        </>
+                      ) : (
+                        <>
+                          <Bot className="h-4 w-4 mr-2" />
+                          {estadoVinculoTelegram?.vinculado ? 'Vincular otro chat' : 'Vincular este chat'}
+                        </>
+                      )}
+                    </Button>
+                  )}
+
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    El enlace usa el bot guardado en esta integración: si aún no lo has conectado,
+                    guarda primero el Bot Token en el campo de abajo.
+                  </p>
+                </div>
+              )}
+
               {/* UI especial para GoCardless Connect */}
               {selectedIntegracion.tipo === 'gocardless' && (
                 <div className="space-y-4 py-4 border-b">
@@ -1674,7 +1950,7 @@ export default function IntegracionesPage() {
                               Google Tasks habilitado
                             </p>
                             <p className="text-xs text-blue-700 mt-1">
-                              Las tareas creadas para leads se sincronizarán automáticamente a la lista "Volkern CRM" en Google Tasks
+                              Las tareas creadas para leads se sincronizarán automáticamente a la lista &quot;Volkern CRM&quot; en Google Tasks
                             </p>
                           </div>
 

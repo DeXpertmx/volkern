@@ -37,7 +37,7 @@ export const GET = withTenantAuth(async (request, auth) => {
     console.error('[SupportAPI] Error listing tickets:', error);
     return NextResponse.json({ error: 'Error al listar tickets' }, { status: 500 });
   }
-});
+}, ['support:read']);
 
 /**
  * POST /api/support/tickets - Crear un nuevo ticket
@@ -72,4 +72,4 @@ export const POST = withTenantAuth(async (request, auth) => {
     console.error('[SupportAPI] Error creating ticket:', error);
     return NextResponse.json({ error: 'Error al crear ticket' }, { status: 500 });
   }
-});
+}, ['support:write']);

@@ -16,7 +16,7 @@ import { cotejarVinculosPropiedad } from '@/lib/hospitality/cotejo-vinculo';
 
 export async function GET(req: NextRequest) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:read']);
     if (!auth.valid) return NextResponse.json({ ok: false, error: auth.error }, { status: 401 });
     // Misma capacidad que el resto del wizard (§27): quien configura canales
     // es quien decide si el precio con el que el canal vendió es aceptable.

@@ -9,7 +9,8 @@ export type RateLimitAction =
   | 'email_send_day'
   | 'whatsapp_message_day'
   | 'file_upload_day'
-  | 'ai_request_day';
+  | 'ai_request_day'
+  | 'implantacion_ia_day';
 
 export interface RateLimitResult {
   allowed: boolean;
@@ -33,6 +34,10 @@ const DEFAULT_RATE_LIMITS: Record<string, RateLimitConfig> = {
   whatsapp_message_day: { limit: 1000, windowMs: 24 * 60 * 60 * 1000, windowLabel: 'dia' },
   file_upload_day: { limit: 100, windowMs: 24 * 60 * 60 * 1000, windowLabel: 'dia' },
   ai_request_day: { limit: 50, windowMs: 24 * 60 * 60 * 1000, windowLabel: 'dia' },
+  // El alta guiada reescribe la propuesta con el modelo al guardar el
+  // cuestionario. Veinte al día dejan corregir respuestas de sobra sin que un
+  // cliente que reenvía el formulario en bucle gaste la cuenta.
+  implantacion_ia_day: { limit: 20, windowMs: 24 * 60 * 60 * 1000, windowLabel: 'dia' },
 };
 
 const ACTION_TO_PLAN_KEY: Record<RateLimitAction, string> = {
@@ -44,6 +49,7 @@ const ACTION_TO_PLAN_KEY: Record<RateLimitAction, string> = {
   whatsapp_message_day: 'whatsapp_messages',
   file_upload_day: 'storage_gb',
   ai_request_day: 'ai_image_generations',
+  implantacion_ia_day: 'ai_image_generations',
 };
 
 const ACTION_TO_LIMIT_KEY: Record<RateLimitAction, keyof typeof DEFAULT_RATE_LIMITS> = {
@@ -55,6 +61,7 @@ const ACTION_TO_LIMIT_KEY: Record<RateLimitAction, keyof typeof DEFAULT_RATE_LIM
   whatsapp_message_day: 'whatsapp_message_day',
   file_upload_day: 'file_upload_day',
   ai_request_day: 'ai_request_day',
+  implantacion_ia_day: 'implantacion_ia_day',
 };
 
 class InMemoryStore {
@@ -199,8 +206,6 @@ export class RateLimiter {
     const config = this.getRateLimitConfig(tenantId, action, effectiveLimit);
     const key = `${tenantId}:${action}`;
 
-    let current: { count: number; resetAt: number };
-
     if (this.useRedis && redisClient) {
       try {
         const redisKey = `ratelimit:${key}`;
@@ -235,7 +240,7 @@ export class RateLimiter {
       }
     }
 
-    current = this.memoryStore.increment(key, config.windowMs);
+    const current = this.memoryStore.increment(key, config.windowMs);
     const remaining = Math.max(0, effectiveLimit - current.count);
 
     return {

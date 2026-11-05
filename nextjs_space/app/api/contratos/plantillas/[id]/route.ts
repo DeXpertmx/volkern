@@ -33,7 +33,7 @@ export const PATCH = withTenantAuth(async (request, auth, { params }) => {
     console.error('Error actualizando plantilla de contrato:', error.message);
     return NextResponse.json({ error: 'Error al actualizar la plantilla' }, { status: 500 });
   }
-});
+}, ['contratos:write']);
 
 // DELETE /api/contratos/plantillas/[id] - Eliminar plantilla
 export const DELETE = withTenantAuth(async (request, auth, { params }) => {
@@ -52,4 +52,4 @@ export const DELETE = withTenantAuth(async (request, auth, { params }) => {
     console.error('Error eliminando plantilla de contrato:', error.message);
     return NextResponse.json({ error: 'Error al eliminar la plantilla' }, { status: 500 });
   }
-});
+}, ['contratos:delete']);

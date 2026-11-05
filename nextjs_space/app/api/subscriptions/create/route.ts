@@ -8,6 +8,7 @@ import { stripe } from '@/lib/stripe'
 import { PLAN_PRICES, PLANS } from '@/lib/plans'
 import { calcularPrecio } from '@/lib/pricing-engine'
 import { VERTICAL_PLAN_IDS, getVerticalPlan } from '@/lib/vertical-plans'
+import { MONEDA_PLATAFORMA, formatearImporte } from '@/lib/moneda'
 import {
   CRM_MAX_SELF_SERVE_SEATS,
   calcularPrecioCrm,
@@ -185,8 +186,8 @@ export async function POST(request: NextRequest) {
           entidad: 'Subscription',
           entidadId: checkoutSession.id,
           descripcion: crmTier
-            ? `Checkout de CRM ${getCrmTier(crmTier)?.name} iniciado (${quantity} usuarios, ${Math.round(unitAmount * 100) / 100} € / ${interval === 'yearly' ? 'año' : 'mes'} por usuario de media)`
-            : `Checkout de la vertical ${vertical.name} iniciado (${unitAmount} € / ${interval === 'yearly' ? 'año' : 'mes'})`,
+            ? `Checkout de CRM ${getCrmTier(crmTier)?.name} iniciado (${quantity} usuarios, ${formatearImporte(unitAmount, MONEDA_PLATAFORMA)} / ${interval === 'yearly' ? 'año' : 'mes'} por usuario de media)`
+            : `Checkout de la vertical ${vertical.name} iniciado (${formatearImporte(unitAmount, MONEDA_PLATAFORMA)} / ${interval === 'yearly' ? 'año' : 'mes'})`,
           cambiosDespues: {
             planId: vertical.id,
             vertical: vertical.id,

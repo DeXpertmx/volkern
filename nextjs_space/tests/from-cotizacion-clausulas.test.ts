@@ -15,6 +15,10 @@ const prismaMock = {
   contratoPago: { createMany: vi.fn() },
   dealActivity: { create: vi.fn() },
   auditLog: { create: vi.fn() },
+  // La ruta pasa por la puerta de contratos del CRM (getCrmEntitlements), que
+  // lee plan y configuracion del tenant. Sin este mock la ruta reventaba con
+  // «Cannot read properties of undefined (reading 'findUnique')» y devolvía 500.
+  tenant: { findUnique: vi.fn() },
 }
 
 vi.mock('@/lib/db', () => ({ prisma: prismaMock }))
@@ -75,6 +79,12 @@ describe('POST /api/contratos/from-cotizacion', () => {
     prismaMock.perfilFiscalCliente.findFirst.mockResolvedValue(null)
     prismaMock.contrato.findFirst.mockResolvedValue(null)
     prismaMock.contrato.create.mockResolvedValue({ id: 'cont-1' })
+    // Nivel Profesional: es el primero que abre contratos, que es lo que estas
+    // pruebas ejercitan (la puerta se cubre aparte en tests/crm-pricing).
+    prismaMock.tenant.findUnique.mockResolvedValue({
+      plan: 'crm_profesional',
+      configuracion: { crmTier: 'profesional' },
+    })
   })
 
   it('hereda las cláusulas de la cotización cuando el body no trae otras', async () => {

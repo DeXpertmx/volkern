@@ -50,7 +50,7 @@ export const PATCH = withTenantAuth(async (req, auth) => {
     console.error('[Agency Branding] Error:', error);
     return NextResponse.json({ error: 'Error al actualizar configuración de marca' }, { status: 500 });
   }
-});
+}, ['settings:write']);
 
 /**
  * GET /api/agency/settings/branding
@@ -63,4 +63,4 @@ export const GET = withTenantAuth(async (req, auth) => {
   });
 
   return NextResponse.json(tenant?.brandingConfig || {});
-});
+}, ['settings:read']);

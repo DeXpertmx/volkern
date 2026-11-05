@@ -85,7 +85,7 @@ describe('Integración: Slots de Agencia (DB real)', () => {
         prefix: agencyPrefix,
         tenantId: agencyTenant.id,
         userId: testUser.id,
-        scopes: ['agent:skill'],
+        scopes: ['agent:skill', 'team:read', 'team:write'],
       },
     });
     agencyApiKey = rawAgencyKey;
@@ -110,7 +110,7 @@ describe('Integración: Slots de Agencia (DB real)', () => {
         prefix: bizPrefix,
         tenantId: businessTenant.id,
         userId: testUser.id,
-        scopes: ['agent:skill'],
+        scopes: ['agent:skill', 'team:read', 'team:write'],
       },
     });
     businessApiKey = rawBizKey;
@@ -342,7 +342,7 @@ describe('Integración: Slots de Agencia (DB real)', () => {
           prefix: pr,
           tenantId: tempAgency.id,
           userId: testUser.id,
-          scopes: ['agent:skill'],
+          scopes: ['agent:skill', 'team:read', 'team:write'],
         },
       });
 

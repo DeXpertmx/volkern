@@ -47,4 +47,4 @@ export const GET = withTenantAuth(async (request, auth) => {
     console.error('[GET /api/leads/export] Error:', error)
     return NextResponse.json({ error: 'Error al exportar leads' }, { status: 500 })
   }
-})
+}, ['leads:read'])

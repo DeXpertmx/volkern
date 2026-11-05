@@ -22,7 +22,7 @@ const CANALES_COMUNES = ['Airbnb', 'Booking.com', 'Expedia', 'Directa', 'Volkern
 // canal, q (búsqueda por huésped/referencia), from, to, limit.
 export async function GET(req: NextRequest) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:read']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
     const sinPermiso = exigirPermisoHospitality(auth, 'reservas.ver');
@@ -238,7 +238,7 @@ async function findConflict(
 //         canal, checkin (YYYY-MM-DD), checkout (YYYY-MM-DD), estado?, importe?, moneda?, notas? }
 export async function POST(req: NextRequest) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:write']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
     const sinPermiso = exigirPermisoHospitality(auth, 'reservas.crear');

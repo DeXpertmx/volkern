@@ -67,4 +67,4 @@ export const GET = withTenantAuth(async (request, auth) => {
     console.error('[SupportAnalyticsAPI] Error:', error);
     return NextResponse.json({ error: 'Error al obtener analíticas' }, { status: 500 });
   }
-});
+}, ['support:read']);

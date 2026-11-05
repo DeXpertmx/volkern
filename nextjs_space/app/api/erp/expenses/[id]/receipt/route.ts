@@ -29,4 +29,4 @@ export const GET = withTenantAuth(async (req, auth, { params }: { params: { id: 
     console.error('[ExpenseReceipt] Error:', error)
     return NextResponse.json({ error: 'Error al obtener el comprobante' }, { status: 500 })
   }
-})
+}, ['erp:read'])

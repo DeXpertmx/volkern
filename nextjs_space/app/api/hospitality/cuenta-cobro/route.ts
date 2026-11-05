@@ -27,7 +27,7 @@ import {
 // GET /api/hospitality/cuenta-cobro — estado de la cuenta de cobro del tenant.
 export async function GET(req: NextRequest) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:read']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
     const sinPermiso = exigirPermisoHospitality(auth, 'finanzas.ver');
@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
 // Body: { return_url?, refresh_url? }
 export async function POST(req: NextRequest) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:write']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
     const sinPermiso = exigirPermisoHospitality(auth, 'finanzas.gestionar');
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
 // PATCH /api/hospitality/cuenta-cobro — sincronizar estado con Stripe.
 export async function PATCH(req: NextRequest) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:write']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
     const sinPermiso = exigirPermisoHospitality(auth, 'finanzas.gestionar');

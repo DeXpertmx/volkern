@@ -92,12 +92,23 @@ export async function inventoryWatchdog(input: {
           context
         ).catch(console.error);
 
-        // Disparo directo a Telegram con botones interactivos
+        // Disparo directo a Telegram con botones interactivos. Solo con el bot
+        // PROPIO del tenant: la alerta es del tenant, así que sale por su bot
+        // (el del sistema no lleva datos de tenants).
         const chatId = (admin.metadata as any)?.telegram_chat_id;
         if (chatId) {
-          const { sendTelegramMessage } = await import('@/lib/telegram');
-          await sendTelegramMessage(chatId, proactiveMessage, undefined, telegramButtons)
-            .catch(err => console.error('[Watchdog] Failed to dispatch interactive Telegram:', err));
+          const { loadTelegramCredentials, sendTelegramMessage } = await import('@/lib/telegram');
+          const creds = await loadTelegramCredentials(tenantId);
+          if (creds.bot_token) {
+            // El teclado va bajo `reply_markup`: `sendTelegramMessage` ignora
+            // un `inline_keyboard` pasado suelto y la alerta llegaría sin los
+            // botones de autorizar/rechazar la compra.
+            await sendTelegramMessage(chatId, proactiveMessage, creds.bot_token, {
+              reply_markup: telegramButtons,
+            }).catch(err => console.error('[Watchdog] Failed to dispatch interactive Telegram:', err));
+          } else {
+            console.warn(`[Watchdog] Tenant ${tenantId} sin bot de Telegram propio; alerta de «${itemName}» no enviada por Telegram`);
+          }
         }
 
         notifications.push({

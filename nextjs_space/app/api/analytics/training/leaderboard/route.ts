@@ -55,4 +55,4 @@ export const GET = withTenantAuth(async (req, auth) => {
     console.error('Error fetching training leaderboard:', error);
     return NextResponse.json({ error: 'Error al cargar el ranking' }, { status: 500 });
   }
-});
+}, ['analytics:read']);

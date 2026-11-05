@@ -722,7 +722,7 @@ Continúa con la misma intención (${pendingCtx.intent}) y completa los parámet
       { status: 500 },
     )
   }
-})
+}, ['skills:execute'])
 
 // ─── Helper: formatear fecha de forma segura ──────────────────────────────
 

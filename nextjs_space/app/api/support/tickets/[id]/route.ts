@@ -32,7 +32,7 @@ export const GET = withTenantAuth(async (request, auth, { params }) => {
     console.error('[SupportAPI] Error fetching ticket:', error);
     return NextResponse.json({ error: 'Error al obtener ticket' }, { status: 500 });
   }
-});
+}, ['support:read']);
 
 /**
  * PATCH /api/support/tickets/[id] - Actualizar estado o asignación
@@ -59,4 +59,4 @@ export const PATCH = withTenantAuth(async (request, auth, { params }) => {
     console.error('[SupportAPI] Error updating ticket:', error);
     return NextResponse.json({ error: 'Error al actualizar ticket' }, { status: 500 });
   }
-});
+}, ['support:write']);

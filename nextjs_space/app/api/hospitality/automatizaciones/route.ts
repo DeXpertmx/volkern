@@ -56,7 +56,7 @@ export const HOSPITALITY_ACTION_TYPES = [
 /** GET /api/hospitality/automatizaciones — reglas del tenant + logs recientes. */
 export async function GET(req: NextRequest) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:read']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
     const sinPermiso = exigirPermisoHospitality(auth, 'automatizaciones.ver');
@@ -101,7 +101,7 @@ export async function GET(req: NextRequest) {
 /** POST /api/hospitality/automatizaciones — crear una regla. */
 export async function POST(req: NextRequest) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:write']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
     const sinPermiso = exigirPermisoHospitality(auth, 'automatizaciones.gestionar');

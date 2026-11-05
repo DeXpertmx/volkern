@@ -42,6 +42,7 @@ import {
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { useMonedaTenant } from '@/lib/use-moneda-tenant'
+import { formatearImporte } from '@/lib/moneda'
 import { DocumentPreview } from '@/components/document-preview'
 import { DocumentTimeline, TimelineEvent } from '@/components/document-timeline'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -144,24 +145,13 @@ export default function CotizacionesPage() {
     return matchesSearch && matchesEstado
   })
 
-  const formatCurrency = (amount: number, currency: string) => {
-    // Sin divisa no se inventa una: se muestra el importe sin símbolo hasta que
-    // el tenant (o la cotización) la declaren.
-    if (!currency) return new Intl.NumberFormat('es-MX', { minimumFractionDigits: 2 }).format(amount)
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency,
-    }).format(amount)
-  }
+  // Sin divisa no se inventa una: se muestra el importe sin símbolo hasta que
+  // el tenant (o la cotización) la declaren. La convención la pone la divisa.
+  const formatCurrency = (amount: number, currency: string) =>
+    formatearImporte(amount, currency, 2)
 
-  const formatCurrencyCompacto = (amount: number, currency: string) => {
-    if (!currency) return new Intl.NumberFormat('es-MX', { maximumFractionDigits: 0 }).format(amount)
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency,
-      maximumFractionDigits: 0,
-    }).format(amount)
-  }
+  const formatCurrencyCompacto = (amount: number, currency: string) =>
+    formatearImporte(amount, currency, 0)
 
   const isExpired = (cot: Cotizacion) => {
     if (!cot.fechaVencimiento) return false

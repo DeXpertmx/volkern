@@ -204,19 +204,24 @@ export const POST = withTenantAuth(async (request, auth) => {
                 await sendSMS(conversacion.contactoTelefono!, contenidoFinal);
             } else if (canal === 'telegram') {
                 // FIX sincronización hub→Telegram: resolver el bot_token del tenant
-                // (Integration legacy → Channel moderno → env). Antes se enviaba con el
-                // bot global de process.env, por lo que el mensaje no llegaba al cliente
-                // cuando el tenant usa su propio bot de Telegram.
+                // (Integration legacy → Channel moderno). Sin bot propio del tenant NO
+                // se envía: el mensaje no sale por el bot global del sistema.
                 const creds = await loadTelegramCredentials(tenantId);
-                const tgResult = await sendTelegramMessage(
-                    conversacion.contactoTelefono!,
-                    contenidoFinal,
-                    creds.bot_token || undefined,
-                );
-                if (!tgResult.success) {
+                if (!creds.bot_token) {
                     estado = 'error';
-                    errorMensaje = tgResult.error || 'Error enviando por Telegram';
+                    errorMensaje = 'El tenant no tiene bot de Telegram propio configurado';
                     resultado = { success: false, error: errorMensaje };
+                } else {
+                    const tgResult = await sendTelegramMessage(
+                        conversacion.contactoTelefono!,
+                        contenidoFinal,
+                        creds.bot_token,
+                    );
+                    if (!tgResult.success) {
+                        estado = 'error';
+                        errorMensaje = tgResult.error || 'Error enviando por Telegram';
+                        resultado = { success: false, error: errorMensaje };
+                    }
                 }
             } else if (canal === 'facebook') {
                 await sendFacebookMessage(conversacion.contactoTelefono!, contenidoFinal);

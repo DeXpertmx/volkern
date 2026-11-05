@@ -183,4 +183,4 @@ export const GET = withTenantAuth(async (request, auth) => {
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-});
+}, ['erp:read']);

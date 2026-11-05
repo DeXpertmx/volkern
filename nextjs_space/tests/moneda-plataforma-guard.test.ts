@@ -583,12 +583,21 @@ describe('la deuda del resto de la plataforma no puede crecer', () => {
     // la ficha pública del hotel: escribía las distancias con su propio
     // `Intl.NumberFormat` y ahora usa `formatearMedida`, que mantiene el número
     // en el idioma del visitante sin que la vista elija una convención.
+    // La bajada siguiente (117 → 115 archivos, 315 → 312 divisas y 87 → 83
+    // formatos) es la que deja la guardia en verde otra vez: la portada de precios
+    // escribía el euro a mano y formateaba con `toLocaleString('es-ES')`, los
+    // términos y los metadatos de /precios repetían el signo en cada plantilla, la
+    // escalera de CRM llevaba su propio `Intl.NumberFormat` con `currency: 'EUR'`,
+    // los informes del alta y la importación caían a `'EUR'` cuando el tenant no
+    // declaraba divisa, y las pantallas de cotizaciones y pronósticos formateaban
+    // por su cuenta con locale fijo. Todas piden ahora la divisa a los datos y el
+    // formato a este módulo.
     // El techo solo puede bajar; cada bajada exige regenerar el inventario, así que
     // queda en el diff y se ve.
-    expect(Object.keys(baseline).length).toBeLessThanOrEqual(117);
+    expect(Object.keys(baseline).length).toBeLessThanOrEqual(115);
     expect(divisa).toBeGreaterThan(0);
-    expect(divisa).toBeLessThanOrEqual(315);
-    expect(formato).toBeLessThanOrEqual(87);
+    expect(divisa).toBeLessThanOrEqual(312);
+    expect(formato).toBeLessThanOrEqual(83);
   });
 
   it('la mayor parte de la deuda son catálogos y datos de ejemplo, no decisiones', () => {
@@ -689,9 +698,14 @@ describe('la deuda de dinero con símbolo no puede crecer', () => {
     // inmobiliario. El exterior de la plataforma —el portal del cliente, el sitio
     // público de cada tenant, las páginas de planes y las portadas de las
     // verticales— sigue a cero.
-    expect(Object.keys(baselineSimbolos).length).toBeLessThanOrEqual(63);
+    //
+    // Y vuelve a bajar, 63 / 177 → 60 / 172, con la misma limpieza: los tres
+    // archivos que se van son los que escribían el signo de la divisa pegado a una
+    // expresión —el audit log del checkout, los metadatos de /precios y la lista de
+    // precios de los términos—, que ahora lo piden a `lib/moneda`.
+    expect(Object.keys(baselineSimbolos).length).toBeLessThanOrEqual(60);
     expect(totalDeSimbolos(baselineSimbolos)).toBeGreaterThan(0);
-    expect(totalDeSimbolos(baselineSimbolos)).toBeLessThanOrEqual(177);
+    expect(totalDeSimbolos(baselineSimbolos)).toBeLessThanOrEqual(172);
   });
 });
 

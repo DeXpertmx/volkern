@@ -143,6 +143,10 @@ volumes:
     driver: local
   caddy-config:
     driver: local
+  # `extends` no hereda el bloque `volumes` del otro fichero: sin esta
+  # declaración Docker rechaza el proyecto entero y no arranca ni la BD.
+  apprise-config:
+    driver: local
 
 networks:
   default:

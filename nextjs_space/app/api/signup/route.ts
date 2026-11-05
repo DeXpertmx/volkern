@@ -11,6 +11,7 @@ import { stripe, createSubscriptionCheckout } from '@/lib/stripe'
 import { calcularPrecio } from '@/lib/pricing-engine'
 import { sendEmail } from '@/lib/ses-email'
 import { aplicarCatalogoRolesBasicos } from '@/lib/roles-basicos'
+import { passwordValida, requisitosPassword } from '@/lib/validation/password'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://volkern.app'
 
@@ -127,18 +128,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Validación de seguridad de contraseña
-    if (password.length < 8) {
+    // Validación de seguridad de contraseña: la MISMA regla que enseña el
+    // formulario mientras se escribe (lib/validation/password.ts). Si el
+    // servidor exigiera algo más, el alta fallaría al enviar sin aviso previo.
+    if (!passwordValida(password)) {
+      const faltan = requisitosPassword(password).filter((r) => !r.ok).map((r) => r.texto)
       return NextResponse.json(
-        { error: 'La contraseña debe tener al menos 8 caracteres' },
-        { status: 400 }
-      )
-    }
-
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$/
-    if (!passwordRegex.test(password)) {
-      return NextResponse.json(
-        { error: 'La contraseña debe incluir mayúsculas, minúsculas y al menos un carácter especial' },
+        { error: `La contraseña aún no cumple: ${faltan.join(', ')}.`, requisitos: faltan },
         { status: 400 }
       )
     }

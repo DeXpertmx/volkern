@@ -32,7 +32,7 @@ import {
  */
 export async function GET(req: NextRequest) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['messaging:read']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     const sinPermiso = exigirPermisoHospitality(auth, 'comunicaciones.ver');
     if (sinPermiso) return sinPermiso;
@@ -100,7 +100,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['messaging:write']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     const sinPermiso = exigirPermisoHospitality(auth, 'comunicaciones.enviar');
     if (sinPermiso) return sinPermiso;
@@ -159,7 +159,7 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['messaging:write']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     const sinPermiso = exigirPermisoHospitality(auth, 'comunicaciones.ver');
     if (sinPermiso) return sinPermiso;

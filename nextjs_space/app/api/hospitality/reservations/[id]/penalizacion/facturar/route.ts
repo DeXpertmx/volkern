@@ -31,7 +31,7 @@ interface Params {
 
 export async function POST(req: NextRequest, ctx: Params) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:write']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
     const sinPermiso = exigirPermisoHospitality(auth, 'finanzas.gestionar');

@@ -3,7 +3,7 @@ import { getMessagingStrategy, getNexusConfig, MessagingStrategy } from './strat
 import { sendWhatsAppMessage, sendWhatsAppMessageWithMedia } from '@/lib/whatsapp';
 import { sendEmail } from '@/lib/ses-email';
 import { sendSMS } from '@/lib/sms';
-import { sendTelegramMessage } from '@/lib/telegram';
+import { loadTelegramCredentials, sendTelegramMessage } from '@/lib/telegram';
 import { sendFacebookMessage, sendInstagramMessage } from '@/lib/meta-messenger';
 
 export interface UnifiedMessagePayload {
@@ -78,8 +78,15 @@ async function sendViaLegacy(tenantId: string, payload: UnifiedMessagePayload) {
         case 'sms':
             return await sendSMS(payload.to, payload.content);
 
-        case 'telegram':
-            return await sendTelegramMessage(payload.to, payload.content);
+        case 'telegram': {
+            // Solo el bot PROPIO del tenant: sin él no se envía (el bot del
+            // sistema no lleva datos de tenants).
+            const creds = await loadTelegramCredentials(tenantId);
+            if (!creds.bot_token) {
+                throw new Error('El tenant no tiene bot de Telegram propio configurado');
+            }
+            return await sendTelegramMessage(payload.to, payload.content, creds.bot_token);
+        }
 
         case 'facebook':
             return await sendFacebookMessage(payload.to, payload.content);

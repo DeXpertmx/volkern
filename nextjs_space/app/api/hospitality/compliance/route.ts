@@ -15,7 +15,7 @@ import { ENTORNOS, ESQUEMA_XML_DISPONIBLE, ENDPOINTS } from '@/lib/hospitality/s
 // de una reserva es una acción, y las acciones van por POST.
 export async function GET(req: NextRequest) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:read']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     const sinPermiso = exigirPermisoHospitality(auth, 'reservas.ver');
     if (sinPermiso) return sinPermiso;

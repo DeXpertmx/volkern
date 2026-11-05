@@ -52,7 +52,7 @@ export const GET = withTenantAuth(async (request, auth) => {
     console.error('[TenantModulesAPI] Error:', error);
     return NextResponse.json({ error: 'Error al obtener módulos del tenant' }, { status: 500 });
   }
-});
+}, ['settings:read']);
 
 /**
  * PATCH /api/tenant/modules
@@ -111,4 +111,4 @@ export const PATCH = withTenantAuth(async (request, auth) => {
     console.error('[TenantModulesAPI] Error PATCH:', error);
     return NextResponse.json({ error: 'Error al actualizar módulo' }, { status: 500 });
   }
-});
+}, ['settings:write']);

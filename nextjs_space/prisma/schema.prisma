@@ -9468,3 +9468,58 @@ model HealthSnapshot {
   @@map("health_snapshots")
 }
 
+// ═══════════════════════════════════════════════════════════════
+// Gate de herramientas MCP
+//
+// La decisión por defecto la fija la matriz estática de
+// lib/mcp/tool-policy.ts (riesgo de la herramienta × rol). Estas tablas
+// sólo añaden lo que el cliente configura y lo que necesita aprobación.
+// ═══════════════════════════════════════════════════════════════
+
+/// Override por empresa de la decisión de una herramienta MCP.
+/// `roleName` null = aplica a todos los roles de esa empresa.
+/// Sin fila, decide la matriz estática: el override nunca puede ampliar el
+/// riesgo de una herramienta, sólo restringirla o pedir aprobación.
+model McpToolCapability {
+  id          String   @id @default(cuid())
+  tenantId    String
+  toolName    String
+  roleName    String?
+  decision    String // allow | ask | deny
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, toolName, roleName])
+  @@index([tenantId])
+  @@map("mcp_tool_capabilities")
+}
+
+/// Solicitud de aprobación de una herramienta que muta datos o sale al
+/// exterior. La fila es el cerrojo: la ejecución se reclama con
+/// `SELECT … FOR UPDATE` sobre `status = 'pending'`, así que un reintento del
+/// agente no ejecuta dos veces la misma acción.
+model McpApprovalRequest {
+  id            String    @id @default(cuid())
+  tenantId      String
+  toolName      String
+  arguments     Json
+  argumentsHash String
+  requestedById String
+  roleName      String?
+  via           String // /mcp | /api/mcp
+  status        String    @default("pending") // pending | approved | rejected | executed | failed | expired
+  reason        String?
+  resolvedById  String?
+  resolvedAt    DateTime?
+  executedAt    DateTime?
+  result        Json?
+  expiresAt     DateTime
+  createdAt     DateTime  @default(now())
+
+  @@index([tenantId, status])
+  @@index([tenantId, createdAt])
+  @@index([argumentsHash])
+  @@map("mcp_approval_requests")
+}
+

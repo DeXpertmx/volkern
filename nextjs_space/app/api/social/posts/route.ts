@@ -19,7 +19,7 @@ export const GET = withTenantAuth(async (req, auth) => {
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-});
+}, ['social:read']);
 
 // POST /api/social/posts - Crear/Programar un post
 export const POST = withTenantAuth(async (req, auth) => {
@@ -54,4 +54,4 @@ export const POST = withTenantAuth(async (req, auth) => {
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-});
+}, ['social:write']);

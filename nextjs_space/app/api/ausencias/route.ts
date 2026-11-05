@@ -42,7 +42,7 @@ export const GET = withTenantAuth(async (request, auth) => {
       { status: 500 }
     )
   }
-})
+}, ['hr:read'])
 
 // POST /api/ausencias - Crear ausencia
 export const POST = withTenantAuth(async (request, auth) => {
@@ -89,7 +89,7 @@ export const POST = withTenantAuth(async (request, auth) => {
       { status: 500 }
     )
   }
-})
+}, ['hr:write'])
 
 // PUT /api/ausencias - Actualizar ausencia
 export const PUT = withTenantAuth(async (request, auth) => {
@@ -132,7 +132,7 @@ export const PUT = withTenantAuth(async (request, auth) => {
       { status: 500 }
     )
   }
-})
+}, ['hr:write'])
 
 // DELETE /api/ausencias - Eliminar ausencia
 export const DELETE = withTenantAuth(async (request, auth) => {
@@ -168,4 +168,4 @@ export const DELETE = withTenantAuth(async (request, auth) => {
       { status: 500 }
     )
   }
-})
+}, ['hr:write'])

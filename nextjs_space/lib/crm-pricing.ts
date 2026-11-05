@@ -28,6 +28,8 @@
  * MÓDULO PURO: no importa Prisma ni Next; lo consumen componentes de cliente.
  */
 
+import { MONEDA_PLATAFORMA, formatearImporte } from './moneda'
+
 export type CrmTierId = 'esencial' | 'profesional' | 'avanzado'
 export type CrmInterval = 'monthly' | 'yearly'
 
@@ -365,12 +367,13 @@ export function calcularPrecioCrm(input: CrmPriceInput): CrmPriceResult {
   }
 }
 
-/** Formato español sin decimales cuando el importe es entero. */
+/**
+ * Formato español sin decimales cuando el importe es entero.
+ *
+ * La divisa la pone `lib/moneda` —es la de la plataforma, no una decisión de esta
+ * escalera— y el formato también: aquí solo queda la regla de negocio de
+ * esconder los céntimos cuando el importe es redondo.
+ */
 export function formatearEuros(value: number): string {
-  return new Intl.NumberFormat('es-ES', {
-    style: 'currency',
-    currency: 'EUR',
-    minimumFractionDigits: Number.isInteger(value) ? 0 : 2,
-    maximumFractionDigits: 2,
-  }).format(value)
+  return formatearImporte(value, MONEDA_PLATAFORMA, Number.isInteger(value) ? 0 : 2)
 }

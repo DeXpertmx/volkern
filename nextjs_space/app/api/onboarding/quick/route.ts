@@ -5,6 +5,35 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/db';
 
+/**
+ * Las dos formas de ocultar el recordatorio caducan, para que una empresa que
+ * sigue sin bot lo vuelva a ver en vez de perderlo para siempre: el descarte
+ * (la X) dura 30 días y el «silenciar una vez» dura 7.
+ */
+const DIAS_DESCARTE_RECORDATORIO_TELEGRAM = 30;
+const DIAS_SILENCIO_RECORDATORIO_TELEGRAM = 7;
+const MS_POR_DIA = 24 * 60 * 60 * 1000;
+
+/** ¿La marca sigue vigente? Una fecha ilegible no silencia el aviso para siempre. */
+function marcaVigente(marca: unknown, dias: number, ahora: number = Date.now()): boolean {
+  if (typeof marca !== 'string') return false;
+  const fecha = Date.parse(marca);
+  if (Number.isNaN(fecha)) return false;
+  return ahora - fecha < dias * MS_POR_DIA;
+}
+
+/**
+ * Pasos de Telegram que solo dejan una marca de tiempo en
+ * `configuracion.onboarding`. La omisión no se pisa (interesa desde cuándo
+ * está pendiente); el descarte y el silencio sí, porque caducan y volver a
+ * pulsarlos tiene que reiniciar su cuenta.
+ */
+const MARCAS_TELEGRAM: Record<string, { campo: string; reescribir: boolean }> = {
+  'skip-telegram': { campo: 'telegramOmitidoEn', reescribir: false },
+  'dismiss-telegram-reminder': { campo: 'telegramAvisoDescartadoEn', reescribir: true },
+  'snooze-telegram-reminder': { campo: 'telegramAvisoSilenciadoEn', reescribir: true },
+};
+
 interface ProvisioningResult {
   success: boolean;
   chatwootAccountId?: number;
@@ -75,10 +104,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 });
     }
 
-    const { step } = await req.json();
+    // El cuerpo se lee UNA sola vez: `req.json()` dos veces lanza porque el body
+    // ya está consumido, y eso devolvía 500 al guardar módulos o perfil — el
+    // error se tragaba porque el cliente solo avisa por consola.
+    const cuerpo = await req.json().catch(() => ({}) as Record<string, any>);
+    const step = cuerpo?.step;
 
     if (step === 'modules') {
-      const { modules: selectedModules } = await req.json()
+      const selectedModules = cuerpo?.modules
       if (!Array.isArray(selectedModules) || selectedModules.length === 0) {
         return NextResponse.json({ error: 'Selecciona al menos un módulo' }, { status: 400 })
       }
@@ -133,7 +166,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (step === 'profile') {
-      const { perfil, nif, nombreEmpresa } = await req.json();
+      const { perfil, nif } = cuerpo;
       await prisma.tenant.update({
         where: { id: user.tenantId },
         data: {
@@ -192,6 +225,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
+    // Marcas del paso de Telegram: cuándo se omitió en el alta, cuándo se
+    // descartó el recordatorio del panel y cuándo se silenció una sola vez.
+    // Viven en `configuracion.onboarding` para no tocar el esquema; se mezclan
+    // con el resto de la configuración.
+    const marca = MARCAS_TELEGRAM[step];
+    if (marca) {
+      const actual = await prisma.tenant.findUnique({
+        where: { id: user.tenantId },
+        select: { configuracion: true },
+      });
+      const config = (actual?.configuracion as any) || {};
+      const onboarding = { ...(config.onboarding || {}) };
+      const { campo, reescribir } = marca;
+
+      if (reescribir || !onboarding[campo]) {
+        onboarding[campo] = new Date().toISOString();
+      }
+
+      await prisma.tenant.update({
+        where: { id: user.tenantId },
+        data: { configuracion: { ...config, onboarding } },
+      });
+
+      return NextResponse.json({ success: true, [campo]: onboarding[campo] });
+    }
+
     return NextResponse.json({ error: 'Step inválido' }, { status: 400 });
 
   } catch (error: any) {
@@ -220,17 +279,43 @@ export async function GET(req: NextRequest) {
       where: { tenantId: user.tenantId }
     });
 
-    const channel = await prisma.channel.findFirst({
-      where: {
-        tenantId: user.tenantId,
-        type: 'telegram'
-      }
-    });
+    // Bot conectado por cualquiera de los dos caminos que existen: canal moderno
+    // o integración legacy. Mirando solo el canal, una empresa que conectó por la
+    // integración seguiría viendo el recordatorio como pendiente.
+    const [channel, integracion] = await Promise.all([
+      prisma.channel.findFirst({
+        where: {
+          tenantId: user.tenantId,
+          type: 'telegram',
+        },
+      }),
+      prisma.integration.findFirst({
+        where: { tenantId: user.tenantId, tipo: 'telegram', activo: true },
+        select: { id: true },
+      }),
+    ]);
+
+    // Estado del recordatorio de Telegram del panel: se omitió en el alta,
+    // sigue sin conectarse y nadie lo descartó ni lo silenció todavía. Las
+    // marcas viejas ya no cuentan: el aviso vuelve a aparecer una vez por
+    // periodo (30 días el descarte, 7 el silencio).
+    const config = (user.tenant?.configuracion as any) || {}
+    const onboarding = config.onboarding || {}
 
     return NextResponse.json({
       currentStep: progress?.pasoActual || 1,
-      telegramConnected: !!channel,
-      telegramUsername: (channel?.config as any)?.botUsername
+      telegramConnected: Boolean(channel || integracion),
+      telegramUsername: (channel?.config as any)?.botUsername,
+      telegramOmitido: Boolean(onboarding.telegramOmitidoEn),
+      telegramOmitidoEn: onboarding.telegramOmitidoEn || null,
+      telegramAvisoDescartado: marcaVigente(
+        onboarding.telegramAvisoDescartadoEn,
+        DIAS_DESCARTE_RECORDATORIO_TELEGRAM
+      ),
+      telegramAvisoSilenciado: marcaVigente(
+        onboarding.telegramAvisoSilenciadoEn,
+        DIAS_SILENCIO_RECORDATORIO_TELEGRAM
+      ),
     });
 
   } catch (error: any) {

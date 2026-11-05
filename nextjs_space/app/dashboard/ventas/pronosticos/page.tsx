@@ -28,6 +28,7 @@ import {
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { useMonedaTenant } from '@/lib/use-moneda-tenant'
+import { formatearImporte, simboloMoneda } from '@/lib/moneda'
 import {
   BarChart,
   Bar,
@@ -126,21 +127,11 @@ export default function PronosticosPage() {
   const monedaTenant = useMonedaTenant()
   const formatEje = (value: number) => {
     const numero = Math.abs(value) >= 1000 ? `${Math.round(value / 1000)}k` : `${value}`
-    if (!monedaTenant) return numero
-    const simbolo = new Intl.NumberFormat('es-ES', { style: 'currency', currency: monedaTenant })
-      .formatToParts(0)
-      .find((parte) => parte.type === 'currency')?.value
+    const simbolo = simboloMoneda(monedaTenant)
     return simbolo ? `${numero} ${simbolo}` : numero
   }
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('es-ES', {
-      style: 'currency',
-      currency: monedaTenant || 'EUR',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value)
-  }
+  const formatCurrency = (value: number) => formatearImporte(value, monedaTenant || '', 0)
 
   const getTendenciaIcon = (tendencia: string) => {
     switch (tendencia) {

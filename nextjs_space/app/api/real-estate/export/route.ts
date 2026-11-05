@@ -93,7 +93,7 @@ export const GET = withTenantAuth(async (request, auth) => {
       { status: 500 }
     );
   }
-});
+}, ['real-estate:read']);
 
 // ─── POST: Export and upload to S3 ─────────────────────────────────────────────
 
@@ -167,4 +167,4 @@ export const POST = withTenantAuth(async (request, auth) => {
       { status: 500 }
     );
   }
-});
+}, ['real-estate:write']);

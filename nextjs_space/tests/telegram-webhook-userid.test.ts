@@ -36,8 +36,13 @@ import { NextRequest } from 'next/server';
 
 const mocks = vi.hoisted(() => {
   const prisma = {
-    integration: { findMany: vi.fn() },
-    user: { findFirst: vi.fn() },
+    // findMany/findFirst: la resolución de contexto (lib/telegram/context-resolver)
+    // busca el vínculo chat→tenant en integraciones, canales, usuarios y
+    // conversaciones, y luego el bot propio del tenant.
+    integration: { findMany: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
+    channel: { findMany: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
+    conversation: { findFirst: vi.fn() },
+    user: { findFirst: vi.fn(), findMany: vi.fn(), update: vi.fn() },
     task: { create: vi.fn() },
     lead: { findFirst: vi.fn() },
     contact: { findFirst: vi.fn() },
@@ -105,11 +110,25 @@ const BOT_TOKEN = '123456:ABC-DEF';
 
 /**
  * Contexto de integración: el chatId del admin coincide con admin_chat_id.
+ *
+ * El webhook resuelve el tenant con `resolverContextoTelegram`: recoge los
+ * vínculos del chat (integración/canal/usuario) y, con el tenant resuelto,
+ * carga SU bot con `integration.findFirst`. Si el chat no está vinculado a
+ * ningún tenant el mensaje se ignora (nunca se contesta con un tenant al
+ * azar), así que este helper también fija las fuentes vacías y el bot.
  */
 function mockTelegramContext(chatId: string) {
-  mocks.prisma.integration.findMany.mockResolvedValue([
-    { id: 'int-1', tenantId: TENANT, credenciales: { bot_token: BOT_TOKEN, admin_chat_id: chatId } },
-  ]);
+  const integracion = {
+    id: 'int-1',
+    tenantId: TENANT,
+    credenciales: { bot_token: BOT_TOKEN, admin_chat_id: chatId },
+  };
+  mocks.prisma.integration.findMany.mockResolvedValue([integracion]);
+  mocks.prisma.integration.findFirst.mockResolvedValue(integracion);
+  mocks.prisma.channel.findMany.mockResolvedValue([]);
+  mocks.prisma.channel.findFirst.mockResolvedValue(null);
+  mocks.prisma.user.findMany.mockResolvedValue([]);
+  mocks.prisma.conversation.findFirst.mockResolvedValue(null);
 }
 
 function makeMessageUpdate(text: string, chatId: string, updateId: number) {

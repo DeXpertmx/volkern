@@ -36,4 +36,4 @@ export const PATCH = withTenantAuth(async (request, auth, { params }) => {
   } catch (error) {
     return NextResponse.json({ error: 'Error al actualizar' }, { status: 500 });
   }
-});
+}, ['compliance:write']);

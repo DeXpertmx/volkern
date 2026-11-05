@@ -15,7 +15,7 @@ import { encogerDetalleAServicios } from '@/lib/hospitality/unit-detalle';
 // GET /api/hospitality/properties — listar propiedades del tenant
 export async function GET(req: NextRequest) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:read']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
     const sinPermiso = exigirPermisoHospitality(auth, 'reservas.ver');
@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
 // POST /api/hospitality/properties — crear propiedad
 export async function POST(req: NextRequest) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:write']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
     const sinPermiso = exigirPermisoHospitality(auth, 'reservas.crear');

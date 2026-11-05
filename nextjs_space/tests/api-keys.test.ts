@@ -124,10 +124,11 @@ describe('AVAILABLE_SCOPES', () => {
     expect(AVAILABLE_SCOPES.length).toBeGreaterThanOrEqual(30);
   });
 
-  it('todos los scopes deben ser strings con formato recurso:accion (pueden incluir números en recurso)', () => {
+  it('todos los scopes deben ser strings con formato recurso:accion (recursos con números o guiones)', () => {
     for (const scope of AVAILABLE_SCOPES) {
       expect(typeof scope).toBe('string');
-      expect(scope).toMatch(/^[a-z0-9]+:[a-z]+$/);
+      // `real-estate:read`: el guion es parte del nombre del módulo.
+      expect(scope).toMatch(/^[a-z0-9-]+:[a-z]+$/);
     }
   });
 

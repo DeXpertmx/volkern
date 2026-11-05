@@ -59,7 +59,7 @@ export const GET = withTenantAuth(async (request, auth) => {
       details: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
-});
+}, ['messaging:read']);
 
 /**
  * POST /api/connect/channels - Crear nuevo canal
@@ -123,4 +123,4 @@ export const POST = withTenantAuth(async (request, auth) => {
     console.error('Error creating channel:', error);
     return NextResponse.json({ error: 'Error al crear canal' }, { status: 500 });
   }
-});
+}, ['messaging:write']);

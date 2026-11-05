@@ -20,6 +20,7 @@ import { InventoryWatchdog } from '@/components/operations/inventory-watchdog'
 import { OperationalMap } from '@/components/operations/operational-map'
 import { TrustProtocolLogs } from '@/components/sovereignty/trust-protocol-logs'
 import { QuickActions } from '@/components/dashboard/quick-actions'
+import { PanelInformes } from '@/components/dashboard/PanelInformes'
 import { DashboardSkeleton } from '@/components/dashboard-skeleton'
 
 const LS_KEY = 'volkern_dashboard_data'
@@ -44,11 +45,12 @@ interface DashboardStatsData {
 }
 
 const ALL_WIDGET_IDS = [
-  'actions', 'stat-leads', 'stat-citas', 'stat-campanas', 'stat-ingresos',
+  'informes', 'actions', 'stat-leads', 'stat-citas', 'stat-campanas', 'stat-ingresos',
   'limits', 'integrity', 'charts', 'appointments', 'inventory', 'map', 'audit'
 ]
 
 const WIDGET_LABELS: Record<string, string> = {
+  informes: 'Tus Informes',
   actions: 'Acciones Rápidas',
   'stat-leads': 'Total Leads',
   'stat-citas': 'Citas Hoy',
@@ -64,19 +66,24 @@ const WIDGET_LABELS: Record<string, string> = {
 }
 
 const defaultLayouts: ResponsiveLayouts = {
+  // El panel de informes va primero: es lo que el cliente fijó en el alta y lo
+  // primero que debe ver al entrar (antes, una cuenta nueva aterrizaba en un
+  // bento sin nada suyo). Los usuarios con layout guardado conservan el suyo y
+  // añaden el widget desde «Añadir Widget».
   lg: [
-    { i: 'actions', x: 0, y: 0, w: 12, h: 2, static: false },
-    { i: 'stat-leads', x: 0, y: 2, w: 3, h: 2 },
-    { i: 'stat-citas', x: 3, y: 2, w: 3, h: 2 },
-    { i: 'stat-campanas', x: 6, y: 2, w: 3, h: 2 },
-    { i: 'stat-ingresos', x: 9, y: 2, w: 3, h: 2 },
-    { i: 'limits', x: 0, y: 4, w: 12, h: 2.5 },
-    { i: 'integrity', x: 0, y: 6.5, w: 6, h: 8, minW: 3, minH: 6 },
-    { i: 'charts', x: 6, y: 6.5, w: 6, h: 4 },
-    { i: 'appointments', x: 6, y: 10.5, w: 6, h: 4 },
-    { i: 'inventory', x: 0, y: 14.5, w: 6, h: 4 },
-    { i: 'map', x: 6, y: 14.5, w: 6, h: 4 },
-    { i: 'audit', x: 0, y: 18.5, w: 12, h: 4 },
+    { i: 'informes', x: 0, y: 0, w: 12, h: 4 },
+    { i: 'actions', x: 0, y: 4, w: 12, h: 2, static: false },
+    { i: 'stat-leads', x: 0, y: 6, w: 3, h: 2 },
+    { i: 'stat-citas', x: 3, y: 6, w: 3, h: 2 },
+    { i: 'stat-campanas', x: 6, y: 6, w: 3, h: 2 },
+    { i: 'stat-ingresos', x: 9, y: 6, w: 3, h: 2 },
+    { i: 'limits', x: 0, y: 8, w: 12, h: 2.5 },
+    { i: 'integrity', x: 0, y: 10.5, w: 6, h: 8, minW: 3, minH: 6 },
+    { i: 'charts', x: 6, y: 10.5, w: 6, h: 4 },
+    { i: 'appointments', x: 6, y: 14.5, w: 6, h: 4 },
+    { i: 'inventory', x: 0, y: 18.5, w: 6, h: 4 },
+    { i: 'map', x: 6, y: 18.5, w: 6, h: 4 },
+    { i: 'audit', x: 0, y: 22.5, w: 12, h: 4 },
   ]
 };
 
@@ -287,6 +294,12 @@ export function DashboardContent() {
           margin={[20, 20]}
           compactType="vertical"
         >
+          {visibleWidgets.includes('informes') && (
+            <div key="informes">
+              <WidgetWrapper id="informes"><PanelInformes /></WidgetWrapper>
+            </div>
+          )}
+
           {visibleWidgets.includes('actions') && (
             <div key="actions">
               <WidgetWrapper id="actions"><QuickActions /></WidgetWrapper>

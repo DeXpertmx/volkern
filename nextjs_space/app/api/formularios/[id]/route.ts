@@ -28,7 +28,7 @@ export const GET = withTenantAuth(async (request, auth, context) => {
     console.error('[Formularios API] Error getting form:', error);
     return NextResponse.json({ error: 'Error al obtener el formulario' }, { status: 500 });
   }
-});
+}, ['config:read']);
 
 // PATCH /api/formularios/[id] — Actualizar un formulario
 export const PATCH = withTenantAuth(async (request, auth, context) => {
@@ -61,7 +61,7 @@ export const PATCH = withTenantAuth(async (request, auth, context) => {
     console.error('[Formularios API] Error updating form:', error);
     return NextResponse.json({ error: 'Error al actualizar el formulario' }, { status: 500 });
   }
-});
+}, ['config:write']);
 
 // DELETE /api/formularios/[id] — Eliminar un formulario
 export const DELETE = withTenantAuth(async (request, auth, context) => {
@@ -84,4 +84,4 @@ export const DELETE = withTenantAuth(async (request, auth, context) => {
     console.error('[Formularios API] Error deleting form:', error);
     return NextResponse.json({ error: 'Error al eliminar el formulario' }, { status: 500 });
   }
-});
+}, ['config:write']);

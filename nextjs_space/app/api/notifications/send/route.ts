@@ -48,4 +48,4 @@ export const POST = withTenantAuth(async (req, auth) => {
       { status: 500 }
     );
   }
-});
+}, ['notifications:write']);

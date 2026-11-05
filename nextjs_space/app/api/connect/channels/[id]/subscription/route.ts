@@ -41,4 +41,4 @@ export const PATCH = withTenantAuth(async (request, auth, { params }) => {
     console.error('Error updating channel subscription:', error);
     return NextResponse.json({ error: 'Error al actualizar suscripción' }, { status: 500 });
   }
-});
+}, ['messaging:write']);

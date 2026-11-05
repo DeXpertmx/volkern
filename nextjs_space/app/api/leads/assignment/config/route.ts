@@ -10,7 +10,7 @@ export const GET = withTenantAuth(async (request, auth) => {
   } catch (error) {
     return NextResponse.json({ error: 'Error al obtener configuración' }, { status: 500 })
   }
-})
+}, ['leads:read'])
 
 export const POST = withTenantAuth(async (request, auth) => {
   try {
@@ -20,4 +20,4 @@ export const POST = withTenantAuth(async (request, auth) => {
   } catch (error) {
     return NextResponse.json({ error: 'Error al guardar configuración' }, { status: 500 })
   }
-})
+}, ['leads:write'])

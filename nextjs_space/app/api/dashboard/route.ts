@@ -172,4 +172,4 @@ export const GET = withTenantAuth(async (request, auth) => {
       { status: 500 }
     )
   }
-});
+}, ['dashboard:read']);

@@ -58,6 +58,25 @@ const baseDeal = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
+/**
+ * Fecha local de hace `n` días, a la MISMA hora del día.
+ *
+ * Se construye con aritmética de calendario (`setDate`) y no restando
+ * milisegundos, porque `Date.now() - n * 24 h` cruza el cambio de hora y deja la
+ * hora local desplazada: en Europa/Madrid, desde el paso a CET del 25-oct-2026,
+ * toda resta de 24 h cae una hora MÁS TARDE que el momento presente.
+ * `differenceInDays` (date-fns) mide días locales completos, así que con la hora
+ * desplazada devuelve n − 1 — 10 días contaban como 9, 7 como 6 y 100 como 99 —
+ * y las expectativas del score se caían sin que nada estuviera roto. Con la
+ * misma hora del día el resultado es exacto en cualquier fecha del año; está
+ * comprobado a las 00:05, 01:30, 12:30 y 23:59 y en los dos cambios de hora.
+ */
+const dia = (n: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d;
+};
+
 const capturarUpdate = () => {
   mocks.dealUpdate.mockImplementation(({ data }: any) => Promise.resolve(data));
 };
@@ -82,7 +101,6 @@ describe('C6 · Health Score del deal (PipelineHealthService)', () => {
 
   it('el estancamiento descuenta 5 por día a partir del séptimo, tope 40', async () => {
     const { PipelineHealthService } = await import('@/lib/sales/pipeline-health-service');
-    const dia = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
 
     // 10 días sin mover el deal: 3 días de exceso × 5 = 15
     mocks.dealFindUnique.mockResolvedValue(baseDeal({ fechaActualizacion: dia(10) }));
@@ -114,7 +132,6 @@ describe('C6 · Health Score del deal (PipelineHealthService)', () => {
 
   it('la actividad vieja descuenta 8 por día a partir del tercero, tope 40', async () => {
     const { PipelineHealthService } = await import('@/lib/sales/pipeline-health-service');
-    const dia = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
 
     // 8 días sin actividad: 5 de exceso × 8 = 40 → justo el tope
     mocks.dealFindUnique.mockResolvedValue(baseDeal({ fechaUltimaActividad: dia(8) }));
@@ -145,7 +162,6 @@ describe('C6 · Health Score del deal (PipelineHealthService)', () => {
 
   it('caso nominal ZOMBIE: 11 días sin actualizar (−20), 10 sin actividad (tope −40), SLA vencido (−20) → 20', async () => {
     const { PipelineHealthService } = await import('@/lib/sales/pipeline-health-service');
-    const dia = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
 
     mocks.dealFindUnique.mockResolvedValue(
       baseDeal({ fechaActualizacion: dia(11), fechaUltimaActividad: dia(10), diasEnPipeline: 30 })
@@ -159,7 +175,6 @@ describe('C6 · Health Score del deal (PipelineHealthService)', () => {
 
   it('los cortes: WARNING < 75, CRITICAL < 50, ZOMBIE < 30 — la frontera queda fija', async () => {
     const { PipelineHealthService } = await import('@/lib/sales/pipeline-health-service');
-    const dia = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
 
     const clasificar = async (over: Record<string, unknown>) => {
       mocks.dealFindUnique.mockResolvedValue(baseDeal(over));
@@ -184,7 +199,6 @@ describe('C6 · Health Score del deal (PipelineHealthService)', () => {
 
   it('normaliza el score al rango 0-100 (nunca negativo)', async () => {
     const { PipelineHealthService } = await import('@/lib/sales/pipeline-health-service');
-    const dia = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
 
     // 200 días estancado + 200 días sin actividad + SLA vencido: sin tope sería -260
     mocks.dealFindUnique.mockResolvedValue(
@@ -240,7 +254,6 @@ describe('C6 · Health Score del deal (PipelineHealthService)', () => {
 describe('C6 · Dataset de calibración (HealthSnapshot)', () => {
   it('cada recálculo deja instantánea con el score, las entradas y el desenlace NULL', async () => {
     const { PipelineHealthService } = await import('@/lib/sales/pipeline-health-service');
-    const dia = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
     mocks.dealFindUnique.mockResolvedValue(
       baseDeal({ tenantId: 'tenant-1', fechaUltimaActividad: dia(5), prioridad: 'urgente', diasEnPipeline: 9 })
     );
@@ -276,7 +289,6 @@ describe('C6 · Dataset de calibración (HealthSnapshot)', () => {
 
   it('score cambió → muestra aunque la snapshot sea fresca', async () => {
     const { PipelineHealthService } = await import('@/lib/sales/pipeline-health-service');
-    const dia = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
     mocks.dealFindUnique.mockResolvedValue(baseDeal({ fechaUltimaActividad: dia(5) })); // 60
     mocks.snapFindFirst.mockResolvedValue({ healthScore: 90, createdAt: new Date() });
 

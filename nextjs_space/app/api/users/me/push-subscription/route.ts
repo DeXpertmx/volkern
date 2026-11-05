@@ -50,4 +50,4 @@ export const POST = withTenantAuth(async (req, auth) => {
     console.error('[PushSubscription] Error:', error);
     return NextResponse.json({ error: 'Failed to save subscription' }, { status: 500 });
   }
-});
+}, ['users:write']);

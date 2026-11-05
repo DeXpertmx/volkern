@@ -4,6 +4,8 @@ import { logger } from './logger';
 import { getServerSession } from 'next-auth';
 import { authOptions } from './auth';
 import { hashApiKey, isValidApiKeyFormat, hasScope, hasAnyScope, extractApiKeyFromRequest } from './api-keys';
+import { decideRestCall } from './mcp/tool-policy';
+import { auditRestDenial } from './rest-gate';
 import jwt from 'jsonwebtoken';
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
@@ -67,6 +69,16 @@ export interface ApiKeyAuthResult {
   db?: PrismaClient;
   vaultSeed?: string;
   error?: string;
+  /**
+   * Código HTTP con el que el llamador debe responder cuando `valid` es false.
+   * Ausente significa 401 (credencial que no sirve); 403 significa que la
+   * credencial sí es válida pero el gate REST deniega la operación. El
+   * envoltorio y los handlers manuales deben propagarlo en lugar de fijar 401.
+   */
+  status?: number;
+  /** Capacidad del gate REST que motivó un 403, para incluirlo en la respuesta. */
+  capability?: string;
+  risk?: string;
   authMethod?: 'session' | 'apikey';
   agencyContext?: boolean;
 }
@@ -212,8 +224,34 @@ export async function validateApiKey(
       return { valid: false, error: `Permisos insuficientes (${requiredScopes.join(', ')})` };
     }
 
-    // --- APLICAR REGLA DE ORO ---
+    // --- GATE REST ---
+    // Un scope dice a qué puede llegar una clave, no cuánto duele equivocarse.
+    // Aquí se cierra lo irreversible: `destructive` y `external` no se ejecutan
+    // con una credencial, tenga el rol que tenga su dueño (docs/gate-rest-alcance-minimo.md).
+    // Va después de los scopes —un permiso insuficiente se explica mejor como 401—
+    // y antes del contexto jerárquico, para no consultar el tenant si se va a denegar.
     const url = new URL(request.url);
+    const gate = decideRestCall({ method: request.method, path: url.pathname });
+
+    if (gate.decision === 'deny') {
+      await auditRestDenial({
+        auth: { tenant: dbApiKey.tenant, user: dbApiKey.user, apiKey: dbApiKey },
+        method: request.method,
+        path: url.pathname,
+        decision: gate,
+      });
+
+      return {
+        valid: false,
+        status: 403,
+        capability: gate.capability,
+        risk: gate.risk,
+        authMethod: 'apikey',
+        error: gate.reason,
+      };
+    }
+
+    // --- APLICAR REGLA DE ORO ---
     const targetId = request.headers.get('X-Impersonate-Tenant-Id') || url.searchParams.get('target_account_id');
     
     const context = await resolveHierarchicalContext(dbApiKey.user, dbApiKey.tenant, targetId);
@@ -481,8 +519,14 @@ export function withTenantAuth(
 
       if (!auth.valid) {
         return NextResponse.json(
-          { error: auth.error || 'No autorizado' },
-          { status: 401 }
+          {
+            error: auth.error || 'No autorizado',
+            // Sólo aparecen cuando el gate REST denegó: permiten al integrador
+            // entender que el problema es la capacidad, no la credencial.
+            ...(auth.capability ? { capability: auth.capability } : {}),
+            ...(auth.risk ? { risk: auth.risk } : {}),
+          },
+          { status: auth.status ?? 401 }
         );
       }
 

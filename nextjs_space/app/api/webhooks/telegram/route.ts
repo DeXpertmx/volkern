@@ -15,12 +15,37 @@ import { callVision } from '@/app/api/erp/expenses/scan/route'
 import { buildTaskCalendarMarkup } from '@/lib/telegram/task-calendar'
 import { buildTaskButtonsMarkup } from '@/lib/telegram/task-buttons'
 import { isChatRateLimited } from '@/lib/telegram/chat-rate-limit'
+import {
+  desvincularChatDeOtrosTenants,
+  resolverContextoTelegram,
+  tokenBotDelTenant,
+  vincularChatComoAdmin,
+  vinculosDelChat,
+} from '@/lib/telegram/context-resolver'
+import {
+  TELEGRAM_SECRET_HEADER,
+  requiereSecret,
+  verificarCabeceraSecret,
+} from '@/lib/telegram/webhook-secret'
+import {
+  TOKEN_ADMIN_PREFIJO,
+  consumirTokenVinculoAdmin,
+  resolverVinculoAdminPorToken,
+} from '@/lib/telegram/admin-link'
+import { auditarChatAdmin } from '@/lib/telegram/admin-chat-audit'
+import {
+  ipBloqueada,
+  ipDeRequest,
+  registrarFalloSecret,
+  segundosBloqueo,
+} from '@/lib/telegram/webhook-secret-rate-limit'
 
 /**
  * Webhook directo de Telegram — pipeline unificado
  *
  * Flujos soportados:
  * 1. /start → vincula el chat_id como admin_chat_id de una integración del tenant
+ *    (solo con el token de un solo uso del panel: `/start a_<token>`)
  * 2. callback_query (admin_buy:|reject_buy:) → flujo watchdog de aprobación de compras (no usa chatbot)
  * 3. callback_query (qr:...) → quick reply del chatbot (re-envía el texto al pipeline unificado)
  * 4. Mensajes normales → chatbot-service unificado (tool calling + quick replies como inline_keyboard)
@@ -77,63 +102,29 @@ interface TelegramContext {
 /**
  * Encuentra el tenant y el bot_token para responder a un chat_id.
  *
- * 1) Primero busca si el chatId coincide con algún admin_chat_id configurado
- *    (caso típico: admin usando el bot desde Telegram).
- * 2) Si no, hace fallback a la primera integración activa de Telegram con bot_token
- *    (casos legacy: un único bot activo en el sistema).
+ * La resolución vive en `lib/telegram/context-resolver` y es estricta:
+ * un chat se resuelve por su vínculo (integración, canal o usuario) o por su
+ * historial, y si hay más de un tenant en juego sin historia que desempate, o
+ * un chat sin vínculo con varios bots en el sistema, **no se resuelve**.
+ *
+ * El antiguo fallback («primera integración activa con bot_token») devolvía un
+ * tenant arbitrario: los mensajes de un chat sin vincular se contestaban con
+ * datos de otro tenant. Eso se eliminó: mejor ignorar el mensaje que filtrar.
  */
-async function findTelegramContext(chatId: string, exactOnly = false): Promise<TelegramContext | null> {
-  const integrations = await prisma.integration.findMany({
-    where: { tipo: 'telegram', activo: true },
-    select: { id: true, tenantId: true, credenciales: true, nombre: true },
-  })
-
-  // 1. Match exacto por admin_chat_id
-  for (const integration of integrations) {
-    const creds = integration.credenciales as any
-    if (creds?.admin_chat_id === chatId && creds?.bot_token) {
-      return { tenantId: integration.tenantId, botToken: creds.bot_token }
-    }
-  }
-
-  // 2. Fallback: primera integración con bot_token. Para archivos no se usa
-  // este fallback: solo el admin_chat_id exacto puede alimentar la bandeja.
-  if (exactOnly) return null
-  for (const integration of integrations) {
-    const creds = integration.credenciales as any
-    if (creds?.bot_token) {
-      return { tenantId: integration.tenantId, botToken: creds.bot_token }
-    }
-  }
-
-  return null
+async function findTelegramContext(chatId: string): Promise<TelegramContext | null> {
+  const contexto = await resolverContextoTelegram(chatId)
+  return contexto ? { tenantId: contexto.tenantId, botToken: contexto.botToken } : null
 }
 
 
 
 /**
- * Busca el bot_token de Telegram de un tenant, soportando ambos modelos:
- * 1) Integration legacy (credenciales.bot_token en texto plano)
- * 2) Channel moderno (config.botToken cifrado con AES)
+ * Bot_token PROPIO del tenant (integración legacy en claro > canal moderno
+ * cifrado). Nunca cae en `TELEGRAM_BOT_TOKEN` del sistema: el bot del sistema
+ * no manda mensajes con vínculos ni datos de tenants.
  */
 async function findTenantBotToken(tenantId: string): Promise<string | null> {
-  const integration = await prisma.integration.findFirst({
-    where: { tenantId, tipo: 'telegram', activo: true },
-    select: { credenciales: true },
-  })
-  const creds = integration?.credenciales as any
-  if (creds?.bot_token) return creds.bot_token
-
-  const channel = await prisma.channel.findFirst({
-    where: { tenantId, type: 'telegram' },
-    select: { config: true },
-  })
-  const config = channel?.config as any
-  if (config?.botToken) {
-    const { decrypt } = await import('@/lib/core/crypto')
-    return decrypt(config.botToken)
-  }
-  return process.env.TELEGRAM_BOT_TOKEN || null
+  return tokenBotDelTenant(tenantId)
 }
 
 /**
@@ -507,6 +498,46 @@ async function correctInboxField(documentId: string, field: string, value: strin
 export async function POST(request: NextRequest) {
   console.log(`[AlternativeTelegramWebhook] Received POST request at ${new Date().toISOString()}`)
   try {
+    // El `secret_token` del webhook identifica al bot que entregó el update y,
+    // con él, al tenant: es la única vía por la que el servidor sabe con
+    // certeza quién habló, porque todos los bots comparten endpoint. Sin
+    // cabecera se mantiene la resolución por vínculos (bots aún sin
+    // re-registrar); con cabecera que no corresponde a ningún bot, no se
+    // procesa nada.
+    const secretRecibido = request.headers.get(TELEGRAM_SECRET_HEADER)
+    const exigirSecret = requiereSecret()
+    const ip = ipDeRequest(request.headers)
+
+    // Cortafuegos por IP ANTES de verificar: comprobar un secret desconocido
+    // obliga a recorrer los bots de los tenants (base de datos), así que una IP
+    // que acumula fallos se rechaza aquí, sin tocar la base ni descifrar nada.
+    if (ip && (secretRecibido || exigirSecret) && (await ipBloqueada(ip))) {
+      return NextResponse.json(
+        { ok: false, error: 'too_many_invalid_secrets' },
+        { status: 429, headers: { 'Retry-After': String(segundosBloqueo()) } }
+      )
+    }
+
+    const verificacionSecret = await verificarCabeceraSecret(secretRecibido, {
+      requerir: exigirSecret,
+    })
+
+    if (verificacionSecret.estado === 'invalida') {
+      if (ip) await registrarFalloSecret(ip).catch(() => {})
+      console.warn('[TelegramWebhook] Cabecera de secret inválida; update rechazado')
+      return NextResponse.json({ ok: false, error: 'invalid_secret' }, { status: 401 })
+    }
+
+    // Contexto cierto cuando el secret identifica al bot: se usa para TODAS las
+    // decisiones del update (chat, tenant y bot token), sin adivinar por
+    // vínculos ni por historial.
+    const contextoDelBot: TelegramContext | null =
+      verificacionSecret.estado === 'valida'
+        ? { tenantId: verificacionSecret.tenantId, botToken: verificacionSecret.botToken }
+        : null
+    const contextoDelChat = (chatId: string): Promise<TelegramContext | null> =>
+      contextoDelBot ? Promise.resolve(contextoDelBot) : findTelegramContext(chatId)
+
     const body = await request.json()
 
     // ════════════════════════════════════════════════════════════════════
@@ -529,7 +560,7 @@ export async function POST(request: NextRequest) {
           callback_query.from.first_name +
           (callback_query.from.last_name ? ` ${callback_query.from.last_name}` : '')
 
-        const ctx = await findTelegramContext(chatId)
+        const ctx = await contextoDelChat(chatId)
         if (ctx) {
           // Limpiamos el teclado del mensaje original para evitar clicks duplicados
           clearReplyMarkup(chatId, callback_query.message.message_id, ctx.botToken).catch(() => {})
@@ -551,7 +582,7 @@ export async function POST(request: NextRequest) {
       const data = callback_query.data || ''
       if (data.startsWith('inbox:')) {
         const [, action, documentId] = data.split(':')
-        const ctx = await findTelegramContext(chatId, true)
+        const ctx = await contextoDelChat(chatId)
         if (!ctx || !documentId || !['view', 'review', 'scan', 'confirm', 'discard', 'discard_confirm', 'restore'].includes(action)) {
           return NextResponse.json({ method: 'answerCallbackQuery', callback_query_id: callback_query.id, text: '❌ No autorizado', show_alert: true })
         }
@@ -636,7 +667,7 @@ export async function POST(request: NextRequest) {
         const taskId = parts[2]
         const token = parts[3]
 
-        const ctx = await findTelegramContext(chatId)
+        const ctx = await contextoDelChat(chatId)
         if (!ctx || !taskId) {
           return NextResponse.json({ method: 'answerCallbackQuery', callback_query_id: callback_query.id, text: '❌ No autorizado', show_alert: true })
         }
@@ -796,6 +827,18 @@ export async function POST(request: NextRequest) {
       // 1d. Flujo watchdog: admin authorize / reject buy (no es chatbot)
       const [action, itemId, tenantId] = data.split(':')
 
+      // El tenant del callback debe ser el del bot que lo entregó (si el
+      // secret lo identifica): el botón no puede autorizar compras de otro
+      // tenant por llevar su id en el `callback_data`.
+      if (contextoDelBot && tenantId !== contextoDelBot.tenantId) {
+        return NextResponse.json({
+          method: 'answerCallbackQuery',
+          callback_query_id: callback_query.id,
+          text: '❌ Este aviso pertenece a otro espacio de trabajo.',
+          show_alert: true,
+        })
+      }
+
       // Seguridad: verificar admin legítimo
       // (Prisma JSON `contains` sin `path` no compara anidados correctamente;
       // filtramos en app code para soportar `metadata.telegram.chat_id` o `metadata.telegram_chat_id`)
@@ -901,7 +944,7 @@ export async function POST(request: NextRequest) {
       // Se exige coincidencia exacta del admin_chat_id: el fallback global del
       // chatbot nunca puede introducir archivos en un tenant equivocado.
       if (message.document || message.photo) {
-        const ctx = await findTelegramContext(chatId, true)
+        const ctx = await contextoDelChat(chatId)
         if (!ctx) return NextResponse.json({ ok: true })
         try {
           const document = await ingestTelegramDocument(message, ctx, chatId)
@@ -930,7 +973,7 @@ export async function POST(request: NextRequest) {
         const documentId = parts[1]
         const field = parts[2]
         const value = parts.slice(3).join(' ').trim()
-        const ctx = await findTelegramContext(chatId, true)
+        const ctx = await contextoDelChat(chatId)
         if (!ctx) return NextResponse.json({ ok: true })
         if (!documentId || !field || !value) {
           await sendBotMessage(chatId, 'Uso: /gasto_corregir ID_DOCUMENTO campo valor\nCampos: proveedor, nif, factura, fecha, vencimiento, total, base, iva, recargo, irpf, moneda, pago, operacion.', ctx.botToken)
@@ -944,7 +987,7 @@ export async function POST(request: NextRequest) {
       // 2b. Consulta rápida de la bandeja de gastos
       // ─────────────────────────────────────────────────────────────────
       if (isTelegramCommand(messageText, 'gastos_pendientes')) {
-        const ctx = await findTelegramContext(chatId, true)
+        const ctx = await contextoDelChat(chatId)
         if (!ctx) return NextResponse.json({ ok: true })
         const documents = await prisma.expenseInboxDocument.findMany({
           where: { tenantId: ctx.tenantId, status: { in: ['PENDING_REVIEW', 'REVIEW', 'ERROR'] } },
@@ -971,7 +1014,7 @@ export async function POST(request: NextRequest) {
       // 2c. Documentos descartados: consulta y restauración
       // ─────────────────────────────────────────────────────────────────
       if (isTelegramCommand(messageText, 'gastos_descartados')) {
-        const ctx = await findTelegramContext(chatId, true)
+        const ctx = await contextoDelChat(chatId)
         if (!ctx) return NextResponse.json({ ok: true })
         const documents = await prisma.expenseInboxDocument.findMany({
           where: { tenantId: ctx.tenantId, status: 'DISCARDED' },
@@ -1022,6 +1065,16 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ ok: true })
           }
 
+          // Si el secret identifica al bot de otro tenant, este enlace no puede
+          // vincular al usuario: el chat quedaría ligado a un tenant ajeno.
+          if (contextoDelBot && user.tenantId !== contextoDelBot.tenantId) {
+            console.warn(
+              `[Telegram] /start u_ de un usuario del tenant ${user.tenantId} recibido por el bot ` +
+                `del tenant ${contextoDelBot.tenantId}; no se vincula`
+            )
+            return NextResponse.json({ ok: true })
+          }
+
           // Guardar chat_id en metadata (plano + anidado) y consumir el token
           const botToken = await findTenantBotToken(user.tenantId)
           await prisma.user.update({
@@ -1040,6 +1093,10 @@ export async function POST(request: NextRequest) {
             },
           })
 
+          // Un chat = un tenant: si este chat quedó vinculado a otros tenants
+          // (integración, canal o usuarios de otros tenants), se desvincula aquí.
+          await desvincularChatDeOtrosTenants(chatId, user.tenantId)
+
           console.log(`[Telegram] Chat ID ${chatId} vinculado al usuario ${user.id}`)
 
           if (botToken) {
@@ -1057,64 +1114,183 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ ok: true })
         }
 
-        let integration = null
+        // ═══ VINCULACIÓN DEL CHAT DE ADMINISTRACIÓN (panel) ═══
+        // Payload: a_<token>, token de un solo uso de 15 minutos generado
+        // desde Ajustes → Integraciones → Telegram. Sustituye a
+        // `/start <tenantId>`, que vinculaba por posesión de un id público.
+        if (tenantIdParam && tenantIdParam.startsWith(TOKEN_ADMIN_PREFIJO)) {
+          const tokenAdmin = tenantIdParam.slice(TOKEN_ADMIN_PREFIJO.length)
 
-        if (tenantIdParam) {
-          integration = await prisma.integration.findFirst({
-            where: { tenantId: tenantIdParam, tipo: 'telegram', activo: true },
-            select: { id: true, credenciales: true, nombre: true, tenantId: true },
-          })
-        }
-
-        if (!integration) {
-          const tenants = await prisma.tenant.findMany({
-            where: { estado: 'activo' },
-            select: { id: true },
-          })
-
-          for (const tenant of tenants) {
-            const found = await prisma.integration.findFirst({
-              where: { tenantId: tenant.id, tipo: 'telegram', activo: true },
-              select: { id: true, credenciales: true, nombre: true, tenantId: true },
-            })
-            if (found) {
-              integration = found
-              break
+          const contestar = async (texto: string) => {
+            const botToken =
+              contextoDelBot?.botToken || (await contextoDelChat(chatId))?.botToken || null
+            if (!botToken) return
+            try {
+              await sendBotMessage(chatId, texto, botToken)
+            } catch (sendErr) {
+              console.error('[TelegramWebhook] Error respondiendo al vínculo por token:', sendErr)
             }
           }
+
+          const vinculoDelToken = await resolverVinculoAdminPorToken(tokenAdmin)
+          if (!vinculoDelToken) {
+            console.warn(
+              `[Telegram] /start a_ con token inválido, gastado o caducado (chat ${chatId}); no se vincula`
+            )
+            await contestar(
+              '⚠️ Este enlace ya no es válido: puede haber caducado (15 minutos) o haberse usado antes.\n\n' +
+                'Genera uno nuevo en Volkern: Ajustes → Integraciones → Telegram → «Vincular este chat».'
+            )
+            return NextResponse.json({ ok: true })
+          }
+
+          // El solicitante del token solo sirve para la auditoría: el vínculo
+          // pertenece al tenant, no a quien pidió el enlace.
+          const { tenantId: tenantDelToken, solicitadoPor } = vinculoDelToken
+
+          // El secret del bot manda: el chat solo puede quedar en la cuenta del
+          // bot que está atendiendo el mensaje.
+          if (contextoDelBot && contextoDelBot.tenantId !== tenantDelToken) {
+            console.warn(
+              `[Telegram] /start a_ del tenant ${tenantDelToken} recibido por el bot del tenant ` +
+                `${contextoDelBot.tenantId}; no se vincula`
+            )
+            await contestar(
+              '⚠️ Este bot pertenece a otro espacio de trabajo, así que no puedo vincular este chat a ese enlace. Pide el enlace correcto al administrador de tu cuenta.'
+            )
+            return NextResponse.json({ ok: true })
+          }
+
+          const vinculado = await vincularChatComoAdmin(chatId, tenantDelToken)
+          if (!vinculado) {
+            console.warn(
+              `[Telegram] /start a_: el tenant ${tenantDelToken} no tiene integración ni canal de Telegram activo`
+            )
+            await contestar(
+              '⚠️ No se encontró una integración de Telegram activa en esa cuenta. Pide al administrador que vuelva a conectar el bot.'
+            )
+            return NextResponse.json({ ok: true })
+          }
+
+          // Un enlace, un uso: se gasta solo cuando el vínculo ya está guardado.
+          await consumirTokenVinculoAdmin(tenantDelToken)
+          console.log(`[Telegram] Admin chat_id vinculado con token: ${chatId} → tenant ${tenantDelToken}`)
+
+          // Queda en el audit log quién vinculó el chat: el administrador que
+          // pidió el enlace (o nadie, si no consta) y la cuenta de Telegram que
+          // lo pulsó, con su tenant y su fecha.
+          await auditarChatAdmin({
+            accion: 'vinculado',
+            tenantId: tenantDelToken,
+            userId: solicitadoPor,
+            chatId,
+            actorTelegram: {
+              id: message.from?.id ?? null,
+              username: message.from?.username ?? null,
+              nombre: senderName,
+            },
+          }).catch((error) =>
+            console.error('[TelegramWebhook] Auditoría del vínculo fallida:', error)
+          )
+
+          await contestar(
+            `✅ *¡Chat vinculado!*\n\nAhora este chat recibe los avisos de la empresa en Volkern.\n\n📱 *Tu Chat ID:* \`${chatId}\``
+          )
+          return NextResponse.json({ ok: true })
         }
 
-        if (integration?.credenciales) {
-          const creds = integration.credenciales as any
-          await prisma.integration.update({
-            where: { id: integration.id },
-            data: {
-              credenciales: {
-                ...creds,
-                admin_chat_id: chatId,
-              },
-            },
-          })
-
-          console.log(`[Telegram] Admin chat_id configurado: ${chatId} para tenant ${integration.tenantId}`)
-
-          const botToken = creds.bot_token
+        // Formato antiguo (`/start <tenantId>`): ya NO vincula. El id de una
+        // empresa no es un secreto: con él se podía mover un chat de espacio de
+        // trabajo y quedarse con los avisos de otra cuenta. El camino válido es
+        // el token de un solo uso del panel.
+        if (tenantIdParam) {
+          console.warn(
+            `[Telegram] /start con tenantId en claro (${tenantIdParam}) desde el chat ${chatId}; ` +
+              'no se vincula: el vínculo exige el token de un solo uso del panel'
+          )
+          const botToken =
+            contextoDelBot?.botToken || (await contextoDelChat(chatId))?.botToken || null
           if (botToken) {
             try {
               await sendBotMessage(
                 chatId,
-                `✅ *¡Configuración completa!*\n\nAhora recibirás notificaciones de Volkern en este chat.\n\n📱 *Tu Chat ID:* \`${chatId}\``,
+                '⚠️ Este enlace es de una versión anterior y ya no vincula el chat.\n\n' +
+                  'Entra en Volkern → Ajustes → Integraciones → Telegram y pulsa «Vincular este chat»: te daré un enlace nuevo de un solo uso.',
                 botToken
               )
             } catch (sendErr) {
-              console.error('[TelegramWebhook] Error enviando confirmación de /start:', sendErr)
+              console.error('[TelegramWebhook] Error avisando del enlace antiguo:', sendErr)
             }
           }
-
           return NextResponse.json({ ok: true })
         }
 
-        const ctx = await findTelegramContext(chatId)
+        // `/start` sin parámetro solo REAFIRMA un vínculo que ya existe; no
+        // crea ninguno. Antes se vinculaba al primer tenant activo con
+        // integración (y, después, al único con bot propio): el chat de
+        // cualquiera acababa como chat de administración de una empresa y
+        // silenciaba sus avisos. Crear el vínculo exige el token del panel.
+        const vinculos = await vinculosDelChat(chatId)
+        const tenants = [...new Set(vinculos.map((v) => v.tenantId))]
+        let tenantObjetivo: string | null = null
+
+        if (contextoDelBot) {
+          // El secret identifica al bot: solo vale si este chat ya está
+          // vinculado a ese mismo tenant.
+          tenantObjetivo = tenants.includes(contextoDelBot.tenantId) ? contextoDelBot.tenantId : null
+        } else if (tenants.length === 1) {
+          tenantObjetivo = tenants[0]
+        }
+
+        if (!tenantObjetivo) {
+          console.warn(
+            `[Telegram] /start sin parámetro y sin vínculo previo (chat ${chatId}, ` +
+              `${tenants.length} tenants); no se crea uno: falta el token del panel`
+          )
+          const botToken =
+            contextoDelBot?.botToken || (await contextoDelChat(chatId))?.botToken || null
+          if (botToken) {
+            try {
+              await sendBotMessage(
+                chatId,
+                '👋 Para recibir los avisos de tu empresa en este chat necesito un enlace de un solo uso.\n\n' +
+                  'Ábrelo desde Volkern: Ajustes → Integraciones → Telegram → «Vincular este chat».',
+                botToken
+              )
+            } catch (sendErr) {
+              console.error('[TelegramWebhook] Error pidiendo el enlace de vínculo:', sendErr)
+            }
+          }
+          return NextResponse.json({ ok: true })
+        }
+
+        if (tenantObjetivo) {
+          const vinculado = await vincularChatComoAdmin(chatId, tenantObjetivo)
+          if (vinculado) {
+            console.log(`[Telegram] Admin chat_id configurado: ${chatId} para tenant ${tenantObjetivo}`)
+
+            const botToken = await tokenBotDelTenant(tenantObjetivo)
+            if (botToken) {
+              try {
+                await sendBotMessage(
+                  chatId,
+                  `✅ *¡Configuración completa!*\n\nAhora recibirás notificaciones de Volkern en este chat.\n\n📱 *Tu Chat ID:* \`${chatId}\``,
+                  botToken
+                )
+              } catch (sendErr) {
+                console.error('[TelegramWebhook] Error enviando confirmación de /start:', sendErr)
+              }
+            }
+
+            return NextResponse.json({ ok: true })
+          }
+
+          console.warn(
+            `[Telegram] /start: el tenant ${tenantObjetivo} no tiene integración ni canal de Telegram activo`
+          )
+        }
+
+        const ctx = await contextoDelChat(chatId)
         if (ctx) {
           try {
             await sendBotMessage(
@@ -1133,7 +1309,7 @@ export async function POST(request: NextRequest) {
       // 2b. Mensaje regular → pipeline unificado (tool calling + quick replies)
       // ─────────────────────────────────────────────────────────────────
 
-      const ctx = await findTelegramContext(chatId)
+      const ctx = await contextoDelChat(chatId)
       if (!ctx) {
         console.warn(`[TelegramWebhook] No se encontró tenant para chat ${chatId}, ignorando mensaje`)
         return NextResponse.json({ ok: true })

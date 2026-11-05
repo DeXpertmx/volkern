@@ -88,4 +88,4 @@ export const GET = withTenantAuth(async (request, auth) => {
     console.error('[IntegrityChainAPI] Error:', error);
     return NextResponse.json({ error: 'Error al obtener la cadena de integridad' }, { status: 500 });
   }
-});
+}, ['invoices:read']);

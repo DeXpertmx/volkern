@@ -355,7 +355,15 @@ export async function DELETE(
   try {
     const auth = await authenticateRequest(req, ['config:write']);
     if (!auth.valid) {
-      return NextResponse.json({ error: auth.error }, { status: 401 });
+      // 403 si el gate REST denegó el borrado; 401 si la credencial no sirve.
+      return NextResponse.json(
+        {
+          error: auth.error,
+          ...(auth.capability ? { capability: auth.capability } : {}),
+          ...(auth.risk ? { risk: auth.risk } : {}),
+        },
+        { status: auth.status ?? 401 }
+      );
     }
 
     // Verificar que el ítem existe y pertenece al tenant

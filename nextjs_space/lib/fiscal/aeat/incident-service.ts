@@ -70,25 +70,27 @@ export class AEATIncidentService {
 
   private static async notifyIncident(incident: any) {
     const creds = await loadTelegramCredentials(incident.tenantId);
-    if (creds.admin_chat_id) {
+    // Solo con el bot PROPIO del tenant: sin él no se avisa (el bot del
+    // sistema no lleva datos de tenants).
+    if (creds.admin_chat_id && creds.bot_token) {
       const msg = `🚨 <b>NUEVO INCIDENTE FISCAL</b>\n\n` +
                   `🆔 ID: ${incident.id}\n` +
                   `🔥 Tipo: ${incident.type}\n` +
                   `⚠️ Severidad: ${incident.severity}\n` +
                   `📝 ${incident.description}\n\n` +
                   `Usa /fiscal_ack ${incident.id} para reconocerlo.`;
-      await sendTelegramMessage(creds.admin_chat_id, msg);
+      await sendTelegramMessage(creds.admin_chat_id, msg, creds.bot_token);
     }
   }
 
   private static async notifyResolution(incident: any) {
     const creds = await loadTelegramCredentials(incident.tenantId);
-    if (creds.admin_chat_id) {
+    if (creds.admin_chat_id && creds.bot_token) {
       const msg = `✅ <b>INCIDENTE RESUELTO</b>\n\n` +
                   `🆔 ID: ${incident.id}\n` +
                   `🔥 Tipo: ${incident.type}\n` +
                   `El sistema ha detectado que la anomalía ha desaparecido.`;
-      await sendTelegramMessage(creds.admin_chat_id, msg);
+      await sendTelegramMessage(creds.admin_chat_id, msg, creds.bot_token);
     }
   }
 }

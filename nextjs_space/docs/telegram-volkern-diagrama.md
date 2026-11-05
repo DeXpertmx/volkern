@@ -321,11 +321,13 @@
          │
          ▼
 2. VOLKERN REGISTRA WEBHOOK EN TELEGRAM
-   GET /api/telegram/webhook?tenantId=xxx&action=setWebhook
-   
-   → TelegramGatewayAgent.setWebhook()
-   → POST https://api.telegram.org/bot<TOKEN>/setWebhook
-   → URL: https://volkern.app/api/telegram/webhook?tenantId=xxx&token=abc
+   scripts/register-telegram-webhooks.ts   (sin --apply, solo el plan)
+
+   → POST https://api.telegram.org/bot<TOKEN>/setWebhook  (con secret_token)
+   → URL: https://volkern.app/api/webhooks/telegram
+
+   NOTA: el antiguo GET .../api/telegram/webhook?action=setWebhook está
+   retirado: respondía sin sesión y apuntaba el bot a la ruta legacy.
          │
          ▼
 3. TELEGRAM CONFIRMA
@@ -387,10 +389,10 @@ POST /api/telegram/webhook
     → Query params: tenantId, token
 
 GET  /api/telegram/webhook?tenantId=xxx&action=status
-    → Verifica estado del chatbot
+    → Verifica estado del chatbot (exige sesión de superadmin)
 
 GET  /api/telegram/webhook?tenantId=xxx&action=setWebhook
-    → Registra webhook en Telegram API
+    → RETIRADO: responde 409 y no cambia el webhook del bot
 
 POST /api/mensajes/enviar
     → Envía respuesta del agente a Telegram

@@ -36,7 +36,7 @@ export const GET = withTenantAuth(async (req, auth) => {
   } catch (error) {
     return NextResponse.json({ error: 'Error al listar skills' }, { status: 500 });
   }
-});
+}, ['skills:execute']);
 
 export const POST = withTenantAuth(async (req, auth) => {
   try {
@@ -278,4 +278,4 @@ export const POST = withTenantAuth(async (req, auth) => {
       message: error.message 
     }, { status: 500 });
   }
-});
+}, ['skills:execute']);

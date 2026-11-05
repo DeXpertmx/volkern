@@ -130,4 +130,4 @@ export const POST = withTenantAuth(async (request: Request, auth) => {
     console.error('[POST /api/contacts/import] Error:', error)
     return NextResponse.json({ error: 'Error al procesar el archivo' }, { status: 500 })
   }
-})
+}, ['contacts:write'])

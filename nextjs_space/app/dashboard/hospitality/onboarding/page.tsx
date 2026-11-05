@@ -188,13 +188,9 @@ const ETIQUETA_FUENTE: Record<CotejoVinculo['nuestro']['fuente'], string> = {
   sin_precio: 'sin precio',
 };
 
+/** Importe en la divisa del dato, sin céntimos: la tarifa de un hotel no los usa. */
 function dinero(valor: number | null | undefined, moneda: string | null | undefined) {
-  if (valor == null || !Number.isFinite(valor)) return '—';
-  try {
-    return new Intl.NumberFormat('es', { style: 'currency', currency: moneda || 'MXN', maximumFractionDigits: 0 }).format(valor);
-  } catch {
-    return `$${Math.round(valor).toLocaleString('es')}`;
-  }
+  return formatearImporte(valor, moneda || '', 0);
 }
 
 interface RateplanCatalogo {

@@ -60,6 +60,23 @@ export VOLKERN_API_KEY="tu_api_key_aqui"
 export VOLKERN_API_URL="https://volkern.app/api"  # Opcional, usa este valor por defecto
 ```
 
+### Cómo se ejecutan las herramientas
+
+El servidor **no ejecuta nada por su cuenta**: reenvía cada `tools/call` al
+endpoint MCP de Volkern (`/mcp`) con tu API key. Así hereda la misma identidad
+derivada de la credencial, la decisión de permisos por herramienta y rol, la
+aprobación de acciones sensibles y la auditoría que el resto de superficies.
+
+Consecuencias prácticas:
+
+- **`Requiere aprobación`** significa que no se ha ejecutado nada: un
+  responsable debe aprobarlo en Volkern. Reintentar devuelve la misma
+  solicitud pendiente, no la ejecuta.
+- **`Denegado`** es una decisión de política (herramienta destructiva con un
+  rol sin permiso, por ejemplo), no un fallo de red.
+- `VOLKERN_MCP_URL` permite apuntar a otro endpoint MCP; por defecto se deriva
+  de `VOLKERN_API_URL` quitando el sufijo `/api` y añadiendo `/mcp`.
+
 ## Uso con Claude Desktop
 
 Agrega la siguiente configuración a tu archivo `claude_desktop_config.json`:

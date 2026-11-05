@@ -18,7 +18,7 @@ export const GET = withTenantAuth(async (req, auth) => {
       { status: 500 }
     );
   }
-});
+}, ['notifications:read']);
 
 export const PUT = withTenantAuth(async (req, auth) => {
   try {
@@ -52,4 +52,4 @@ export const PUT = withTenantAuth(async (req, auth) => {
       { status: 500 }
     );
   }
-});
+}, ['notifications:write']);

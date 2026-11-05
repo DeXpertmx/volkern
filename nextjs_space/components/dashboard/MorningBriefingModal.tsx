@@ -27,6 +27,7 @@ import type { BriefingData } from '@/lib/sales/morning-briefing-service';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { marcarBriefingResuelto } from '@/lib/primer-uso';
 
 export function MorningBriefingModal() {
   const [data, setData] = useState<BriefingData | null>(null);
@@ -40,8 +41,20 @@ export function MorningBriefingModal() {
 
     if (lastShow !== today) {
       fetchBriefing();
+    } else {
+      // Ya se resolvió hoy: el resto de pasos del primer uso puede seguir.
+      marcarBriefingResuelto();
     }
   }, []);
+
+  /**
+   * Única forma de cerrar: el paso siguiente (permiso de notificaciones) sólo
+   * arranca cuando éste ha terminado, no mientras está abierto.
+   */
+  const cerrar = () => {
+    marcarBriefingResuelto();
+    setOpen(false);
+  };
 
   const fetchBriefing = async () => {
     try {
@@ -52,21 +65,33 @@ export function MorningBriefingModal() {
         // semántica de una-vez-al-día, sin volver a consultar en cada navegación).
         if (briefing.disabled) {
           localStorage.setItem('last_morning_briefing', new Date().toDateString());
+          marcarBriefingResuelto();
           return;
         }
         setData(briefing);
         setOpen(true);
         localStorage.setItem('last_morning_briefing', new Date().toDateString());
+      } else {
+        // Error del servidor: no hay briefing que mostrar hoy.
+        marcarBriefingResuelto();
       }
     } catch (error) {
       console.error('Error fetching briefing:', error);
+      // Sin briefing no hay nada que enseñar: no bloqueamos el paso siguiente.
+      marcarBriefingResuelto();
     }
   };
 
   if (!data) return null;
 
+  /** Cuenta sin actividad: orientar en vez de fingir un análisis. */
+  const sinActividad =
+    data.topDeals.length === 0 &&
+    data.tareasPendientes.length === 0 &&
+    data.riskyDeals.length === 0;
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : cerrar())}>
       <DialogContent className="max-w-2xl border-primary/20 bg-gradient-to-b from-primary/5 to-background">
         <DialogHeader>
           <div className="flex items-center gap-3 mb-2">
@@ -74,9 +99,13 @@ export function MorningBriefingModal() {
               <Sun className="h-6 w-6 text-amber-600 animate-pulse" />
             </div>
             <div>
-              <DialogTitle className="text-2xl font-black">¡Buenos días, Estratega!</DialogTitle>
+              <DialogTitle className="text-2xl font-black">
+                {sinActividad ? 'Aún no tienes actividad' : '¡Buenos días, Estratega!'}
+              </DialogTitle>
               <DialogDescription className="font-medium text-primary/70">
-                Gemma ha analizado tu cartera. Aquí está tu hoja de ruta para hoy.
+                {sinActividad
+                  ? 'Crea tu primer lead y define su próxima acción: a partir de ahí este resumen se llena solo.'
+                  : 'Gemma ha analizado tu cartera. Aquí está tu hoja de ruta para hoy.'}
               </DialogDescription>
             </div>
           </div>
@@ -87,15 +116,32 @@ export function MorningBriefingModal() {
           <div className="space-y-3">
             <h3 className="text-sm font-bold flex items-center gap-2 text-muted-foreground uppercase tracking-wider">
               <Rocket className="h-4 w-4" />
-              Tus 3 movimientos clave
+              {sinActividad ? 'Primer paso' : 'Tus 3 movimientos clave'}
             </h3>
+            {sinActividad ? (
+              <Card className="bg-background/50 border-dashed">
+                <CardContent className="p-5 text-center space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    No hay oportunidades, tareas ni riesgos que revisar todavía.
+                  </p>
+                  <Button
+                    onClick={() => {
+                      cerrar();
+                      router.push('/dashboard/leads');
+                    }}
+                  >
+                    Crear mi primer lead
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
             <div className="grid gap-3">
               {data.topDeals.map((deal) => (
                 <Card 
                   key={deal.id} 
                   className="group hover:border-primary/50 transition-all cursor-pointer bg-background/50"
                   onClick={() => {
-                    setOpen(false);
+                    cerrar();
                     router.push(`/dashboard/pipeline/${deal.id}`);
                   }}
                 >
@@ -114,6 +160,7 @@ export function MorningBriefingModal() {
                 </Card>
               ))}
             </div>
+            )}
           </div>
 
           {/* Pendientes importantes */}
@@ -128,7 +175,7 @@ export function MorningBriefingModal() {
                   <button
                     key={t.id}
                     onClick={() => {
-                      setOpen(false);
+                      cerrar();
                       router.push(t.leadId ? `/dashboard/leads/${t.leadId}` : '/dashboard/tareas');
                     }}
                     className="w-full text-left p-3 rounded-xl border bg-background/60 hover:border-primary/40 hover:shadow-sm transition-all group flex items-center justify-between gap-3"
@@ -175,7 +222,7 @@ export function MorningBriefingModal() {
                         <button
                           key={deal.id}
                           onClick={() => {
-                            setOpen(false);
+                            cerrar();
                             router.push(`/dashboard/pipeline/${deal.id}`);
                           }}
                           className="w-full text-left p-2.5 rounded-lg bg-white/70 border border-red-100 hover:border-red-300 hover:shadow-sm transition-all group"
@@ -232,9 +279,9 @@ export function MorningBriefingModal() {
         </div>
 
         <div className="flex justify-end gap-3">
-          <Button variant="ghost" onClick={() => setOpen(false)}>Descartar</Button>
+          <Button variant="ghost" onClick={cerrar}>Descartar</Button>
           <Button onClick={() => {
-            setOpen(false);
+            cerrar();
             router.push('/dashboard/pipeline');
           }}>Ir al Pipeline</Button>
         </div>

@@ -65,7 +65,7 @@ export const POST = withTenantAuth(async (request, auth) => {
     console.error('[ComplaintsAPI] Error:', error);
     return NextResponse.json({ error: 'Error al procesar la denuncia' }, { status: 500 });
   }
-});
+}, ['compliance:write']);
 
 /**
  * GET /api/equality/complaints - Listar denuncias (Solo para el responsable)
@@ -98,4 +98,4 @@ export const GET = withTenantAuth(async (request, auth) => {
   } catch (error) {
     return NextResponse.json({ error: 'Error al obtener denuncias' }, { status: 500 });
   }
-});
+}, ['compliance:read']);

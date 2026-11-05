@@ -33,4 +33,4 @@ export const POST = withTenantAuth(async (request: Request, auth) => {
     console.error('[GuideAPI] Error fatal:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
-});
+}, ['skills:execute']);

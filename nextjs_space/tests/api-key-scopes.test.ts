@@ -23,7 +23,9 @@ const PLATFORM_PATH_SEGMENT = join('app', 'api', 'admin');
 // El módulo admite dígitos (p. ej. n8n:read) pero debe contener al menos una
 // letra, para no confundir horas ('10:00') o ratios ('16:9') con scopes.
 const SCOPE_LITERAL_RE = /['"]((?=[a-z0-9_]*[a-z])[a-z0-9_]+:[a-z_]+)['"]/g;
-const SCOPE_FORMAT_RE = /^(?=[a-z0-9_]*[a-z])[a-z0-9_]+:[a-z_]+$/;
+// El guion es parte del nombre del módulo (`real-estate:read`), igual que en la
+// ruta `/api/real-estate`. Se exige que el recurso empiece por letra.
+const SCOPE_FORMAT_RE = /^(?=[a-z0-9_-]*[a-z])[a-z0-9_-]+:[a-z_]+$/;
 
 function findApiDir(): string {
   const candidates = [

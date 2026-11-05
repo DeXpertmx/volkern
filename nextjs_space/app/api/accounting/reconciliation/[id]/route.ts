@@ -107,7 +107,7 @@ export const GET = withTenantAuth(async (request, auth) => {
     console.error('[Reconciliation GET:id] Error:', error);
     return NextResponse.json({ error: 'Error al obtener detalle' }, { status: 500 });
   }
-});
+}, ['accounting:read']);
 
 // ─── PATCH /api/accounting/reconciliation/[id] ────────────────────────────────
 
@@ -166,7 +166,7 @@ export const PATCH = withTenantAuth(async (request, auth) => {
     console.error('[Reconciliation PATCH:id] Error:', error);
     return NextResponse.json({ error: 'Error al actualizar' }, { status: 500 });
   }
-});
+}, ['accounting:write']);
 
 // ─── DELETE /api/accounting/reconciliation/[id] ───────────────────────────────
 
@@ -224,4 +224,4 @@ export const DELETE = withTenantAuth(async (request, auth) => {
     console.error('[Reconciliation DELETE:id] Error:', error);
     return NextResponse.json({ error: 'Error al eliminar' }, { status: 500 });
   }
-});
+}, ['accounting:write']);

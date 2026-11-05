@@ -82,7 +82,7 @@ describe('Integración: Branding de Agencia (DB real)', () => {
         prefix: agencyPrefix,
         tenantId: agencyTenant.id,
         userId: testUser.id,
-        scopes: ['agent:skill'],
+        scopes: ['agent:skill', 'settings:write'],
       },
     });
     agencyApiKey = rawAgencyKey;
@@ -107,7 +107,7 @@ describe('Integración: Branding de Agencia (DB real)', () => {
         prefix: bizPrefix,
         tenantId: businessTenant.id,
         userId: testUser.id,
-        scopes: ['agent:skill'],
+        scopes: ['agent:skill', 'settings:write'],
       },
     });
     businessApiKey = rawBizKey;

@@ -53,4 +53,4 @@ export const GET = withTenantAuth(async (request, auth, context) => {
     console.error('[Formularios API] Error listing submissions:', error);
     return NextResponse.json({ error: 'Error al listar submissions' }, { status: 500 });
   }
-});
+}, ['config:read']);

@@ -56,7 +56,7 @@ export const PATCH = withTenantAuth(async (req, auth) => {
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-});
+}, ['social:write']);
 
 // DELETE /api/social/posts/[id] - Eliminar un post
 export const DELETE = withTenantAuth(async (req, auth) => {
@@ -84,4 +84,4 @@ export const DELETE = withTenantAuth(async (req, auth) => {
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-});
+}, ['social:write']);

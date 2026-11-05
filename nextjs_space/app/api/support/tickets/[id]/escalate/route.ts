@@ -49,4 +49,4 @@ export const POST = withTenantAuth(async (request, auth, { params }) => {
     console.error('[SupportEscalate] Error:', error);
     return NextResponse.json({ error: 'Error al escalar ticket' }, { status: 500 });
   }
-});
+}, ['support:write']);

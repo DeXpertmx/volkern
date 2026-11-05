@@ -16,7 +16,7 @@ const TIPOS_VALIDOS = ['alojamiento', 'limpieza', 'extra', 'otro'];
 // PATCH /api/hospitality/reservations/[id]/items/[itemId] — editar línea
 export async function PATCH(req: NextRequest, ctx: Params) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:write']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     const sinPermiso = exigirPermisoHospitality(auth, 'finanzas.gestionar');
     if (sinPermiso) return sinPermiso;
@@ -81,7 +81,7 @@ export async function PATCH(req: NextRequest, ctx: Params) {
 // DELETE /api/hospitality/reservations/[id]/items/[itemId] — quitar línea
 export async function DELETE(req: NextRequest, ctx: Params) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:write']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     const sinPermiso = exigirPermisoHospitality(auth, 'finanzas.gestionar');
     if (sinPermiso) return sinPermiso;

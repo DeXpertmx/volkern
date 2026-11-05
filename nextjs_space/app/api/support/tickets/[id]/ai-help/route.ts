@@ -62,4 +62,4 @@ export const POST = withTenantAuth(async (request, auth, { params }) => {
     console.error('[SupportAIHelp] Error:', error);
     return NextResponse.json({ error: 'Error al consultar a Gemma' }, { status: 500 });
   }
-});
+}, ['support:write']);

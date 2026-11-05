@@ -97,4 +97,4 @@ Reglas:
     console.error('[AI Suggest] Error:', error);
     return NextResponse.json({ error: 'Error al procesar solicitud' }, { status: 500 });
   }
-});
+}, ['cms:write']);

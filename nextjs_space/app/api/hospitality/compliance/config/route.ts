@@ -19,7 +19,7 @@ import { ENDPOINTS, ENTORNOS, ESQUEMA_XML_DISPONIBLE } from '@/lib/hospitality/s
 // puede ofrecer el envío, y nada más.
 export async function GET(req: NextRequest) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['compliance:read']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     const sinPermiso = exigirPermisoHospitality(auth, 'integraciones.ver');
     if (sinPermiso) return sinPermiso;
@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
 // concediéndolo, en lugar de tener que llamarse `Admin`.
 export async function PUT(req: NextRequest) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['compliance:write']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     const sinPermiso = exigirPermisoHospitality(auth, 'integraciones.administrar');
     if (sinPermiso) return sinPermiso;
@@ -99,7 +99,7 @@ export async function PUT(req: NextRequest) {
 // las dos cosas.
 export async function DELETE(req: NextRequest) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['compliance:write']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     const sinPermiso = exigirPermisoHospitality(auth, 'integraciones.administrar');
     if (sinPermiso) return sinPermiso;
@@ -129,7 +129,7 @@ export async function DELETE(req: NextRequest) {
 // respuesta lo dice en `certificadoError`.
 export async function POST(req: NextRequest) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['compliance:write']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     const sinPermiso = exigirPermisoHospitality(auth, 'integraciones.gestionar');
     if (sinPermiso) return sinPermiso;

@@ -370,26 +370,46 @@ export class NotificationService {
     context: SkillContext
   ): Promise<Omit<NotificationResult, 'notificationId'>> {
     try {
-      const creds = await (loadTelegramCredentials as any)(context.tenantId);
-      
-      // Fallback: si no hay admin_chat_id, buscar el primer usuario del tenant
-      if (!creds?.admin_chat_id && context.tenantId) {
-        const { prisma } = await import('@/lib/db');
-        const firstUser = await prisma.user.findFirst({
-          where: { tenantId: context.tenantId },
-          select: { telefono: true }
-        });
-        if (firstUser?.telefono) {
-          // Usar el teléfono como fallback (no es ideal pero funciona)
-          console.log('[NotificationLayer] Usando teléfono del usuario como fallback para Telegram');
-        }
+      if (!context.tenantId) {
+        throw new Error('Telegram notification requires tenantId');
       }
-      
+
+      const creds = await (loadTelegramCredentials as any)(context.tenantId);
+
+      // El tenant debe tener SU bot propio. Sin él no se envía por Telegram:
+      // nunca por el bot del sistema (`TELEGRAM_BOT_TOKEN`), que no lleva
+      // datos de tenants (TELEGRAM_ARQUITECTURA.md §1).
+      if (!creds?.bot_token) {
+        return {
+          success: false,
+          channel: 'telegram',
+          status: 'failed',
+          error: 'El tenant no tiene un bot de Telegram propio configurado',
+        };
+      }
+
       // Determinar el chatId: 1. Del destinatario, 2. De la integración del tenant (admin)
       const chatId = recipient.telegramChatId || creds?.admin_chat_id;
       
       if (!chatId) {
         throw new Error('Telegram chat ID required (not in recipient nor in tenant config)');
+      }
+
+      // Guardia anti-fuga: un chat pertenece a UN solo tenant. Si este chat
+      // está vinculado también a otro tenant, no se le envía nada desde aquí
+      // (evita que lleguen avisos de otros tenants al mismo chat personal).
+      const { chatVinculadoSoloA } = await import('@/lib/telegram/context-resolver');
+      if (!(await chatVinculadoSoloA(String(chatId), context.tenantId))) {
+        console.warn(
+          `[NotificationLayer] Chat ${chatId} vinculado a más de un tenant; ` +
+            `no se envía la notificación de ${context.tenantId}`
+        );
+        return {
+          success: false,
+          channel: 'telegram',
+          status: 'failed',
+          error: 'El chat está vinculado a otro tenant (un chat = un tenant)',
+        };
       }
 
       // Convertir a inline_keyboard de Telegram. `inlineKeyboard` (botones con
@@ -409,11 +429,15 @@ export class NotificationService {
         };
       }
       
+      // `sendTelegramMessage` solo adjunta el teclado si viene bajo
+      // `reply_markup` (contrato de `TelegramService.sendMessage`). Pasarlo
+      // suelto hacía que Telegram recibiera el mensaje SIN botones, así que el
+      // morning briefing y las acciones de tarea llegaban sin teclado.
       const sendResult = await sendTelegramMessage(
         chatId,
         content.body,
         creds?.bot_token,
-        replyMarkup
+        replyMarkup ? { reply_markup: replyMarkup } : undefined
       );
       
       return {
@@ -442,7 +466,9 @@ export class NotificationService {
   ): Promise<void> {
     try {
       const creds = await (loadTelegramCredentials as any)(context.tenantId);
-      if (creds && (recipient.telegramChatId || creds.admin_chat_id)) {
+      // Sin bot propio del tenant no se notifica por Telegram (nada del bot
+      // del sistema para datos de tenants).
+      if (creds?.bot_token && (recipient.telegramChatId || creds.admin_chat_id)) {
         await this.sendTelegram(recipient, content, context);
       }
     } catch (error) {

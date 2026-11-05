@@ -63,4 +63,4 @@ export const GET = withTenantAuth(async (request, auth) => {
     console.error('[SupportMetrics] Error:', error);
     return NextResponse.json({ error: 'Error al calcular métricas' }, { status: 500 });
   }
-});
+}, ['support:read']);

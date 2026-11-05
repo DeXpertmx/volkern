@@ -29,7 +29,7 @@ interface Params {
 
 export async function GET(req: NextRequest, ctx: Params) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:read']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     const sinPermiso = exigirPermisoHospitality(auth, 'reservas.ver');
     if (sinPermiso) return sinPermiso;
@@ -45,7 +45,7 @@ export async function GET(req: NextRequest, ctx: Params) {
 
 export async function POST(req: NextRequest, ctx: Params) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:write']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     // La fianza es dinero (se cobra y se retiene): decide Finanzas, no una
     // edición de reserva.
@@ -87,7 +87,7 @@ export async function POST(req: NextRequest, ctx: Params) {
 
 export async function DELETE(req: NextRequest, ctx: Params) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:write']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     const sinPermiso = exigirPermisoHospitality(auth, 'finanzas.gestionar');
     if (sinPermiso) return sinPermiso;

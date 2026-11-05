@@ -11,7 +11,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from 'sonner'
-import { Building2, Mail, Lock, User, Loader2, Zap, Shield, Users, BookOpen, PenTool, GraduationCap, Calculator, Factory, UserCheck, CheckCircle2, LayoutGrid, Hotel } from 'lucide-react'
+import { Building2, Mail, Lock, User, Loader2, Zap, Shield, Users, BookOpen, PenTool, GraduationCap, Calculator, Factory, UserCheck, CheckCircle2, LayoutGrid, Hotel, Eye, EyeOff } from 'lucide-react'
+import { passwordValida, requisitosPassword, PASSWORD_PLACEHOLDER } from '@/lib/validation/password'
 
 /* ─── Plan Summary Card ──────────────────────────────────────────────────── */
 
@@ -90,6 +91,7 @@ function SignupForm() {
   const [couponValid, setCouponValid] = useState<any>(null)
   const [validatingCoupon, setValidatingCoupon] = useState(false)
   const [selectedVertical, setSelectedVertical] = useState<string | null>(null)
+  const [verPassword, setVerPassword] = useState(false)
 
   const validateCoupon = async () => {
     if (!formData.couponCode.trim()) return
@@ -125,8 +127,17 @@ function SignupForm() {
       return
     }
 
-    if (formData.password.length < 6) {
-      toast.error('La contraseña debe tener al menos 6 caracteres')
+    // La misma regla que aplica el servidor, mostrada mientras se escribe:
+    // si aquí está en verde, allí no puede fallar.
+    const requisitos = requisitosPassword(formData.password)
+    const incompletos = requisitos.filter(r => !r.ok).map(r => r.texto)
+    if (incompletos.length > 0) {
+      toast.error(`La contraseña todavía no cumple: ${incompletos.join(', ')}`)
+      return
+    }
+
+    if (!passwordValida(formData.password)) {
+      toast.error('La contraseña no cumple los requisitos de seguridad')
       return
     }
 
@@ -336,14 +347,33 @@ function SignupForm() {
                 <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                 <Input
                   id="password"
-                  type="password"
-                  placeholder="Mínimo 6 caracteres"
-                  className="pl-10"
+                  type={verPassword ? 'text' : 'password'}
+                  placeholder={PASSWORD_PLACEHOLDER}
+                  className="pl-10 pr-10"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  aria-describedby="requisitos-password"
                   required
                 />
+                <button
+                  type="button"
+                  onClick={() => setVerPassword(v => !v)}
+                  aria-label={verPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  className="absolute right-3 top-2.5 h-5 w-5 text-gray-400 hover:text-gray-600"
+                >
+                  {verPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </div>
+              {/* Requisitos visibles ANTES de escribir y evaluados en vivo: el
+                  servidor exige exactamente esto (lib/validation/password.ts). */}
+              <ul id="requisitos-password" className="grid grid-cols-1 gap-1 pt-1">
+                {requisitosPassword(formData.password).map(r => (
+                  <li key={r.id} className={`flex items-center gap-1.5 text-xs ${r.ok ? 'text-emerald-600' : 'text-gray-500'}`}>
+                    <CheckCircle2 className={`h-3.5 w-3.5 ${r.ok ? '' : 'text-gray-300'}`} />
+                    {r.texto}
+                  </li>
+                ))}
+              </ul>
             </div>
 
             <div className="space-y-2">

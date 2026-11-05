@@ -88,7 +88,7 @@ export const GET = withTenantAuth(async (request, auth) => {
       { status: 500 }
     )
   }
-});
+}, ['settings:read']);
 
 /**
  * PUT - Actualizar configuración de whitelabel
@@ -238,7 +238,7 @@ export const PUT = withTenantAuth(async (request, auth) => {
       { status: 500 }
     )
   }
-});
+}, ['settings:write']);
 
 /**
  * POST - Subir logo/icono (Sigue siendo estándar ya que solo requiere estar autenticado)

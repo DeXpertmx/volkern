@@ -5,6 +5,7 @@ import { usePushNotifications } from '@/hooks/use-push-notifications';
 import { Button } from '@/components/ui/button';
 import { Bell, X, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { briefingPendienteHoy, EVENTO_BRIEFING_RESUELTO } from '@/lib/primer-uso';
 
 export function PushPrompt() {
   const { permissionState, subscribe, isSupported } = usePushNotifications();
@@ -24,8 +25,27 @@ export function PushPrompt() {
     // También verificar permiso nativo directamente por si el estado aún no se sincronizó
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission !== 'default') return;
 
-    const timer = setTimeout(() => setIsVisible(true), 3000);
-    return () => clearTimeout(timer);
+    // Un solo paso activo en el primer uso: mientras el resumen de Gemma no se
+    // haya cerrado, este aviso no aparece (evita los dos mensajes a la vez).
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const programar = () => {
+      timer = setTimeout(() => setIsVisible(true), 3000);
+    };
+    const alResolverse = () => {
+      if (briefingPendienteHoy()) return;
+      window.removeEventListener(EVENTO_BRIEFING_RESUELTO, alResolverse);
+      programar();
+    };
+    if (briefingPendienteHoy()) {
+      window.addEventListener(EVENTO_BRIEFING_RESUELTO, alResolverse);
+    } else {
+      programar();
+    }
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener(EVENTO_BRIEFING_RESUELTO, alResolverse);
+    };
   }, [permissionState, isSupported]);
 
   const handleDismiss = () => {

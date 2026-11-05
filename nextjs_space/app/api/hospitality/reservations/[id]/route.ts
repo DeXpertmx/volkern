@@ -23,7 +23,7 @@ interface Params {
 // GET /api/hospitality/reservations/[id] — detalle
 export async function GET(_req: NextRequest, ctx: Params) {
   try {
-    const auth = await authenticateRequest(_req);
+    const auth = await authenticateRequest(_req, ['hospitality:read']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
 
     const sinPermiso = exigirPermisoHospitality(auth, 'reservas.ver');
@@ -52,7 +52,7 @@ export async function GET(_req: NextRequest, ctx: Params) {
 // Body: { unitId?, canal?, checkin?, checkout?, estado?, importe?, moneda?, notas? }
 export async function PATCH(req: NextRequest, ctx: Params) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:write']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
 
     const { id } = await ctx.params;

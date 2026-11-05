@@ -259,6 +259,29 @@ export const AVAILABLE_SCOPES = [
   'ads:write',
   'ads:manage',
   'ads:admin',
+
+  // ─── Módulos que hasta ahora sólo se protegían con el rol ────────────────
+  // Sus rutas se autenticaban por sesión o por una clave SIN scope: cualquier
+  // clave válida del tenant pasaba, aunque se hubiera emitido para leer leads.
+  // No existía vocabulario para ellos, así que se añade aquí. Añadir un scope
+  // NO cambia ninguna clave existente (cada una conserva su lista): hasta que
+  // un tenant lo otorgue, la integración que llame a esas rutas recibirá 403, y
+  // por eso el despliegue va acompañado de la medición de §7 del documento.
+  'hospitality:read',
+  'hospitality:write',
+  'real-estate:read',
+  'real-estate:write',
+  'support:read',
+  'support:write',
+  'compliance:read',
+  'compliance:write',
+  'notifications:read',
+  'notifications:write',
+  'users:read',
+  'users:write',
+  'import:write',
+  // GET /api/import/history: leer el historial de importaciones no es importar.
+  'import:read',
 ] as const;
 
 export type ApiKeyScope = typeof AVAILABLE_SCOPES[number];
@@ -274,13 +297,23 @@ export function hasScope(scopes: string[], requiredScope: string): boolean {
 }
 
 /**
- * Verifica si una API key tiene cualquiera de los scopes requeridos
+ * Verifica si una API key tiene cualquiera de los scopes requeridos.
+ *
+ * Regla de implicación: `x:write` satisface `x:read`. Una integración a la que
+ * se le dio permiso para escribir en un módulo obviamente puede leerlo, y sin
+ * esto cada ruta de lectura nueva rompería claves que ya funcionaban. La
+ * implicación es en un solo sentido a propósito: un `:read` NUNCA satisface un
+ * `:write`.
+ *
  * @param scopes - Lista de scopes de la API key
  * @param requiredScopes - Lista de scopes requeridos (al menos uno)
- * @returns true si tiene al menos uno de los scopes
+ * @returns true si tiene al menos uno de los scopes (o su `:write`)
  */
 export function hasAnyScope(scopes: string[], requiredScopes: string[]): boolean {
-  return requiredScopes.some(scope => scopes.includes(scope));
+  return requiredScopes.some((scope) =>
+    scopes.includes(scope) ||
+    (scope.endsWith(':read') && scopes.includes(`${scope.slice(0, -':read'.length)}:write`))
+  );
 }
 
 /**

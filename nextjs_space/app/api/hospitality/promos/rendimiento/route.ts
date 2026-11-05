@@ -58,7 +58,7 @@ function codigoDelPayload(payload: unknown): string | null {
 
 export async function GET(req: NextRequest) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:read']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     const sinPermiso = exigirPermisoHospitality(auth, 'finanzas.ver');
     if (sinPermiso) return sinPermiso;

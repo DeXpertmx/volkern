@@ -104,13 +104,13 @@ function fechaDeChequeo(iso: string | null): string {
   if (!iso) return '';
   const fecha = new Date(iso);
   if (Number.isNaN(fecha.getTime())) return '';
-  return fecha.toLocaleString('es-MX', {
+  return new Intl.DateTimeFormat('es-MX', {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-  });
+  }).format(fecha);
 }
 
 export default function ConectividadDelHotel() {

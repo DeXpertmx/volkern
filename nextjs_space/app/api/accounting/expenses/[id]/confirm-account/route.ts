@@ -17,4 +17,4 @@ export const POST = withTenantAuth(async (req, auth, params) => {
     console.error('[Expense Confirm Account] Error:', error);
     return NextResponse.json({ error: error.message || 'Error al confirmar cuenta' }, { status: 500 });
   }
-});
+}, ['accounting:write']);

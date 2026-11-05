@@ -67,7 +67,7 @@ export const GET = withTenantAuth(async (request, auth) => {
     console.error('Error fetching messages:', error);
     return NextResponse.json({ error: 'Error al cargar mensajes' }, { status: 500 });
   }
-});
+}, ['messaging:read']);
 
 /**
  * POST /api/connect/messages - Enviar mensaje
@@ -110,4 +110,4 @@ export const POST = withTenantAuth(async (request, auth) => {
     console.error('Error sending message:', error);
     return NextResponse.json({ error: 'Error al enviar mensaje' }, { status: 500 });
   }
-});
+}, ['messaging:send']);

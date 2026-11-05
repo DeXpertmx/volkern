@@ -24,4 +24,4 @@ export const GET = withTenantAuth(async (request, auth) => {
     console.error('[OperationsActivityAPI] Error:', error);
     return NextResponse.json({ error: 'Error al obtener actividad operativa' }, { status: 500 });
   }
-});
+}, ['dashboard:read']);

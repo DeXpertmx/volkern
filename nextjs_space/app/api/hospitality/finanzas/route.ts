@@ -50,7 +50,7 @@ function parseDateOnly(value: string | null): Date | null {
 // GET /api/hospitality/finanzas?propertyId&estadoCobro&canal&from&to&q
 export async function GET(req: NextRequest) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['accounting:read']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
     const sinPermiso = exigirPermisoHospitality(auth, 'finanzas.ver');
@@ -255,7 +255,7 @@ export async function GET(req: NextRequest) {
 // Body: { reservationId, importe, moneda?, metodo?, estado?, referenciaExterna?, fechaPago?, notas? }
 export async function POST(req: NextRequest) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['accounting:write']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
     const sinPermiso = exigirPermisoHospitality(auth, 'finanzas.gestionar');

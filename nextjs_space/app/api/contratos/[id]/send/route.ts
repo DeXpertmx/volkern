@@ -10,7 +10,15 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   try {
     const auth = await authenticateRequest(request, ['contratos:write']);
     if (!auth.valid || !auth.tenant) {
-      return NextResponse.json({ error: auth.error || 'No autorizado' }, { status: 401 });
+      // 403 si el gate REST denegó el envío; 401 si la credencial no sirve.
+      return NextResponse.json(
+        {
+          error: auth.error || 'No autorizado',
+          ...(auth.capability ? { capability: auth.capability } : {}),
+          ...(auth.risk ? { risk: auth.risk } : {}),
+        },
+        { status: auth.status ?? 401 }
+      );
     }
 
     const tenantId = auth.tenant.id;

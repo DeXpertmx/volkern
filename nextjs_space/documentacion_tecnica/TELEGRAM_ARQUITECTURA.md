@@ -10,7 +10,7 @@
 
 | Bot | Rol | Quién lo usa | Qué recibe |
 |---|---|---|---|
-| **`volkerncrm_bot`** (ID `8657932328`, "Volkern System") | **Bot general del SISTEMA** | El desarrollador / admin de la plataforma | **Solo avisos del sistema**: notificaciones de deploy, alertas de errores de la plataforma, reportes de problemas. Es el `TELEGRAM_BOT_TOKEN` del entorno y el fallback del webhook. **Nunca** recibe conversación del chatbot ni avisos de datos de ningún tenant. |
+| **`volkerncrm_bot`** (ID `8657932328`, "Volkern System") | **Bot general del SISTEMA** | El desarrollador / admin de la plataforma | **Solo avisos del sistema**: notificaciones de deploy, alertas de errores de la plataforma, reportes de problemas. Es el `TELEGRAM_BOT_TOKEN` del entorno. **Nunca** recibe conversación del chatbot ni avisos de datos de ningún tenant — ni como fallback del webhook, ni como fallback de credenciales (`loadTelegramCredentials(tenantId)` devuelve `nulls` si el tenant no tiene bot propio). |
 | **Bot del tenant** (uno por tenant, conectado en su integración de Telegram) | **Bot del CHATBOT + avisos de ese tenant** | Los usuarios de ese tenant | Conversación con Volkern (registrar gastos, agendar citas, consultar leads…) **y todos los avisos de los datos de SU tenant**: confirmaciones destructivas, citas, cotizaciones aceptadas, firmas de contratos, entregas de WhatsApp no entregables, alertas de stock/visión, tareas de seguimiento, etc. Cada tenant usa el suyo y **solo recibe lo suyo**. |
 
 **Regla de oro**: el entrenamiento de la IA (los bloques de intents) es del
@@ -35,19 +35,94 @@ clientes.
 
 ## 2. Cómo resuelve el webhook a qué tenant pertenece el mensaje
 
-`POST /api/webhooks/telegram` (un solo endpoint para todos los bots):
+`POST /api/webhooks/telegram` (un solo endpoint para todos los bots) delega en
+`lib/telegram/context-resolver.ts`:
 
-1. Busca la integración `telegram` cuyo `admin_chat_id` coincide con el chat
-   que escribió (el `/start` vincula el chat al tenant).
-2. Si no, usa la primera integración activa con `bot_token`.
-3. Soporta integraciones legacy (token plano) y canales modernos (token
-   cifrado AES).
-4. Si nada matchea, cae al `TELEGRAM_BOT_TOKEN` del entorno (bot del sistema).
+1. Recoge los **vínculos** del chat que escribió: `admin_chat_id` de la
+   integración legacy, `adminChatId` del canal moderno, `telegram_chat_id` del
+   metadata de usuarios (QR del perfil) y la conversación previa
+   (`Conversation.externalRef = "telegram:<chatId>"`, única en el esquema).
+2. **Un solo tenant vinculado** → ese tenant.
+3. **Varios tenants vinculados** → solo se acepta si la conversación previa
+   está en uno de ellos; si no, **no se resuelve** y el mensaje se ignora.
+4. **Sin vínculo** → si hay conversación previa, ese tenant; si no, solo si
+   exactamente **un** tenant del sistema tiene bot propio (por eliminación no
+   hay ambigüedad). Con varios bots y ningún vínculo, **no se resuelve**.
+5. Todo lo demás → `null`. **Nunca** «la primera integración activa que
+   encuentre»: ese fallback era el que contestaba chats con datos de un tenant
+   arbitrario.
+
+**Regla: un chat = un tenant.** El vínculo del chat de administración se crea
+con un **token de un solo uso** —`/start a_<token>`, generado en Ajustes →
+Integraciones → Telegram y válido 15 minutos— y lo desvincula del resto
+(integraciones, canales y usuarios de otros tenants). El formato antiguo
+`/start <tenantId>` **ya no vincula**: el id de una empresa no es un secreto y
+permitía mover un chat de espacio de trabajo. `/start` sin parámetro no adivina:
+reafirma el vínculo ya existente o, si nadie está vinculado y solo hay un tenant
+con bot propio, va ahí.
+
+En el envío, `lib/skills/notification-layer.ts` exige además (a) que el tenant
+tenga **su bot propio** —`loadTelegramCredentials(tenantId)` ya no cae en las
+variables de entorno— y (b) que el chat esté vinculado **solo** a ese tenant
+(`chatVinculadoSoloA`); si no, no se envía nada. Un aviso que hable de datos de
+un tenant sale por el bot de **ese** tenant, nunca por el del sistema.
 
 Por eso cada tenant conecta **su propio bot** en Configuración → Integraciones:
 los mensajes de sus usuarios se resuelven contra los datos de ese tenant, y
 las respuestas y avisos salen por el `bot_token` de **ese** tenant (nunca por
 el bot del sistema).
+
+### 2.1 `secret_token`: saber qué bot entregó el update (sin adivinar)
+
+Todos los bots comparten el mismo endpoint, así que el payload no dice cuál lo
+entregó. Telegram permite registrar cada webhook con un `secret_token` que
+devuelve en la cabecera `X-Telegram-Bot-Api-Secret-Token`; el webhook valida esa
+cabecera (`lib/telegram/webhook-secret.ts`) y, si corresponde a un bot, **el
+tenant sale del secret** — no del vínculo ni del historial. Con cabecera que no
+corresponde a ningún bot se responde **401**.
+
+El secret se **deriva** del token del bot (SHA-256 determinista, base64url): no
+se guarda en la base ni en el repositorio, re-registrar no lo cambia y no permite
+recuperar el token.
+
+La resolución `secret → tenant` se cachea para no recorrer todos los bots en
+cada update: clave `telegram:webhook-secret:v1:<hash(secret)>` con el `tenantId`
+(nunca el token ni el secret en claro), TTL de 10 min para un acierto y 60 s para
+un secret desconocido, con fallback en memoria si Redis no está. En un hit se
+vuelve a resolver el token del tenant y, si ya no tiene bot, la entrada se
+invalida y se re-escanea.
+
+Además hay un cortafuegos por IP (`lib/telegram/webhook-secret-rate-limit.ts`):
+cuando una IP acumula `TELEGRAM_SECRET_MAX_FALLOS` (5) verificaciones inválidas en
+60 s, los siguientes updates de esa IP se responden **429 con `Retry-After` sin
+verificar nada** — es decir, sin consultar la base — durante 10 minutos. Los
+updates válidos no consumen cuota y los que llegan sin cabecera (y sin exigirla)
+no entran en el límite. El panel de estado del webhook (`/api/webhook-status` →
+`secretLimit`) muestra las IPs bloqueadas con su cuenta atrás y las que acumulan
+fallos sin llegar al bloqueo, y permite **desbloquear a mano** una IP
+(`DELETE /api/webhook-status?ip=…`, solo admin). El desbloqueo borra la marca de
+bloqueo y el contador de fallos —quitar solo el bloqueo haría que el siguiente
+intento la volviera a cortar— y deja constancia en `auditLog`
+(`telegram_secret_ip_desbloqueada`) con autor, origen y fallos descartados. El
+panel devuelve esas trazas en `historial` (junto a los reinicios de métricas),
+paginadas por cursor (`historialCursor` / `historialHayMas`, 8 por página por
+defecto), de modo que la auditoría se recorre sin salir de la pantalla.
+
+```bash
+# Plan (no toca nada) y registro real de todos los bots de tenant
+npx tsx scripts/register-telegram-webhooks.ts --all
+npx tsx scripts/register-telegram-webhooks.ts --all --apply
+# Un tenant concreto
+npx tsx scripts/register-telegram-webhooks.ts --tenant <tenantId> --apply
+```
+
+El script **omite** los bots que ya apuntan a otra URL (p. ej. un inbox de
+Telegram gestionado por Chatwoot) para no romper el hub; `--force` lo pisa.
+
+Sin cabecera, el webhook mantiene la resolución por vínculos descrita arriba
+(compatibilidad con bots aún sin re-registrar). Para cerrar la puerta del todo:
+`TELEGRAM_WEBHOOK_REQUIRE_SECRET=true`, que rechaza los updates sin cabecera
+válida. Actívala **después** de registrar los bots.
 
 ## 3. Entrenamiento (cómo se agrega una capacidad nueva)
 

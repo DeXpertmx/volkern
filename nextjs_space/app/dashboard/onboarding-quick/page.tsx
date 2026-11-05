@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -228,6 +229,30 @@ export default function OnboardingQuickPage() {
     finally { setLoading(false) }
   }
 
+  /**
+   * «Configurar más tarde»: el alta no puede quedar a medias. Antes este salto
+   * empujaba al dashboard sin marcar el onboarding como completado, así que
+   * `OnboardingProgress` se quedaba pendiente para siempre. Ahora termina igual
+   * que el último paso; en las verticales contables sigue con su configuración.
+   */
+  const handleSkipTelegram = async () => {
+    // Se anota la omisión: es lo que permite ofrecer el recordatorio en el panel
+    // (y retirarlo en cuanto se conecte el bot). Si falla, no bloquea la salida.
+    try {
+      await fetch('/api/onboarding/quick', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ step: 'skip-telegram' }),
+      })
+    } catch {}
+
+    if (perfil === 'gestoria' || perfil === 'asesoria_contable') {
+      setStep(6)
+      return
+    }
+    await handleComplete()
+  }
+
   const handleAccountingSetup = async () => {
     setLoading(true)
     try {
@@ -379,6 +404,13 @@ export default function OnboardingQuickPage() {
                   <Button onClick={perfil ? handleStartOnboarding : undefined} disabled={!perfil} className="w-full h-14 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white font-bold text-lg rounded-xl">
                     Comenzar <ArrowRight className="ml-2 h-5 w-5" />
                   </Button>
+
+                  <p className="text-center text-xs text-slate-500 mt-3">
+                    ¿No sabes qué encender?{' '}
+                    <Link href="/dashboard/implantacion" className="text-violet-400 hover:text-violet-300 underline">
+                      Te preguntamos y te proponemos los módulos
+                    </Link>
+                  </p>
                 </CardContent>
               </Card>
             </motion.div>
@@ -418,13 +450,37 @@ export default function OnboardingQuickPage() {
             <motion.div key="step-3" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
               <Card className={cardClass}>
                 <CardContent className="p-8">
-                  <h2 className="text-2xl font-bold text-white mb-2">Conecta tu canal</h2>
-                  <p className="text-slate-400 mb-6">Elige cómo tus clientes te contactarán</p>
+                  <h2 className="text-2xl font-bold text-white mb-2">Recibe avisos y opera desde Telegram</h2>
+                  {/* Telegram tiene DOS funciones y el paso debe decirlas: antes
+                      solo hablaba de avisos, y el botón de «Configurar más tarde»
+                      existía sin explicar qué se perdía al omitirlo. */}
+                  <ul className="text-slate-300 text-sm space-y-2 mb-4">
+                    <li className="flex gap-2">
+                      <span aria-hidden className="text-purple-400">•</span>
+                      <span>
+                        <strong className="text-white">Avisos:</strong> el briefing de cada mañana,
+                        las oportunidades en riesgo y los pendientes de tareas y compras, también
+                        cuando no estás en la app.
+                      </span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span aria-hidden className="text-purple-400">•</span>
+                      <span>
+                        <strong className="text-white">Operar por chat:</strong> tu equipo puede
+                        escribirle al bot para registrar un gasto, agendar una cita o consultar un
+                        lead, sin abrir el panel.
+                      </span>
+                    </li>
+                  </ul>
+                  <p className="text-slate-400 text-sm mb-6">
+                    Se usa un bot propio de tu empresa (se crea en un minuto con @BotFather): los
+                    avisos y los chats de tu empresa no se mezclan con los de ninguna otra.
+                  </p>
                   <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                     <Card className="p-4 cursor-pointer bg-slate-800/50 border-slate-700 hover:border-purple-500 transition-colors" onClick={() => setStep(4)}>
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center"><MessageCircle className="h-6 w-6 text-blue-400" /></div>
-                        <div><p className="font-semibold text-white">Telegram</p><p className="text-sm text-slate-400">Responde automáticamente con IA</p></div>
+                        <div><p className="font-semibold text-white">Telegram</p><p className="text-sm text-slate-400">Avisos y operación por chat</p></div>
                       </div>
                     </Card>
                   </motion.div>
@@ -438,6 +494,18 @@ export default function OnboardingQuickPage() {
               <Card className={cardClass}>
                 <CardContent className="p-8">
                   <h2 className="text-2xl font-bold text-white mb-4">Conectar Telegram</h2>
+                  {/* Se explica PARA QUÉ sirve y POR QUÉ hace falta el bot
+                      antes de pedir el token: el usuario no debe adivinarlo. */}
+                  <p className="text-slate-400 text-sm mb-3">
+                    Con este bot, Volkern te envía el briefing de la mañana, las alertas de
+                    oportunidades en riesgo y los avisos de tareas y compras; y tu equipo puede
+                    escribirle para registrar un gasto, agendar una cita o consultar un lead. El bot
+                    es el canal: sin él, nada de eso llega a Telegram.
+                  </p>
+                  <p className="text-slate-400 text-sm mb-5">
+                    Los avisos de la empresa llegan al chat de administración que configures; los
+                    personales, al chat de cada persona vinculada desde su perfil.
+                  </p>
                   <ol className="text-slate-300 text-sm space-y-2 mb-6">
                     {['Abre Telegram', 'Busca @BotFather', 'Crea tu bot con /newbot', 'Copia el token'].map((txt, i) => (
                       <li key={i} className="flex items-center gap-2">
@@ -450,6 +518,17 @@ export default function OnboardingQuickPage() {
                   <Button onClick={handleConnectTelegram} disabled={loading || !token} className="w-full h-12 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white font-semibold rounded-xl">
                     {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Conectando...</> : 'Conectar Bot'}
                   </Button>
+                  <div className="flex gap-3 mt-3">
+                    <Button variant="outline" onClick={() => setStep(3)} className="flex-1 h-11 border-slate-600 text-slate-300 hover:bg-slate-800 rounded-xl">Volver</Button>
+                    <Button variant="outline" onClick={handleSkipTelegram} className="flex-1 h-11 border-slate-600 text-slate-300 hover:bg-slate-800 rounded-xl">Configurar más tarde</Button>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-3">
+                    Si lo dejas para después: el briefing seguirá apareciendo al abrir el panel, pero
+                    los avisos que Volkern manda por Telegram —oportunidades en riesgo, tareas y
+                    compras pendientes— no llegarán hasta que conectes el bot. Puedes hacerlo cuando
+                    quieras en Integraciones → Telegram; el enlace del perfil solo vincula tu chat a
+                    un bot que ya exista.
+                  </p>
                 </CardContent>
               </Card>
             </motion.div>

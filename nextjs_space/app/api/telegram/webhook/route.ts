@@ -1,8 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
 import { handleTelegramWebhook } from '@/lib/agents/telegram-chatbot';
+import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { rateLimiter } from '@/lib/agents/rate-limiter';
 import { orchestrator } from '@/lib/agents/orchestrator';
+
+/**
+ * Ruta de entrada ANTIGUA de Telegram (motor propio, sin bandeja de gastos).
+ *
+ * Su `GET` es una acción de administración, no un webhook: antes no pedía
+ * sesión, solo el `tenantId` de la URL. Cualquiera que conociera o adivinara
+ * ese id podía ejecutar `action=setWebhook` y re-registrar el webhook del bot
+ * apuntándolo a esta ruta, dejando al pipeline unificado sin recibir updates
+ * (y, de paso, `action=status` devolvía los últimos cuatro caracteres del
+ * token). Ahora exige sesión de superadmin, igual que el resto de acciones de
+ * plataforma.
+ */
+async function requireSuperadmin() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return { error: NextResponse.json({ error: 'No autorizado' }, { status: 401 }) };
+  }
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    include: { role: true },
+  });
+  if (!user || user.role?.nombre !== 'Superadmin') {
+    return { error: NextResponse.json({ error: 'Acceso denegado' }, { status: 403 }) };
+  }
+  return { user };
+}
 
 export async function POST(request: NextRequest) {
   console.log(`[TelegramWebhook] Received POST request at ${new Date().toISOString()}`);
@@ -111,6 +139,9 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
+  const auth = await requireSuperadmin();
+  if (auth.error) return auth.error;
+
   const { searchParams } = new URL(request.url);
   const tenantId = searchParams.get('tenantId');
   const action = searchParams.get('action');
@@ -143,42 +174,24 @@ export async function GET(request: NextRequest) {
         });
 
       case 'setWebhook':
-        if (!config.botToken) {
-          return NextResponse.json(
-            { error: 'No hay bot token configurado' },
-            { status: 400 }
-          );
-        }
-
-        const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/telegram/webhook?tenantId=${tenantId}&token=${Date.now()}`;
-        const { TelegramGatewayAgent } = await import('@/lib/agents/telegram-gateway');
-        
-        const webhookResult = await TelegramGatewayAgent.setWebhook(
-          config.botToken,
-          webhookUrl
+        // Retirado a propósito: esta acción apuntaba el bot a esta misma ruta,
+        // que usa otro motor y no tiene bandeja de gastos. Se responde con el
+        // motivo en vez de cambiar el enrutamiento de un canal en producción.
+        return NextResponse.json(
+          {
+            error: 'Registrar el webhook desde esta ruta está desactivado',
+            detalle:
+              'La ruta antigua ya no puede apuntarse a sí misma. El webhook se registra ' +
+              'con scripts/register-telegram-webhooks.ts (sin --apply muestra el plan y ' +
+              'omite los bots que apuntan a otra dirección); si el bot usa el inbox de ' +
+              'Telegram del hub de comunicaciones, no se toca.',
+          },
+          { status: 409 }
         );
-
-        if (!webhookResult.success) {
-          return NextResponse.json(
-            { error: webhookResult.error },
-            { status: 500 }
-          );
-        }
-
-        // Guardar el webhook URL en la config
-        await prisma.telegramChatbotConfig.update({
-          where: { tenantId },
-          data: { webhookUrl }
-        });
-
-        return NextResponse.json({
-          success: true,
-          webhookUrl
-        });
 
       default:
         return NextResponse.json({
-          message: 'Usa action=status para ver el estado o action=setWebhook para configurar',
+          message: 'Usa action=status para ver el estado. setWebhook está retirado: registra el webhook con scripts/register-telegram-webhooks.ts',
           config: {
             isActive: config.isActive,
             welcomeMessage: config.welcomeMessage,

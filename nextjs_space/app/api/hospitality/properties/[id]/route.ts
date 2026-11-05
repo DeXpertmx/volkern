@@ -29,7 +29,7 @@ async function getProperty(tenantId: string, id: string) {
 // GET /api/hospitality/properties/[id] — detalle (con unidades)
 export async function GET(_req: NextRequest, ctx: Params) {
   try {
-    const auth = await authenticateRequest(_req);
+    const auth = await authenticateRequest(_req, ['hospitality:read']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
 
     const sinPermiso = exigirPermisoHospitality(auth, 'reservas.ver');
@@ -54,7 +54,7 @@ export async function GET(_req: NextRequest, ctx: Params) {
 // PATCH /api/hospitality/properties/[id] — actualizar
 export async function PATCH(req: NextRequest, ctx: Params) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:write']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
     const sinPermiso = exigirPermisoHospitality(auth, 'reservas.editar');
@@ -277,7 +277,7 @@ export async function PATCH(req: NextRequest, ctx: Params) {
 // DELETE /api/hospitality/properties/[id] — eliminar
 export async function DELETE(req: NextRequest, ctx: Params) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:write']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     // La capacidad la decide el rol (§27): sin ella, 403 con el permiso exacto.
     const sinPermiso = exigirPermisoHospitality(auth, 'reservas.editar');

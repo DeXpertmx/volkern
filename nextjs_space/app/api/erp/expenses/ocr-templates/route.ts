@@ -53,7 +53,7 @@ export const GET = withTenantAuth(async (req, auth) => {
 
   const templates = rows.map(serializeTemplate)
   return NextResponse.json({ templates, template: templates[0] || null })
-})
+}, ['erp:read'])
 
 // POST /api/erp/expenses/ocr-templates
 // { supplierName, nif?, name?, fields?, vatRows?, templateId? }
@@ -150,7 +150,7 @@ export const POST = withTenantAuth(async (req, auth) => {
     }
     throw err
   }
-})
+}, ['erp:write'])
 
 // DELETE /api/erp/expenses/ocr-templates?id=...
 export const DELETE = withTenantAuth(async (req, auth) => {
@@ -168,4 +168,4 @@ export const DELETE = withTenantAuth(async (req, auth) => {
   }
   await prisma.supplierOcrTemplate.delete({ where: { id: existing.id } })
   return NextResponse.json({ success: true })
-})
+}, ['erp:write'])

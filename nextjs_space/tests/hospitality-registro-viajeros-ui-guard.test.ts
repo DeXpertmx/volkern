@@ -147,8 +147,12 @@ describe('Formulario compartido de «completar el parte»', () => {
 describe('API de registro de viajeros', () => {
   const fuente = leer('app/api/hospitality/registro-viajeros/route.ts');
 
-  it('exige autenticación en lectura y escritura', () => {
-    expect(fuente.match(/authenticateRequest\(req\)/g)?.length).toBe(2);
+  it('exige autenticación en lectura y escritura, con su scope', () => {
+    // La ruta autenticaba por credencial sin declarar scope: cualquier clave del
+    // tenant pasaba. Ahora la lectura pide `hospitality:read` y la escritura
+    // `hospitality:write`, y las dos llamadas siguen estando.
+    expect(fuente.match(/authenticateRequest\(/g)?.length).toBe(2);
+    expect(fuente.match(/authenticateRequest\(req, \['hospitality:(read|write)'\]\)/g)?.length).toBe(2);
   });
 
   it('delega el envío en el servicio (nada de XML ni HTTP aquí)', () => {

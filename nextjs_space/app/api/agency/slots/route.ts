@@ -36,7 +36,7 @@ export const GET = withTenantAuth(async (req, auth) => {
   });
 
   return NextResponse.json(slots);
-});
+}, ['team:read']);
 
 /**
  * POST /api/agency/slots
@@ -118,4 +118,4 @@ export const POST = withTenantAuth(async (req, auth) => {
     console.error('[Agency Slots] Error al crear slot:', error);
     return NextResponse.json({ error: 'Error al crear el slot del cliente' }, { status: 500 });
   }
-});
+}, ['team:write']);

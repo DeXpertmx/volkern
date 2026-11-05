@@ -12,4 +12,4 @@ export const GET = withTenantAuth(async (req, auth, { params }: any) => {
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-});
+}, ['ads:read']);

@@ -125,12 +125,14 @@ export class VolkernActionRegistry {
     const { tenant_id, data } = context
     const creds = await (loadTelegramCredentials as any)(tenant_id)
     
-    if (!creds?.admin_chat_id) {
+    // Solo el bot PROPIO del tenant: sin él no se envía (el bot del sistema
+    // no lleva datos de tenants).
+    if (!creds?.admin_chat_id || !creds?.bot_token) {
       return { success: false, error: 'Telegram not configured' }
     }
 
     const message = config?.message as string || 'Notificación de Volkern'
-    await sendTelegramMessage(creds.admin_chat_id, message)
+    await sendTelegramMessage(creds.admin_chat_id, message, creds.bot_token)
 
     return { success: true }
   }

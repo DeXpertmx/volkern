@@ -71,4 +71,4 @@ export const GET = withTenantAuth(async (req, auth) => {
     console.error('[Agency-Usage] Error:', error);
     return NextResponse.json({ error: 'Error al calcular métricas de uso' }, { status: 500 });
   }
-});
+}, ['analytics:read']);

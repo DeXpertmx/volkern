@@ -39,7 +39,7 @@ export const GET = withTenantAuth(async (req, auth) => {
 
   const slots = await SlotManager.listSlots(auth.tenant!.id, type || undefined);
   return NextResponse.json(slots);
-});
+}, ['team:read']);
 
 // ─── POST /api/slots ─────────────────────────────────────────────────────────
 // Crea un nuevo slot (tenant hijo)
@@ -88,4 +88,4 @@ export const POST = withTenantAuth(async (req, auth) => {
     const status = error.message?.includes('Límite') || error.message?.includes('alcanzado') ? 403 : 500;
     return NextResponse.json({ error: message }, { status });
   }
-});
+}, ['team:write']);

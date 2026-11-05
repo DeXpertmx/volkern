@@ -17,7 +17,7 @@ const ESTADOS_VALIDOS = ['pendiente', 'pagado', 'parcial', 'reembolsado', 'falli
 // GET /api/hospitality/reservations/[id]/payments — pagos y estado de cobro
 export async function GET(req: NextRequest, ctx: Params) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:read']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     const sinPermiso = exigirPermisoHospitality(auth, 'finanzas.ver');
     if (sinPermiso) return sinPermiso;
@@ -57,7 +57,7 @@ export async function GET(req: NextRequest, ctx: Params) {
 // Body: { importe, metodo?, estado?, referenciaExterna?, fechaPago?, notas? }
 export async function POST(req: NextRequest, ctx: Params) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:write']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
     const sinPermiso = exigirPermisoHospitality(auth, 'finanzas.gestionar');
     if (sinPermiso) return sinPermiso;

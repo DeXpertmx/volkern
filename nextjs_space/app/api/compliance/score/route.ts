@@ -23,4 +23,4 @@ export const GET = withTenantAuth(async (req, auth) => {
       { status: 500 }
     )
   }
-})
+}, ['compliance:read'])

@@ -35,9 +35,6 @@
   "app/api/invoices/[id]/send-email/route.ts": {
     "simbolo": 1
   },
-  "app/api/subscriptions/create/route.ts": {
-    "simbolo": 1
-  },
   "app/api/webhooks/telegram/route.ts": {
     "simbolo": 1
   },
@@ -62,13 +59,7 @@
   "app/neting/page.tsx": {
     "simbolo": 4
   },
-  "app/precios/page.tsx": {
-    "simbolo": 3
-  },
   "app/signup/page.tsx": {
-    "simbolo": 1
-  },
-  "app/terms/page.tsx": {
     "simbolo": 1
   },
   "components/admin/GlobalAnalytics.tsx": {

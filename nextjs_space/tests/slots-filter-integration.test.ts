@@ -74,7 +74,7 @@ describe('Integración: Filtro por tipo en GET /api/slots (DB real)', () => {
         prefix: agencyPrefix,
         tenantId: agencyTenant.id,
         userId: testUser.id,
-        scopes: ['agent:skill'],
+        scopes: ['agent:skill', 'team:read', 'team:write'],
       },
     });
     agencyApiKey = rawAgencyKey;
@@ -99,7 +99,7 @@ describe('Integración: Filtro por tipo en GET /api/slots (DB real)', () => {
         prefix: bizPrefix,
         tenantId: businessTenant.id,
         userId: testUser.id,
-        scopes: ['agent:skill'],
+        scopes: ['agent:skill', 'team:read', 'team:write'],
       },
     });
     businessApiKey = rawBizKey;
@@ -301,7 +301,7 @@ describe('Integración: Filtro por tipo en GET /api/slots (DB real)', () => {
           prefix: pr,
           tenantId: emptyAgency.id,
           userId: testUser.id,
-          scopes: ['agent:skill'],
+          scopes: ['agent:skill', 'team:read', 'team:write'],
         },
       });
 

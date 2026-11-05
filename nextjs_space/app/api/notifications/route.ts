@@ -21,7 +21,7 @@ export const GET = withTenantAuth(async (req, auth) => {
     console.error('Error fetching notifications:', error);
     return NextResponse.json({ error: 'Error al recuperar notificaciones' }, { status: 500 });
   }
-});
+}, ['notifications:read']);
 
 /**
  * PATCH /api/notifications - Marca notificaciones como leídas.
@@ -64,4 +64,4 @@ export const PATCH = withTenantAuth(async (req, auth) => {
     console.error('Error updating notifications:', error);
     return NextResponse.json({ error: 'Error al actualizar' }, { status: 500 });
   }
-});
+}, ['notifications:write']);

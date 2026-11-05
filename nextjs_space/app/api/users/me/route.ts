@@ -85,7 +85,7 @@ export const GET = withTenantAuth(async (req, auth) => {
       { status: 500 }
     );
   }
-});
+}, ['users:read']);
 
 /**
  * PATCH /api/users/me - Actualizar perfil
@@ -193,4 +193,4 @@ export const PATCH = withTenantAuth(async (req, auth) => {
       { status: 500 }
     );
   }
-});
+}, ['users:write']);

@@ -219,7 +219,7 @@ ${rows.length > 0
       { status: 500 }
     );
   }
-});
+}, ['skills:execute']);
 
 /**
  * Fallback simple de extracción de filtros cuando la IA falla

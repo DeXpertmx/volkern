@@ -51,7 +51,7 @@ export const GET = withTenantAuth(async (_req, auth, { params }) => {
 
   const detail = await SlotManager.getSlot(params.id);
   return NextResponse.json(detail);
-});
+}, ['team:read']);
 
 // ─── PATCH /api/slots/[id] ───────────────────────────────────────────────────
 
@@ -115,7 +115,7 @@ export const PATCH = withTenantAuth(async (req, auth, { params }) => {
     console.error('[Slots API] Error al actualizar slot:', error);
     return NextResponse.json({ error: 'Error al actualizar el slot' }, { status: 500 });
   }
-});
+}, ['team:write']);
 
 // ─── DELETE /api/slots/[id] ──────────────────────────────────────────────────
 
@@ -144,4 +144,4 @@ export const DELETE = withTenantAuth(async (_req, auth, { params }) => {
     console.error('[Slots API] Error al eliminar slot:', error);
     return NextResponse.json({ error: 'Error al eliminar el slot' }, { status: 500 });
   }
-});
+}, ['team:write']);

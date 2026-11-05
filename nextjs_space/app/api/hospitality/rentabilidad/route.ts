@@ -31,7 +31,7 @@ import { monedaEfectiva } from '@/lib/moneda';
 
 export async function GET(req: NextRequest) {
   try {
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, ['hospitality:read']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
 
     // La cartera es dinero de la propiedad: la ve quien puede ver finanzas.

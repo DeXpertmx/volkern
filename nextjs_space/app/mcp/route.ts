@@ -2,6 +2,8 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { resolvePublicBaseUrl } from '@/lib/seo/public-base-url'
 import { MCP_SERVER_INFO } from '@/lib/seo/mcp-server-card'
+import { resolveMcpIdentity, auditMcpIdentityRejection } from '@/lib/mcp/request-identity'
+import { enforceToolGate } from '@/lib/mcp/tool-gate'
 // Catálogo compartido con el MCP server standalone: única fuente de verdad
 // de las 43 tools (nombres, descripciones e inputSchemas reales).
 import { VOLKERN_TOOLS } from '../../mcp-server/src/tools-catalog'
@@ -156,22 +158,71 @@ export async function POST(req: Request) {
       return jsonRpcError(id, -32000, 'Rate limit exceeded. Máximo 100 requests por minuto.', 429)
     }
 
+    // Identidad: SOLO desde la credencial. Un tenantId/userId distinto en el
+    // cuerpo es un intento de cruce entre empresas y se rechaza con 403 (no se
+    // ignora: el rechazo queda auditado y convierte el intento en señal).
+    const identity = resolveMcpIdentity(auth, {
+      tenantId: toolArgs.tenantId,
+      userId: toolArgs.userId,
+    })
+    if (!identity.ok) {
+      await auditMcpIdentityRejection({ auth, identity, toolName: catalogTool.name, superficie: '/mcp' })
+      return jsonRpcError(id, -32001, identity.message, 403)
+    }
+
+    const argsResueltos = {
+      ...toolArgs,
+      tenantId: identity.tenantId,
+      userId: identity.userId,
+      source: 'mcp' as const,
+    }
+
+    // Gate de permisos: allow / ask / deny por herramienta y rol. Denegar por
+    // defecto y pedir aprobación lo que no se puede deshacer (ver
+    // lib/mcp/tool-policy.ts).
+    const gate = await enforceToolGate({
+      tenantId: identity.tenantId,
+      userId: identity.userId,
+      roleName: auth.user?.role?.nombre ?? null,
+      toolName: catalogTool.name,
+      args: argsResueltos,
+      via: '/mcp',
+    })
+
+    if (gate.kind === 'deny') {
+      return jsonRpcError(id, -32003, gate.reason, 403)
+    }
+
+    if (gate.kind === 'ask') {
+      // 409: la acción es válida pero no se ha ejecutado; hay una solicitud
+      // pendiente. Reintentar sin aprobarla devuelve la misma solicitud.
+      return NextResponse.json(
+        {
+          jsonrpc: '2.0',
+          id,
+          error: {
+            code: -32002,
+            message: gate.reason,
+            data: {
+              status: 'pending',
+              approvalId: gate.approvalId,
+              expiresAt: gate.expiresAt.toISOString(),
+            },
+          },
+        },
+        { status: 409 }
+      )
+    }
+
     // Mapear al skill equivalente y ejecutar de verdad vía Skills.
     // Todas las tools del catálogo son ejecutables: handleCallTool valida
     // contra el inputSchema del catálogo y captura errores como isError.
     const { handleCallTool, resolveSkillName } = await import('@/lib/mcp/mcp-handler')
     const skillName = resolveSkillName(catalogTool.name)
 
-    // Inyección de contexto de seguridad: el tenant autenticado manda
-    // (evita cross-tenant aunque el cliente envíe otro tenantId).
     const result = await handleCallTool({
       name: skillName,
-      arguments: {
-        ...toolArgs,
-        tenantId: auth.tenant?.id || toolArgs.tenantId,
-        userId: toolArgs.userId || auth.user?.id,
-        source: 'mcp',
-      },
+      arguments: argsResueltos,
     })
 
     // Audit log (best-effort, igual que /api/mcp)
@@ -179,8 +230,8 @@ export async function POST(req: Request) {
       const { prisma } = await import('@/lib/db')
       await prisma.auditLog.create({
         data: {
-          tenantId: auth.tenant?.id || 'unknown',
-          userId: auth.user?.id,
+          tenantId: identity.tenantId || 'unknown',
+          userId: identity.userId,
           accion: 'MCP_tool_execution',
           entidad: 'MCP',
           entidadId: catalogTool.name,

@@ -12,7 +12,7 @@ export const GET = withTenantAuth(async (request, auth, { params }) => {
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-});
+}, ['erp:read']);
 
 export const PATCH = withTenantAuth(async (request, auth, { params }) => {
   try {
@@ -29,4 +29,4 @@ export const PATCH = withTenantAuth(async (request, auth, { params }) => {
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
-});
+}, ['erp:write']);

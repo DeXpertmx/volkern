@@ -38,7 +38,7 @@ export const GET = withTenantAuth(async (request) => {
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-})
+}, ['erp:read'])
 
 // ═══════════════════════════════════════════════════════════════
 // POST /api/erp/logistics/gps/device-mapping
@@ -70,7 +70,7 @@ export const POST = withTenantAuth(async (request) => {
     }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-})
+}, ['erp:write'])
 
 // ═══════════════════════════════════════════════════════════════
 // PUT /api/erp/logistics/gps/device-mapping
@@ -96,7 +96,7 @@ export const PUT = withTenantAuth(async (request) => {
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 400 })
   }
-})
+}, ['erp:write'])
 
 // ═══════════════════════════════════════════════════════════════
 // DELETE /api/erp/logistics/gps/device-mapping
@@ -135,4 +135,4 @@ export const DELETE = withTenantAuth(async (request) => {
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-})
+}, ['erp:write'])

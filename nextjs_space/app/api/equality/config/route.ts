@@ -17,7 +17,7 @@ export const GET = withTenantAuth(async (request, auth) => {
   } catch (error) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-});
+}, ['compliance:read']);
 
 /**
  * POST /api/equality/config - Guardar configuración
@@ -58,4 +58,4 @@ export const POST = withTenantAuth(async (request, auth) => {
     console.error('[EqualityConfigAPI] Error:', error);
     return NextResponse.json({ error: 'Error al guardar configuración' }, { status: 500 });
   }
-});
+}, ['compliance:write']);

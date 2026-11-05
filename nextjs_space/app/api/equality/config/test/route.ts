@@ -26,4 +26,4 @@ export const POST = withTenantAuth(async (request, auth) => {
   } catch (error) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-});
+}, ['compliance:write']);

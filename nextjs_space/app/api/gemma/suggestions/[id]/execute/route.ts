@@ -28,4 +28,4 @@ export const POST = withTenantAuth(async (request, auth, { params }) => {
     console.error('Error executing Gemma action:', error);
     return NextResponse.json({ error: 'Error al ejecutar acción' }, { status: 500 });
   }
-});
+}, ['skills:execute']);

@@ -68,4 +68,4 @@ export const GET = withTenantAuth(async (req, auth) => {
     console.error('[Telephony Calls] GET Error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
-});
+}, ['telephony:read']);

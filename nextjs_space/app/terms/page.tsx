@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { VERTICAL_PLANS } from '@/lib/vertical-plans';
 import { CRM_TIERS } from '@/lib/crm-pricing';
+import { MONEDA_PLATAFORMA, formatearImporte } from '@/lib/moneda';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, FileText } from 'lucide-react';
@@ -107,8 +108,10 @@ export default function TermsOfServicePage() {
                     <li key={v.id}>
                       <strong>{v.name}:</strong>{' '}
                       {v.id === 'crm_ventas'
-                        ? `${CRM_TIERS.map((t) => `${t.name} ${t.annualMonthly}`).join(', ')} €/usuario/mes (según nivel, facturación anual)`
-                        : `${v.price} €/mes`}
+                        ? `${CRM_TIERS.map(
+                            (t) => `${t.name} ${formatearImporte(t.annualMonthly, MONEDA_PLATAFORMA, 0)}`,
+                          ).join(', ')}/usuario/mes (según nivel, facturación anual)`
+                        : `${formatearImporte(v.price, MONEDA_PLATAFORMA, 0)}/mes`}
                     </li>
                   ))}
                 </ul>
