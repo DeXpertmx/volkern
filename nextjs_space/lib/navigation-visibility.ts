@@ -1,4 +1,4 @@
-import type { HubConfig, NavigationItem } from './navigation-config'
+import { HUBS, type HubConfig, type NavigationItem } from './navigation-config'
 
 /**
  * Volkern ERP — Reglas de visibilidad del menú (sidebar y cockpits).
@@ -117,6 +117,34 @@ export function itemEsVisible(item: NavigationItem, ctx: VisibilityContext): boo
   }
 
   return true
+}
+
+/**
+ * Hub al que pertenece una ruta del panel.
+ *
+ * Gana el prefijo más largo: `/dashboard/configuracion/real-estate` es de
+ * Configuración, no de Inmobiliaria (cuyo hub empieza en `/dashboard/real-estate`),
+ * y `/dashboard/inventario/almacenes` es de Inventario aunque «almacenes» también
+ * aparezca como ruta propia en otros hubs.
+ */
+export function hubDeRuta(pathname: string, hubs: readonly HubConfig[] = HUBS): HubConfig | undefined {
+  const ruta = (pathname.split('?')[0].replace(/\/+$/, '') || '/')
+  let encontrado: HubConfig | undefined
+  let longitud = -1
+
+  for (const hub of hubs) {
+    for (const candidato of [hub.href, ...(hub.basePaths ?? [])]) {
+      const prefijo = candidato.split('?')[0].replace(/\/+$/, '')
+      if (!prefijo) continue
+      const coincide = ruta === prefijo || ruta.startsWith(`${prefijo}/`)
+      if (coincide && prefijo.length > longitud) {
+        encontrado = hub
+        longitud = prefijo.length
+      }
+    }
+  }
+
+  return encontrado
 }
 
 /** ¿Se muestra este hub en el menú global de módulos? */

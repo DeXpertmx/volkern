@@ -1,5 +1,4 @@
-import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
 import { resolveLegacyRedirect } from '@/lib/legacy-redirects'
 import { applyDiscoveryLinks } from '@/lib/seo/discovery-links'
 import { getToken, encode } from 'next-auth/jwt'
@@ -80,6 +79,20 @@ function loginRedirect(request: NextRequest, pathname: string): NextResponse {
   const res = NextResponse.redirect(loginUrl)
   res.cookies.set(SESSION_COOKIE_NAME, '', { path: '/', maxAge: 0 })
   return res
+}
+
+/**
+ * Propaga el pathname a los Server Components.
+ *
+ * `headers()` no lo expone y el layout raíz del panel lo necesita para saber a
+ * qué hub pertenece la ruta y cortar antes de enviar el armazón (ver
+ * `exigirHubDeRuta`). Se pasa como cabecera de PETICIÓN, que es la única que leen
+ * los componentes de servidor.
+ */
+function conRutaVisible(request: NextRequest) {
+  const headers = new Headers(request.headers)
+  headers.set('x-pathname', request.nextUrl.pathname)
+  return { request: { headers } }
 }
 
 export async function middleware(request: NextRequest) {
@@ -420,7 +433,7 @@ export async function middleware(request: NextRequest) {
           secret: process.env.NEXTAUTH_SECRET!,
           maxAge: SESSION_ABSOLUTE_MAX_AGE_SECONDS,
         })
-        const res = NextResponse.next()
+        const res = NextResponse.next(conRutaVisible(request))
         const cookieOptions: Record<string, unknown> = {
           httpOnly: true,
           sameSite: 'lax',
@@ -440,7 +453,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Set headers for downstream
-  const res = NextResponse.next()
+  const res = NextResponse.next(conRutaVisible(request))
   res.headers.set('x-tenant-subdomain', subdomain || '')
   if (xTenantId) {
     res.headers.set('x-tenant-id', xTenantId)

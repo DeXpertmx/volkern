@@ -6,7 +6,12 @@ import { prisma } from './db'
 import { resolveHierarchicalContext } from './api-key-auth'
 import { resolverModulosTenant } from './tenant-modules'
 import { HUBS } from './navigation-config'
-import { hubEsVisible, type VisibilityContext } from './navigation-visibility'
+import {
+  esSuperadminEfectivo,
+  hubDeRuta,
+  hubEsVisible,
+  type VisibilityContext,
+} from './navigation-visibility'
 import { paisDeMoneda } from './moneda'
 
 /**
@@ -160,6 +165,41 @@ export function visibilidadDelActivo(activo: TenantActivo): VisibilityContext {
  * @returns el contexto activo, por si la página necesita algo más.
  */
 export async function exigirHub(idHub: string): Promise<TenantActivo> {
+  const hub = HUBS.find((h) => h.id === idHub)
+  return comprobarHub(hub)
+}
+
+/**
+ * Guardia por ruta: resuelve a qué hub pertenece el pathname y aplica la misma
+ * regla que el menú.
+ *
+ * Se usa en el layout raíz del panel, que es el primer componente que se
+ * renderiza: así el corte ocurre antes de enviar el armazón y la respuesta es
+ * un 307 de verdad. Con la guardia solo en el layout de la sección, el armazón
+ * del panel ya se ha enviado en streaming y la redirección viaja dentro del
+ * payload en lugar de en la cabecera.
+ *
+ * Una ruta que no pertenece a ningún hub (el panel de inicio, por ejemplo) no
+ * se toca. Un Superadmin sin suplantar tampoco: su tenant de plataforma puede
+ * no tener los módulos de negocio y no debe quedarse fuera de su propio panel.
+ */
+export async function exigirHubDeRuta(pathname: string): Promise<void> {
+  const hub = hubDeRuta(pathname)
+  if (!hub) return
+
+  const resultado = await tenantActivo()
+  if (!resultado.ok) {
+    redirect(resultado.motivo === 'sin-sesion' ? '/auth/login' : '/dashboard')
+  }
+
+  const contexto = visibilidadDelActivo(resultado.activo)
+  if (esSuperadminEfectivo(contexto)) return
+
+  if (!hubEsVisible(hub, contexto)) redirect('/dashboard')
+}
+
+/** Comprueba un hub concreto (o corta si no existe) y devuelve el tenant activo. */
+async function comprobarHub(hub: (typeof HUBS)[number] | undefined): Promise<TenantActivo> {
   const resultado = await tenantActivo()
 
   if (!resultado.ok) {
@@ -168,7 +208,6 @@ export async function exigirHub(idHub: string): Promise<TenantActivo> {
     redirect(resultado.motivo === 'sin-sesion' ? '/auth/login' : '/dashboard')
   }
 
-  const hub = HUBS.find((h) => h.id === idHub)
   if (!hub) redirect('/dashboard')
 
   if (!hubEsVisible(hub, visibilidadDelActivo(resultado.activo))) {
