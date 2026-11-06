@@ -113,6 +113,7 @@ export const ALL_MODULES: ModuleDefinition[] = [
   { id: 'activos', label: 'Activos', description: 'Gestión de maquinaria y activos fijos', icon: '🚜', group: 'ERP' },
   { id: 'conciliacion', label: 'Conciliación Bancaria', description: 'Sincronización con bancos', icon: '🏦', group: 'ERP' },
   { id: 'logistica', label: 'Logística', description: 'Flota, envíos, almacenes', icon: '🚚', group: 'ERP' },
+  { id: 'real-estate', label: 'Inmobiliaria', description: 'Cartera de inmuebles, captaciones y portal público', icon: '🏠', group: 'ERP' },
   { id: 'estrategia', label: 'Estrategia', description: 'Planificación estratégica y KPIs', icon: '🎯', group: 'Estrategia' },
 ]
 
@@ -174,6 +175,7 @@ export const VERTICAL_DEFINITIONS: Record<Vertical, VerticalDefinition> = {
                + 'y comisión de franquicia.',
     icon: '🏠',
     modules: [
+      'real-estate',
       'leads', 'contactos', 'empresas', 'pipeline', 'tareas', 'analytics',
       'mensajes', 'citas', 'catalogo',
       'cotizaciones', 'contratos', 'ordenes_venta',

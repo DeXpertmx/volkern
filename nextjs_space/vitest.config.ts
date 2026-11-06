@@ -22,6 +22,9 @@ export default defineConfig({
       'mcp-server/**',
       'dist/**',
       '.next/**',
+      // Salida del build de OpenNext: contiene copias compiladas de `tests/` que
+      // se ejecutaban como si fueran la suite real y fallaban por los mocks.
+      '.open-next/**',
       'coverage/**',
     ],
     coverage: {
