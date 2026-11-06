@@ -224,6 +224,9 @@ export const HUBS: HubConfig[] = [
     icon: GraduationCap,
     href: '/dashboard/academia',
     description: 'Cursos, estudiantes y comunidad de aprendizaje.',
+    // Sin el módulo de cursos la Academia no tiene nada dentro: se apaga el hub
+    // entero, no solo sus entradas (una cuenta inmobiliaria no la usa).
+    requiredModule: 'cursos',
     basePaths: [
       '/dashboard/cursos',
       '/dashboard/estudiantes',

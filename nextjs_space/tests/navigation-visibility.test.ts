@@ -260,3 +260,27 @@ describe('Región y permisos', () => {
     }
   });
 });
+
+// ─── Hubs sin tipo de cuenta que dependen de un módulo ──────────────────────
+
+/**
+ * Caso real (6 nov 2026): una agencia inmobiliaria veía «Academia» en el menú
+ * de la demo sin un solo curso dentro. El hub no declara tipo de cuenta —cual
+ * cuenta puede formarse— y por eso se colaba siempre; ahora depende del módulo
+ * `cursos` y desaparece cuando la cuenta no lo tiene.
+ */
+describe('Hub de Academia', () => {
+  const academiaHub = HUBS.find((h) => h.id === 'academia')!;
+
+  it('sin el módulo de cursos no se ofrece', () => {
+    expect(hubEsVisible(academiaHub, ctx({ activeModules: ['configuracion'] }))).toBe(false);
+  });
+
+  it('con el módulo de cursos vuelve', () => {
+    expect(hubEsVisible(academiaHub, ctx({ activeModules: ['configuracion', 'cursos'] }))).toBe(true);
+  });
+
+  it('mientras cargan los módulos no parpadea', () => {
+    expect(hubEsVisible(academiaHub, ctx({ activeModules: [], isLoadingModules: true }))).toBe(true);
+  });
+});

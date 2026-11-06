@@ -34,6 +34,30 @@ const ADMIN_EMAIL = 'admin@norandohomes.com';
 const AGENTE_EMAIL = 'agente@norandohomes.com';
 const PASSWORD = process.env.NORANDO_DEMO_PASSWORD;
 
+/**
+ * Módulos que esta demo NO enseña.
+ *
+ * El plan `profesional` trae el catálogo completo (`PLAN_MODULES`) y
+ * `enabledModules` solo AÑADE: la única forma de apagar un módulo es la fila de
+ * `TenantFeature` con `habilitado: false`, que `resolverModulosTenant` aplica al
+ * final y gana sobre el plan (ver lib/tenant-modules.ts). Con eso el menú deja
+ * de ofrecerlos y `lib/module-guard.ts` manda al panel si alguien escribe la
+ * URL a mano.
+ *
+ * Una agencia inmobiliaria no compra la academia, la cartera de seguros, el
+ * motor de reservas turísticas ni la planta industrial. Enseñarlos en la demo
+ * la convierte en un ERP genérico y resta credibilidad al vertical.
+ */
+const MODULOS_APAGADOS = [
+  'cursos', 'estudiantes', // Academia
+  'insurance', // Seguros
+  'hospitality', // Hospitality
+  'calidad', 'produccion', // Planta
+  'inventario', 'compras', // Almacén y aprovisionamiento
+  'proyectos', 'taskforce', // Obra y soporte
+  'logistica', // Flota
+] as const;
+
 // ─── Catálogo de campos ──────────────────────────────────────────────────────
 
 interface FieldDefinition {
@@ -615,6 +639,26 @@ async function main() {
       habilitadoPor: 'seed-demo-norando-homes',
     },
   });
+
+  // Apagado del catálogo que no es de una inmobiliaria (ver MODULOS_APAGADOS).
+  for (const modulo of MODULOS_APAGADOS) {
+    await prisma.tenantFeature.upsert({
+      where: { tenantId_feature: { tenantId: tenant.id, feature: modulo } },
+      update: {
+        habilitado: false,
+        razon: 'Fuera del alcance de la demo inmobiliaria',
+        habilitadoPor: 'seed-demo-norando-homes',
+      },
+      create: {
+        tenantId: tenant.id,
+        feature: modulo,
+        habilitado: false,
+        razon: 'Fuera del alcance de la demo inmobiliaria',
+        habilitadoPor: 'seed-demo-norando-homes',
+      },
+    });
+  }
+  console.log(`✅ ${MODULOS_APAGADOS.length} módulos ajenos al vertical apagados.`);
 
   // Identidad visual del panel: misma marca que el portal público.
   for (const [clave, valor] of [

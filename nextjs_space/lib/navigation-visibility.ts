@@ -125,8 +125,10 @@ export function hubEsVisible(hub: HubConfig, ctx: VisibilityContext): boolean {
   const tieneModulo = (moduleId?: string) =>
     !moduleId || ctx.isLoadingModules || ctx.activeModules.includes(moduleId)
 
-  // Los hubs sin tipo de cuenta requerido son abiertos (con o sin módulo).
-  if (!hub.requiredAccountType) return true
+  // Los hubs sin tipo de cuenta requerido no dependen de la cuenta, pero sí de
+  // su módulo si lo declaran: Academia se apaga junto con «Cursos», en vez de
+  // quedarse como un hub vacío en el menú de un tenant que no la usa.
+  if (!hub.requiredAccountType) return tieneModulo(hub.requiredModule)
 
   if (hub.requiredAccountType === 'SUPERADMIN') {
     // El backend solo deja pasar Superadmin al control plane: el menú no anuncia
