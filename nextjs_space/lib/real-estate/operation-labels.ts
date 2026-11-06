@@ -6,6 +6,26 @@
  * donde bundlerear Prisma en el navegador rompe el runtime.
  */
 
+import { formatearImporte } from '@/lib/moneda';
+
+/** Texto con el que se anuncia un inmueble que no publica precio. */
+const PRECIO_A_CONSULTAR = 'Precio a consultar';
+
+/**
+ * Precio de un inmueble listo para pintar.
+ *
+ * Un inmueble sin precio publicado (0 o ausente) se anuncia como «Precio a
+ * consultar» en vez de «0 €»: un cero es un importe, no la falta de importe, y
+ * en el portal parecía una propiedad regalada.
+ */
+export function formatearPrecioInmueble(
+  precio: number | null | undefined,
+  moneda: string | null | undefined
+): string {
+  if (!precio || precio <= 0) return PRECIO_A_CONSULTAR;
+  return formatearImporte(precio, moneda || '', 0);
+}
+
 /**
  * Etiquetas legibles para el tipo de operación (portal público).
  * Incluye 'alquiler_temporada' para renta vacacional estilo Airbnb/Booking.

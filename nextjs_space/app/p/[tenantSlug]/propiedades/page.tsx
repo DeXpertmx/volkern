@@ -2,7 +2,12 @@ import { Metadata } from 'next';
 import { globalPrisma } from '@/lib/db';
 import { notFound } from 'next/navigation';
 import { parseInmuebles } from '@/lib/real-estate/property-helpers';
-import { formatOperationLabel, operationBadgeColor, priceSuffix } from '@/lib/real-estate/operation-labels';
+import {
+  formatOperationLabel,
+  formatearPrecioInmueble,
+  operationBadgeColor,
+  priceSuffix,
+} from '@/lib/real-estate/operation-labels';
 import { resolveTenantBySlug } from '@/lib/real-estate/portal-utils';
 import { getEffectiveBranding } from '@/lib/branding';
 import { formatearImporte } from '@/lib/moneda';
@@ -392,7 +397,7 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
                         className="text-white text-sm font-bold px-3 py-1.5 rounded-lg shadow-lg backdrop-blur-sm"
                         style={{ backgroundColor: `${brandingColor}dd` }}
                       >
-                        {formatearImporte(property.precioBase, property.moneda, 0)}
+                        {formatearPrecioInmueble(property.precioBase, property.moneda)}
                         {priceSuffix(property.operationType) && (
                           <span className="text-xs font-normal opacity-80">{priceSuffix(property.operationType)}</span>
                         )}
@@ -464,7 +469,7 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
 
                     {/* Bottom row: Price per m² */}
                     <div className="mt-auto pt-3 flex items-center justify-between">
-                      {pricePerM2 && property.operationType !== 'alquiler' && property.operationType !== 'alquiler_temporada' && (
+                      {pricePerM2 && pricePerM2 > 0 && property.operationType !== 'alquiler' && property.operationType !== 'alquiler_temporada' && (
                         <span className="text-xs text-gray-400">
                           {formatearImporte(pricePerM2, property.moneda, 0)}/m²
                         </span>

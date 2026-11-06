@@ -4,8 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import useEmblaCarousel from 'embla-carousel-react';
 import Autoplay from 'embla-carousel-autoplay';
 import type { InmuebleParsed } from '@/lib/real-estate/property-helpers';
-import { formatOperationLabel } from '@/lib/real-estate/operation-labels';
-import { formatearImporte } from '@/lib/moneda';
+import { formatOperationLabel, formatearPrecioInmueble } from '@/lib/real-estate/operation-labels';
 
 interface Props {
   properties: InmuebleParsed[];
@@ -145,7 +144,7 @@ export default function HeroCarousel({
                       {/* Price */}
                       <div className="flex items-baseline gap-1 mb-6">
                         <span className="text-3xl md:text-4xl font-bold text-white">
-                          {formatearImporte(property.precioBase, property.moneda, 0)}
+                          {formatearPrecioInmueble(property.precioBase, property.moneda)}
                         </span>
                         {property.operationType === 'alquiler' && (
                           <span className="text-white/50 text-base">/mes</span>

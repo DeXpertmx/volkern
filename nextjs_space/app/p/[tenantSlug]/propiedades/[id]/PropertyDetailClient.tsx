@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { InmuebleParsed } from '@/lib/real-estate/property-helpers';
-import { formatearImporte } from '@/lib/moneda';
+import { formatearPrecioInmueble } from '@/lib/real-estate/operation-labels';
 import { ESCALA_ENERGETICA, esClaseEnTramite } from '@/lib/real-estate/energia';
 
 interface Props {
@@ -538,7 +538,7 @@ export default function PropertyDetailClient({
                     <div className="p-4">
                       <h3 className="font-semibold text-gray-900 truncate">{rp.nombre}</h3>
                       <p className="text-lg font-bold mt-1" style={{ color: brandingColor }}>
-                        {formatearImporte(rp.precioBase, rp.moneda, 0)}
+                        {formatearPrecioInmueble(rp.precioBase, rp.moneda)}
                         {rp.operationType === 'alquiler' && <span className="text-sm font-normal text-gray-500">/mes</span>}
                       </p>
                       <div className="flex items-center gap-3 mt-2 text-sm text-gray-500">
