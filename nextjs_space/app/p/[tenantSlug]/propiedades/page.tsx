@@ -6,6 +6,7 @@ import { formatOperationLabel, operationBadgeColor, priceSuffix } from '@/lib/re
 import { resolveTenantBySlug } from '@/lib/real-estate/portal-utils';
 import { getEffectiveBranding } from '@/lib/branding';
 import { formatearImporte } from '@/lib/moneda';
+import { etiquetaClaseEnergetica } from '@/lib/real-estate/energia';
 import HeroCarousel from './HeroCarousel';
 
 export const revalidate = 60;
@@ -326,6 +327,8 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
                 ? Math.round(property.precioBase / property.areaM2)
                 : null;
 
+              const energia = etiquetaClaseEnergetica(property.energyCert);
+
               return (
                 <a
                   key={property.id}
@@ -369,6 +372,18 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
                       >
                         {formatOperationLabel(property.operationType)}
                       </span>
+                      {energia && (
+                        <span
+                          className="self-start text-xs font-bold px-2 py-1 rounded-md shadow-md"
+                          style={{
+                            backgroundColor: energia.color,
+                            color: energia.textoOscuro ? '#1f2937' : '#ffffff',
+                          }}
+                          title={`Clase energética ${property.energyCert}`}
+                        >
+                          {energia.texto}
+                        </span>
+                      )}
                     </div>
 
                     {/* Price tag overlay */}

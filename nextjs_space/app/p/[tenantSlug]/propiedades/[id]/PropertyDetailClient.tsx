@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { InmuebleParsed } from '@/lib/real-estate/property-helpers';
 import { formatearImporte } from '@/lib/moneda';
+import { ESCALA_ENERGETICA, esClaseEnTramite } from '@/lib/real-estate/energia';
 
 interface Props {
   property: InmuebleParsed;
@@ -278,7 +279,7 @@ export default function PropertyDetailClient({
                   )}
                 </div>
 
-                {property.energyCert === 'En trámite' ? (
+                {esClaseEnTramite(property.energyCert) ? (
                   <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                     Certificado energético en trámite.
                   </p>
@@ -563,16 +564,6 @@ export default function PropertyDetailClient({
     </div>
   );
 }
-
-const ESCALA_ENERGETICA: Array<{ letra: string; color: string; textoOscuro?: boolean }> = [
-  { letra: 'A', color: '#0f9d58' },
-  { letra: 'B', color: '#7cb342' },
-  { letra: 'C', color: '#f2d43d', textoOscuro: true },
-  { letra: 'D', color: '#f0b037', textoOscuro: true },
-  { letra: 'E', color: '#e67e22' },
-  { letra: 'F', color: '#e74c3c' },
-  { letra: 'G', color: '#a93226' },
-];
 
 /** Escala A–G con la letra del inmueble señalada, para la ficha pública */
 function EscalaEnergetica({ clase }: { clase: string }) {

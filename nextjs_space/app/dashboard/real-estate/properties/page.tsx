@@ -14,6 +14,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { etiquetaClaseEnergetica } from '@/lib/real-estate/energia';
 import {
   Pagination,
   PaginationContent,
@@ -694,6 +695,7 @@ function RealEstatePropertiesInner() {
                       <TableHead className="w-[300px]">Propiedad</TableHead>
                       <TableHead>Operación</TableHead>
                       <TableHead>Tipo</TableHead>
+                      <TableHead className="text-center">Energía</TableHead>
                       <TableHead>Ubicación</TableHead>
                       <TableHead className="text-right">Precio</TableHead>
                       <TableHead className="text-center">Habs</TableHead>
@@ -755,6 +757,24 @@ function RealEstatePropertiesInner() {
                                 property.propertyType
                               : '—'}
                           </Badge>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {(() => {
+                            const energia = etiquetaClaseEnergetica(property.energyCert);
+                            if (!energia) return <span className="text-muted-foreground">—</span>;
+                            return (
+                              <span
+                                className="inline-flex min-w-[2rem] items-center justify-center rounded px-1.5 py-0.5 text-xs font-bold"
+                                style={{
+                                  backgroundColor: energia.color,
+                                  color: energia.textoOscuro ? '#1f2937' : '#ffffff',
+                                }}
+                                title={`Clase energética ${property.energyCert}`}
+                              >
+                                {energia.texto}
+                              </span>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1 text-sm">
