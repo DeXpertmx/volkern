@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { etiquetaClaseEnergetica } from '@/lib/real-estate/energia';
+import { formatearPrecioInmueble } from '@/lib/real-estate/operation-labels';
 import {
   Pagination,
   PaginationContent,
@@ -142,9 +143,6 @@ const STATUS_OPTIONS = [
   { value: 'vendida', label: 'Vendida', color: 'bg-emerald-500' },
   { value: 'alquilada', label: 'Alquilada', color: 'bg-indigo-500' },
 ];
-
-const formatCurrency = (value: number, currency: string = '') =>
-  formatearImporte(value, currency, 0);
 
 const getStatusBadge = (status: string | null) => {
   const opt = STATUS_OPTIONS.find((s) => s.value === status);
@@ -786,11 +784,11 @@ function RealEstatePropertiesInner() {
                         </TableCell>
                         <TableCell className="text-right font-medium">
                           <span className="text-primary">
-                            {formatCurrency(property.precioBase, property.moneda)}
+                            {formatearPrecioInmueble(property.precioBase, property.moneda)}
                           </span>
-                          {property.areaM2 && property.areaM2 > 0 && (
+                          {property.areaM2 && property.areaM2 > 0 && property.precioBase > 0 && (
                             <div className="text-[10px] text-muted-foreground">
-                              {formatCurrency(property.precioBase / property.areaM2, property.moneda)} / m²
+                              {formatearImporte(property.precioBase / property.areaM2, property.moneda, 0)} / m²
                             </div>
                           )}
                         </TableCell>
