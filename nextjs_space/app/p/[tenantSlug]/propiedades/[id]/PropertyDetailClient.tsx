@@ -232,17 +232,76 @@ export default function PropertyDetailClient({
                 {property.orientation && (
                   <FeatureCard icon="🧭" label="Orientación" value={property.orientation} />
                 )}
-                {property.energyCert && (
-                  <FeatureCard icon="⚡" label="Cert. Energética" value={property.energyCert} />
-                )}
-                {property.energyCertConsumption && (
-                  <FeatureCard icon="⚡" label="Consumo" value={`${property.energyCertConsumption} kWh/m²/año`} />
-                )}
-                {property.energyCertEmission && (
-                  <FeatureCard icon="⚡" label="Emisiones CO₂" value={`${property.energyCertEmission} kg/m²/año`} />
-                )}
               </div>
             </div>
+
+            {/* Clasificación energética: letra, índices y escala A–G */}
+            {(property.energyCert ||
+              property.energyCertConsumption != null ||
+              property.energyCertEmission != null) && (
+              <div className="bg-white rounded-2xl p-6 shadow-sm">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">Clasificación energética</h2>
+                <div className="divide-y divide-gray-100 border-t border-gray-100">
+                  {property.energyCert && (
+                    <div className="flex items-center justify-between py-3">
+                      <span className="text-sm text-gray-600">Clasificación energética</span>
+                      <span className="text-sm font-semibold text-gray-900">{property.energyCert}</span>
+                    </div>
+                  )}
+                  {property.energyCertConsumption != null && (
+                    <div className="flex items-center justify-between py-3">
+                      <span className="text-sm text-gray-600">Índice de rendimiento energético</span>
+                      <span className="text-sm font-semibold text-gray-900">
+                        {property.energyCertConsumption} kWh/m²·año
+                      </span>
+                    </div>
+                  )}
+                  {property.energyCertEmission != null && (
+                    <div className="flex items-center justify-between py-3">
+                      <span className="text-sm text-gray-600">Emisiones CO₂</span>
+                      <span className="text-sm font-semibold text-gray-900">
+                        {property.energyCertEmission} kg/m²·año
+                      </span>
+                    </div>
+                  )}
+                  {property.energyCertBody && (
+                    <div className="flex items-center justify-between py-3">
+                      <span className="text-sm text-gray-600">Organismo certificador</span>
+                      <span className="text-sm font-semibold text-gray-900">{property.energyCertBody}</span>
+                    </div>
+                  )}
+                  {property.energyCertExpiry && (
+                    <div className="flex items-center justify-between py-3">
+                      <span className="text-sm text-gray-600">Válido hasta</span>
+                      <span className="text-sm font-semibold text-gray-900">{property.energyCertExpiry}</span>
+                    </div>
+                  )}
+                </div>
+
+                {property.energyCert === 'En trámite' ? (
+                  <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                    Certificado energético en trámite.
+                  </p>
+                ) : property.energyCert ? (
+                  <EscalaEnergetica clase={property.energyCert} />
+                ) : null}
+
+                {property.energyCertUrl && (
+                  <a
+                    href={property.energyCertUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-4 inline-flex items-center gap-2 text-sm font-medium hover:underline"
+                    style={{ color: brandingColor }}
+                  >
+                    Ver certificado energético
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </a>
+                )}
+              </div>
+            )}
 
             {/* Long Description */}
             {property.longDescription && (
@@ -501,6 +560,49 @@ export default function PropertyDetailClient({
           © {new Date().getFullYear()} {tenant.nombre}. Powered by Volkern
         </div>
       </footer>
+    </div>
+  );
+}
+
+const ESCALA_ENERGETICA: Array<{ letra: string; color: string; textoOscuro?: boolean }> = [
+  { letra: 'A', color: '#0f9d58' },
+  { letra: 'B', color: '#7cb342' },
+  { letra: 'C', color: '#f2d43d', textoOscuro: true },
+  { letra: 'D', color: '#f0b037', textoOscuro: true },
+  { letra: 'E', color: '#e67e22' },
+  { letra: 'F', color: '#e74c3c' },
+  { letra: 'G', color: '#a93226' },
+];
+
+/** Escala A–G con la letra del inmueble señalada, para la ficha pública */
+function EscalaEnergetica({ clase }: { clase: string }) {
+  const activa = clase.trim().toUpperCase();
+  const indice = ESCALA_ENERGETICA.findIndex((e) => e.letra === activa);
+  if (indice === -1) return null;
+
+  return (
+    <div className="mt-6 pt-8 relative">
+      <div
+        className="absolute top-0 flex flex-col items-center"
+        style={{ left: `${((indice + 0.5) / ESCALA_ENERGETICA.length) * 100}%`, transform: 'translateX(-50%)' }}
+      >
+        <span className="whitespace-nowrap rounded bg-gray-600 px-2 py-1 text-[11px] font-medium text-white shadow-sm">
+          Clase energética {activa}
+        </span>
+        <span className="h-2 w-2 rotate-45 bg-gray-600" />
+      </div>
+      <div className="flex overflow-hidden rounded-md">
+        {ESCALA_ENERGETICA.map(({ letra, color, textoOscuro }) => (
+          <div
+            key={letra}
+            title={`Clase energética ${letra}`}
+            className={`flex-1 py-2 text-center text-xs font-bold ${letra === activa ? 'ring-2 ring-inset ring-gray-900' : ''}`}
+            style={{ backgroundColor: color, color: textoOscuro ? '#1f2937' : '#ffffff' }}
+          >
+            {letra}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
