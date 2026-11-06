@@ -290,8 +290,8 @@ Se aplican **en memoria** tras traer todos los inmuebles activos de la cuenta (�
 
 | Formato | Ruta | Contenido |
 | --- | --- | --- |
-| Idealista (XML) | `GET /api/real-estate/export?format=xml` | `idealista:feed` con `info` (empresa, email, fecha, nº de inmuebles) y un bloque `property` por inmueble |
-| Fotocasa (CSV) | `GET /api/real-estate/export?format=csv` | 29 columnas separadas por `;`, con `FotoURLs` y `Tags` unidos por `\|` |
+| Idealista (XML) | `GET /api/real-estate/export?format=xml` | `idealista:feed` con `info` (empresa, email, fecha, nº de inmuebles) y un bloque `property` por inmueble; el certificado va en `energyCertification` (`type` + `consumption`/`emissions` con `rating`, `value` y `unit`) |
+| Fotocasa (CSV) | `GET /api/real-estate/export?format=csv` | 35 columnas separadas por `;`, con `FotoURLs` y `Tags` unidos por `\|`; el certificado va en `CertificacionEnergetica` (letra A–G o «En trámite») con consumo, emisiones y metadatos del documento en columnas propias |
 | MLS (JSON) | `GET /api/real-estate/export?format=json` | Feed JSON para MLS internacional |
 | Sincronización | `GET /api/real-estate/sync` (feed completo) · `POST /api/real-estate/sync` (`{ previousIds }` → delta `{ added, updated, removed, total, lastSyncAt }`) | Canal incremental para integradores |
 

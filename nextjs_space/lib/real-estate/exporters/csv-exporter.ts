@@ -7,6 +7,7 @@
  */
 
 import type { InmuebleParsed } from '../property-helpers';
+import { esClaseEnTramite, letraEnergeticaParaFeed } from '../energia';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -29,6 +30,12 @@ export interface CSVRow {
   Jardin: string;
   Amueblado: string;
   CertificacionEnergetica: string;
+  ConsumoEnergetico: number | null;
+  EmisionesCO2: number | null;
+  OrganismoCertificador: string;
+  FechaCertificado: string;
+  CaducidadCertificado: string;
+  DocumentoCertificado: string;
   Antiguedad: number | null;
   Direccion: string;
   Ciudad: string;
@@ -105,6 +112,12 @@ export function generateFotocasaCSV(properties: InmuebleParsed[]): string {
     'Jardin',
     'Amueblado',
     'CertificacionEnergetica',
+    'ConsumoEnergetico',
+    'EmisionesCO2',
+    'OrganismoCertificador',
+    'FechaCertificado',
+    'CaducidadCertificado',
+    'DocumentoCertificado',
     'Antiguedad',
     'Direccion',
     'Ciudad',
@@ -122,6 +135,11 @@ export function generateFotocasaCSV(properties: InmuebleParsed[]): string {
     const images = extractImageUrls(p.media);
     const imageUrlString = images.join('|');
     const tags = p.seoTags || '';
+
+    // Fotocasa espera la letra del certificado; «En trámite» es su marca para
+    // un certificado aún no emitido, y entonces no hay valores que enviar.
+    const letraEnergia = letraEnergeticaParaFeed(p.energyCert);
+    const enTramite = esClaseEnTramite(p.energyCert);
 
     return {
       Referencia: p.id,
@@ -141,9 +159,9 @@ export function generateFotocasaCSV(properties: InmuebleParsed[]): string {
       Piscina: boolToSiNo(p.hasPool),
       Jardin: boolToSiNo(p.hasGarden),
       Amueblado: boolToSiNo(p.furnished),
-      CertificacionEnergetica: p.energyCert || '',
-      ConsumoEnergetico: p.energyCertConsumption ? `${p.energyCertConsumption} kWh/m²/año` : '',
-      EmisionesCO2: p.energyCertEmission ? `${p.energyCertEmission} kg CO₂/m²/año` : '',
+      CertificacionEnergetica: letraEnergia || (enTramite ? 'En trámite' : ''),
+      ConsumoEnergetico: letraEnergia ? p.energyCertConsumption : null,
+      EmisionesCO2: letraEnergia ? p.energyCertEmission : null,
       OrganismoCertificador: p.energyCertBody || '',
       FechaCertificado: p.energyCertDate || '',
       CaducidadCertificado: p.energyCertExpiry || '',
@@ -159,7 +177,7 @@ export function generateFotocasaCSV(properties: InmuebleParsed[]): string {
       Destacada: boolToSiNo(p.featured),
       FotoURLs: imageUrlString,
       Tags: tags,
-    } as CSVRow;
+    };
   });
 
   // Header row

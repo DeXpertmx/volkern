@@ -15,6 +15,7 @@
  */
 
 import type { InmuebleParsed } from '../property-helpers';
+import { estadoCertificadoEnergetico, letraEnergeticaParaFeed } from '../energia';
 import { monedaEfectiva } from '@/lib/moneda';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -93,6 +94,7 @@ export interface MLSProperty {
   adaptedForDisabled?: boolean;
 
   // Eficiencia energética
+  energyCertStatus?: 'certificate' | 'inProcess';
   energyCert?: string;
   energyCertEmission?: string;
   energyCertConsumption?: string;
@@ -253,13 +255,10 @@ function mapStatus(status: string | null): MLSProperty['status'] {
 }
 
 /**
- * Traduce la certificación energética
+ * Traduce la certificación energética a la letra A–G del feed
  */
 function mapEnergyCert(cert: string | null): string | undefined {
-  if (!cert) return undefined;
-  const valid = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
-  const upper = cert.toUpperCase();
-  return valid.includes(upper) ? upper : undefined;
+  return letraEnergeticaParaFeed(cert) || undefined;
 }
 
 /**
@@ -300,6 +299,7 @@ export function propertyToMLS(
   const images = extractImages(property.media);
   const tags = parseTags(property.seoTags);
   const features = buildFeatures(property);
+  const estadoEnergia = estadoCertificadoEnergetico(property.energyCert);
 
   const mls: MLSProperty = {
     // Identificación
@@ -345,9 +345,14 @@ export function propertyToMLS(
     hasHeating: property.hasHeating,
 
     // Eficiencia energética
-    ...(property.energyCert ? { energyCert: mapEnergyCert(property.energyCert) } : {}),
-    ...(property.energyCertConsumption ? { energyCertConsumption: `${property.energyCertConsumption} kWh/m²/year` } : {}),
-    ...(property.energyCertEmission ? { energyCertEmission: `${property.energyCertEmission} kg CO₂/m²/year` } : {}),
+    ...(estadoEnergia !== 'notAvailable' ? { energyCertStatus: estadoEnergia } : {}),
+    ...(estadoEnergia === 'certificate' ? { energyCert: mapEnergyCert(property.energyCert) } : {}),
+    ...(estadoEnergia === 'certificate' && property.energyCertConsumption
+      ? { energyCertConsumption: `${property.energyCertConsumption} kWh/m²/year` }
+      : {}),
+    ...(estadoEnergia === 'certificate' && property.energyCertEmission
+      ? { energyCertEmission: `${property.energyCertEmission} kg CO₂/m²/year` }
+      : {}),
 
     // Antigüedad
     ...(property.yearBuilt ? { yearBuilt: property.yearBuilt } : {}),

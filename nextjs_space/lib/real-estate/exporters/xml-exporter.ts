@@ -8,6 +8,7 @@
  */
 
 import type { InmuebleParsed } from '../property-helpers';
+import { estadoCertificadoEnergetico, letraEnergeticaParaFeed } from '../energia';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -62,6 +63,42 @@ function extractImages(media: any): string[] {
 }
 
 /**
+ * Bloque de certificación energética con la forma que lee Idealista: el estado
+ * del certificado y, cuando ya está emitido, las dos calificaciones con su
+ * valor y unidad.
+ *
+ * El modelo guarda una sola letra por inmueble, así que consumo y emisiones
+ * comparten calificación. Los metadatos del documento (organismo, fechas, PDF)
+ * van fuera del bloque: no forman parte del objeto de certificación del portal.
+ */
+function energyCertificationBlock(p: InmuebleParsed): string {
+  const estado = estadoCertificadoEnergetico(p.energyCert);
+
+  if (estado === 'inProcess') {
+    return `      <energyCertification>
+        ${tag('type', 'inProcess')}
+      </energyCertification>`;
+  }
+
+  const letra = letraEnergeticaParaFeed(p.energyCert);
+  if (!letra) return '';
+
+  const medida = (nombre: 'consumption' | 'emissions', valor: number | null, unidad: string): string =>
+    [
+      `        <${nombre}>`,
+      `          ${tag('rating', letra)}`,
+      ...(valor !== null ? [`          ${tag('value', valor)}`, `          ${tag('unit', unidad)}`] : []),
+      `        </${nombre}>`,
+    ].join('\n');
+
+  return `      <energyCertification>
+        ${tag('type', 'certificate')}
+${medida('consumption', p.energyCertConsumption, 'kWh/m2 year')}
+${medida('emissions', p.energyCertEmission, 'kg CO2/m2 year')}
+      </energyCertification>`;
+}
+
+/**
  * Genera el feed XML completo para Idealista
  */
 export function generateIdealistaFeed(
@@ -94,9 +131,7 @@ export function generateIdealistaFeed(
       ${p.bedrooms ? tag('bedrooms', p.bedrooms) : ''}
       ${p.bathrooms ? tag('bathrooms', p.bathrooms) : ''}
       ${tag('condition', 'good')}
-      ${p.energyCert ? tag('energyCertification', p.energyCert) : ''}
-      ${p.energyCertConsumption ? tag('energyConsumption', `${p.energyCertConsumption} kWh/m²/year`) : ''}
-      ${p.energyCertEmission ? tag('energyEmission', `${p.energyCertEmission} kg CO₂/m²/year`) : ''}
+      ${energyCertificationBlock(p)}
       ${p.energyCertBody ? tag('energyCertBody', p.energyCertBody) : ''}
       ${p.energyCertDate ? tag('energyCertDate', p.energyCertDate) : ''}
       ${p.energyCertExpiry ? tag('energyCertExpiry', p.energyCertExpiry) : ''}

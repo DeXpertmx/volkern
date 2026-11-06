@@ -49,3 +49,27 @@ export function etiquetaClaseEnergetica(
 
   return { texto: tramo.letra, color: tramo.color, textoOscuro: Boolean(tramo.textoOscuro), enTramite: false };
 }
+
+/**
+ * Letra A–G válida para el feed de un portal. «En trámite» no es una letra:
+ * los portales lo representan con su propio estado, así que aquí devuelve
+ * `null` y quien llama decide cómo marcarlo.
+ */
+export function letraEnergeticaParaFeed(clase: string | null | undefined): string | null {
+  const etiqueta = etiquetaClaseEnergetica(clase);
+  return etiqueta && !etiqueta.enTramite ? etiqueta.texto : null;
+}
+
+export type EstadoCertificadoEnergetico = 'certificate' | 'inProcess' | 'notAvailable';
+
+/**
+ * Estado del certificado en el vocabulario de los portales: `certificate`
+ * cuando ya hay letra, `inProcess` cuando aún no se ha emitido y
+ * `notAvailable` cuando el inmueble no tiene el dato.
+ */
+export function estadoCertificadoEnergetico(
+  clase: string | null | undefined
+): EstadoCertificadoEnergetico {
+  if (esClaseEnTramite(clase)) return 'inProcess';
+  return letraEnergeticaParaFeed(clase) ? 'certificate' : 'notAvailable';
+}

@@ -679,7 +679,7 @@ flowchart LR
         GP["getProperties(tenantId, filtros)<br/>por defecto status = 'disponible'"]
     end
     GP --> X["XML Idealista<br/>idealista:feed + info + property"]
-    GP --> C["CSV Fotocasa<br/>29 columnas, separador ';'"]
+    GP --> C["CSV Fotocasa<br/>35 columnas, separador ';'"]
     GP --> J["JSON MLS<br/>feed + delta"]
     X & C & J --> D["GET /export?format=…<br/>descarga directa"]
     X & C & J --> S["POST /export<br/>sube a S3 y devuelve URL firmada 7 días"]
