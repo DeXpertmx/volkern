@@ -1,20 +1,24 @@
-const CACHE_VERSION = 'v3'
+// v4: deja de precachear páginas. `cache.addAll` rechaza las respuestas
+// redirigidas, así que precachear `/` (que en un subdominio de tenant responde
+// 307 hacia /auth/login) tumbaba la instalación entera y dejaba al navegador
+// atado para siempre al service worker anterior.
+const CACHE_VERSION = 'v4'
 const STATIC_CACHE = `volkern-static-${CACHE_VERSION}`
 const DYNAMIC_CACHE = `volkern-dynamic-${CACHE_VERSION}`
 
+// Solo ficheros estáticos reales: nunca páginas ni rutas que puedan redirigir.
 const STATIC_ASSETS = [
-  '/',
   '/volkern-icon.png',
   '/volkern-logo.png',
   '/manifest.json',
   '/favicon.ico',
-  '/dashboard/finanzas/gastos/escanear',
 ]
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(STATIC_CACHE).then((cache) => {
-      return cache.addAll(STATIC_ASSETS)
+      // Un asset que falle no puede invalidar la instalación completa.
+      return Promise.allSettled(STATIC_ASSETS.map((asset) => cache.add(asset)))
     })
   )
   self.skipWaiting()
@@ -50,16 +54,19 @@ self.addEventListener('fetch', (event) => {
   //     obsoletos tras guardar. Pasan directo al network.
   if (url.pathname.startsWith('/api/')) return
 
+  // Las navegaciones van siempre a la red: el HTML de una página no se sirve
+  // desde caché (una raíz cacheada de otro tenant, o una redirección cacheada,
+  // acaba en error de navegación en el navegador).
+  if (request.mode === 'navigate') {
+    event.respondWith(networkFirstWithCache(request, DYNAMIC_CACHE))
+    return
+  }
+
   const isStaticAsset = STATIC_ASSETS.includes(url.pathname) ||
     /\.(png|jpg|jpeg|gif|svg|ico|woff2?|css|js)$/.test(url.pathname)
 
   if (isStaticAsset) {
     event.respondWith(cacheFirstWithNetwork(request, STATIC_CACHE))
-    return
-  }
-
-  if (request.mode === 'navigate') {
-    event.respondWith(networkFirstWithCache(request, DYNAMIC_CACHE))
     return
   }
 
@@ -103,7 +110,14 @@ async function networkFirstWithCache(request, cacheName) {
     const cached = await caches.match(request)
     if (cached) return cached
     if (request.mode === 'navigate') {
-      return caches.match('/')
+      // Nunca devolver `undefined`: responder vacío a una navegación es un
+      // error net::ERR_FAILED en el navegador, no un "sin conexión" legible.
+      return new Response(
+        '<!doctype html><meta charset="utf-8"><title>Sin conexión</title>' +
+          '<body style="font:16px system-ui;padding:2rem">Sin conexión. ' +
+          'Recupera la red y vuelve a cargar.</body>',
+        { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+      )
     }
     return new Response(JSON.stringify({ error: 'offline' }), {
       status: 503,
