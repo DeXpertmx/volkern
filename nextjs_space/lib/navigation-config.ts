@@ -139,6 +139,24 @@ export const HUBS: HubConfig[] = [
     ]
   },
   {
+    id: 'inmobiliaria',
+    name: 'Inmobiliaria',
+    icon: Home,
+    href: '/dashboard/real-estate',
+    description: 'Cartera de inmuebles, captaciones y portal público.',
+    requiredAccountType: 'BUSINESS',
+    requiredModule: 'real-estate',
+    basePaths: [
+      '/dashboard/real-estate'
+    ],
+    items: [
+      { name: 'Dashboard', href: '/dashboard/real-estate', icon: LayoutDashboard, planModule: 'real-estate', description: 'Cartera, captaciones y rendimiento del portal' },
+      { name: 'Inmuebles', href: '/dashboard/real-estate/properties', icon: Building2, planModule: 'real-estate', description: 'Inventario: fichas, precios, fotos y destacados' },
+      { name: 'Captaciones', href: '/dashboard/real-estate/captaciones', icon: FileSignature, planModule: 'real-estate', description: 'Propietarios, mandatos y seguimiento de captación' },
+      { name: 'Configuración', href: '/dashboard/configuracion/real-estate', icon: Settings2, planModule: 'real-estate', description: 'Portal público, campos del catálogo y comisiones' },
+    ]
+  },
+  {
     id: 'ventas',
     name: 'Ventas',
     icon: TrendingUp,
