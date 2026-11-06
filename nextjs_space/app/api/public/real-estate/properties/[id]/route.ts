@@ -12,10 +12,10 @@ import { applyRateLimit, RATE_LIMIT_ACTIONS } from "@/lib/rate-limit-middleware"
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const { searchParams } = new URL(req.url);
     const slug = searchParams.get("slug");
     const tenantIdParam = searchParams.get("tenantId");
