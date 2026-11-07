@@ -74,12 +74,18 @@ const nextConfig = {
         ],
       },
       {
-        // Widget embebible: caché corta y revalidable para que una corrección
-        // del script llegue a las webs que lo tienen embebido.
+        // Widget embebible: sin caché.
+        //
+        // Con `max-age` el CDN reescribía la cabecera a 4 horas y las webs que
+        // tienen el widget embebido seguían ejecutando la versión anterior
+        // durante horas después de un despliegue (por ejemplo, abriendo la
+        // ficha en una pestaña nueva cuando ya se abría dentro del widget).
+        // Servido con `no-store` el CDN lo deja pasar sin cachear, igual que
+        // `sw.js`, y cada visita recibe la versión desplegada.
         source: '/propiedades-embed.js',
         headers: [
           { key: 'Content-Type', value: 'application/javascript; charset=utf-8' },
-          { key: 'Cache-Control', value: 'public, max-age=300, must-revalidate' },
+          { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
         ],
       },
       {
