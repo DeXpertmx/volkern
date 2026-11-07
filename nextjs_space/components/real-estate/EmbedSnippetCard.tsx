@@ -42,7 +42,7 @@ const SCRIPT_ORIGIN = 'https://volkern.app';
  * Versión del widget. Al cambiar el script se sube este número para que los
  * sitios que ya lo tienen embebido no sigan sirviendo la copia cacheada.
  */
-const SCRIPT_VERSION = '3';
+const SCRIPT_VERSION = '4';
 const TITULO_POR_DEFECTO = 'Nuestras propiedades';
 const COLOR_POR_DEFECTO = '#2563eb';
 
@@ -486,6 +486,7 @@ export function EmbedSnippetCard({ tenantId, className }: EmbedSnippetCardProps)
                 ['data-estado', 'disponible, reservada, vendida o alquilada'],
                 ['data-filtros', 'true (por defecto) o false para ocultar el buscador'],
                 ['data-moneda', 'fuerza la divisa de presentación'],
+                ['data-detalle', 'embed (por defecto) abre la ficha dentro del widget; portal la abre en el portal'],
                 ['data-tema', 'auto (por defecto), claro u oscuro'],
               ].map(([atributo, descripcion]) => (
                 <div key={atributo} className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">

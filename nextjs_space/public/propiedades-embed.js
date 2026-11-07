@@ -25,6 +25,9 @@
  *   data-moneda           fuerza la divisa de presentación
  *   data-ver-todas        true | false (enlace al portal completo)
  *   data-filtros          true | false (buscador y filtros visibles)
+ *   data-detalle          embed | portal (por defecto «embed»: la ficha se abre
+ *                         dentro del propio widget; «portal» abre el portal
+ *                         completo en una pestaña nueva)
  *   data-tema             auto | claro | oscuro
  */
 
@@ -33,6 +36,7 @@
 
   var ORIGIN = 'https://volkern.app';
   var API_ENDPOINT = ORIGIN + '/api/public/real-estate/propiedades';
+  var API_DETALLE = ORIGIN + '/api/public/real-estate/properties';
 
   // ─── Localizar el <script> que nos cargó ────────────────────────────────
   var scriptTag = document.currentScript;
@@ -78,6 +82,7 @@
     verTodas: attr('data-ver-todas') !== 'false',
     filtros: attr('data-filtros') !== 'false',
     tema: ['claro', 'oscuro'].indexOf(attr('data-tema')) >= 0 ? attr('data-tema') : 'auto',
+    detalle: attr('data-detalle') === 'portal' ? 'portal' : 'embed',
   };
 
   // ─── Contenedor ─────────────────────────────────────────────────────────
@@ -115,6 +120,10 @@
       minPrecio: '',
       maxPrecio: '',
     },
+    // Vista activa: el listado o la ficha de un inmueble dentro del widget.
+    vista: 'lista',
+    detalleId: '',
+    detalle: { cargando: false, error: '', propiedad: null },
   };
 
   // ─── Iconos (SVG inline, sin dependencias) ──────────────────────────────
@@ -273,6 +282,117 @@
 
   function urlDetalle(id) {
     return basePortal() + '/propiedades/' + encodeURIComponent(id);
+  }
+
+  /** Ubicación legible sin repetir la ciudad cuando ya está en la dirección. */
+  function textoUbicacion(propiedad) {
+    var partes = [propiedad.city, propiedad.address]
+      .filter(Boolean)
+      .map(function (parte) {
+        return String(parte).trim();
+      });
+    if (
+      partes.length === 2 &&
+      partes[1].toLowerCase().indexOf(partes[0].toLowerCase()) !== -1
+    ) {
+      partes = [partes[1]];
+    }
+    return partes.join(' · ');
+  }
+
+  /** Todas las fotos de la ficha, normalizadas a { url, alt }. */
+  function imagenesDe(propiedad) {
+    var media = propiedad && propiedad.media;
+    if (!Array.isArray(media)) {
+      var unica = imagenDe(propiedad);
+      return unica ? [{ url: unica, alt: propiedad.nombre || 'Propiedad' }] : [];
+    }
+    return media
+      .map(function (item) {
+        if (typeof item === 'string') {
+          var directa = urlSegura(item);
+          return directa ? { url: directa, alt: propiedad.nombre || 'Propiedad' } : null;
+        }
+        if (item && typeof item === 'object') {
+          var url = urlSegura(item.url || item.src || item.path);
+          return url
+            ? { url: url, alt: item.alt || propiedad.nombre || 'Propiedad' }
+            : null;
+        }
+        return null;
+      })
+      .filter(Boolean);
+  }
+
+  // ─── Ficha dentro del widget ────────────────────────────────────────────
+  // Las tarjetas enlazan al portal por defecto desde hace tiempo; abrir la
+  // ficha en una pestaña nueva saca al visitante de la web que embebe el
+  // widget. En modo «embed» la ficha se pinta en el mismo contenedor y se
+  // vuelve al listado sin recargar: los filtros aplicados siguen intactos.
+
+  function alPulsarEscape(evento) {
+    if (evento.key === 'Escape' && state.vista === 'detalle') {
+      evento.stopPropagation();
+      cerrarDetalle();
+    }
+  }
+
+  function desplazarAlWidget() {
+    if (!container.scrollIntoView) return;
+    try {
+      container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (e) {
+      container.scrollIntoView();
+    }
+  }
+
+  function abrirDetalle(id) {
+    if (!id) return;
+    state.vista = 'detalle';
+    state.detalleId = id;
+    state.detalle = { cargando: true, error: '', propiedad: null };
+    render();
+    desplazarAlWidget();
+    document.addEventListener('keydown', alPulsarEscape);
+
+    fetch(
+      API_DETALLE + '/' + encodeURIComponent(id) + '?tenantId=' + encodeURIComponent(CONFIG.tenantId),
+      { headers: { Accept: 'application/json' }, credentials: 'omit' }
+    )
+      .then(function (respuesta) {
+        if (!respuesta.ok) throw new Error('HTTP ' + respuesta.status);
+        return respuesta.json();
+      })
+      .then(function (datos) {
+        // El visitante pudo volver al listado mientras cargaba.
+        if (state.vista !== 'detalle' || state.detalleId !== id) return;
+        var propiedad = datos && datos.property ? datos.property : null;
+        state.detalle = {
+          cargando: false,
+          error: propiedad ? '' : 'Puede que ya no esté publicada.',
+          propiedad: propiedad,
+        };
+        render();
+      })
+      .catch(function (error) {
+        console.error('[Volkern] Error al cargar la ficha:', error);
+        if (state.vista !== 'detalle' || state.detalleId !== id) return;
+        state.detalle = {
+          cargando: false,
+          error: 'No se pudo conectar con Volkern.',
+          propiedad: null,
+        };
+        render();
+      });
+  }
+
+  function cerrarDetalle() {
+    state.vista = 'lista';
+    state.detalleId = '';
+    state.detalle = { cargando: false, error: '', propiedad: null };
+    document.removeEventListener('keydown', alPulsarEscape);
+    render();
+    desplazarAlWidget();
   }
 
   // ─── Estilos ────────────────────────────────────────────────────────────
@@ -672,6 +792,186 @@ ${CID} .vp-cta {
 ${CID} .vp-card:hover .vp-cta { opacity: 0.92; transform: translateX(2px); }
 ${CID} .vp-cta .vp-ico { width: 15px; height: 15px; }
 
+/* ── Ficha dentro del widget ──────────────────────────────── */
+${CID} .vp-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+${CID} .vp-back {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid var(--vp-border);
+  border-radius: 999px;
+  background: var(--vp-surface);
+  color: var(--vp-text);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+${CID} .vp-back:hover { border-color: var(--vp-accent); color: var(--vp-accent); }
+${CID} .vp-galeria-main {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--vp-border);
+  background: var(--vp-surface-2);
+}
+${CID} .vp-galeria-main img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+${CID} .vp-thumbs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 8px 0 2px;
+}
+${CID} .vp-thumb {
+  flex: none;
+  width: 84px;
+  height: 62px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 9px;
+  overflow: hidden;
+  background: none;
+  cursor: pointer;
+  opacity: 0.72;
+}
+${CID} .vp-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+${CID} .vp-thumb[aria-current="true"] { border-color: var(--vp-accent); opacity: 1; }
+${CID} .vp-detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+${CID} .vp-detail-title {
+  margin: 0 0 6px;
+  font-size: clamp(1.15rem, 2vw, 1.5rem);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+${CID} .vp-detail-precio { text-align: right; }
+${CID} .vp-detail-precio .vp-price { font-size: 1.5rem; }
+${CID} .vp-badges-detalle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 2px 0 0;
+  list-style: none;
+  padding: 0;
+}
+${CID} .vp-detalle-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+@media (max-width: 760px) {
+  ${CID} .vp-detalle-grid { grid-template-columns: 1fr; }
+}
+${CID} .vp-detalle-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+${CID} .vp-detalle-h {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--vp-muted);
+}
+${CID} .vp-desc p {
+  margin: 0 0 10px;
+  font-size: 0.92rem;
+  line-height: 1.65;
+  color: var(--vp-text);
+}
+${CID} .vp-desc p:last-child { margin-bottom: 0; }
+${CID} .vp-fichas {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+${CID} .vp-ficha {
+  padding: 9px 11px;
+  border: 1px solid var(--vp-border);
+  border-radius: 10px;
+  background: var(--vp-surface-2);
+}
+${CID} .vp-ficha span {
+  display: block;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--vp-muted);
+}
+${CID} .vp-ficha strong { font-size: 0.93rem; font-weight: 700; }
+${CID} .vp-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+${CID} .vp-chip {
+  padding: 5px 10px;
+  border: 1px solid var(--vp-border);
+  border-radius: 999px;
+  background: var(--vp-surface-2);
+  color: var(--vp-text);
+  font-size: 0.78rem;
+}
+${CID} .vp-detail-cta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--vp-border);
+  border-radius: 14px;
+  background: var(--vp-surface-2);
+}
+${CID} .vp-detail-cta a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 11px 16px;
+  border-radius: 10px;
+  background: var(--vp-accent);
+  color: var(--vp-contrast);
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+${CID} .vp-detail-cta a:hover { opacity: 0.92; }
+${CID} .vp-detail-cta small {
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--vp-muted);
+  text-align: center;
+}
+${CID} .vp-skel-detalle { display: grid; gap: 10px; }
+${CID} .vp-skel-detalle .vp-skel-media { border-radius: 14px; }
+
 /* ── Esqueletos de carga ──────────────────────────────────── */
 ${CID} .vp-skel {
   border: 1px solid var(--vp-border);
@@ -763,6 +1063,9 @@ ${CID} .vp-attrib a:hover { color: var(--vp-accent); }
   ${CID} .vp-range { flex: 1 1 100%; }
   ${CID} .vp-range .vp-input { flex: 1 1 0; width: auto; }
   ${CID} .vp-btn-filtros { flex: 1 1 100%; justify-content: center; }
+  ${CID} .vp-detail-head { flex-direction: column; }
+  ${CID} .vp-detail-precio { text-align: left; }
+  ${CID} .vp-detail-precio .vp-price { font-size: 1.3rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -820,8 +1123,19 @@ ${CID} .vp-attrib a:hover { color: var(--vp-accent); }
 
     var tarjeta = el('a', 'vp-card');
     tarjeta.href = urlDetalle(propiedad.id);
-    tarjeta.target = '_blank';
-    tarjeta.rel = 'noopener noreferrer';
+    if (CONFIG.detalle === 'portal') {
+      tarjeta.target = '_blank';
+      tarjeta.rel = 'noopener noreferrer';
+    } else {
+      // El enlace sigue apuntando a la ficha del portal para que «abrir en
+      // pestaña nueva» y los modificadores del teclado funcionen; el clic
+      // normal se resuelve dentro del propio widget.
+      tarjeta.addEventListener('click', function (evento) {
+        if (evento.metaKey || evento.ctrlKey || evento.shiftKey || evento.altKey) return;
+        evento.preventDefault();
+        abrirDetalle(propiedad.id);
+      });
+    }
     tarjeta.setAttribute('aria-label', 'Ver detalle de ' + (propiedad.nombre || 'la propiedad'));
 
     // Imagen
@@ -879,16 +1193,7 @@ ${CID} .vp-attrib a:hover { color: var(--vp-accent); }
     // Ciudad y dirección suelen solaparse («Monda · Monda» o
     // «Ciudad Jardín · Barrio de Ciudad Jardín, Málaga»): se muestra la más
     // específica una sola vez.
-    var partesUbicacion = [propiedad.city, propiedad.address]
-      .filter(Boolean)
-      .map(function (parte) { return String(parte).trim(); });
-    if (
-      partesUbicacion.length === 2 &&
-      partesUbicacion[1].toLowerCase().indexOf(partesUbicacion[0].toLowerCase()) !== -1
-    ) {
-      partesUbicacion = [partesUbicacion[1]];
-    }
-    var ubicacion = partesUbicacion.join(' · ');
+    var ubicacion = textoUbicacion(propiedad);
     if (ubicacion) {
       var loc = el('p', 'vp-loc');
       loc.appendChild(svg('pin'));
@@ -952,6 +1257,237 @@ ${CID} .vp-attrib a:hover { color: var(--vp-accent); }
     tarjeta.appendChild(cuerpo);
 
     return tarjeta;
+  }
+
+  var EXTRAS = [
+    ['hasPool', 'Piscina'],
+    ['hasGarden', 'Jardín'],
+    ['hasTerrace', 'Terraza'],
+    ['hasBalcony', 'Balcón'],
+    ['hasElevator', 'Ascensor'],
+    ['hasStorageRoom', 'Trastero'],
+    ['hasParking', 'Parking'],
+    ['furnished', 'Amueblado'],
+    ['hasAirConditioning', 'Aire acondicionado'],
+    ['hasHeating', 'Calefacción'],
+  ];
+
+  function fichaDato(etiqueta, valor) {
+    var nodo = el('li', 'vp-ficha');
+    nodo.appendChild(el('span', null, etiqueta));
+    nodo.appendChild(el('strong', null, valor));
+    return nodo;
+  }
+
+  function construirGaleria(propiedad, imagenes) {
+    var galeria = el('div');
+    var marco = el('div', 'vp-galeria-main');
+    var principal = document.createElement('img');
+    principal.src = imagenes[0].url;
+    principal.alt = imagenes[0].alt;
+    marco.appendChild(principal);
+    galeria.appendChild(marco);
+
+    if (imagenes.length > 1) {
+      var tiras = el('div', 'vp-thumbs');
+      imagenes.slice(0, 10).forEach(function (imagen, indice) {
+        var boton = document.createElement('button');
+        boton.type = 'button';
+        boton.className = 'vp-thumb';
+        boton.setAttribute('aria-current', indice === 0 ? 'true' : 'false');
+        boton.setAttribute('aria-label', 'Ver foto ' + (indice + 1));
+        var miniatura = document.createElement('img');
+        miniatura.src = imagen.url;
+        miniatura.alt = '';
+        miniatura.loading = 'lazy';
+        boton.appendChild(miniatura);
+        boton.addEventListener('click', function () {
+          principal.src = imagen.url;
+          principal.alt = imagen.alt;
+          Array.prototype.forEach.call(tiras.children, function (hijo) {
+            hijo.setAttribute('aria-current', hijo === boton ? 'true' : 'false');
+          });
+        });
+        tiras.appendChild(boton);
+      });
+      galeria.appendChild(tiras);
+    }
+
+    return galeria;
+  }
+
+  function construirEsqueletoDetalle() {
+    var esqueleto = el('div', 'vp-skel-detalle');
+    esqueleto.setAttribute('aria-busy', 'true');
+    esqueleto.appendChild(el('div', 'vp-skel-media'));
+    esqueleto.appendChild(el('div', 'vp-skel-line w-70'));
+    esqueleto.appendChild(el('div', 'vp-skel-line w-45'));
+    return esqueleto;
+  }
+
+  function construirDetalle() {
+    var raiz = el('div', 'vp-detail');
+
+    var volver = el('button', 'vp-back');
+    volver.type = 'button';
+    volver.appendChild(document.createTextNode('← Volver al listado'));
+    volver.addEventListener('click', cerrarDetalle);
+    raiz.appendChild(volver);
+
+    if (state.detalle.cargando) {
+      raiz.appendChild(construirEsqueletoDetalle());
+      return raiz;
+    }
+
+    var propiedad = state.detalle.propiedad;
+
+    if (!propiedad) {
+      raiz.appendChild(
+        construirEstado(
+          'error',
+          'No pudimos abrir la ficha',
+          state.detalle.error || 'La propiedad ya no está disponible.',
+          function () {
+            abrirDetalle(state.detalleId);
+          }
+        )
+      );
+      return raiz;
+    }
+
+    var operacion = OPERACIONES[propiedad.operationType] || null;
+    var estado = ESTADOS[propiedad.status] || null;
+    var imagenes = imagenesDe(propiedad);
+
+    if (imagenes.length > 0) {
+      raiz.appendChild(construirGaleria(propiedad, imagenes));
+    }
+
+    // Cabecera: título, ubicación, insignias y precio.
+    var cabecera = el('div', 'vp-detail-head');
+    var bloqueTitulo = el('div');
+    bloqueTitulo.appendChild(el('h3', 'vp-detail-title', propiedad.nombre || 'Propiedad'));
+
+    var ubicacion = textoUbicacion(propiedad);
+    if (ubicacion) {
+      var loc = el('p', 'vp-loc');
+      loc.appendChild(svg('pin'));
+      loc.appendChild(document.createTextNode(ubicacion));
+      bloqueTitulo.appendChild(loc);
+    }
+
+    var insignias = el('ul', 'vp-badges-detalle');
+    if (operacion) {
+      var etiquetaOperacion = el('li', 'vp-chip', operacion.texto);
+      etiquetaOperacion.style.color = operacion.color;
+      insignias.appendChild(etiquetaOperacion);
+    }
+    if (estado) {
+      var etiquetaEstado = el('li', 'vp-chip', estado.texto);
+      etiquetaEstado.style.color = estado.color;
+      insignias.appendChild(etiquetaEstado);
+    }
+    if (propiedad.destacado || propiedad.featured) {
+      insignias.appendChild(el('li', 'vp-chip', 'Destacada'));
+    }
+    if (insignias.childNodes.length > 0) bloqueTitulo.appendChild(insignias);
+    cabecera.appendChild(bloqueTitulo);
+
+    var bloquePrecio = el('div', 'vp-detail-precio');
+    var precio = el('p', 'vp-price', importe(propiedad.precioBase, CONFIG.moneda || propiedad.moneda));
+    var sufijo = sufijoPrecio(propiedad.operationType);
+    if (sufijo && propiedad.precioBase > 0) {
+      precio.appendChild(el('span', 'vp-suffix', sufijo));
+    }
+    bloquePrecio.appendChild(precio);
+    if (
+      propiedad.precioBase > 0 &&
+      propiedad.areaM2 > 0 &&
+      propiedad.operationType !== 'alquiler' &&
+      propiedad.operationType !== 'alquiler_temporada'
+    ) {
+      bloquePrecio.appendChild(
+        el('p', 'vp-m2', importe(propiedad.precioBase / propiedad.areaM2, CONFIG.moneda || propiedad.moneda) + ' /m²')
+      );
+    }
+    cabecera.appendChild(bloquePrecio);
+    raiz.appendChild(cabecera);
+
+    // Descripción
+    var grid = el('div', 'vp-detalle-grid');
+    var principal = el('div', 'vp-detalle-col');
+    var texto = String(propiedad.longDescription || propiedad.descripcion || '').trim();
+    if (texto) {
+      var bloqueDesc = el('div', 'vp-desc');
+      texto
+        .split(/\r?\n+/)
+        .map(function (parrafo) {
+          return parrafo.trim();
+        })
+        .filter(Boolean)
+        .forEach(function (parrafo) {
+          bloqueDesc.appendChild(el('p', null, parrafo));
+        });
+      principal.appendChild(el('h4', 'vp-detalle-h', 'Descripción'));
+      principal.appendChild(bloqueDesc);
+    }
+
+    // Características: banderas del inmueble + servicios del editor.
+    var extras = EXTRAS.filter(function (par) {
+      return propiedad[par[0]];
+    }).map(function (par) {
+      return par[1];
+    });
+    if (Array.isArray(propiedad.servicios)) {
+      propiedad.servicios.forEach(function (servicio) {
+        if (typeof servicio === 'string' && servicio.trim()) {
+          extras.push(etiquetaTipo(servicio.trim()));
+        }
+      });
+    }
+    if (extras.length > 0) {
+      principal.appendChild(el('h4', 'vp-detalle-h', 'Características'));
+      var chips = el('ul', 'vp-chips');
+      extras.forEach(function (extra) {
+        chips.appendChild(el('li', 'vp-chip', extra));
+      });
+      principal.appendChild(chips);
+    }
+    grid.appendChild(principal);
+
+    // Datos y contacto
+    var lateral = el('div', 'vp-detalle-col');
+    var fichas = el('ul', 'vp-fichas');
+    if (propiedad.areaM2) fichas.appendChild(fichaDato('Superficie', propiedad.areaM2 + ' m²'));
+    if (propiedad.builtM2) fichas.appendChild(fichaDato('Construidos', propiedad.builtM2 + ' m²'));
+    if (propiedad.bedrooms) fichas.appendChild(fichaDato('Habitaciones', String(propiedad.bedrooms)));
+    if (propiedad.bathrooms) fichas.appendChild(fichaDato('Baños', String(propiedad.bathrooms)));
+    if (propiedad.parking) fichas.appendChild(fichaDato('Estacionamientos', String(propiedad.parking)));
+    if (propiedad.yearBuilt) fichas.appendChild(fichaDato('Antigüedad', propiedad.yearBuilt + ' años'));
+    if (propiedad.propertyType) fichas.appendChild(fichaDato('Tipo', etiquetaTipo(propiedad.propertyType)));
+    if (propiedad.energyCert) {
+      fichas.appendChild(fichaDato('Certificado energético', String(propiedad.energyCert).toUpperCase()));
+    }
+    if (fichas.childNodes.length > 0) {
+      lateral.appendChild(el('h4', 'vp-detalle-h', 'Datos del inmueble'));
+      lateral.appendChild(fichas);
+    }
+
+    var cta = el('div', 'vp-detail-cta');
+    var contacto = el('a', null, 'Solicitar información');
+    contacto.href = urlDetalle(propiedad.id);
+    contacto.target = '_blank';
+    contacto.rel = 'noopener noreferrer';
+    contacto.appendChild(svg('flecha'));
+    cta.appendChild(contacto);
+    cta.appendChild(el('small', null, 'Se abre la ficha completa con el formulario de contacto.'));
+    lateral.appendChild(cta);
+
+    grid.appendChild(lateral);
+    raiz.appendChild(grid);
+    raiz.appendChild(construirAtribucion());
+
+    return raiz;
   }
 
   function placeholderImagen() {
@@ -1129,6 +1665,12 @@ ${CID} .vp-attrib a:hover { color: var(--vp-accent); }
 
   // ─── Render ─────────────────────────────────────────────────────────────
   function render() {
+    if (state.vista === 'detalle') {
+      container.textContent = '';
+      container.appendChild(construirDetalle());
+      return;
+    }
+
     var raiz = el('div', 'vp-root');
 
     var cabecera = construirCabecera();
