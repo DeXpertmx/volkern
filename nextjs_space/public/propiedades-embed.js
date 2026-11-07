@@ -750,7 +750,19 @@ ${CID} .vp-attrib a:hover { color: var(--vp-accent); }
     var cuerpo = el('div', 'vp-body');
     cuerpo.appendChild(el('h3', 'vp-name', propiedad.nombre || 'Propiedad'));
 
-    var ubicacion = [propiedad.city, propiedad.address].filter(Boolean).join(' · ');
+    // Ciudad y dirección suelen solaparse («Monda · Monda» o
+    // «Ciudad Jardín · Barrio de Ciudad Jardín, Málaga»): se muestra la más
+    // específica una sola vez.
+    var partesUbicacion = [propiedad.city, propiedad.address]
+      .filter(Boolean)
+      .map(function (parte) { return String(parte).trim(); });
+    if (
+      partesUbicacion.length === 2 &&
+      partesUbicacion[1].toLowerCase().indexOf(partesUbicacion[0].toLowerCase()) !== -1
+    ) {
+      partesUbicacion = [partesUbicacion[1]];
+    }
+    var ubicacion = partesUbicacion.join(' · ');
     if (ubicacion) {
       var loc = el('p', 'vp-loc');
       loc.appendChild(svg('pin'));
