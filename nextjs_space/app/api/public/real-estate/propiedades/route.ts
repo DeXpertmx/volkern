@@ -1,6 +1,14 @@
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+/**
+ * Catálogo público de solo lectura: se puede cachear en el CDN unos segundos
+ * para que el widget embebido en webs de terceros cargue rápido.
+ */
+const CACHE_HEADERS = {
+  'Cache-Control': 'public, max-age=30, s-maxage=60, stale-while-revalidate=300',
+};
+
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { parseInmueble } from '@/lib/real-estate/property-helpers';
@@ -53,7 +61,7 @@ export const GET = async (req: NextRequest) => {
   const soloDestacadas = searchParams.get('destacadas') === 'true';
   const operacion = searchParams.get('operacion') || undefined;
   const ciudad = searchParams.get('ciudad') || undefined;
-  const estado = searchParams.get('estado') || 'disponible';
+  const estado = searchParams.get('estado') || undefined;
 
   try {
     const where: any = {
@@ -63,9 +71,21 @@ export const GET = async (req: NextRequest) => {
     };
 
     if (soloDestacadas) where.destacado = true;
-    if (operacion) where.customFieldValues = { path: ['tipo_operacion'], equals: operacion };
-    if (ciudad) where.customFieldValues = { path: ['zona'], contains: ciudad, mode: 'insensitive' };
-    if (estado) where.customFieldValues = { path: ['estado'], equals: estado };
+
+    // Cada filtro es una condición independiente: antes se sobrescribía la
+    // misma clave `customFieldValues`, de modo que con operación + ciudad solo
+    // se aplicaba el último filtro enviado.
+    const condiciones: any[] = [];
+    if (operacion) {
+      condiciones.push({ customFieldValues: { path: ['tipo_operacion'], equals: operacion } });
+    }
+    if (ciudad) {
+      condiciones.push({ customFieldValues: { path: ['zona'], string_contains: ciudad } });
+    }
+    if (estado) {
+      condiciones.push({ customFieldValues: { path: ['estado'], equals: estado } });
+    }
+    if (condiciones.length > 0) where.AND = condiciones;
 
     const items = await prisma.catalogoItem.findMany({
       where,
@@ -81,22 +101,25 @@ export const GET = async (req: NextRequest) => {
 
     const properties = (items as unknown as CatalogoItem[]).map(parseInmueble);
 
-    return NextResponse.json({
-      ok: true,
-      tenant: {
-        id: tenant.id,
-        nombre: tenant.nombre,
-        slug: tenant.slug,
+    return NextResponse.json(
+      {
+        ok: true,
+        tenant: {
+          id: tenant.id,
+          nombre: tenant.nombre,
+          slug: tenant.slug,
+        },
+        properties,
+        pagination: {
+          limit: limite,
+          offset,
+          total,
+          totalPages: Math.ceil(total / limite),
+          currentPage: Math.floor(offset / limite) + 1,
+        },
       },
-      properties,
-      pagination: {
-        limit: limite,
-        offset,
-        total,
-        totalPages: Math.ceil(total / limite),
-        currentPage: Math.floor(offset / limite) + 1,
-      },
-    });
+      { headers: CACHE_HEADERS }
+    );
   } catch (error) {
     console.error('[Public Real Estate API] Error:', error);
     return NextResponse.json(

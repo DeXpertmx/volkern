@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { RealEstateModuleNav } from '@/components/real-estate/RealEstateModuleNav'
+import { EmbedSnippetCard } from '@/components/real-estate/EmbedSnippetCard'
 import {
   Card,
   CardContent,
@@ -58,10 +59,6 @@ import {
   Sparkles,
   MapPin,
   TrendingUp,
-  Code,
-  Copy,
-  Check,
-  Loader2,
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 
@@ -168,11 +165,6 @@ export default function RealEstateConfigDashboard() {
   const [confirmSetup, setConfirmSetup] = useState(false)
   const [setupLoading, setSetupLoading] = useState(false)
 
-  // Embed
-  const [embedTenantId, setEmbedTenantId] = useState('')
-  const [embedLoading, setEmbedLoading] = useState(true)
-  const [copiedEmbed, setCopiedEmbed] = useState(false)
-
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
@@ -236,34 +228,6 @@ export default function RealEstateConfigDashboard() {
   useEffect(() => {
     fetchConfig()
   }, [fetchConfig])
-
-  // Cargar tenantId para el código embed desde la sesión
-  useEffect(() => {
-    setEmbedLoading(true)
-    const id = session?.user?.tenantId
-    if (id) {
-      setEmbedTenantId(id)
-    }
-    setEmbedLoading(false)
-  }, [session?.user?.tenantId])
-
-  const copiarEmbed = () => {
-    if (!embedTenantId) return
-    const code = `<script
-  src="https://volkern.app/propiedades-embed.js"
-  data-tenant-id="${embedTenantId}"
-  data-titulo="Nuestras propiedades"
-  data-color="#2563eb"
-  data-limite="12"
-  data-modo="grid"
-></script>
-<div id="volkern-propiedades"></div>`
-    navigator.clipboard.writeText(code).then(() => {
-      setCopiedEmbed(true)
-      toast.success('Código embed copiado')
-      setTimeout(() => setCopiedEmbed(false), 2000)
-    })
-  }
 
   // ─── Save Config ────────────────────────────────────────────────────────────
 
@@ -755,74 +719,7 @@ export default function RealEstateConfigDashboard() {
             </CardContent>
           </Card>
 
-          {/* Código Embed para tu sitio web */}
-          <Card className="border-l-4 border-l-primary">
-            <CardHeader className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Code className="h-5 w-5" />
-                  Código de Inserción (Embed)
-                </CardTitle>
-                <CardDescription>
-                  Copia y pega este código en tu sitio web para mostrar tus
-                  propiedades automáticamente.
-                </CardDescription>
-              </div>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={copiarEmbed}
-                disabled={embedLoading || !embedTenantId}
-              >
-                {copiedEmbed ? (
-                  <Check className="h-4 w-4" />
-                ) : (
-                  <Copy className="h-4 w-4" />
-                )}
-              </Button>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {embedLoading ? (
-                <div className="flex items-center justify-center py-4">
-                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                </div>
-              ) : !embedTenantId ? (
-                <div className="text-center py-4 text-muted-foreground text-sm">
-                  No se pudo obtener el tenant para el código embed.
-                </div>
-              ) : (
-                <div className="relative">
-                  <pre className="bg-muted p-4 rounded-lg text-sm overflow-x-auto font-mono">
-                    <code>{`<script
-  src="https://volkern.app/propiedades-embed.js"
-  data-tenant-id="${embedTenantId}"
-  data-titulo="Nuestras propiedades"
-  data-color="#2563eb"
-  data-limite="12"
-  data-modo="grid"
-></script>
-<div id="volkern-propiedades"></div>`}</code>
-                  </pre>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="absolute top-2 right-2"
-                    onClick={copiarEmbed}
-                  >
-                    {copiedEmbed ? 'Copiado' : 'Copiar'}
-                  </Button>
-                </div>
-              )}
-              <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-lg p-3 text-sm">
-                <p className="text-amber-800 dark:text-amber-200 font-medium">Cómo funciona:</p>
-                <ol className="text-amber-700 dark:text-amber-300 mt-1 list-disc list-inside space-y-1">
-                  <li>Pega el <code>&lt;script&gt;</code> antes de cerrar <code>&lt;/body&gt;</code></li>
-                  <li>Coloca <code>&lt;div id=&apos;volkern-propiedades&apos;&gt;&lt;/div&gt;</code> donde quieras que aparezcan</li>
-                  <li>Las propiedades se actualizan solas desde tu panel de Volkern</li>
-                </ol>
-              </div>
-            </CardContent>
-          </Card>
+          <EmbedSnippetCard tenantId={session?.user?.tenantId} className="border-l-4 border-l-primary" />
 
           <Card>
             <CardHeader>
