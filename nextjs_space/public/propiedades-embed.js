@@ -24,6 +24,7 @@
  *   data-estado           disponible | reservada | vendida | alquilada
  *   data-moneda           fuerza la divisa de presentación
  *   data-ver-todas        true | false (enlace al portal completo)
+ *   data-filtros          true | false (buscador y filtros visibles)
  *   data-tema             auto | claro | oscuro
  */
 
@@ -75,6 +76,7 @@
     estado: attr('data-estado') || '',
     moneda: attr('data-moneda') || '',
     verTodas: attr('data-ver-todas') !== 'false',
+    filtros: attr('data-filtros') !== 'false',
     tema: ['claro', 'oscuro'].indexOf(attr('data-tema')) >= 0 ? attr('data-tema') : 'auto',
   };
 
@@ -103,6 +105,16 @@
     total: 0,
     cargando: true,
     error: '',
+    // Filtros activos: se siembran con los atributos del script para que los
+    // controles muestren lo mismo que se pidió al cargar el widget.
+    filtros: {
+      q: '',
+      operacion: CONFIG.operacion,
+      tipo: '',
+      ciudad: CONFIG.ciudad,
+      minPrecio: '',
+      maxPrecio: '',
+    },
   };
 
   // ─── Iconos (SVG inline, sin dependencias) ──────────────────────────────
@@ -117,6 +129,8 @@
     estrella: '<path d="m12 3 2.6 5.6 6.1.8-4.5 4.3 1.1 6.1-5.4-3-5.4 3 1.1-6.1L3.3 9.4l6.1-.8Z"/>',
     alerta: '<circle cx="12" cy="12" r="9"/><path d="M12 8v4"/><path d="M12 16h.01"/>',
     recargar: '<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/>',
+    lupa: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+    filtro: '<path d="M3 5h18"/><path d="M6 12h12"/><path d="M10 19h4"/>',
   };
 
   function svg(nombre) {
@@ -236,10 +250,25 @@
 
   function urlListado() {
     var params = new URLSearchParams();
-    if (CONFIG.operacion) params.set('operacion', CONFIG.operacion);
-    if (CONFIG.ciudad) params.set('ciudad', CONFIG.ciudad);
+    var f = state.filtros;
+    if (f.q) params.set('q', f.q);
+    if (f.operacion) params.set('operacion', f.operacion);
+    if (f.tipo) params.set('tipo', f.tipo);
+    if (f.ciudad) params.set('ciudad', f.ciudad);
+    if (f.minPrecio) params.set('minPrecio', f.minPrecio);
+    if (f.maxPrecio) params.set('maxPrecio', f.maxPrecio);
     var qs = params.toString();
     return basePortal() + '/propiedades' + (qs ? '?' + qs : '');
+  }
+
+  function hayFiltros() {
+    var f = state.filtros;
+    return Boolean(f.q || f.operacion || f.tipo || f.ciudad || f.minPrecio || f.maxPrecio);
+  }
+
+  function limpiarFiltros() {
+    state.filtros = { q: '', operacion: '', tipo: '', ciudad: '', minPrecio: '', maxPrecio: '' };
+    cargar();
   }
 
   function urlDetalle(id) {
@@ -320,6 +349,97 @@ ${CID} .vp-all {
 }
 ${CID} .vp-all:hover { text-decoration: underline; }
 ${CID} .vp-all .vp-ico { width: 16px; height: 16px; }
+
+/* ── Buscador y filtros ───────────────────────────────────── */
+${CID} .vp-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 12px;
+  background: var(--vp-surface);
+  border: 1px solid var(--vp-border);
+  border-radius: 14px;
+  box-shadow: var(--vp-shadow);
+}
+${CID} .vp-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 220px;
+  min-width: 180px;
+}
+${CID} .vp-field .vp-ico {
+  position: absolute;
+  left: 11px;
+  width: 16px;
+  height: 16px;
+  color: var(--vp-muted);
+  pointer-events: none;
+}
+${CID} .vp-input,
+${CID} .vp-select {
+  height: 40px;
+  min-width: 0;
+  padding: 0 12px;
+  border: 1px solid var(--vp-border);
+  border-radius: 10px;
+  background: var(--vp-surface);
+  color: var(--vp-text);
+  font: inherit;
+  font-size: 0.86rem;
+}
+${CID} .vp-field .vp-input { width: 100%; padding-left: 34px; }
+${CID} .vp-select { padding-right: 30px; flex: 0 1 auto; cursor: pointer; }
+${CID} .vp-input--ciudad { flex: 1 1 130px; width: 130px; }
+${CID} .vp-input:focus-visible,
+${CID} .vp-select:focus-visible {
+  outline: 2px solid var(--vp-accent);
+  outline-offset: 1px;
+}
+${CID} .vp-range { display: flex; align-items: center; gap: 6px; }
+${CID} .vp-range .vp-input { width: 78px; padding: 0 10px; text-align: center; }
+${CID} .vp-range-sep { color: var(--vp-muted); }
+${CID} .vp-btn-filtros {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--vp-contrast);
+  background: var(--vp-accent);
+  cursor: pointer;
+  transition: opacity 0.18s ease;
+}
+${CID} .vp-btn-filtros:hover { opacity: 0.92; }
+${CID} .vp-btn-filtros .vp-ico { width: 15px; height: 15px; }
+${CID} .vp-results {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 14px;
+  min-height: 20px;
+  font-size: 0.8rem;
+  color: var(--vp-muted);
+}
+${CID} .vp-clear {
+  border: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--vp-accent);
+  cursor: pointer;
+  text-decoration: underline;
+}
 
 /* ── Rejilla / lista ──────────────────────────────────────── */
 ${CID} .vp-grid {
@@ -637,6 +757,12 @@ ${CID} .vp-attrib a:hover { color: var(--vp-accent); }
   ${CID} .vp-list .vp-media { width: 100%; aspect-ratio: 4 / 3; }
   ${CID} .vp-list .vp-body { padding: 16px 18px 18px; }
   ${CID} .vp-head { align-items: flex-start; flex-direction: column; gap: 8px; }
+  ${CID} .vp-field { flex: 1 1 100%; }
+  ${CID} .vp-select { flex: 1 1 calc(50% - 4px); }
+  ${CID} .vp-input--ciudad { flex: 1 1 100%; width: 100%; }
+  ${CID} .vp-range { flex: 1 1 100%; }
+  ${CID} .vp-range .vp-input { flex: 1 1 0; width: auto; }
+  ${CID} .vp-btn-filtros { flex: 1 1 100%; justify-content: center; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -873,12 +999,145 @@ ${CID} .vp-attrib a:hover { color: var(--vp-accent); }
     return nodo;
   }
 
+  // ─── Buscador ───────────────────────────────────────────────────────────
+  var TIPOS_INMUEBLE = ['Casa', 'Departamento', 'Oficina', 'Local Comercial', 'Terreno'];
+
+  function construirFiltros() {
+    var form = el('form', 'vp-filtros');
+    form.setAttribute('role', 'search');
+    form.setAttribute('aria-label', 'Buscar propiedades');
+
+    // Texto libre
+    var buscador = el('div', 'vp-field');
+    buscador.appendChild(svg('lupa'));
+    var inputBuscar = document.createElement('input');
+    inputBuscar.type = 'search';
+    inputBuscar.className = 'vp-input';
+    inputBuscar.placeholder = 'Buscar por nombre o descripción...';
+    inputBuscar.setAttribute('aria-label', 'Buscar por nombre o descripción');
+    inputBuscar.value = state.filtros.q;
+    buscador.appendChild(inputBuscar);
+    form.appendChild(buscador);
+
+    // Operación
+    var selectOperacion = document.createElement('select');
+    selectOperacion.className = 'vp-select';
+    selectOperacion.setAttribute('aria-label', 'Tipo de operación');
+    [['', 'Todas las ops.'], ['venta', 'En Venta'], ['alquiler', 'En Alquiler'], ['alquiler_temporada', 'Renta Vacacional'], ['traspaso', 'Traspaso']]
+      .forEach(function (opcion) {
+        selectOperacion.appendChild(new Option(opcion[1], opcion[0]));
+      });
+    selectOperacion.value = state.filtros.operacion || '';
+    form.appendChild(selectOperacion);
+
+    // Tipo de inmueble
+    var selectTipo = document.createElement('select');
+    selectTipo.className = 'vp-select';
+    selectTipo.setAttribute('aria-label', 'Tipo de inmueble');
+    selectTipo.appendChild(new Option('Todos los tipos', ''));
+    TIPOS_INMUEBLE.forEach(function (tipo) {
+      selectTipo.appendChild(new Option(tipo, tipo));
+    });
+    selectTipo.value = state.filtros.tipo || '';
+    form.appendChild(selectTipo);
+
+    // Ciudad o zona
+    var inputCiudad = document.createElement('input');
+    inputCiudad.type = 'text';
+    inputCiudad.className = 'vp-input vp-input--ciudad';
+    inputCiudad.placeholder = 'Ciudad o zona...';
+    inputCiudad.setAttribute('aria-label', 'Ciudad o zona');
+    inputCiudad.value = state.filtros.ciudad;
+    form.appendChild(inputCiudad);
+
+    // Rango de precio
+    var rango = el('div', 'vp-range');
+    var minimo = document.createElement('input');
+    minimo.type = 'text';
+    minimo.inputMode = 'numeric';
+    minimo.className = 'vp-input';
+    minimo.placeholder = 'Mín';
+    minimo.setAttribute('aria-label', 'Precio mínimo');
+    minimo.value = state.filtros.minPrecio;
+    var maximo = document.createElement('input');
+    maximo.type = 'text';
+    maximo.inputMode = 'numeric';
+    maximo.className = 'vp-input';
+    maximo.placeholder = 'Máx';
+    maximo.setAttribute('aria-label', 'Precio máximo');
+    maximo.value = state.filtros.maxPrecio;
+    rango.appendChild(minimo);
+    rango.appendChild(el('span', 'vp-range-sep', '—'));
+    rango.appendChild(maximo);
+    form.appendChild(rango);
+
+    var boton = el('button', 'vp-btn-filtros');
+    boton.type = 'submit';
+    boton.appendChild(svg('filtro'));
+    boton.appendChild(document.createTextNode('Filtrar'));
+    form.appendChild(boton);
+
+    form.addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      state.filtros = {
+        q: inputBuscar.value.trim(),
+        operacion: selectOperacion.value,
+        tipo: selectTipo.value,
+        ciudad: inputCiudad.value.trim(),
+        minPrecio: minimo.value.replace(/[^\d]/g, ''),
+        maxPrecio: maximo.value.replace(/[^\d]/g, ''),
+      };
+      cargar();
+    });
+
+    // La «x» nativa del input type=search también limpia la búsqueda.
+    inputBuscar.addEventListener('search', function () {
+      if (!inputBuscar.value) {
+        state.filtros.q = '';
+        cargar();
+      }
+    });
+
+    return form;
+  }
+
+  function construirResumen() {
+    var resumen = el('div', 'vp-results');
+    var texto = el('span');
+
+    if (state.cargando) {
+      texto.textContent = 'Buscando propiedades…';
+    } else if (!state.error) {
+      var mostradas = state.propiedades.length;
+      if (mostradas === state.total) {
+        texto.textContent = mostradas === 1 ? '1 propiedad' : mostradas + ' propiedades';
+      } else {
+        texto.textContent = 'Mostrando ' + mostradas + ' de ' + state.total + ' propiedades';
+      }
+    }
+    resumen.appendChild(texto);
+
+    if (hayFiltros() && !state.cargando) {
+      var limpiar = el('button', 'vp-clear', 'Limpiar filtros');
+      limpiar.type = 'button';
+      limpiar.addEventListener('click', limpiarFiltros);
+      resumen.appendChild(limpiar);
+    }
+
+    return resumen;
+  }
+
   // ─── Render ─────────────────────────────────────────────────────────────
   function render() {
     var raiz = el('div', 'vp-root');
 
     var cabecera = construirCabecera();
     if (cabecera) raiz.appendChild(cabecera);
+
+    if (CONFIG.filtros) {
+      raiz.appendChild(construirFiltros());
+      raiz.appendChild(construirResumen());
+    }
 
     if (state.cargando) {
       var contenedorCarga = el('div', CONFIG.modo === 'lista' ? 'vp-list' : 'vp-grid');
@@ -899,9 +1158,21 @@ ${CID} .vp-attrib a:hover { color: var(--vp-accent); }
         )
       );
     } else if (state.propiedades.length === 0) {
-      raiz.appendChild(
-        construirEstado('vacio', 'No hay propiedades disponibles', 'Publica una propiedad en tu panel para verla aquí.')
+      var conFiltros = hayFiltros();
+      var vacio = construirEstado(
+        'vacio',
+        conFiltros ? 'Sin resultados para esa búsqueda' : 'No hay propiedades disponibles',
+        conFiltros
+          ? 'Prueba con otros filtros, amplía la zona o el rango de precio.'
+          : 'Publica una propiedad en tu panel para verla aquí.'
       );
+      if (conFiltros) {
+        var reiniciar = el('button', 'vp-retry', 'Limpiar filtros');
+        reiniciar.type = 'button';
+        reiniciar.addEventListener('click', limpiarFiltros);
+        vacio.appendChild(reiniciar);
+      }
+      raiz.appendChild(vacio);
     } else {
       var contenedor = el('div', CONFIG.modo === 'lista' ? 'vp-list' : 'vp-grid');
       state.propiedades.forEach(function (propiedad) {
@@ -927,9 +1198,13 @@ ${CID} .vp-attrib a:hover { color: var(--vp-accent); }
     params.set('limite', String(CONFIG.limite));
     params.set('offset', '0');
     if (CONFIG.soloDestacadas) params.set('destacadas', 'true');
-    if (CONFIG.operacion) params.set('operacion', CONFIG.operacion);
-    if (CONFIG.ciudad) params.set('ciudad', CONFIG.ciudad);
     if (CONFIG.estado) params.set('estado', CONFIG.estado);
+    if (state.filtros.q) params.set('q', state.filtros.q);
+    if (state.filtros.operacion) params.set('operacion', state.filtros.operacion);
+    if (state.filtros.tipo) params.set('tipo', state.filtros.tipo);
+    if (state.filtros.ciudad) params.set('ciudad', state.filtros.ciudad);
+    if (state.filtros.minPrecio) params.set('minPrecio', state.filtros.minPrecio);
+    if (state.filtros.maxPrecio) params.set('maxPrecio', state.filtros.maxPrecio);
 
     fetch(API_ENDPOINT + '?' + params.toString(), {
       headers: { Accept: 'application/json' },

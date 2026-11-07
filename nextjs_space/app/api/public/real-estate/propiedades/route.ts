@@ -14,6 +14,15 @@ import { prisma } from '@/lib/db';
 import { parseInmueble } from '@/lib/real-estate/property-helpers';
 import type { CatalogoItem } from '@prisma/client';
 
+/** Convierte un parámetro de precio en número; ignora valores no numéricos. */
+function precio(valor: string | null): number | undefined {
+  if (!valor) return undefined;
+  const limpio = valor.replace(/[^\d]/g, '');
+  if (!limpio) return undefined;
+  const n = Number.parseInt(limpio, 10);
+  return Number.isFinite(n) && n >= 0 ? n : undefined;
+}
+
 /**
  * GET /api/public/real-estate/propiedades?tenantId=XXX
  *
@@ -21,6 +30,16 @@ import type { CatalogoItem } from '@prisma/client';
  * tenant para uso en embebidos de terceros (widget de inmuebles).
  *
  * Solo devuelve inmuebles con `activo: true` y `tipo: 'inmueble'`.
+ *
+ * Filtros admitidos (todos opcionales y combinables):
+ *   q            texto libre sobre nombre y descripción
+ *   operacion    venta | alquiler | alquiler_temporada | traspaso
+ *   tipo         tipo_inmueble (Casa, Departamento, …)
+ *   ciudad       coincidencia parcial en zona o dirección
+ *   estado       disponible | reservada | vendida | alquilada
+ *   minPrecio    precioBase mínimo
+ *   maxPrecio    precioBase máximo
+ *   destacadas   true para mostrar solo las destacadas
  */
 export const GET = async (req: NextRequest) => {
   const { searchParams } = new URL(req.url);
@@ -60,8 +79,12 @@ export const GET = async (req: NextRequest) => {
   const offset = parseInt(searchParams.get('offset') || '0', 10);
   const soloDestacadas = searchParams.get('destacadas') === 'true';
   const operacion = searchParams.get('operacion') || undefined;
-  const ciudad = searchParams.get('ciudad') || undefined;
+  const tipo = searchParams.get('tipo') || undefined;
+  const ciudad = searchParams.get('ciudad')?.trim() || undefined;
   const estado = searchParams.get('estado') || undefined;
+  const q = searchParams.get('q')?.trim() || undefined;
+  const minPrecio = precio(searchParams.get('minPrecio'));
+  const maxPrecio = precio(searchParams.get('maxPrecio'));
 
   try {
     const where: any = {
@@ -79,11 +102,35 @@ export const GET = async (req: NextRequest) => {
     if (operacion) {
       condiciones.push({ customFieldValues: { path: ['tipo_operacion'], equals: operacion } });
     }
-    if (ciudad) {
-      condiciones.push({ customFieldValues: { path: ['zona'], string_contains: ciudad } });
+    if (tipo) {
+      condiciones.push({ customFieldValues: { path: ['tipo_inmueble'], equals: tipo } });
     }
     if (estado) {
       condiciones.push({ customFieldValues: { path: ['estado'], equals: estado } });
+    }
+    if (ciudad) {
+      // `zona` es la ciudad del inmueble; la dirección permite además buscar
+      // por barrio («Ciudad Jardín»).
+      condiciones.push({
+        OR: [
+          { customFieldValues: { path: ['zona'], string_contains: ciudad } },
+          { customFieldValues: { path: ['direccion'], string_contains: ciudad } },
+        ],
+      });
+    }
+    if (q) {
+      condiciones.push({
+        OR: [
+          { nombre: { contains: q, mode: 'insensitive' } },
+          { descripcion: { contains: q, mode: 'insensitive' } },
+        ],
+      });
+    }
+    if (minPrecio !== undefined) {
+      condiciones.push({ precioBase: { gte: minPrecio } });
+    }
+    if (maxPrecio !== undefined) {
+      condiciones.push({ precioBase: { lte: maxPrecio } });
     }
     if (condiciones.length > 0) where.AND = condiciones;
 

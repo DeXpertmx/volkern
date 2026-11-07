@@ -42,7 +42,7 @@ const SCRIPT_ORIGIN = 'https://volkern.app';
  * Versión del widget. Al cambiar el script se sube este número para que los
  * sitios que ya lo tienen embebido no sigan sirviendo la copia cacheada.
  */
-const SCRIPT_VERSION = '2';
+const SCRIPT_VERSION = '3';
 const TITULO_POR_DEFECTO = 'Nuestras propiedades';
 const COLOR_POR_DEFECTO = '#2563eb';
 
@@ -83,6 +83,7 @@ export function EmbedSnippetCard({ tenantId, className }: EmbedSnippetCardProps)
   const [soloDestacadas, setSoloDestacadas] = useState(false);
   const [operacion, setOperacion] = useState('todas');
   const [verTodas, setVerTodas] = useState(true);
+  const [filtros, setFiltros] = useState(true);
   const [copiado, setCopiado] = useState(false);
   const [tab, setTab] = useState<'codigo' | 'vista'>('codigo');
 
@@ -118,9 +119,12 @@ export function EmbedSnippetCard({ tenantId, className }: EmbedSnippetCardProps)
     if (!verTodas) {
       atributos.push('  data-ver-todas="false"');
     }
+    if (!filtros) {
+      atributos.push('  data-filtros="false"');
+    }
 
     return `<script\n${atributos.join('\n')}\n></script>\n<div id="volkern-propiedades"></div>`;
-  }, [tenantId, titulo, subtitulo, color, limite, modo, soloDestacadas, operacion, verTodas]);
+  }, [tenantId, titulo, subtitulo, color, limite, modo, soloDestacadas, operacion, verTodas, filtros]);
 
   const urlVistaPrevia = useMemo(() => {
     if (!tenantId) return '';
@@ -133,8 +137,9 @@ export function EmbedSnippetCard({ tenantId, className }: EmbedSnippetCardProps)
     if (soloDestacadas) params.set('destacadas', '1');
     if (operacion !== 'todas') params.set('operacion', operacion);
     params.set('verTodas', verTodas ? '1' : '0');
+    if (!filtros) params.set('filtros', '0');
     return `/embed/propiedades?${params.toString()}`;
-  }, [tenantId, titulo, subtitulo, color, limite, modo, soloDestacadas, operacion, verTodas]);
+  }, [tenantId, titulo, subtitulo, color, limite, modo, soloDestacadas, operacion, verTodas, filtros]);
 
   const copiar = async () => {
     if (!listo) return;
@@ -157,6 +162,7 @@ export function EmbedSnippetCard({ tenantId, className }: EmbedSnippetCardProps)
     setSoloDestacadas(false);
     setOperacion('todas');
     setVerTodas(true);
+    setFiltros(true);
     setTab('codigo');
   };
 
@@ -343,6 +349,21 @@ export function EmbedSnippetCard({ tenantId, className }: EmbedSnippetCardProps)
             </div>
             <div className="flex items-center justify-between gap-4 border-t pt-3">
               <div className="space-y-0.5">
+                <Label htmlFor="embed-filtros" className="text-sm font-medium">
+                  Buscador y filtros
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Búsqueda por texto, operación, tipo, zona y precio.
+                </p>
+              </div>
+              <Switch
+                id="embed-filtros"
+                checked={filtros}
+                onCheckedChange={setFiltros}
+              />
+            </div>
+            <div className="flex items-center justify-between gap-4 border-t pt-3">
+              <div className="space-y-0.5">
                 <Label htmlFor="embed-ver-todas" className="text-sm font-medium">
                   Enlace «Ver todas las propiedades»
                 </Label>
@@ -463,6 +484,7 @@ export function EmbedSnippetCard({ tenantId, className }: EmbedSnippetCardProps)
                 ['data-container-id', 'id del contenedor (por defecto volkern-propiedades)'],
                 ['data-ciudad', 'filtra por ciudad o zona'],
                 ['data-estado', 'disponible, reservada, vendida o alquilada'],
+                ['data-filtros', 'true (por defecto) o false para ocultar el buscador'],
                 ['data-moneda', 'fuerza la divisa de presentación'],
                 ['data-tema', 'auto (por defecto), claro u oscuro'],
               ].map(([atributo, descripcion]) => (

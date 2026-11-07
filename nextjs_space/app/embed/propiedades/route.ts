@@ -88,8 +88,9 @@ export async function GET(request: NextRequest) {
   if (params.get('modo') === 'lista') atributos.push('data-modo="lista"');
   if (params.get('destacadas') === '1') atributos.push('data-solo-destacadas="true"');
   if (params.get('verTodas') === '0') atributos.push('data-ver-todas="false"');
+  if (params.get('filtros') === '0') atributos.push('data-filtros="false"');
 
   return documento(
-    `<div id="volkern-propiedades"></div>\n<script src="/propiedades-embed.js?v=2" ${atributos.join(' ')}></script>`
+    `<div id="volkern-propiedades"></div>\n<script src="/propiedades-embed.js?v=3" ${atributos.join(' ')}></script>`
   );
 }
