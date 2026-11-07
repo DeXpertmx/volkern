@@ -38,6 +38,11 @@ import {
 import { cn } from '@/lib/utils';
 
 const SCRIPT_ORIGIN = 'https://volkern.app';
+/**
+ * Versión del widget. Al cambiar el script se sube este número para que los
+ * sitios que ya lo tienen embebido no sigan sirviendo la copia cacheada.
+ */
+const SCRIPT_VERSION = '2';
 const TITULO_POR_DEFECTO = 'Nuestras propiedades';
 const COLOR_POR_DEFECTO = '#2563eb';
 
@@ -85,7 +90,7 @@ export function EmbedSnippetCard({ tenantId, className }: EmbedSnippetCardProps)
 
   const snippet = useMemo(() => {
     const atributos: string[] = [
-      `  src="${SCRIPT_ORIGIN}/propiedades-embed.js"`,
+      `  src="${SCRIPT_ORIGIN}/propiedades-embed.js?v=${SCRIPT_VERSION}"`,
       `  data-tenant-id="${tenantId || 'TU_TENANT_ID'}"`,
     ];
 

@@ -90,6 +90,6 @@ export async function GET(request: NextRequest) {
   if (params.get('verTodas') === '0') atributos.push('data-ver-todas="false"');
 
   return documento(
-    `<div id="volkern-propiedades"></div>\n<script src="/propiedades-embed.js" ${atributos.join(' ')}></script>`
+    `<div id="volkern-propiedades"></div>\n<script src="/propiedades-embed.js?v=2" ${atributos.join(' ')}></script>`
   );
 }

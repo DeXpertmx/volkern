@@ -74,6 +74,15 @@ const nextConfig = {
         ],
       },
       {
+        // Widget embebible: caché corta y revalidable para que una corrección
+        // del script llegue a las webs que lo tienen embebido.
+        source: '/propiedades-embed.js',
+        headers: [
+          { key: 'Content-Type', value: 'application/javascript; charset=utf-8' },
+          { key: 'Cache-Control', value: 'public, max-age=300, must-revalidate' },
+        ],
+      },
+      {
         source: '/manifest.json',
         headers: [
           { key: 'Content-Type', value: 'application/manifest+json' },
