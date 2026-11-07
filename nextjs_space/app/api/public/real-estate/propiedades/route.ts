@@ -35,7 +35,7 @@ function precio(valor: string | null): number | undefined {
  *   q            texto libre sobre nombre y descripción
  *   operacion    venta | alquiler | alquiler_temporada | traspaso
  *   tipo         tipo_inmueble (Casa, Departamento, …)
- *   ciudad       coincidencia parcial en zona o dirección
+ *   ciudad       coincidencia parcial en zona, ciudad o dirección
  *   estado       disponible | reservada | vendida | alquilada
  *   minPrecio    precioBase mínimo
  *   maxPrecio    precioBase máximo
@@ -109,11 +109,14 @@ export const GET = async (req: NextRequest) => {
       condiciones.push({ customFieldValues: { path: ['estado'], equals: estado } });
     }
     if (ciudad) {
-      // `zona` es la ciudad del inmueble; la dirección permite además buscar
-      // por barrio («Ciudad Jardín»).
+      // El visitante escribe indistintamente el barrio («Centro») o la
+      // población («Córdoba») en el mismo campo, así que se busca en los tres:
+      // buscar solo en `zona`/`direccion` dejaba «Córdoba» con un único
+      // resultado (una calle llamada así) y ocultaba el resto de la ciudad.
       condiciones.push({
         OR: [
           { customFieldValues: { path: ['zona'], string_contains: ciudad } },
+          { customFieldValues: { path: ['ciudad'], string_contains: ciudad } },
           { customFieldValues: { path: ['direccion'], string_contains: ciudad } },
         ],
       });
