@@ -1508,6 +1508,9 @@ ${CID} .vp-attrib a:hover { color: var(--vp-accent); }
             mensaje.campo.value.trim() ||
             'Solicita información sobre ' + (propiedad.nombre || 'el inmueble') + '.',
           consent: true,
+          // Marca el origen: el endpoint avisa al equipo por email solo con
+          // los leads que llegan desde este widget.
+          origen: 'widget',
         }),
       })
         .then(function (respuesta) {

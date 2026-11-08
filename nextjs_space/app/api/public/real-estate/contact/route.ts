@@ -24,6 +24,9 @@ export async function POST(req: NextRequest) {
       message, 
       preferredDate,
       consent,
+      // El widget embebible marca su origen: solo esos leads avisan al equipo
+      // por email, para no cambiar el comportamiento del formulario del portal.
+      origen,
     } = body;
 
     if (!slug && !tenantIdBody) {
@@ -45,11 +48,11 @@ export async function POST(req: NextRequest) {
     const tenant = slug
       ? await globalPrisma.tenant.findUnique({
           where: { slug },
-          select: { id: true, nombre: true },
+          select: { id: true, nombre: true, subdomain: true },
         })
       : await globalPrisma.tenant.findUnique({
           where: { id: String(tenantIdBody) },
-          select: { id: true, nombre: true },
+          select: { id: true, nombre: true, subdomain: true },
         });
 
     if (!tenant) {
@@ -152,6 +155,30 @@ export async function POST(req: NextRequest) {
           propertyId: propertyId || null,
           timestamp: new Date(),
         } as any);
+      }
+
+      // 7. Avisar al equipo por email cuando el lead viene del widget embebible.
+      // Nunca bloquea ni cambia la respuesta: el lead ya está creado y el
+      // visitante tiene que ver su «gracias» aunque el correo falle.
+      if (lead && origen === "widget") {
+        try {
+          const { avisarLeadDesdeWidget } = await import("@/lib/real-estate/aviso-lead");
+          await avisarLeadDesdeWidget({
+            tenantId: tenant.id,
+            tenantName: tenant.nombre,
+            tenantSubdomain: tenant.subdomain,
+            leadId: lead.id,
+            nombre: name,
+            email,
+            telefono: phone || null,
+            mensaje: message || null,
+            propiedad: property ? { id: property.id, nombre: propertyName } : null,
+            consentimiento: consent === true,
+            origenUrl: req.headers.get("referer") || null,
+          });
+        } catch (avisoError) {
+          console.error("[Real Estate Contact] No se pudo avisar al equipo del lead:", avisoError);
+        }
       }
 
       return NextResponse.json({
