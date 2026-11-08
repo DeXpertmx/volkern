@@ -37,6 +37,7 @@
   var ORIGIN = 'https://volkern.app';
   var API_ENDPOINT = ORIGIN + '/api/public/real-estate/propiedades';
   var API_DETALLE = ORIGIN + '/api/public/real-estate/properties';
+  var API_CONTACTO = ORIGIN + '/api/public/real-estate/contact';
 
   // ─── Localizar el <script> que nos cargó ────────────────────────────────
   var scriptTag = document.currentScript;
@@ -969,6 +970,100 @@ ${CID} .vp-detail-cta small {
   color: var(--vp-muted);
   text-align: center;
 }
+
+/* ── Formulario de contacto de la ficha ───────────────────── */
+${CID} .vp-contacto {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--vp-border);
+  border-radius: 14px;
+  background: var(--vp-surface-2);
+}
+${CID} .vp-contacto-sub {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--vp-muted);
+}
+${CID} .vp-form { display: grid; gap: 10px; }
+${CID} .vp-form label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--vp-muted);
+}
+${CID} .vp-form input[type="text"],
+${CID} .vp-form input[type="email"],
+${CID} .vp-form input[type="tel"],
+${CID} .vp-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 11px;
+  border: 1px solid var(--vp-border);
+  border-radius: 9px;
+  background: var(--vp-surface);
+  color: var(--vp-text);
+  font: inherit;
+  font-size: 0.88rem;
+}
+${CID} .vp-form textarea { min-height: 64px; resize: vertical; }
+${CID} .vp-form input:focus,
+${CID} .vp-form textarea:focus {
+  outline: 2px solid var(--vp-accent);
+  outline-offset: 1px;
+  border-color: var(--vp-accent);
+}
+${CID} .vp-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.74rem;
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--vp-muted);
+}
+${CID} .vp-check input { margin: 2px 0 0; accent-color: var(--vp-accent); }
+${CID} .vp-enviar {
+  padding: 11px 16px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--vp-accent);
+  color: var(--vp-contrast);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+${CID} .vp-enviar:hover:not([disabled]) { opacity: 0.92; }
+${CID} .vp-enviar[disabled] { opacity: 0.65; cursor: progress; }
+${CID} .vp-form-error {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: #dc2626;
+}
+${CID} .vp-form-ok {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(22, 163, 74, 0.35);
+  border-radius: 10px;
+  background: rgba(22, 163, 74, 0.1);
+  color: #15803d;
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+${CID} .vp-portal-link {
+  font-size: 0.75rem;
+  color: var(--vp-muted);
+  text-align: center;
+  text-decoration: underline;
+}
+${CID} .vp-hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+${CID} .vp-contacto [hidden] { display: none !important; }
 ${CID} .vp-skel-detalle { display: grid; gap: 10px; }
 ${CID} .vp-skel-detalle .vp-skel-media { border-radius: 14px; }
 
@@ -1279,6 +1374,174 @@ ${CID} .vp-attrib a:hover { color: var(--vp-accent); }
     return nodo;
   }
 
+  // ─── Formulario de contacto de la ficha ─────────────────────────────────
+  function construirCampo(sufijo, etiqueta, tipo, nombre, opciones) {
+    var envoltorio = el('div');
+    var id = 'vp-' + nombre + '-' + sufijo;
+    var label = el('label', null, etiqueta);
+    label.setAttribute('for', id);
+    envoltorio.appendChild(label);
+
+    var campo;
+    if (tipo === 'textarea') {
+      campo = document.createElement('textarea');
+      campo.rows = 3;
+    } else {
+      campo = document.createElement('input');
+      campo.type = tipo;
+    }
+    campo.id = id;
+    campo.name = nombre;
+    if (opciones && opciones.placeholder) campo.placeholder = opciones.placeholder;
+    if (opciones && opciones.autocomplete) campo.autocomplete = opciones.autocomplete;
+    if (opciones && opciones.requerido) campo.required = true;
+
+    envoltorio.appendChild(campo);
+    return { envoltorio: envoltorio, campo: campo };
+  }
+
+  function construirContacto(propiedad) {
+    var bloque = el('div', 'vp-contacto');
+    bloque.appendChild(el('h4', 'vp-detalle-h', 'Solicitar información'));
+    bloque.appendChild(
+      el('p', 'vp-contacto-sub', 'Déjanos tus datos y te respondemos sobre este inmueble.')
+    );
+
+    var sufijo = String(propiedad.id || 'inmueble').replace(/[^a-zA-Z0-9_-]/g, '');
+
+    var nombre = construirCampo(sufijo, 'Nombre *', 'text', 'nombre', {
+      placeholder: 'Tu nombre',
+      autocomplete: 'name',
+      requerido: true,
+    });
+    var email = construirCampo(sufijo, 'Email *', 'email', 'email', {
+      placeholder: 'tu@email.com',
+      autocomplete: 'email',
+      requerido: true,
+    });
+    var telefono = construirCampo(sufijo, 'Teléfono', 'tel', 'telefono', {
+      placeholder: '+34 600 000 000',
+      autocomplete: 'tel',
+    });
+    var mensaje = construirCampo(sufijo, 'Mensaje', 'textarea', 'mensaje', {
+      placeholder: '¿Quieres visitarla, saber más detalles…?',
+    });
+
+    var form = el('form', 'vp-form');
+    form.appendChild(nombre.envoltorio);
+    form.appendChild(email.envoltorio);
+    form.appendChild(telefono.envoltorio);
+    form.appendChild(mensaje.envoltorio);
+
+    var consentimiento = el('label', 'vp-check');
+    var casilla = document.createElement('input');
+    casilla.type = 'checkbox';
+    casilla.name = 'consentimiento';
+    casilla.required = true;
+    consentimiento.appendChild(casilla);
+    consentimiento.appendChild(
+      document.createTextNode('Acepto que me contacten por teléfono o email sobre esta propiedad.')
+    );
+    form.appendChild(consentimiento);
+
+    // Campo trampa: los bots lo rellenan, las personas no lo ven.
+    var trampa = el('div', 'vp-hp');
+    trampa.setAttribute('aria-hidden', 'true');
+    var trampaCampo = document.createElement('input');
+    trampaCampo.type = 'text';
+    trampaCampo.name = 'website';
+    trampaCampo.tabIndex = -1;
+    trampaCampo.autocomplete = 'off';
+    trampa.appendChild(trampaCampo);
+    form.appendChild(trampa);
+
+    var boton = el('button', 'vp-enviar', 'Enviar consulta');
+    boton.type = 'submit';
+    form.appendChild(boton);
+
+    var error = el('p', 'vp-form-error');
+    error.hidden = true;
+    error.setAttribute('role', 'alert');
+    form.appendChild(error);
+
+    var exito = el(
+      'p',
+      'vp-form-ok',
+      '¡Gracias! Hemos recibido tu consulta y te contactaremos en breve.'
+    );
+    exito.hidden = true;
+    exito.setAttribute('role', 'status');
+
+    var enlace = el('a', 'vp-portal-link', 'Ver la ficha completa en el portal');
+    enlace.href = urlDetalle(propiedad.id);
+    enlace.target = '_blank';
+    enlace.rel = 'noopener noreferrer';
+
+    form.addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      if (boton.disabled) return;
+
+      error.hidden = true;
+
+      // Bot: se le responde como si todo hubiera ido bien y no se envía nada.
+      if (trampaCampo.value.trim() !== '') {
+        form.hidden = true;
+        exito.hidden = false;
+        return;
+      }
+
+      boton.disabled = true;
+      boton.textContent = 'Enviando…';
+
+      fetch(API_CONTACTO, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        credentials: 'omit',
+        body: JSON.stringify({
+          slug: state.slug || '',
+          tenantId: CONFIG.tenantId,
+          propertyId: propiedad.id,
+          name: nombre.campo.value.trim(),
+          email: email.campo.value.trim(),
+          phone: telefono.campo.value.trim(),
+          message:
+            mensaje.campo.value.trim() ||
+            'Solicita información sobre ' + (propiedad.nombre || 'el inmueble') + '.',
+          consent: true,
+        }),
+      })
+        .then(function (respuesta) {
+          if (respuesta.ok) return respuesta.json();
+          return respuesta
+            .json()
+            .catch(function () {
+              return {};
+            })
+            .then(function (cuerpo) {
+              throw new Error(cuerpo.error || 'No se pudo enviar la consulta.');
+            });
+        })
+        .then(function () {
+          form.reset();
+          form.hidden = true;
+          exito.hidden = false;
+          boton.textContent = 'Enviar consulta';
+        })
+        .catch(function (fallo) {
+          boton.disabled = false;
+          boton.textContent = 'Enviar consulta';
+          error.textContent =
+            (fallo && fallo.message) || 'No se pudo enviar la consulta. Inténtalo de nuevo.';
+          error.hidden = false;
+        });
+    });
+
+    bloque.appendChild(form);
+    bloque.appendChild(exito);
+    bloque.appendChild(enlace);
+    return bloque;
+  }
+
   function construirGaleria(propiedad, imagenes) {
     var galeria = el('div');
     var marco = el('div', 'vp-galeria-main');
@@ -1473,15 +1736,7 @@ ${CID} .vp-attrib a:hover { color: var(--vp-accent); }
       lateral.appendChild(fichas);
     }
 
-    var cta = el('div', 'vp-detail-cta');
-    var contacto = el('a', null, 'Solicitar información');
-    contacto.href = urlDetalle(propiedad.id);
-    contacto.target = '_blank';
-    contacto.rel = 'noopener noreferrer';
-    contacto.appendChild(svg('flecha'));
-    cta.appendChild(contacto);
-    cta.appendChild(el('small', null, 'Se abre la ficha completa con el formulario de contacto.'));
-    lateral.appendChild(cta);
+    lateral.appendChild(construirContacto(propiedad));
 
     grid.appendChild(lateral);
     raiz.appendChild(grid);

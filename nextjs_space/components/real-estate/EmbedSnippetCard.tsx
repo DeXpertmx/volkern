@@ -42,7 +42,7 @@ const SCRIPT_ORIGIN = 'https://volkern.app';
  * Versión del widget. Al cambiar el script se sube este número para que los
  * sitios que ya lo tienen embebido no sigan sirviendo la copia cacheada.
  */
-const SCRIPT_VERSION = '5';
+const SCRIPT_VERSION = '6';
 const TITULO_POR_DEFECTO = 'Nuestras propiedades';
 const COLOR_POR_DEFECTO = '#2563eb';
 

@@ -16,15 +16,17 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { 
       slug,
+      tenantId: tenantIdBody,
       propertyId, 
       name, 
       email, 
       phone, 
       message, 
-      preferredDate 
+      preferredDate,
+      consent,
     } = body;
 
-    if (!slug) {
+    if (!slug && !tenantIdBody) {
       return NextResponse.json(
         { error: "Se requiere slug del tenant" },
         { status: 400 }
@@ -38,11 +40,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 1. Resolver tenant
-    const tenant = await globalPrisma.tenant.findUnique({
-      where: { slug },
-      select: { id: true, nombre: true },
-    });
+    // 1. Resolver tenant. El widget embebible solo conoce el id (data-tenant-id),
+    // así que se admite también; el slug sigue teniendo prioridad.
+    const tenant = slug
+      ? await globalPrisma.tenant.findUnique({
+          where: { slug },
+          select: { id: true, nombre: true },
+        })
+      : await globalPrisma.tenant.findUnique({
+          where: { id: String(tenantIdBody) },
+          select: { id: true, nombre: true },
+        });
 
     if (!tenant) {
       return NextResponse.json(
@@ -89,7 +97,7 @@ export async function POST(req: NextRequest) {
         nombre: name,
         email,
         telefono: phone || "",
-        notas: `[Portal Inmobiliario] ${message || "Sin mensaje adicional"}${propertyName ? `\nPropiedad: ${propertyName}` : ""}${preferredDate ? `\nFecha preferida de visita: ${preferredDate}` : ""}`,
+        notas: `[Portal Inmobiliario] ${message || "Sin mensaje adicional"}${propertyName ? `\nPropiedad: ${propertyName}` : ""}${preferredDate ? `\nFecha preferida de visita: ${preferredDate}` : ""}${consent === true ? `\nConsentimiento de contacto aceptado (${new Date().toISOString()})` : ""}`,
         fuente: "portal_inmobiliario" as any,
         metadataExterna: {
           propertyId: propertyId || null,
