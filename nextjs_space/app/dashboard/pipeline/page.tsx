@@ -80,6 +80,7 @@ import {
   ListOrdered,
   Copy,
   RefreshCw,
+  X,
 } from 'lucide-react'
 import {
   Tooltip,
@@ -602,6 +603,8 @@ export default function PipelinePage() {
     return matchesSearch && matchesPrioridad && matchesSalud
   })
 
+  const hayFiltros = searchTerm.trim() !== '' || filterPrioridad !== 'all' || filterSalud !== 'all'
+
   const normalizeStageName = (name: string | null | undefined) => {
     if (!name) return "";
     try {
@@ -612,8 +615,37 @@ export default function PipelinePage() {
     }
   };
 
-  const getDealsByStage = (stageName: string) => {
-    return filteredDeals.filter((deal) => normalizeStageName(deal.etapa) === normalizeStageName(stageName))
+  // `etapa` llega como nombre en unos deals y como id de etapa en otros (los
+  // creados por API), así que se aceptan las dos formas: si no, la tarjeta
+  // existía para las métricas pero no aparecía en ninguna columna.
+  const getDealsByStage = (stage: Stage) => {
+    const nombreEtapa = normalizeStageName(stage.nombre)
+    return filteredDeals.filter((deal) =>
+      normalizeStageName(deal.etapa) === nombreEtapa || deal.etapa === stage.id
+    )
+  }
+
+  const handleSincronizarPipelines = async () => {
+    const res = await fetch('/api/pipelines/seed', { method: 'POST' })
+    if (res.ok) {
+      const data = await res.json()
+      toast.success(data.message || 'Pipelines sincronizados')
+      await fetchPipelines()
+    } else {
+      const err = await res.json()
+      toast.error(err.error || 'Error al sincronizar pipelines')
+    }
+  }
+
+  const handleSincronizarOraculo = () => {
+    toast.promise(apiFetch('/api/deals/sync', { method: 'POST' }), {
+      loading: 'Consultando Oráculo de Ventas...',
+      success: () => {
+        fetchData(activePipelineId)
+        return 'Pipeline sincronizado'
+      },
+      error: 'Error en la sincronización',
+    })
   }
 
   if (loading) {
@@ -630,11 +662,11 @@ export default function PipelinePage() {
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <h2 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-              <TrendingUp className="h-8 w-8" />
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2 sm:text-3xl">
+              <TrendingUp className="h-6 w-6 sm:h-8 sm:w-8" />
               Pipeline
             </h2>
             {pipelines.length > 0 && (
@@ -652,7 +684,7 @@ export default function PipelinePage() {
                   }
                 }}
               >
-                <SelectTrigger className="w-[260px] border-primary/20">
+                <SelectTrigger className="w-[190px] border-primary/20 sm:w-[260px]">
                   <div className="flex items-center gap-2 flex-1 min-w-0">
                     <SelectValue placeholder="Seleccionar pipeline" className="flex-1 min-w-0" />
                     <span className={`text-xs whitespace-nowrap flex-shrink-0 ${pipelines.length >= maxPipelines ? 'text-amber-500 font-medium' : 'text-muted-foreground'}`}>
@@ -820,51 +852,59 @@ export default function PipelinePage() {
             Visualiza y gestiona tus oportunidades de venta
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            className="border-muted-foreground/20 hover:bg-muted/50"
-            onClick={async () => {
-              const res = await fetch('/api/pipelines/seed', { method: 'POST' })
-              if (res.ok) {
-                const data = await res.json()
-                toast.success(data.message || 'Pipelines sincronizados')
-                await fetchPipelines()
-              } else {
-                const err = await res.json()
-                toast.error(err.error || 'Error al sincronizar pipelines')
-              }
-            }}
-          >
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Sincronizar Pipelines
-          </Button>
-          <Button variant="outline" onClick={() => setShowConfigDialog(true)}>
-            <Settings className="h-4 w-4 mr-2" />
-            Configurar Etapas
-          </Button>
-          <Button 
-            variant="outline" 
-            className="border-primary/20 hover:bg-primary/5 text-primary"
-            onClick={async () => {
-              toast.promise(apiFetch('/api/deals/sync', { method: 'POST' }), {
-                loading: 'Consultando Oráculo de Ventas...',
-                success: () => {
-                  fetchData(activePipelineId)
-                  return 'Pipeline Sincronizado'
-                },
-                error: 'Error en la sincronización'
-              })
-            }}
-          >
-            <TrendingUp className="h-4 w-4 mr-2" />
-            Sincronizar Oráculo
-          </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* En escritorio las acciones secundarias se ven directamente */}
+          <div className="hidden items-center gap-2 md:flex">
+            <Button
+              variant="outline"
+              className="border-muted-foreground/20 hover:bg-muted/50"
+              onClick={handleSincronizarPipelines}
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Sincronizar pipelines
+            </Button>
+            <Button variant="outline" onClick={() => setShowConfigDialog(true)}>
+              <Settings className="h-4 w-4 mr-2" />
+              Configurar etapas
+            </Button>
+            <Button
+              variant="outline"
+              className="border-primary/20 hover:bg-primary/5 text-primary"
+              onClick={handleSincronizarOraculo}
+            >
+              <TrendingUp className="h-4 w-4 mr-2" />
+              Sincronizar oráculo
+            </Button>
+          </div>
+
+          {/* En móvil caben en un solo menú para no empujar el botón principal */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="md:hidden">
+                <MoreVertical className="h-4 w-4 mr-2" />
+                Acciones
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onClick={() => setShowConfigDialog(true)}>
+                <Settings className="h-4 w-4 mr-2" />
+                Configurar etapas
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleSincronizarPipelines}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Sincronizar pipelines
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleSincronizarOraculo}>
+                <TrendingUp className="h-4 w-4 mr-2" />
+                Sincronizar oráculo
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Dialog open={showNewDealDialog} onOpenChange={setShowNewDealDialog}>
             <DialogTrigger asChild>
-              <Button>
+              <Button className="flex-1 sm:flex-none">
                 <Plus className="h-4 w-4 mr-2" />
-                Nuevo Deal
+                Nuevo deal
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -889,52 +929,52 @@ export default function PipelinePage() {
 
       {/* Métricas */}
       {metrics && (
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Deals</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-1">
+              <CardTitle className="text-xs font-medium text-muted-foreground">Oportunidades</CardTitle>
+              <TrendingUp className="h-4 w-4 shrink-0 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{metrics.totalDeals}</div>
-              <p className="text-xs text-muted-foreground">Oportunidades activas</p>
+            <CardContent className="p-4 pt-1">
+              <div className="text-xl font-bold tabular-nums sm:text-2xl">{metrics.totalDeals}</div>
+              <p className="text-[11px] text-muted-foreground">Deals activos en el embudo</p>
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Valor Total</CardTitle>
-              <Coins className="h-4 w-4 text-muted-foreground" />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-1">
+              <CardTitle className="text-xs font-medium text-muted-foreground">Valor del pipeline</CardTitle>
+              <Coins className="h-4 w-4 shrink-0 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
+            <CardContent className="p-4 pt-1">
+              <div className="truncate text-xl font-bold tabular-nums sm:text-2xl">
                 {formatCurrency(metrics.totalValor)}
               </div>
-              <p className="text-xs text-muted-foreground">En pipeline</p>
+              <p className="text-[11px] text-muted-foreground">Suma de oportunidades abiertas</p>
             </CardContent>
           </Card>
           <Card className="bg-primary/5 border-primary/20">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-bold text-primary">Weighted Value</CardTitle>
-              <Coins className="h-4 w-4 text-primary" />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-1">
+              <CardTitle className="text-xs font-semibold text-primary">Previsión ponderada</CardTitle>
+              <Coins className="h-4 w-4 shrink-0 text-primary" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-black text-primary">
+            <CardContent className="p-4 pt-1">
+              <div className="truncate text-xl font-bold tabular-nums text-primary sm:text-2xl">
                 {formatCurrency(metrics.valorPonderado)}
               </div>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Forecast Proyectado</p>
+              <p className="text-[11px] text-muted-foreground">Ajustada por probabilidad de cada etapa</p>
             </CardContent>
           </Card>
-          <Card className={metrics.gapAnalysis > 0 ? 'bg-red-50 border-red-200' : 'bg-emerald-50 border-emerald-200'}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className={`text-sm font-bold ${metrics.gapAnalysis > 0 ? 'text-red-600' : 'text-emerald-600'}`}>Gap vs Objetivo</CardTitle>
-              <ArrowUpDown className={`h-4 w-4 ${metrics.gapAnalysis > 0 ? 'text-red-600' : 'text-emerald-600'}`} />
+          <Card className={metrics.gapAnalysis > 0 ? 'border-destructive/20 bg-destructive/5' : 'border-emerald-500/20 bg-emerald-500/5'}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-1">
+              <CardTitle className={`text-xs font-semibold ${metrics.gapAnalysis > 0 ? 'text-destructive' : 'text-emerald-700 dark:text-emerald-400'}`}>Brecha vs objetivo</CardTitle>
+              <ArrowUpDown className={`h-4 w-4 shrink-0 ${metrics.gapAnalysis > 0 ? 'text-destructive' : 'text-emerald-700 dark:text-emerald-400'}`} />
             </CardHeader>
-            <CardContent>
-              <div className={`text-2xl font-black ${metrics.gapAnalysis > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+            <CardContent className="p-4 pt-1">
+              <div className={`truncate text-xl font-bold tabular-nums sm:text-2xl ${metrics.gapAnalysis > 0 ? 'text-destructive' : 'text-emerald-700 dark:text-emerald-400'}`}>
                 {formatCurrency(metrics.gapAnalysis)}
               </div>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">
-                {metrics.gapAnalysis > 0 ? 'Restante para meta' : 'Objetivo superado'}
+              <p className="text-[11px] text-muted-foreground">
+                {metrics.gapAnalysis > 0 ? 'Falta para la meta' : 'Objetivo superado'}
               </p>
             </CardContent>
           </Card>
@@ -942,50 +982,73 @@ export default function PipelinePage() {
       )}
 
       {/* Filtros */}
-      <div className="flex items-center gap-4">
-        <div className="flex-1">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              id="search-deals"
-              name="searchDeals"
-              placeholder="Buscar deals, leads, empresas..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
-          </div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            id="search-deals"
+            name="searchDeals"
+            placeholder="Buscar por título, cliente o empresa..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
         </div>
-        <Select value={filterPrioridad} onValueChange={setFilterPrioridad}>
-          <SelectTrigger className="w-[180px]">
-            <Filter className="h-4 w-4 mr-2" />
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas las prioridades</SelectItem>
-            <SelectItem value="urgente">Urgente</SelectItem>
-            <SelectItem value="alta">Alta</SelectItem>
-            <SelectItem value="media">Media</SelectItem>
-            <SelectItem value="baja">Baja</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <Select value={filterPrioridad} onValueChange={setFilterPrioridad}>
+            <SelectTrigger className="flex-1 sm:w-[170px]">
+              <Filter className="mr-2 h-4 w-4 shrink-0" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Toda prioridad</SelectItem>
+              <SelectItem value="urgente">Urgente</SelectItem>
+              <SelectItem value="alta">Alta</SelectItem>
+              <SelectItem value="media">Media</SelectItem>
+              <SelectItem value="baja">Baja</SelectItem>
+            </SelectContent>
+          </Select>
 
-        <Select value={filterSalud} onValueChange={setFilterSalud}>
-          <SelectTrigger className="w-[180px]">
-            <div className="flex items-center gap-2">
-              <div className="h-2 w-2 rounded-full bg-red-500" />
-              <SelectValue placeholder="Filtrar por Salud" />
-            </div>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas las saludes</SelectItem>
-            <SelectItem value="HEALTHY">Saludables</SelectItem>
-            <SelectItem value="WARNING">En Observación</SelectItem>
-            <SelectItem value="CRITICAL">Críticos</SelectItem>
-            <SelectItem value="ZOMBIE">Zombies</SelectItem>
-          </SelectContent>
-        </Select>
+          <Select value={filterSalud} onValueChange={setFilterSalud}>
+            <SelectTrigger className="flex-1 sm:w-[170px]">
+              <div className="flex items-center gap-2">
+                <div className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                <SelectValue placeholder="Estado de salud" />
+              </div>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Cualquier estado</SelectItem>
+              <SelectItem value="HEALTHY">Saludables</SelectItem>
+              <SelectItem value="WARNING">En observación</SelectItem>
+              <SelectItem value="CRITICAL">Críticos</SelectItem>
+              <SelectItem value="ZOMBIE">Zombies</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {hayFiltros && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="shrink-0 text-muted-foreground"
+              onClick={() => {
+                setSearchTerm('')
+                setFilterPrioridad('all')
+                setFilterSalud('all')
+              }}
+              title="Quitar filtros"
+            >
+              <X className="h-4 w-4 sm:mr-1" />
+              <span className="hidden sm:inline">Limpiar</span>
+            </Button>
+          )}
+        </div>
       </div>
+
+      {hayFiltros && (
+        <p className="text-xs text-muted-foreground">
+          {filteredDeals.length} de {deals.length} oportunidades coinciden con los filtros
+        </p>
+      )}
 
       {/* Pipeline Kanban */}
       <DndContext
@@ -994,18 +1057,30 @@ export default function PipelinePage() {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex gap-4 overflow-x-auto pb-4">
+        <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-4 sm:mx-0 sm:gap-4 sm:px-0 md:snap-none">
+          {stages.filter((stage) => !stage.nombre.toLowerCase().includes('perdido')).length === 0 && (
+            <div className="w-full rounded-xl border border-dashed p-10 text-center">
+              <ListOrdered className="mx-auto h-8 w-8 text-muted-foreground/60" />
+              <p className="mt-3 text-sm font-medium">Este pipeline todavía no tiene etapas</p>
+              <p className="mt-1 text-xs text-muted-foreground">Configura las etapas para empezar a mover oportunidades.</p>
+              <Button variant="outline" size="sm" className="mt-4" onClick={() => setShowConfigDialog(true)}>
+                <Settings className="h-4 w-4 mr-2" />
+                Configurar etapas
+              </Button>
+            </div>
+          )}
           {stages
             .filter((stage) => !stage.nombre.toLowerCase().includes('perdido'))
             .map((stage) => (
               <PipelineColumn
                 key={stage.id}
                 stage={stage}
-                deals={getDealsByStage(stage.nombre)}
+                deals={getDealsByStage(stage)}
                 formatCurrency={formatCurrency}
                 getPriorityColor={getPriorityColor}
                 isCollapsed={collapsedStages.has(stage.nombre)}
                 onToggleCollapse={() => toggleCollapseStage(stage.nombre)}
+                activeDealId={activeId}
               />
             ))}
         </div>
@@ -1303,6 +1378,7 @@ function PipelineColumn({
   getPriorityColor,
   isCollapsed,
   onToggleCollapse,
+  activeDealId,
 }: {
   stage: Stage
   deals: Deal[]
@@ -1310,8 +1386,14 @@ function PipelineColumn({
   getPriorityColor: (prioridad: string) => string
   isCollapsed: boolean
   onToggleCollapse: () => void
+  activeDealId?: string | null
 }) {
   const totalValor = deals.reduce((sum, deal) => sum + deal.valor, 0)
+  // Si toda la columna comparte divisa, el total se muestra en esa divisa y no
+  // en la del tenant: un deal en euros no debe sumarse como si fuera en pesos.
+  const monedaColumna = deals.length > 0 && deals.every((d) => d.moneda === deals[0].moneda)
+    ? deals[0].moneda
+    : undefined
   
   const { setNodeRef } = useDroppable({
     id: stage.nombre,
@@ -1319,25 +1401,26 @@ function PipelineColumn({
 
   if (isCollapsed) {
     return (
-      <div className="flex-shrink-0 w-16">
+      <div className="w-14 flex-shrink-0 snap-start">
         <div
           ref={setNodeRef}
-          className="rounded-lg border-2 border-dashed p-2 min-h-[600px] flex flex-col items-center cursor-pointer hover:bg-muted/50 transition-colors"
+          className="flex min-h-[520px] cursor-pointer flex-col items-center rounded-xl border-2 border-dashed p-2 transition-colors hover:bg-muted/50"
           style={{ borderColor: stage.color }}
           onClick={onToggleCollapse}
+          aria-label={`Expandir ${stage.nombre}`}
         >
           <div
-            className="h-3 w-3 rounded-full mb-2"
+            className="mb-2 h-3 w-3 rounded-full"
             style={{ backgroundColor: stage.color }}
           />
-          <span className="text-xs font-semibold writing-mode-vertical rotate-180" style={{ writingMode: 'vertical-rl' }}>
+          <span className="text-xs font-semibold" style={{ writingMode: 'vertical-rl' }}>
             {stage.nombre}
           </span>
-          <Badge variant="secondary" className="mt-2 text-xs">
+          <Badge variant="secondary" className="mt-2 text-xs tabular-nums">
             {deals.length}
           </Badge>
-          <span className="text-xs text-muted-foreground mt-2 writing-mode-vertical rotate-180" style={{ writingMode: 'vertical-rl' }}>
-            {formatCurrency(totalValor)}
+          <span className="mt-2 text-[11px] text-muted-foreground" style={{ writingMode: 'vertical-rl' }}>
+            {formatCurrency(totalValor, monedaColumna)}
           </span>
         </div>
       </div>
@@ -1345,45 +1428,52 @@ function PipelineColumn({
   }
 
   return (
-    <div className="flex-shrink-0 w-80">
+    <div className="w-[85vw] max-w-[320px] flex-shrink-0 snap-start sm:w-80">
       <div
         ref={setNodeRef}
-        className="rounded-lg border-2 border-dashed p-4 min-h-[600px]"
-        style={{ borderColor: stage.color }}
+        className="flex min-h-[520px] flex-col overflow-hidden rounded-xl border bg-card/60 shadow-sm"
       >
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
+        {/* Franja del color de la etapa: identifica la columna de un vistazo */}
+        <div className="h-1 w-full" style={{ backgroundColor: stage.color }} />
+
+        <div className="border-b bg-card px-3 py-2.5">
+          <div className="flex items-center gap-1.5">
             <button
               onClick={onToggleCollapse}
-              className="p-1 hover:bg-muted rounded transition-colors"
+              className="-ml-1 shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              aria-label={`Contraer ${stage.nombre}`}
             >
               <ChevronDown className="h-4 w-4" />
             </button>
-            <div
-              className="h-3 w-3 rounded-full"
-              style={{ backgroundColor: stage.color }}
-            />
-            <h3 className="font-semibold">{stage.nombre}</h3>
-            <Badge variant="secondary">{deals.length}</Badge>
+            <h3 className="truncate text-sm font-semibold">{stage.nombre}</h3>
+            <Badge variant="secondary" className="h-5 shrink-0 px-1.5 text-[11px] tabular-nums">
+              {deals.length}
+            </Badge>
           </div>
-          <span className="text-xs text-muted-foreground">
-            {stage.probabilidad}%
-          </span>
+          <div className="mt-1 flex items-center gap-1.5 pl-6 text-[11px] text-muted-foreground">
+            <span className="tabular-nums">{formatCurrency(totalValor, monedaColumna)}</span>
+            <span aria-hidden>·</span>
+            <span className="tabular-nums">{stage.probabilidad}% de cierre</span>
+          </div>
         </div>
 
-        <div className="mb-4">
-          <p className="text-sm font-medium">{formatCurrency(totalValor)}</p>
-        </div>
-
-        <div className="space-y-3">
-          {deals.map((deal) => (
-            <DealCard
-              key={deal.id}
-              deal={deal}
-              formatCurrency={formatCurrency}
-              getPriorityColor={getPriorityColor}
-            />
-          ))}
+        <div className="flex-1 space-y-2.5 p-2.5">
+          {deals.length === 0 ? (
+            <div className="flex h-32 flex-col items-center justify-center rounded-lg border border-dashed text-center">
+              <p className="text-xs font-medium text-muted-foreground">Sin oportunidades</p>
+              <p className="mt-0.5 px-3 text-[11px] text-muted-foreground/70">Arrastra una tarjeta aquí</p>
+            </div>
+          ) : (
+            deals.map((deal) => (
+              <DealCard
+                key={deal.id}
+                deal={deal}
+                formatCurrency={formatCurrency}
+                getPriorityColor={getPriorityColor}
+                estaArrastrando={activeDealId === deal.id}
+              />
+            ))
+          )}
         </div>
       </div>
     </div>
@@ -1396,11 +1486,13 @@ function DealCard({
   formatCurrency,
   getPriorityColor,
   isDragging = false,
+  estaArrastrando = false,
 }: {
   deal: Deal | undefined
   formatCurrency: (value: number, currency?: string) => string
   getPriorityColor: (prioridad: string) => string
   isDragging?: boolean
+  estaArrastrando?: boolean
 }) {
   const router = useRouter()
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
@@ -1409,10 +1501,9 @@ function DealCard({
 
   if (!deal) return null;
 
-  const style = transform
-    ? {
-        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-      }
+  // El overlay ya sigue al puntero: aplicar aquí el transform duplicaría la tarjeta.
+  const style = transform && !isDragging
+    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
     : undefined
 
   const handleViewDeal = (e: React.MouseEvent) => {
@@ -1421,89 +1512,103 @@ function DealCard({
     router.push(`/dashboard/pipeline/${deal.id}`)
   }
 
+  // Quién está detrás del deal, en una sola línea con los datos que existan.
+  const contacto = deal.contact
+    ? [deal.contact.nombre, deal.contact.cargo, deal.company?.nombre].filter(Boolean).join(' · ')
+    : deal.lead
+      ? [deal.lead.nombre, deal.lead.empresa].filter(Boolean).join(' · ')
+      : ''
+
+  const saludColor =
+    deal.healthStatus === 'HEALTHY' ? 'bg-emerald-500'
+      : deal.healthStatus === 'WARNING' ? 'bg-amber-500'
+        : deal.healthStatus === 'CRITICAL' ? 'bg-red-500 ring-2 ring-red-500/25'
+          : 'bg-slate-400'
+
+  const fechaCierre = deal.fechaEstimadaCierre ? new Date(deal.fechaEstimadaCierre) : null
+  const vencida = !!fechaCierre && fechaCierre.getTime() < Date.now()
+
   return (
     <Card
       ref={setNodeRef}
       style={style}
-      className={`hover:shadow-md transition-shadow overflow-hidden ${isDragging ? 'opacity-50' : ''}`}
+      className={`group overflow-hidden transition-shadow focus-within:ring-2 focus-within:ring-primary/30 ${
+        isDragging ? 'shadow-xl ring-2 ring-primary/40' : 'hover:shadow-md'
+      } ${estaArrastrando ? 'opacity-40' : ''}`}
     >
-      <CardContent className="p-4 overflow-hidden">
+      <CardContent className="p-3">
         {/* Zona de arrastre - Solo esta parte es draggable */}
-        <div {...listeners} {...attributes} className="cursor-move overflow-hidden">
-          <div className="space-y-3 overflow-hidden">
-            <div className="flex items-start justify-between gap-2 overflow-hidden">
-              <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
-                <GripVertical className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                <div className="min-w-0 flex-1 overflow-hidden">
-                  <h4 className="font-semibold text-sm truncate">{deal.titulo}</h4>
-                  {deal.contact ? (
-                    <p className="text-xs text-muted-foreground truncate">
-                      {deal.contact.nombre}
-                      {deal.contact.cargo && ` • ${deal.contact.cargo}`}
-                      {deal.company && ` • ${deal.company.nombre}`}
-                    </p>
-                  ) : deal.lead && (
-                    <p className="text-xs text-muted-foreground truncate">
-                      {deal.lead.nombre}
-                      {deal.lead.empresa && ` • ${deal.lead.empresa}`}
-                    </p>
-                  )}
-                </div>
+        <div {...listeners} {...attributes} className="cursor-grab overflow-hidden active:cursor-grabbing">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <span
+                  className={`h-1.5 w-1.5 shrink-0 rounded-full ${saludColor}`}
+                  title={`Salud: ${deal.healthScore}/100`}
+                  aria-label={`Salud ${deal.healthScore} de 100`}
+                />
+                <h4 className="truncate text-sm font-semibold">{deal.titulo}</h4>
               </div>
-              <Badge variant={getPriorityColor(deal.prioridad) as any} className="flex-shrink-0 text-xs">
-                {deal.prioridad}
-              </Badge>
-              {/* Indicador de Salud */}
-              <div className={`h-2 w-2 rounded-full ${
-                deal.healthStatus === 'HEALTHY' ? 'bg-emerald-500' :
-                deal.healthStatus === 'WARNING' ? 'bg-amber-500' :
-                deal.healthStatus === 'CRITICAL' ? 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]' : 'bg-slate-400'
-              }`} title={`Salud: ${deal.healthScore}/100`} />
+              {contacto && (
+                <p className="mt-0.5 truncate text-xs text-muted-foreground" title={contacto}>
+                  {contacto}
+                </p>
+              )}
             </div>
+            <Badge
+              variant={getPriorityColor(deal.prioridad) as any}
+              className="shrink-0 px-1.5 text-[10px] capitalize"
+            >
+              {deal.prioridad}
+            </Badge>
+          </div>
 
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-green-600">
-                {formatCurrency(deal.valor, deal.moneda)}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {deal.probabilidad}%
-              </span>
-            </div>
+          <div className="mt-2 flex items-baseline justify-between gap-2">
+            <span className="truncate text-base font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
+              {formatCurrency(deal.valor, deal.moneda)}
+            </span>
+            <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
+              {deal.probabilidad}% cierre
+            </span>
+          </div>
 
-            {deal.fechaEstimadaCierre && (
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Calendar className="h-3 w-3" />
-                {new Date(deal.fechaEstimadaCierre).toLocaleDateString('es-MX')}
-              </div>
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+            {fechaCierre && (
+              <span className={`flex items-center gap-1 ${vencida ? 'font-medium text-destructive' : ''}`}>
+                <Calendar className="h-3 w-3 shrink-0" />
+                {fechaCierre.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
+                {vencida && ' · vencido'}
+              </span>
             )}
-
             {deal.usuarioAsignado && (
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                <User className="h-3 w-3" />
-                {deal.usuarioAsignado.name}
-              </div>
+              <span className="flex min-w-0 items-center gap-1">
+                <User className="h-3 w-3 shrink-0" />
+                <span className="truncate">{deal.usuarioAsignado.name}</span>
+              </span>
             )}
           </div>
         </div>
 
         {/* Zona de acciones - NO es draggable */}
-        <div className="flex items-center justify-between pt-2 mt-2 border-t gap-2 overflow-hidden">
-          <div className="flex gap-2 text-xs text-muted-foreground truncate min-w-0 flex-1">
+        <div className="mt-2 flex items-center justify-between gap-2 border-t pt-1.5">
+          <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
             {deal._count && (
               <>
-                <span className="truncate">{deal._count.actividades} actividades</span>
-                <span>•</span>
-                <span className="truncate">{deal._count.cotizaciones} cotizaciones</span>
+                <span className="truncate">{deal._count.actividades} act.</span>
+                <span aria-hidden>·</span>
+                <span className="truncate">{deal._count.cotizaciones} cotiz.</span>
               </>
             )}
           </div>
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 w-7 p-0 flex-shrink-0"
+            className="h-7 shrink-0 px-2 text-xs"
             onClick={handleViewDeal}
+            aria-label={`Abrir ${deal.titulo}`}
           >
-            <Eye className="h-4 w-4" />
+            <Eye className="h-3.5 w-3.5 mr-1" />
+            Abrir
           </Button>
         </div>
       </CardContent>
