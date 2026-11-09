@@ -547,11 +547,21 @@ export function withTenantAuth(
         }
       }
 
+      // Next entrega `params` como Promise (15 en adelante). Se resuelve en este
+      // único punto por el que pasan todas las rutas del wrapper, para que los
+      // handlers puedan seguir leyendo `params.id` sin await: acceder a la
+      // propiedad de una Promise devolvía `undefined` y un error en cada
+      // petición dinámica. Quien ya haga `await params` no se ve afectado.
+      const contexto =
+        context?.params && typeof context.params.then === 'function'
+          ? { ...context, params: await context.params }
+          : context;
+
       // Ejecutar el handler dentro del contexto del tenant
       // Esto hace que 'import { prisma }' use automáticamente la DB del tenant
       return await dbContext.run(
         { tenantId: auth.tenant!.id, client: auth.db, vaultSeed: auth.vaultSeed },
-        () => handler(request, auth, context)
+        () => handler(request, auth, contexto)
       );
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error)
