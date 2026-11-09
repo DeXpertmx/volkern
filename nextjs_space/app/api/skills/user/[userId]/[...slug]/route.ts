@@ -13,8 +13,9 @@ import { skills, listSkills, executeSkill } from '@/lib/skills';
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { userId: string; slug: string[] } }
+  { params: paramsPromise }: { params: Promise<{ userId: string; slug: string[] }> }
 ) {
+  const params = await paramsPromise;
   const { userId, slug } = params;
   const path = slug.join('/');
   const protocol = req.headers.get('x-forwarded-proto') || 'https';
@@ -90,8 +91,9 @@ export async function GET(
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { userId: string; slug: string[] } }
+  { params: paramsPromise }: { params: Promise<{ userId: string; slug: string[] }> }
 ) {
+  const params = await paramsPromise;
   const { userId, slug } = params;
   const path = slug.join('/');
 

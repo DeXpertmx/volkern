@@ -11,8 +11,9 @@ import { listSkills } from '@/lib/skills';
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { userId: string } }
+  { params: paramsPromise }: { params: Promise<{ userId: string }> }
 ) {
+  const params = await paramsPromise;
   const { userId } = params;
   const protocol = req.headers.get('x-forwarded-proto') || 'https';
   const host = req.headers.get('host');

@@ -117,8 +117,9 @@ function getLeadErrorMessage(error: unknown): string {
 // POST /api/formularios/[id]/submit — Submit público de un formulario
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const form = await prisma.webForm.findUnique({
       where: { id: params.id },

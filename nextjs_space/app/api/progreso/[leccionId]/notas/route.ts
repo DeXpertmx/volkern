@@ -7,7 +7,7 @@ import { getServerSession } from 'next-auth';
 
 export async function GET(
   request: Request,
-  { params }: { params: { leccionId: string } }
+  { params }: { params: Promise<{ leccionId: string }> }
 ) {
   try {
     const session = await getServerSession();
@@ -28,7 +28,7 @@ export async function GET(
 
 export async function POST(
   request: Request,
-  { params }: { params: { leccionId: string } }
+  { params }: { params: Promise<{ leccionId: string }> }
 ) {
   try {
     const session = await getServerSession();

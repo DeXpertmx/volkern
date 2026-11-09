@@ -47,8 +47,9 @@ function validateSignature(payload: string, signature: string, secret: string): 
 // POST - Recibir webhook genérico
 export async function POST(
   request: NextRequest,
-  { params }: { params: { webhookId: string } }
+  { params: paramsPromise }: { params: Promise<{ webhookId: string }> }
 ) {
+  const params = await paramsPromise;
   const startTime = Date.now();
   const { webhookId } = params;
 
@@ -318,8 +319,9 @@ export async function POST(
 // GET - Obtener información del webhook (para testing)
 export async function GET(
   request: NextRequest,
-  { params }: { params: { webhookId: string } }
+  { params: paramsPromise }: { params: Promise<{ webhookId: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const { webhookId } = params;
 

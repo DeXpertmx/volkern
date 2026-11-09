@@ -19,8 +19,9 @@ const SUPPORTED_PLATFORMS = ['facebook', 'instagram', 'linkedin', 'youtube', 'ti
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { platform: string } },
+  { params: paramsPromise }: { params: Promise<{ platform: string }> },
 ) {
+  const params = await paramsPromise;
   const platform = params.platform as typeof SUPPORTED_PLATFORMS[number];
   const searchParams = request.nextUrl.searchParams;
 

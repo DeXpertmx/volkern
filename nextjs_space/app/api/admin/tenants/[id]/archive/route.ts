@@ -30,8 +30,9 @@ import { archiveTenant, type ArchiveActor } from '@/lib/provisioning/tenant-arch
  */
 export async function POST(
     req: NextRequest,
-    { params }: { params: { id: string } }
+    { params: paramsPromise }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
+  const params = await paramsPromise;
     try {
         const session = await getServerSession(authOptions);
         if (!session?.user?.id) {

@@ -611,10 +611,17 @@ export function withPublicTenant(
       const { getTenantDb } = await import('./db');
       const db = await getTenantDb(tenantId!);
 
+      // Next entrega `params` como Promise (15 en adelante); el handler lo
+      // espera resuelto, igual que en withTenantAuth.
+      const params =
+        context?.params && typeof context.params.then === 'function'
+          ? await context.params
+          : context?.params;
+
       // Ejecutar dentro del contexto del tenant
       return await dbContext.run(
         { tenantId: tenantId!, client: db.client },
-        () => handler(request, tenantId!, context?.params)
+        () => handler(request, tenantId!, params)
       );
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error)

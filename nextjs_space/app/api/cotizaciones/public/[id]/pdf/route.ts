@@ -7,7 +7,8 @@ import { generateCotizacionHTML } from '@/lib/cotizaciones/cotizacion-pdf';
 import { getEffectiveBranding } from '@/lib/branding';
 import { getPublicUrl } from '@/lib/s3-public-url';
 
-export async function GET(request: Request, context: { params: { id: string } }) {
+export async function GET(request: Request, contextPromise: { params: Promise<{ id: string }> }) {
+  const context = await contextPromise;
   try {
     const cotizacion = await prisma.cotizacion.findUnique({
       where: { tokenPublico: context.params.id },

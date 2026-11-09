@@ -12,8 +12,9 @@ import { ComplianceGate } from '@/lib/compliance-gate';
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user || !(session.user as any).tenantId) {
@@ -76,8 +77,9 @@ export async function PATCH(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {

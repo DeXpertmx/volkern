@@ -16,7 +16,8 @@ function publicHeaders() {
  * Devuelve el PDF ya firmado (el que LibreSign devuelve en el webhook) si
  * existe una SignatureRequest firmada con documento, o 404 si aún no hay.
  */
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: Request, { params: paramsPromise }: { params: Promise<{ id: string }> }) {
+  const params = await paramsPromise;
   try {
     const contrato = await prisma.contrato.findUnique({
       where: { tokenPublico: params.id },

@@ -9,8 +9,9 @@ import { hasPermission, canManageUser, logAuditAction } from '@/lib/permissions'
 // GET /api/users/[id] - Obtener usuario por ID
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
@@ -62,8 +63,9 @@ export async function GET(
 // PATCH /api/users/[id] - Actualizar usuario
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
@@ -162,8 +164,9 @@ export async function PATCH(
 // DELETE /api/users/[id] - Eliminar usuario
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {

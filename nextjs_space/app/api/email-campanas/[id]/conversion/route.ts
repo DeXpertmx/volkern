@@ -8,8 +8,9 @@ import prisma from "@/lib/db";
 // POST - Registrar conversión de un destinatario
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {

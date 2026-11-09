@@ -14,7 +14,8 @@ function publicHeaders() {
 }
 
 // POST /api/firma/[token]/sign - Verificar código y firmar el contrato
-export async function POST(request: Request, { params }: { params: { token: string } }) {
+export async function POST(request: Request, { params: paramsPromise }: { params: Promise<{ token: string }> }) {
+  const params = await paramsPromise;
   try {
     const contrato = await prisma.contrato.findUnique({
       where: { tokenPublico: params.token },

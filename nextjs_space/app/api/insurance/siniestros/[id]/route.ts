@@ -73,8 +73,9 @@ async function authenticateSiniestros(
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params: paramsPromise }: { params: Promise<{ id: string }> },
 ) {
+  const params = await paramsPromise;
   try {
     const url = new URL(req.url);
     const tenantIdFromQuery = url.searchParams.get('tenantId') ?? undefined;
@@ -104,8 +105,9 @@ export async function GET(
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params: paramsPromise }: { params: Promise<{ id: string }> },
 ) {
+  const params = await paramsPromise;
   try {
     const body = await req.json().catch(() => ({}));
     const authResult = await authenticateSiniestros(req, body.tenantId);

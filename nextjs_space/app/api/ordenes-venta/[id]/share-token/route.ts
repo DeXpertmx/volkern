@@ -13,8 +13,9 @@ import { randomBytes } from 'crypto'
  */
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const auth = await authenticateRequest(req, ['deals:write', 'orders:write'])
     if (!auth.valid) {
@@ -75,8 +76,9 @@ export async function POST(
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const auth = await authenticateRequest(req, ['deals:read', 'orders:read'])
     if (!auth.valid) {

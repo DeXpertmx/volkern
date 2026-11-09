@@ -8,8 +8,9 @@ import { authOptions } from '@/lib/auth';
 // GET /api/email-campanas/[id] - Obtener campaña específica
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
@@ -65,8 +66,9 @@ export async function GET(
 // PUT /api/email-campanas/[id] - Actualizar campaña
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
@@ -151,8 +153,9 @@ export async function PUT(
 // DELETE /api/email-campanas/[id] - Eliminar campaña
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {

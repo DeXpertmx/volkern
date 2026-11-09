@@ -7,8 +7,9 @@ import { authenticateRequest } from '@/lib/api-key-auth'
 // GET - Obtener tasa específica
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const auth = await authenticateRequest(req, ['config:read'])
     if (!auth.valid) {
@@ -42,8 +43,9 @@ export async function GET(
 // PATCH - Actualizar tasa
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const auth = await authenticateRequest(req, ['config:write'])
     if (!auth.valid) {
@@ -102,8 +104,9 @@ export async function PATCH(
 // DELETE - Eliminar o desactivar tasa
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const auth = await authenticateRequest(req, ['config:write'])
     if (!auth.valid) {

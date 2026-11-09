@@ -8,8 +8,9 @@ import { authOptions } from '@/lib/auth';
 // GET /api/email-campanas/templates/[id] - Obtener plantilla
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
@@ -58,8 +59,9 @@ export async function GET(
 // DELETE /api/email-campanas/templates/[id] - Eliminar plantilla
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {

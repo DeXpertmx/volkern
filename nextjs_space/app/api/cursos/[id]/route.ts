@@ -9,8 +9,9 @@ import { getSessionTenantId, tenantWhere } from '@/lib/academy/tenant-guard';
 // GET /api/cursos/[id] - Obtener un curso específico
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -121,8 +122,9 @@ function sanitizeCursoData(data: any) {
 // PATCH /api/cursos/[id] - Actualizar un curso (parcial)
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -163,8 +165,9 @@ export async function PATCH(
 // PUT /api/cursos/[id] - Actualizar un curso (completo)
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -200,8 +203,9 @@ export async function PUT(
 // DELETE /api/cursos/[id] - Eliminar un curso
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {

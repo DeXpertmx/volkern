@@ -8,8 +8,9 @@ import { prisma } from '@/lib/db';
 // GET /api/lecciones/[id] - Obtener una lección específica
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user?.email) {
@@ -63,8 +64,9 @@ export async function GET(
 // PUT /api/lecciones/[id] - Actualizar una lección
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
@@ -109,8 +111,9 @@ export async function PUT(
 // DELETE /api/lecciones/[id] - Eliminar una lección
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session) {

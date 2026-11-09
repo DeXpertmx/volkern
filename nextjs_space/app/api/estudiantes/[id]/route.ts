@@ -9,8 +9,9 @@ import { getSessionTenantId, tenantWhere } from '@/lib/academy/tenant-guard';
 // GET /api/estudiantes/[id] - Obtener un estudiante específico
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
@@ -64,8 +65,9 @@ export async function GET(
 // PUT /api/estudiantes/[id] - Actualizar un estudiante
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
@@ -144,8 +146,9 @@ export async function PUT(
 // DELETE /api/estudiantes/[id] - Eliminar un estudiante
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session) {

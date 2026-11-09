@@ -521,7 +521,8 @@ function generateInvoiceHTML(invoice: any, tenant: any): string {
 
 // ─── Route Handler ─────────────────────────────────────────────
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: Request, { params: paramsPromise }: { params: Promise<{ id: string }> }) {
+  const params = await paramsPromise;
   try {
     const auth = await authenticateRequest(request, ['billing:read', 'invoices:read']);
     if (!auth.valid || !auth.tenant) {

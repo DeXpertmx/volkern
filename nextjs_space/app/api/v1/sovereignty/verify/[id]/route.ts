@@ -9,8 +9,9 @@ import { SignatureService } from '@/lib/security/signature-service';
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const signatureId = params.id;
 

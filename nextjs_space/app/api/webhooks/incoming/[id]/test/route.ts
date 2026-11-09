@@ -8,8 +8,9 @@ import { prisma } from '@/lib/db';
 // POST - Enviar un payload de prueba al webhook
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
 

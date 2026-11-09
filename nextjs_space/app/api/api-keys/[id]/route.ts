@@ -8,8 +8,9 @@ import { AVAILABLE_SCOPES } from '@/lib/api-keys';
 // GET - Obtener detalles de una API key
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
 
@@ -70,8 +71,9 @@ export async function GET(
 // PUT - Actualizar API key (nombre, descripción, scopes, estado)
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
 
@@ -180,8 +182,9 @@ export async function PUT(
 // DELETE - Eliminar API key
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
 

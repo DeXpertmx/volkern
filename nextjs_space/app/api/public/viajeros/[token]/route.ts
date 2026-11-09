@@ -32,7 +32,8 @@ const ETIQUETAS_CAMPO: Record<string, string> = {
  * documento para que nadie con el enlace lo vea): se validan los datos
  * fusionados y solo se envía a la API interna lo que el viajero escribió.
  */
-export async function POST(req: NextRequest, { params }: { params: { token: string } }) {
+export async function POST(req: NextRequest, { params: paramsPromise }: { params: Promise<{ token: string }> }) {
+  const params = await paramsPromise;
   try {
     const verificacion = verificarTokenEnlace(params.token);
     if (!verificacion.ok) {

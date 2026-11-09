@@ -23,8 +23,9 @@ import { emitir_poliza_en_aseguradora } from '@/lib/insurance/connectors-skills'
  */
 export async function POST(
   req: NextRequest,
-  { params }: { params: { slug: string } },
+  { params: paramsPromise }: { params: Promise<{ slug: string }> },
 ) {
+  const params = await paramsPromise;
   try {
     const body = await req.json().catch(() => ({}));
     const authResult = await authenticateConnector(req, body.tenantId);

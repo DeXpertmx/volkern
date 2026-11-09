@@ -8,8 +8,9 @@ import { findBookingUserBySlug } from '@/lib/public-slug-lookup'
 
 export async function GET(
     request: NextRequest,
-    { params }: { params: { slug: string } }
+    { params: paramsPromise }: { params: Promise<{ slug: string }> }
 ) {
+  const params = await paramsPromise;
     try {
         const selectFields = {
             id: true,

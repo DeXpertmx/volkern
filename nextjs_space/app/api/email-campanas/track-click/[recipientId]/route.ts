@@ -6,8 +6,9 @@ import { prisma } from '@/lib/db';
 // GET /api/email-campanas/track-click/[recipientId] - Tracking de clics en emails
 export async function GET(
   request: NextRequest,
-  { params }: { params: { recipientId: string } }
+  { params: paramsPromise }: { params: Promise<{ recipientId: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     // Buscar el destinatario
     const recipient = await prisma.campaignRecipient.findUnique({

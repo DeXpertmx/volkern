@@ -87,8 +87,9 @@ async function readInstanceRow(
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { instanceName: string } }
+  { params: paramsPromise }: { params: Promise<{ instanceName: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const instanceName = params.instanceName;
     const body = await request.json();
@@ -617,8 +618,9 @@ export async function POST(
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { instanceName: string } }
+  { params: paramsPromise }: { params: Promise<{ instanceName: string }> }
 ) {
+  const params = await paramsPromise;
   return NextResponse.json({
     message: 'Webhook endpoint para Evolution API',
     instanceName: params.instanceName,

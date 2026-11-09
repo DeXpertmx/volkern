@@ -8,8 +8,9 @@ import { maskIntegracionApi, mergeIntegracionApiForSave } from '@/lib/insurance/
 // GET - Obtener aseguradora individual
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const auth = await authenticateRequest(req, ['insurance:read', 'catalogo:read']);
     if (!auth.valid) {
@@ -43,8 +44,9 @@ export async function GET(
 // PATCH - Actualizar aseguradora
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const auth = await authenticateRequest(req, ['insurance:write', 'config:write']);
     if (!auth.valid) {
@@ -143,8 +145,9 @@ export async function PATCH(
 // DELETE - Eliminar aseguradora
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const auth = await authenticateRequest(req, ['insurance:write', 'config:write']);
     if (!auth.valid) {

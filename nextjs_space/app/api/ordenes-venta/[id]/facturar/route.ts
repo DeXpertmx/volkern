@@ -6,8 +6,9 @@ import { InvoicingService } from '@/lib/invoicing-service'
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const auth = await authenticateRequest(req, ['orders:write', 'billing:write'])
     if (!auth.valid) {

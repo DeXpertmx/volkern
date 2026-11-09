@@ -8,8 +8,9 @@ import { prisma } from '@/lib/db';
 // GET /api/lecciones/[id]/comentarios - Obtener comentarios de una lección
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -58,8 +59,9 @@ export async function GET(
 // POST /api/lecciones/[id]/comentarios - Crear un comentario
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {

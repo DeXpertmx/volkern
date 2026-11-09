@@ -10,8 +10,9 @@ import { authenticateRequest } from '@/lib/api-key-auth'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     // Autenticación dual: sesión o API key
     const auth = await authenticateRequest(request, ['citas:read', 'appointments:read'])
@@ -69,8 +70,9 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     // Autenticación dual: sesión o API key
     const auth = await authenticateRequest(request, ['citas:write', 'appointments:write'])
@@ -283,8 +285,9 @@ export async function PUT(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     // Autenticación dual: sesión o API key
     const auth = await authenticateRequest(request, ['citas:write', 'appointments:write'])
@@ -435,8 +438,9 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     // Autenticación dual: sesión o API key
     const auth = await authenticateRequest(request, ['citas:delete', 'appointments:delete'])

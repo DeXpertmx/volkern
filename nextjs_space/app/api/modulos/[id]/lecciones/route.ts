@@ -8,8 +8,9 @@ import { prisma } from '@/lib/db';
 // POST /api/modulos/[id]/lecciones - Crear una nueva lección para un módulo
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session) {

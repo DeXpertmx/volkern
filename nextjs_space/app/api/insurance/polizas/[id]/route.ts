@@ -7,8 +7,9 @@ import { authenticateRequest } from '@/lib/api-key-auth';
 // GET - Obtener póliza individual
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const auth = await authenticateRequest(req, ['insurance:read', 'catalogo:read']);
     if (!auth.valid) {
@@ -47,8 +48,9 @@ export async function GET(
 // PATCH - Actualizar póliza
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const auth = await authenticateRequest(req, ['insurance:write', 'config:write']);
     if (!auth.valid) {
@@ -114,8 +116,9 @@ export async function PATCH(
 // DELETE - Eliminar póliza
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const auth = await authenticateRequest(req, ['insurance:write', 'config:write']);
     if (!auth.valid) {

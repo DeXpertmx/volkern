@@ -10,8 +10,9 @@ import { findDigitalCardByUrlUnica } from '@/lib/public-slug-lookup';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { cardId: string } }
+  { params: paramsPromise }: { params: Promise<{ cardId: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const { cardId } = params;
 

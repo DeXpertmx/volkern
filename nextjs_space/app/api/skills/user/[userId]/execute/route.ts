@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { globalPrisma } from '@/lib/db';
 import { skills, listSkills, executeSkill } from '@/lib/skills';
 
-export async function POST(req: NextRequest, { params }: { params: { userId: string } }) {
+export async function POST(req: NextRequest, { params: paramsPromise }: { params: Promise<{ userId: string }> }) {
+  const params = await paramsPromise;
   const { userId } = params;
 
   try {

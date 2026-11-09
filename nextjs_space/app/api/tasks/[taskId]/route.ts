@@ -8,8 +8,9 @@ import { createSystemContext } from '@/lib/skills/context';
 // PATCH /api/tasks/[taskId] - Actualizar una tarea
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { taskId: string } }
+  { params: paramsPromise }: { params: Promise<{ taskId: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const auth = await authenticateRequest(request, ['tasks:write']);
     const data = await request.json();
@@ -65,8 +66,9 @@ export async function PATCH(
 // DELETE /api/tasks/[taskId] - Eliminar una tarea
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { taskId: string } }
+  { params: paramsPromise }: { params: Promise<{ taskId: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     await prisma.task.delete({
       where: { id: params.taskId }

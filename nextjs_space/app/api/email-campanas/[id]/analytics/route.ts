@@ -8,8 +8,9 @@ import prisma from "@/lib/db";
 // GET - Obtener métricas avanzadas y analytics de una campaña
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {

@@ -7,8 +7,9 @@ import { triggerAutomation } from '@/lib/automation-engine';
 // POST /api/email-campanas/track/[recipientId]/convert - Marcar conversión desde email
 export async function POST(
   request: NextRequest,
-  { params }: { params: { recipientId: string } }
+  { params: paramsPromise }: { params: Promise<{ recipientId: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const body = await request.json();
     const { valor, tipo } = body; // valor monetario opcional, tipo de conversión

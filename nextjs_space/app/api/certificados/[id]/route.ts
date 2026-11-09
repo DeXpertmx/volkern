@@ -14,8 +14,9 @@ import { generateCertificatePdf } from '@/lib/academy/certificate-pdf';
  */
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession();
     if (!session?.user?.email) {

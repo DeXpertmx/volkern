@@ -8,8 +8,9 @@ import { prisma } from "@/lib/db";
 // GET /api/templates/[id] - Obtener una plantilla específica
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
@@ -45,8 +46,9 @@ export async function GET(
 // DELETE /api/templates/[id] - Eliminar una plantilla del editor
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {

@@ -47,7 +47,8 @@ type Accion = (typeof ACCIONES)[number];
 // Los documentos salen enmascarados salvo para quien tiene privilegio (ver
 // `viajeroPublico`), y el acceso queda auditado: son datos personales y hay que
 // poder responder quién los miró.
-export async function GET(req: NextRequest, { params }: { params: { reservationId: string } }) {
+export async function GET(req: NextRequest, { params: paramsPromise }: { params: Promise<{ reservationId: string }> }) {
+  const params = await paramsPromise;
   try {
     const auth = await authenticateRequest(req, ['compliance:read']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });
@@ -117,7 +118,8 @@ export async function GET(req: NextRequest, { params }: { params: { reservationI
  * cambian el mismo registro de la misma reserva, y tenerlos juntos hace que la
  * auditoría y la comprobación de tenant se lean de una vez.
  */
-export async function POST(req: NextRequest, { params }: { params: { reservationId: string } }) {
+export async function POST(req: NextRequest, { params: paramsPromise }: { params: Promise<{ reservationId: string }> }) {
+  const params = await paramsPromise;
   try {
     const auth = await authenticateRequest(req, ['compliance:write']);
     if (!auth.valid) return NextResponse.json({ error: auth.error }, { status: 401 });

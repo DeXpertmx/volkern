@@ -9,8 +9,9 @@ import { actividadBloqueada, puertaActivaEnEtiquetas } from '@/lib/sales/trainin
 // POST - Crear actividad del deal
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {

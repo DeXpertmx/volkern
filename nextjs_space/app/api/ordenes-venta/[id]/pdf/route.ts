@@ -9,7 +9,8 @@ import { getEffectiveBranding } from '@/lib/branding';
 import { getPublicUrl } from '@/lib/s3-public-url';
 
 // GET /api/ordenes-venta/[id]/pdf — Descargar el documento oficial en PDF
-export async function GET(request: NextRequest, context: { params: { id: string } }) {
+export async function GET(request: NextRequest, contextPromise: { params: Promise<{ id: string }> }) {
+  const context = await contextPromise;
   try {
     const auth = await authenticateRequest(request, ['deals:read', 'orders:read']);
     if (!auth.valid || !auth.tenant) {

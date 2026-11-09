@@ -9,8 +9,9 @@ import { logAuditAction } from '@/lib/permissions';
 // DELETE - Eliminar una integración
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -60,8 +61,9 @@ export async function DELETE(
 // PATCH - Actualizar estado de una integración
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {

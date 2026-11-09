@@ -9,8 +9,9 @@ import { getSessionTenantId, tenantWhere } from '@/lib/academy/tenant-guard';
 // POST /api/cursos/[id]/modulos - Crear un nuevo módulo para un curso
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session) {

@@ -28,8 +28,9 @@ import { sync_cartera_desde_aseguradora } from '@/lib/insurance/connectors-skill
  */
 export async function POST(
   req: NextRequest,
-  { params }: { params: { slug: string } },
+  { params: paramsPromise }: { params: Promise<{ slug: string }> },
 ) {
+  const params = await paramsPromise;
   try {
     const body = await req.json().catch(() => ({}));
     const authResult = await authenticateConnector(req, body.tenantId);

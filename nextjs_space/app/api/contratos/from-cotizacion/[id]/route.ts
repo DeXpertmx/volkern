@@ -8,7 +8,8 @@ import { addContratoTimelineEvent } from '@/lib/contratos/timeline';
 import { randomBytes } from 'crypto';
 
 // POST - Crear contrato desde cotización aceptada
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, { params: paramsPromise }: { params: Promise<{ id: string }> }) {
+  const params = await paramsPromise;
   try {
     const auth = await authenticateRequest(request, ['contratos:write']);
     if (!auth.valid || !auth.tenant) {

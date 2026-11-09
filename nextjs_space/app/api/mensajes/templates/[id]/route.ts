@@ -8,8 +8,9 @@ import prisma from '@/lib/db'
 // Obtener un template específico
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions)
     if (!session) {
@@ -40,8 +41,9 @@ export async function GET(
 // Actualizar un template
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions)
     if (!session) {
@@ -85,8 +87,9 @@ export async function PATCH(
 // Eliminar un template
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions)
     if (!session) {

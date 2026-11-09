@@ -8,8 +8,9 @@ import { prisma } from '@/lib/db';
 // GET /api/cursos/[id]/reviews - Obtener reviews de un curso
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const { searchParams } = new URL(request.url);
     const aprobado = searchParams.get('aprobado');
@@ -44,8 +45,9 @@ export async function GET(
 // POST /api/cursos/[id]/reviews - Crear un review
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {

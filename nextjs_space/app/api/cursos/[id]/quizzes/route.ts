@@ -8,7 +8,7 @@ import { prisma } from '@/lib/db';
 // POST /api/cursos/[id]/quizzes - Crear un quiz para un curso
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);

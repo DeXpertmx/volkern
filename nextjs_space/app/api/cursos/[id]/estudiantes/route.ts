@@ -8,8 +8,9 @@ import { prisma } from '@/lib/db';
 // GET /api/cursos/[id]/estudiantes - Obtener estudiantes inscritos en un curso
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -65,8 +66,9 @@ export async function GET(
 // POST /api/cursos/[id]/estudiantes/export - Exportar estudiantes a CSV
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {

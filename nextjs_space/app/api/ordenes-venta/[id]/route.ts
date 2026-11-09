@@ -8,8 +8,9 @@ import { skills } from '@/lib/skills'
 // GET - Obtener orden de venta específica
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const auth = await authenticateRequest(req, ['deals:read', 'orders:read'])
     if (!auth.valid) {
@@ -94,8 +95,9 @@ export async function GET(
 // PATCH - Actualizar orden de venta
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const auth = await authenticateRequest(req, ['deals:write', 'orders:write'])
     if (!auth.valid) {
@@ -302,8 +304,9 @@ export async function PATCH(
 // DELETE - Eliminar orden de venta
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const auth = await authenticateRequest(req, ['deals:write', 'orders:write'])
     if (!auth.valid) {

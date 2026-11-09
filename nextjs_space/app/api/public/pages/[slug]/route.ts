@@ -7,8 +7,9 @@ import { prisma, globalPrisma, getTenantDb, dbContext } from "@/lib/db";
 // Resuelve el tenant a través del query param ?tenant=<tenantSlug>
 export async function GET(
   req: NextRequest,
-  { params }: { params: { slug: string } }
+  { params: paramsPromise }: { params: Promise<{ slug: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const { slug } = params;
     const { searchParams } = new URL(req.url);

@@ -11,8 +11,9 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { auditId: string } }
+  { params: paramsPromise }: { params: Promise<{ auditId: string }> }
 ) {
+  const params = await paramsPromise;
   const authResult = await isAdminRequest(request);
   if (!authResult.ok) {
     return NextResponse.json({ error: authResult.error }, { status: 401 });

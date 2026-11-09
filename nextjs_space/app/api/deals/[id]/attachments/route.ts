@@ -10,8 +10,9 @@ import { getBucketConfig } from '@/lib/aws-config'
 // POST - Subir archivo
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
@@ -119,8 +120,9 @@ export async function POST(
 // GET - Listar archivos del deal
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {

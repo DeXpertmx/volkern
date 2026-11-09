@@ -281,7 +281,8 @@ function generateContratoHTML(contrato: any, tenant: any, opts: { logoUrl?: stri
   `;
 }
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: Request, { params: paramsPromise }: { params: Promise<{ id: string }> }) {
+  const params = await paramsPromise;
   try {
     const contrato = await prisma.contrato.findUnique({
       where: { tokenPublico: params.id },

@@ -6,8 +6,9 @@ import { DunningService } from '@/lib/finance/dunning-service'
 // GET /api/public/subscriptions/[id]
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const subscription = await (prisma as any).clientSubscription.findUnique({
       where: { id: params.id },
@@ -38,8 +39,9 @@ export async function GET(
 // En producción, aquí se recibiría un token de pago (Stripe/etc)
 export async function POST(
   req: Request,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const subscription = await (prisma as any).clientSubscription.findUnique({
       where: { id: params.id }

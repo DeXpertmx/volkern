@@ -24,8 +24,9 @@ function mapearPerfil(p: any) {
 // GET - Obtener perfil fiscal específico
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const auth = await authenticateRequest(req, ['config:read', 'leads:read', 'contacts:read'])
     if (!auth.valid) {
@@ -67,8 +68,9 @@ export async function GET(
 // PATCH - Actualizar perfil fiscal
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const auth = await authenticateRequest(req, ['config:write', 'leads:write', 'contacts:write'])
     if (!auth.valid) {
@@ -185,8 +187,9 @@ export async function PATCH(
 // DELETE - Eliminar perfil fiscal
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const auth = await authenticateRequest(req, ['config:write', 'leads:write', 'contacts:write'])
     if (!auth.valid) {

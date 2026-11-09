@@ -142,8 +142,9 @@ function getPlanLimit(plan: string, key: string): number {
 // GET - Listar features y límites del tenant
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -224,8 +225,9 @@ export async function GET(
 // PATCH - Actualizar un feature/límite del tenant
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {

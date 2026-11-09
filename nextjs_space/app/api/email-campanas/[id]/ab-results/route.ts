@@ -8,8 +8,9 @@ import prisma from '@/lib/db'
 // GET - Obtener resultados de A/B Testing
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
@@ -172,8 +173,9 @@ export async function GET(
 // POST - Declarar ganador y aplicar resultado
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {

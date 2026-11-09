@@ -9,8 +9,9 @@ import { prisma } from '@/lib/db';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { hash: string } }
+  { params: paramsPromise }: { params: Promise<{ hash: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const hash = params.hash;
 

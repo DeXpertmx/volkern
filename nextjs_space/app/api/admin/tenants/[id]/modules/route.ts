@@ -9,8 +9,9 @@ import { getPlanConfig, ALL_MODULES, ADDONS, type CrmModule } from '@/lib/plans'
 // GET - Obtener módulos del tenant con estado actual
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -90,8 +91,9 @@ export async function GET(
 // PATCH - Activar/desactivar módulos para un tenant
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -179,8 +181,9 @@ export async function PATCH(
 // PUT - Asignar un plan completo (activa los módulos del plan)
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {

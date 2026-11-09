@@ -8,8 +8,9 @@ import { prisma } from '@/lib/db';
 // GET /api/cursos/[id]/cupones - Obtener cupones de un curso
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -33,8 +34,9 @@ export async function GET(
 // POST /api/cursos/[id]/cupones - Crear un cupón
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {

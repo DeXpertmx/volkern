@@ -8,8 +8,9 @@ import { authenticateRequest } from '@/lib/api-key-auth'
 // GET /api/contacts/[id]/tasks - Obtener tareas de un contacto
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const auth = await authenticateRequest(request, ['contacts:read'])
     if (!auth.valid || !auth.tenant) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
@@ -31,8 +32,9 @@ export async function GET(
 // POST /api/contacts/[id]/tasks - Crear tarea para un contacto
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const auth = await authenticateRequest(request, ['contacts:write'])
     if (!auth.valid || !auth.tenant) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })

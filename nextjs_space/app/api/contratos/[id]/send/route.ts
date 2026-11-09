@@ -6,7 +6,8 @@ import { authenticateRequest } from '@/lib/api-key-auth';
 
 import { sendEmail } from '@/lib/ses-email';
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, { params: paramsPromise }: { params: Promise<{ id: string }> }) {
+  const params = await paramsPromise;
   try {
     const auth = await authenticateRequest(request, ['contratos:write']);
     if (!auth.valid || !auth.tenant) {

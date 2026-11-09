@@ -9,8 +9,9 @@ import { logAuditAction } from '@/lib/permissions'
 // GET /api/contacts/[id]/interactions - Obtener interacciones de un contacto
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const auth = await authenticateRequest(request, ['contacts:read'])
     if (!auth.valid || !auth.tenant) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
@@ -32,8 +33,9 @@ export async function GET(
 // POST /api/contacts/[id]/interactions - Crear interacción para un contacto
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const auth = await authenticateRequest(request, ['contacts:write'])
     if (!auth.valid || !auth.tenant) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })

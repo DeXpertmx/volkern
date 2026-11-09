@@ -8,8 +8,9 @@ import { prisma } from '@/lib/db';
 // GET - Obtener entregas de un webhook
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
 

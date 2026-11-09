@@ -6,8 +6,9 @@ import { prisma } from '@/lib/db';
 // GET /api/email-campanas/unsubscribe/[token] - Cancelar suscripción
 export async function GET(
   request: NextRequest,
-  { params }: { params: { token: string } }
+  { params: paramsPromise }: { params: Promise<{ token: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     // Decodificar token
     const decoded = Buffer.from(params.token, 'base64').toString('utf-8');

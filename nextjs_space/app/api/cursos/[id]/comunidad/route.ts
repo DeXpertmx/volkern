@@ -11,8 +11,9 @@ import { notifyNewCommunityThread, notifyCommunityReply } from '@/lib/services/c
  */
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) return new NextResponse('Unauthorized', { status: 401 });
@@ -60,8 +61,9 @@ export async function GET(
  */
 export async function POST(
   req: Request,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) return new NextResponse('Unauthorized', { status: 401 });

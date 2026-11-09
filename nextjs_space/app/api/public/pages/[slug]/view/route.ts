@@ -8,8 +8,9 @@ import { globalPrisma, getTenantDb, dbContext, prisma } from '@/lib/db';
  */
 export async function POST(
   req: NextRequest,
-  { params }: { params: { slug: string } }
+  { params: paramsPromise }: { params: Promise<{ slug: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const { searchParams } = new URL(req.url);
     const tenantSlugParam = searchParams.get('tenant');

@@ -6,8 +6,9 @@ import { authOptions } from '@/lib/auth';
 /* PATCH /api/aprobaciones/[id] — Aprobar o rechazar */
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id || !session?.user?.tenantId) {

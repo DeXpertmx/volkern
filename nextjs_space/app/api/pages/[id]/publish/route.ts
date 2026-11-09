@@ -6,7 +6,7 @@ import { withTenantAuth } from "@/lib/api-key-auth";
 import { checkFeatureLimit } from "@/lib/subscription";
 
 // POST /api/pages/[id]/publish - Publicar una página
-export const POST = withTenantAuth(async (req, auth, params: { id: string }) => {
+export const POST = withTenantAuth(async (req, auth, { params }: { params: { id: string } }) => {
   try {
     const tenantId = auth.tenant!.id;
 

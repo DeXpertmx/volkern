@@ -6,8 +6,9 @@ import prisma from '@/lib/db';
 
 export async function POST(
   request: Request,
-  { params }: { params: { leccionId: string } }
+  { params: paramsPromise }: { params: Promise<{ leccionId: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession();
     if (!session?.user?.email) {
@@ -149,8 +150,9 @@ export async function POST(
 
 export async function GET(
   request: Request,
-  { params }: { params: { leccionId: string } }
+  { params: paramsPromise }: { params: Promise<{ leccionId: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession();
     if (!session?.user?.email) {

@@ -6,8 +6,9 @@ import { prisma } from '@/lib/db';
 // GET /api/certificados/verificar/[codigo] - Verificar un certificado por código
 export async function GET(
   request: NextRequest,
-  { params }: { params: { codigo: string } }
+  { params: paramsPromise }: { params: Promise<{ codigo: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const certificado = await prisma.certificado.findUnique({
       where: { codigoUnico: params.codigo },

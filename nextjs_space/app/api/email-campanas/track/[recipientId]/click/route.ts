@@ -7,8 +7,9 @@ import { triggerAutomation } from '@/lib/automation-engine';
 // GET /api/email-campanas/track/[recipientId]/click - Tracking de clics en emails
 export async function GET(
   request: NextRequest,
-  { params }: { params: { recipientId: string } }
+  { params: paramsPromise }: { params: Promise<{ recipientId: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const { searchParams } = new URL(request.url);
     const url = searchParams.get('url') || '';

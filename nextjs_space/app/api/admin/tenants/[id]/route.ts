@@ -9,8 +9,9 @@ import { normalizarSubdominio } from '@/lib/tenant-subdomain';
 // GET /api/admin/tenants/[id] - Get tenant details
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     
@@ -90,8 +91,9 @@ export async function GET(
 // PATCH /api/admin/tenants/[id] - Update tenant
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     
@@ -218,8 +220,9 @@ export async function PATCH(
 // DELETE /api/admin/tenants/[id] - Delete tenant
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     

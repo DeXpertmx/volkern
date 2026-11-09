@@ -8,8 +8,9 @@ import { prisma } from '@/lib/db';
 // POST /api/inscripciones/[id]/progreso - Actualizar progreso de una lección
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {

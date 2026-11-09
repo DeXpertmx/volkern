@@ -7,8 +7,9 @@ import { authOptions } from '@/lib/auth'
 // GET - Obtener una etapa específica
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
@@ -47,8 +48,9 @@ export async function GET(
 // PATCH - Actualizar una etapa
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
@@ -133,8 +135,9 @@ export async function PATCH(
 // DELETE - Eliminar una etapa
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {

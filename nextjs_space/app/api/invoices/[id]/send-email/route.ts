@@ -273,7 +273,8 @@ function generateEmailHTML(invoice: any, tenant: any, pdfFilename: string): stri
 
 // ─── Route Handler ─────────────────────────────────────────────
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, { params: paramsPromise }: { params: Promise<{ id: string }> }) {
+  const params = await paramsPromise;
   try {
     const auth = await authenticateRequest(request, ['billing:write', 'invoices:send']);
     if (!auth.valid || !auth.tenant) {

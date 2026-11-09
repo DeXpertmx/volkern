@@ -8,8 +8,9 @@ import { prisma } from '@/lib/db';
 // POST /api/intentos/[id]/calificar - Calificar un intento de quiz
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {

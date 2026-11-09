@@ -8,8 +8,9 @@ import { prisma } from '@/lib/db';
 // PUT /api/modulos/[id] - Actualizar un módulo
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
@@ -38,8 +39,9 @@ export async function PUT(
 // DELETE /api/modulos/[id] - Eliminar un módulo
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session) {

@@ -10,8 +10,9 @@ import { checkResourceLimit } from '@/lib/limits';
 // POST /api/email-campanas/[id]/send - Enviar o programar campaña
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: paramsPromise }: { params: Promise<{ id: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {

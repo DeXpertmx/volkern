@@ -6,8 +6,9 @@ import { prisma } from '@/lib/db';
 // POST - Recibir webhooks de servicios externos
 export async function POST(
   request: Request,
-  { params }: { params: { tenantId: string } }
+  { params: paramsPromise }: { params: Promise<{ tenantId: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const { tenantId } = params;
 
@@ -87,8 +88,9 @@ export async function POST(
 // GET - Obtener logs de webhooks
 export async function GET(
   request: Request,
-  { params }: { params: { tenantId: string } }
+  { params: paramsPromise }: { params: Promise<{ tenantId: string }> }
 ) {
+  const params = await paramsPromise;
   try {
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '50');

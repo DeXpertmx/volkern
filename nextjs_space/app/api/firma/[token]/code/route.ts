@@ -13,7 +13,8 @@ function publicHeaders() {
 }
 
 // GET /api/firma/[token]/code - Canales de verificación disponibles (email/WhatsApp)
-export async function GET(request: Request, { params }: { params: { token: string } }) {
+export async function GET(request: Request, { params: paramsPromise }: { params: Promise<{ token: string }> }) {
+  const params = await paramsPromise;
   try {
     const contrato = await prisma.contrato.findUnique({
       where: { tokenPublico: params.token },
@@ -36,7 +37,8 @@ export async function GET(request: Request, { params }: { params: { token: strin
 }
 
 // POST /api/firma/[token]/code - Enviar código de verificación por el canal elegido
-export async function POST(request: Request, { params }: { params: { token: string } }) {
+export async function POST(request: Request, { params: paramsPromise }: { params: Promise<{ token: string }> }) {
+  const params = await paramsPromise;
   try {
     const contrato = await prisma.contrato.findUnique({
       where: { tokenPublico: params.token },
