@@ -33,6 +33,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Progress } from '@/components/ui/progress'
+import { Slider } from '@/components/ui/slider'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,6 +47,7 @@ import {
   Calendar,
   User,
   Coins,
+  Edit,
   Trash2,
   Plus,
   Phone,
@@ -225,15 +227,18 @@ export default function DealDetailPage() {
   const [showNewTaskDialog, setShowNewTaskDialog] = useState(false)
   const [showNewCitaDialog, setShowNewCitaDialog] = useState(false)
   const [showUploadDialog, setShowUploadDialog] = useState(false)
+  const [showEditDialog, setShowEditDialog] = useState(false)
 
   useEffect(() => {
     fetchDeal()
     fetchTimeline()
   }, [params.id])
 
-  const fetchDeal = async () => {
+  // `silencioso` evita que la ficha entera vuelva al esqueleto de carga cuando
+  // el usuario acaba de guardar desde un diálogo.
+  const fetchDeal = async (silencioso = false) => {
     try {
-      setLoading(true)
+      if (!silencioso) setLoading(true)
       const response = await fetch(`/api/deals/${params.id}`)
       
       if (!response.ok) {
@@ -534,6 +539,15 @@ export default function DealDetailPage() {
               </Button>
             </>
           )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="hidden sm:inline-flex"
+            onClick={() => setShowEditDialog(true)}
+          >
+            <Edit className="h-4 w-4 mr-2" />
+            Editar
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" aria-label="Más acciones">
@@ -543,6 +557,11 @@ export default function DealDetailPage() {
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Acciones</DropdownMenuLabel>
               <DropdownMenuSeparator />
+              <DropdownMenuItem className="sm:hidden" onClick={() => setShowEditDialog(true)}>
+                <Edit className="h-4 w-4 mr-2" />
+                Editar deal
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="sm:hidden" />
               <DropdownMenuItem onClick={handleDeleteDeal} className="text-destructive">
                 <Trash2 className="h-4 w-4 mr-2" />
                 Eliminar deal
@@ -551,6 +570,27 @@ export default function DealDetailPage() {
           </DropdownMenu>
         </div>
       </div>
+
+      {/* Edición de los datos clave sin salir de la ficha */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>Editar deal</DialogTitle>
+            <DialogDescription>
+              Los cambios se guardan en la oportunidad y quedan en el historial.
+            </DialogDescription>
+          </DialogHeader>
+          <EditDealForm
+            deal={deal}
+            onCancel={() => setShowEditDialog(false)}
+            onSaved={() => {
+              setShowEditDialog(false)
+              fetchDeal(true)
+              fetchTimeline()
+            }}
+          />
+        </DialogContent>
+      </Dialog>
 
       {/* Simulador de Roleplay (puerta de práctica) */}
       {simuladorAbierto && deal.leadId && (
@@ -1064,6 +1104,175 @@ export default function DealDetailPage() {
         </aside>
       </div>
     </div>
+  )
+}
+
+/** Convierte un ISO a YYYY-MM-DD en hora local, que es lo que acepta el input. */
+function aFechaInput(iso: string | null) {
+  if (!iso) return ''
+  const fecha = new Date(iso)
+  if (Number.isNaN(fecha.getTime())) return ''
+  const mes = `${fecha.getMonth() + 1}`.padStart(2, '0')
+  const dia = `${fecha.getDate()}`.padStart(2, '0')
+  return `${fecha.getFullYear()}-${mes}-${dia}`
+}
+
+// Formulario de edición de los datos clave del deal
+function EditDealForm({
+  deal,
+  onSaved,
+  onCancel,
+}: {
+  deal: Deal
+  onSaved: () => void
+  onCancel: () => void
+}) {
+  const [loading, setLoading] = useState(false)
+  const [formData, setFormData] = useState({
+    titulo: deal.titulo,
+    valor: String(deal.valor),
+    probabilidad: deal.probabilidad,
+    prioridad: deal.prioridad,
+    fechaEstimadaCierre: aFechaInput(deal.fechaEstimadaCierre),
+  })
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const titulo = formData.titulo.trim()
+    if (!titulo) {
+      toast.error('El título no puede estar vacío')
+      return
+    }
+    const valor = Number(formData.valor)
+    if (Number.isNaN(valor) || valor < 0) {
+      toast.error('El valor debe ser un número mayor o igual a cero')
+      return
+    }
+
+    setLoading(true)
+    try {
+      const response = await fetch(`/api/deals/${deal.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          titulo,
+          valor,
+          probabilidad: formData.probabilidad,
+          prioridad: formData.prioridad,
+          // El input devuelve YYYY-MM-DD sin hora: se ancla al mediodía local
+          // para que la zona horaria no mueva el día guardado.
+          fechaEstimadaCierre: formData.fechaEstimadaCierre
+            ? new Date(`${formData.fechaEstimadaCierre}T12:00:00`).toISOString()
+            : null,
+        }),
+      })
+
+      if (!response.ok) {
+        const cuerpo = await response.json().catch(() => null)
+        throw new Error(cuerpo?.error || 'No se pudo guardar el deal')
+      }
+
+      toast.success('Deal actualizado')
+      onSaved()
+    } catch (error) {
+      console.error('Error:', error)
+      toast.error(error instanceof Error ? error.message : 'Error al actualizar deal')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <Label htmlFor="edit-titulo">Título *</Label>
+        <Input
+          id="edit-titulo"
+          value={formData.titulo}
+          onChange={(e) => setFormData({ ...formData, titulo: e.target.value })}
+          required
+        />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label htmlFor="edit-valor">Valor ({deal.moneda}) *</Label>
+          <Input
+            id="edit-valor"
+            type="number"
+            min="0"
+            step="0.01"
+            inputMode="decimal"
+            value={formData.valor}
+            onChange={(e) => setFormData({ ...formData, valor: e.target.value })}
+            required
+          />
+        </div>
+        <div>
+          <Label htmlFor="edit-probabilidad">Probabilidad</Label>
+          <div className="flex items-center gap-3 pt-2">
+            <Slider
+              id="edit-probabilidad"
+              value={[formData.probabilidad]}
+              onValueChange={(valores) =>
+                setFormData({
+                  ...formData,
+                  probabilidad: valores[0] ?? formData.probabilidad,
+                })
+              }
+              min={0}
+              max={100}
+              step={5}
+              aria-label="Probabilidad de cierre"
+            />
+            <span className="w-10 shrink-0 text-right text-sm tabular-nums">
+              {formData.probabilidad}%
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label htmlFor="edit-prioridad">Prioridad</Label>
+          <Select
+            value={formData.prioridad}
+            onValueChange={(valor) => setFormData({ ...formData, prioridad: valor })}
+          >
+            <SelectTrigger id="edit-prioridad">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="baja">Baja</SelectItem>
+              <SelectItem value="media">Media</SelectItem>
+              <SelectItem value="alta">Alta</SelectItem>
+              <SelectItem value="urgente">Urgente</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="edit-cierre">Cierre previsto</Label>
+          <Input
+            id="edit-cierre"
+            type="date"
+            value={formData.fechaEstimadaCierre}
+            onChange={(e) => setFormData({ ...formData, fechaEstimadaCierre: e.target.value })}
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Déjala vacía si todavía no hay fecha.
+          </p>
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-2 pt-2">
+        <Button type="button" variant="outline" onClick={onCancel} disabled={loading}>
+          Cancelar
+        </Button>
+        <Button type="submit" disabled={loading}>
+          {loading ? 'Guardando...' : 'Guardar cambios'}
+        </Button>
+      </div>
+    </form>
   )
 }
 
