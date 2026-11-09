@@ -690,7 +690,9 @@ function RealEstatePropertiesInner() {
             </div>
           ) : (
             <>
-              <div className="overflow-x-auto">
+              {/* Escritorio: tabla. En móvil la tabla ni se pinta: con diez
+                  columnas obligaba a desplazar en horizontal para ver el precio. */}
+              <div className="hidden overflow-x-auto md:block">
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
@@ -879,8 +881,146 @@ function RealEstatePropertiesInner() {
                 </Table>
               </div>
 
+              {/* Móvil: una tarjeta por inmueble, con los datos que en la tabla
+                  quedaban fuera de pantalla y las acciones siempre visibles
+                  (en táctil no hay hover que las revele). */}
+              <ul className="md:hidden">
+                {properties.map((property) => {
+                  const energia = etiquetaClaseEnergetica(property.energyCert);
+                  const tipoEtiqueta = property.propertyType
+                    ? PROPERTY_TYPES.find((t) => t.value === property.propertyType)?.label ||
+                      property.propertyType
+                    : '—';
+                  const abrir = () => router.push(`/dashboard/real-estate/properties?edit=${property.id}`);
+
+                  return (
+                    <li key={property.id} className="border-b last:border-b-0">
+                      <button
+                        type="button"
+                        onClick={abrir}
+                        className="flex w-full items-start gap-3 p-3 text-left transition-colors active:bg-muted/60"
+                      >
+                        <div className="h-20 w-24 flex-shrink-0 overflow-hidden rounded-lg bg-muted">
+                          {Array.isArray(property.media) && property.media.length > 0 ? (
+                            <img
+                              src={(property.media[0] as any)?.url || (property.media[0] as string)}
+                              alt={property.nombre}
+                              className="h-full w-full object-cover"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = 'none';
+                                (e.target as HTMLImageElement).parentElement!.classList.add('flex', 'items-center', 'justify-center');
+                              }}
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center">
+                              <Home className="h-6 w-6 text-muted-foreground/40" />
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="min-w-0 flex-1 space-y-1.5">
+                          <div className="flex items-start gap-1.5">
+                            {property.destacado && (
+                              <Star className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 fill-yellow-500 text-yellow-500" />
+                            )}
+                            <span className="line-clamp-2 font-medium leading-snug">{property.nombre}</span>
+                          </div>
+
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
+                            <span className="truncate">{property.city || property.address || 'Sin ubicación'}</span>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {getStatusBadge(property.status)}
+                            {getOperationBadge(property.operationType)}
+                            <Badge variant="secondary" className="text-xs font-normal">
+                              {tipoEtiqueta}
+                            </Badge>
+                            {energia && (
+                              <span
+                                className="inline-flex min-w-[1.75rem] items-center justify-center rounded px-1.5 py-0.5 text-xs font-bold"
+                                style={{
+                                  backgroundColor: energia.color,
+                                  color: energia.textoOscuro ? '#1f2937' : '#ffffff',
+                                }}
+                                title={`Clase energética ${property.energyCert}`}
+                              >
+                                {energia.texto}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                            <span className="font-semibold text-primary">
+                              {formatearPrecioInmueble(property.precioBase, property.moneda)}
+                            </span>
+                            <span className="flex items-center gap-3 text-xs text-muted-foreground">
+                              {property.bedrooms ? (
+                                <span className="flex items-center gap-1">
+                                  <BedDouble className="h-3.5 w-3.5" />
+                                  {property.bedrooms}
+                                </span>
+                              ) : null}
+                              {property.areaM2 ? (
+                                <span className="flex items-center gap-1">
+                                  <Maximize className="h-3.5 w-3.5" />
+                                  {property.areaM2} m²
+                                </span>
+                              ) : null}
+                            </span>
+                          </div>
+                        </div>
+                      </button>
+
+                      <div className="flex items-center justify-end gap-1 px-2 pb-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9"
+                          title="Ver propietario"
+                          onClick={() => {
+                            setSelectedOwner({ owner: property.owner, name: property.nombre });
+                            setOwnerDialogOpen(true);
+                          }}
+                        >
+                          <User className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9"
+                          title={property.destacado ? 'Quitar destacada' : 'Marcar como destacada'}
+                          onClick={() => handleToggleFeatured(property)}
+                        >
+                          <Star
+                            className={`h-4 w-4 ${
+                              property.destacado ? 'fill-yellow-500 text-yellow-500' : 'text-muted-foreground'
+                            }`}
+                          />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-9 w-9" title="Editar" asChild>
+                          <Link href={`/dashboard/real-estate/properties?edit=${property.id}`}>
+                            <Edit2 className="h-4 w-4" />
+                          </Link>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9 text-destructive"
+                          title="Eliminar"
+                          onClick={() => handleDelete(property)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+
               {/* Pagination info */}
-              <div className="flex items-center justify-between px-6 py-4 border-t">
+              <div className="flex flex-col gap-3 border-t px-4 py-4 md:flex-row md:items-center md:justify-between md:px-6">
                 <p className="text-sm text-muted-foreground">
                   Mostrando {Math.min((pagination.page - 1) * pagination.limit + 1, pagination.total)}–
                   {Math.min(pagination.page * pagination.limit, pagination.total)} de{' '}
