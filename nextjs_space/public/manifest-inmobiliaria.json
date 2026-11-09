@@ -4,7 +4,7 @@
   "description": "Panel inmobiliario de Volkern: propiedades, captaciones y leads desde el movil, con navegacion inferior.",
   "start_url": "/dashboard/real-estate",
   "id": "/dashboard/real-estate",
-  "scope": "/dashboard/real-estate",
+  "scope": "/",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
   "background_color": "#f8fafc",
