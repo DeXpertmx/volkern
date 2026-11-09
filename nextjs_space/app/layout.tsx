@@ -17,6 +17,10 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata = {
   title: 'Volkern | La Infraestructura Soberana para tu Empresa',
   description: 'Unifica Marketing, Ventas y Operaciones con IA propia y datos protegidos.',
+  // Va en los metadatos y no como <link> suelto para que una sección pueda
+  // sustituirlo con el suyo (el módulo inmobiliario lo hace): se resuelve en el
+  // servidor y el navegador lo ve al instalar, sin depender del JavaScript.
+  manifest: '/manifest.json',
   icons: {
     icon: '/volkern-icon.png',
     shortcut: '/volkern-icon.png',
@@ -48,7 +52,6 @@ export default function RootLayout({
   return (
     <html lang="es" suppressHydrationWarning>
       <head>
-        <link rel="manifest" href="/manifest.json" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="Volkern" />
