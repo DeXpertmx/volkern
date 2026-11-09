@@ -40,7 +40,11 @@ const log = (...args: any[]) => {
   }
 }
 
-export function Sidebar() {
+/**
+ * `ocultarBotonMovil` retira el botón de hamburguesa en móvil: lo usa el módulo
+ * inmobiliario, que navega con su propia barra inferior.
+ */
+export function Sidebar({ ocultarBotonMovil = false }: { ocultarBotonMovil?: boolean }) {
   const pathname = usePathname()
   const { data: session } = useSession() || {}
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
@@ -196,10 +200,17 @@ export function Sidebar() {
     return `VOLVER A ${activeHub.name.toUpperCase()}`
   }
 
+  // Al entrar en una pantalla sin hamburguesa, el cajón no puede quedarse abierto
+  // tapando el contenido.
+  useEffect(() => {
+    if (ocultarBotonMovil) setIsMobileMenuOpen(false)
+  }, [ocultarBotonMovil, pathname])
+
   if (!mounted) return null
 
   return (
     <>
+      {!ocultarBotonMovil && (
       <Button
         variant="ghost"
         size="icon"
@@ -233,6 +244,7 @@ export function Sidebar() {
           </span>
         )}
       </Button>
+      )}
 
       {/* Popover de resumen: últimas entregas no entregables (móvil, sin abrir el menú) */}
       {badgePopoverOpen && (

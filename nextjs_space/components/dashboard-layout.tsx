@@ -13,6 +13,7 @@ import { TelegramReminder } from '@/components/dashboard/TelegramReminder'
 import { usePathname } from 'next/navigation'
 import { VolkernGuide } from '@/components/guide/VolkernGuide'
 import ImpersonationBanner from '@/components/admin/ImpersonationBanner'
+import { RealEstateMobileApp, esRutaAppInmobiliaria } from '@/components/real-estate/RealEstateMobileApp'
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -53,6 +54,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const isConnect = pathname === '/dashboard/connect'
   const isLeads = pathname === '/dashboard/leads'
   const isFullscreenRoute = pathname?.includes('/fullscreen')
+  // El módulo inmobiliario en el móvil se comporta como una app: barra inferior
+  // y sin menú de hamburguesa, en vez del panel general con su cajón lateral.
+  const esAppInmobiliaria = esRutaAppInmobiliaria(pathname)
 
   if (!mounted) return null
 
@@ -73,7 +77,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <div className="flex h-screen bg-background overflow-hidden font-sans">
-      {!isMessaging && <Sidebar />}
+      {!isMessaging && <Sidebar ocultarBotonMovil={esAppInmobiliaria} />}
       <main className={cn(
         "flex-1 flex flex-col min-w-0 transition-all duration-300 relative bg-slate-50/50 dark:bg-slate-950",
         isMessaging ? "ml-0" : (isCollapsed ? "md:ml-24" : "md:ml-72")
@@ -88,11 +92,16 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           {pathname === '/dashboard' && <TelegramReminder />}
           <div className={cn(
             "animate-in fade-in duration-700 h-full",
-            (isPipeline || isMessaging || isConnect) ? "w-full min-h-full" : isLeads ? "w-full min-h-full p-6" : "container mx-auto p-6 max-w-7xl"
+            esAppInmobiliaria
+              // En móvil las pantallas del módulo ya traen su propio padding: el
+              // contenedor solo reserva el hueco de la barra inferior.
+              ? "container mx-auto max-w-7xl pb-28 md:p-6 md:pb-6"
+              : (isPipeline || isMessaging || isConnect) ? "w-full min-h-full" : isLeads ? "w-full min-h-full p-6" : "container mx-auto p-6 max-w-7xl"
           )}>
             {children}
           </div>
         </div>
+        {esAppInmobiliaria && <RealEstateMobileApp />}
         <PushPrompt />
         <IncomingCallPopup />
         <VolkernGuide />

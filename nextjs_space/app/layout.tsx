@@ -29,6 +29,9 @@ export const viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  // Las barras de app (módulo inmobiliario) llegan hasta el borde inferior: sin
+  // esto, iOS las tapa con la barra de gestos.
+  viewportFit: 'cover' as const,
   themeColor: '#0f1d46',
   appleWebApp: {
     capable: true,

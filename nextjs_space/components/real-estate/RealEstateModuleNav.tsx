@@ -8,6 +8,9 @@
  * inmuebles, captaciones) quedaban sin forma de alcanzarse entre ellas. Esta
  * tira de pestañas es el hub que faltaba, y por eso se pinta en todas las
  * pantallas del módulo en vez de duplicar enlaces sueltos en cada una.
+ *
+ * En el móvil no se pinta: allí la navegación del módulo es la barra inferior
+ * del app (`RealEstateMobileApp`) y dos menús apilados sobran.
  */
 
 import Link from 'next/link';
@@ -36,7 +39,7 @@ export function RealEstateModuleNav() {
   return (
     <nav
       aria-label="Secciones del panel inmobiliario"
-      className="flex items-center gap-1 overflow-x-auto border-b"
+      className="hidden items-center gap-1 overflow-x-auto border-b md:flex"
     >
       {SECCIONES.map((seccion) => {
         const activa = seccion.exacto

@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
+import { usePathname } from 'next/navigation';
+import { esRutaAppInmobiliaria } from '@/components/real-estate/RealEstateMobileApp';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -24,6 +26,7 @@ interface NotificationConfigData {
 
 export function PushNotificationInit() {
   const { data: session } = useSession();
+  const pathname = usePathname();
   const initRef = useRef(false);
   const [permission, setPermission] = useState<NotificationPermission>('default');
   const [showConfigModal, setShowConfigModal] = useState(false);
@@ -35,6 +38,11 @@ export function PushNotificationInit() {
   const [briefingListo, setBriefingListo] = useState(false);
 
   const isPublicPage = !session?.user;
+
+  // El app inmobiliario móvil navega con una barra de pestañas abajo: este aviso
+  // flotante vive por encima de ella. Con el permiso denegado, el cartel tapaba
+  // la barra y los toques a «Más» no llegaban.
+  const posicionAviso = esRutaAppInmobiliaria(pathname) ? 'bottom-24' : 'bottom-4';
 
   useEffect(() => {
     const sincronizar = () => setBriefingListo(!briefingPendienteHoy());
@@ -183,7 +191,7 @@ export function PushNotificationInit() {
 
   if (permission === 'denied') {
     return (
-      <div className="fixed bottom-4 right-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded shadow-lg z-50 max-w-sm">
+      <div className={`fixed ${posicionAviso} right-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded shadow-lg z-50 max-w-sm`}>
         <p className="font-bold">Notificaciones bloqueadas</p>
         <p className="text-sm">Por favor habilita las notificaciones en la configuración de tu navegador.</p>
       </div>
@@ -199,7 +207,7 @@ export function PushNotificationInit() {
       <>
         <button
           onClick={requestPermission}
-          className="fixed bottom-4 right-4 bg-primary text-white px-4 py-3 rounded-lg shadow-lg z-50 hover:bg-primary/90 transition-colors flex items-center gap-2"
+          className={`fixed ${posicionAviso} right-4 bg-primary text-white px-4 py-3 rounded-lg shadow-lg z-50 hover:bg-primary/90 transition-colors flex items-center gap-2`}
         >
           🔔 Activar notificaciones
         </button>
