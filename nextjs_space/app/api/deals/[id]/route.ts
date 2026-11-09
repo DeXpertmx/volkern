@@ -10,8 +10,9 @@ import { ComplianceGate } from '@/lib/compliance-gate'
 // GET - Obtener deal por ID
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
@@ -28,7 +29,7 @@ export async function GET(
 
     const deal = await prisma.deal.findFirst({
       where: {
-        id: params.id,
+        id: id,
         tenantId: user.tenantId,
       },
       include: {
@@ -122,8 +123,9 @@ export async function GET(
 // PATCH - Actualizar deal
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
@@ -141,7 +143,7 @@ export async function PATCH(
     // Verificar que el deal existe y pertenece al tenant
     const dealActual = await prisma.deal.findFirst({
       where: {
-        id: params.id,
+        id: id,
         tenantId: user.tenantId,
       },
     })
@@ -209,7 +211,7 @@ export async function PATCH(
         tenantId: user.tenantId,
         userId: user.id,
         action: 'pipeline_advance',
-        entityId: params.id,
+        entityId: id,
         entityType: 'deal',
       });
 
@@ -230,7 +232,7 @@ export async function PATCH(
       // Registrar actividad de cambio de etapa
       await prisma.dealActivity.create({
         data: {
-          dealId: params.id,
+          dealId: id,
           tenantId: user.tenantId,
           userId: user.id,
           tipo: 'cambio_etapa',
@@ -250,7 +252,7 @@ export async function PATCH(
           tenantId: user.tenantId,
           userId: user.id,
           action: estado === 'ganado' ? 'deal_close_won' : 'deal_close_lost',
-          entityId: params.id,
+          entityId: id,
           entityType: 'deal',
           metadata: { razonPerdida: body.razonPerdida },
         });
@@ -272,7 +274,7 @@ export async function PATCH(
         // Registrar actividad de cierre
         await prisma.dealActivity.create({
           data: {
-            dealId: params.id,
+            dealId: id,
             tenantId: user.tenantId,
             userId: user.id,
             tipo: 'cierre',
@@ -288,7 +290,7 @@ export async function PATCH(
         try {
           const { PipelineHealthService } = await import('@/lib/sales/pipeline-health-service');
           await PipelineHealthService.marcarDesenlaceEnSnapshots(
-            params.id,
+            id,
             estado as 'ganado' | 'perdido'
           );
         } catch (e: any) {
@@ -305,7 +307,7 @@ export async function PATCH(
 
     // Actualizar el deal
     const deal = await prisma.deal.update({
-      where: { id: params.id },
+      where: { id: id },
       data: dataToUpdate,
       include: {
         lead: true,
@@ -360,8 +362,9 @@ export async function PATCH(
 // DELETE - Eliminar deal
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
@@ -378,7 +381,7 @@ export async function DELETE(
 
     const deal = await prisma.deal.findFirst({
       where: {
-        id: params.id,
+        id: id,
         tenantId: user.tenantId,
       },
     })
@@ -389,7 +392,7 @@ export async function DELETE(
 
     // Eliminar deal (las relaciones en cascade se eliminan automáticamente)
     await prisma.deal.delete({
-      where: { id: params.id },
+      where: { id: id },
     })
 
     // Audit log
@@ -399,7 +402,7 @@ export async function DELETE(
         userId: user.id,
         accion: 'eliminar',
         entidad: 'deal',
-        entidadId: params.id,
+        entidadId: id,
         descripcion: `Usuario ${user.name} eliminó el deal "${deal.titulo}"`,
         cambiosAntes: deal,
       },

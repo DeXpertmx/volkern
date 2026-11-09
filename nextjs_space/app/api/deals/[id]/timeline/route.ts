@@ -24,8 +24,9 @@ export interface TimelineItem {
 // GET - Obtener timeline unificado del deal
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
@@ -43,7 +44,7 @@ export async function GET(
     // Obtener el deal con sus relaciones
     const deal = await prisma.deal.findFirst({
       where: {
-        id: params.id,
+        id: id,
         tenantId: user.tenantId,
       },
       include: {
