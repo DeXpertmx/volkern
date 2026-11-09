@@ -571,26 +571,30 @@ export default function DealDetailPage() {
         </div>
       </div>
 
-      {/* Edición de los datos clave sin salir de la ficha */}
-      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="sm:max-w-[520px]">
-          <DialogHeader>
-            <DialogTitle>Editar deal</DialogTitle>
-            <DialogDescription>
-              Los cambios se guardan en la oportunidad y quedan en el historial.
-            </DialogDescription>
-          </DialogHeader>
-          <EditDealForm
-            deal={deal}
-            onCancel={() => setShowEditDialog(false)}
-            onSaved={() => {
-              setShowEditDialog(false)
-              fetchDeal(true)
-              fetchTimeline()
-            }}
-          />
-        </DialogContent>
-      </Dialog>
+      {/* Edición de los datos clave sin salir de la ficha. Se monta solo cuando
+          está abierto: así el cierre no depende de que la animación de salida
+          llegue a disparar su evento de fin. */}
+      {showEditDialog && (
+        <Dialog open onOpenChange={setShowEditDialog}>
+          <DialogContent className="sm:max-w-[520px]">
+            <DialogHeader>
+              <DialogTitle>Editar deal</DialogTitle>
+              <DialogDescription>
+                Los cambios se guardan en la oportunidad y quedan en el historial.
+              </DialogDescription>
+            </DialogHeader>
+            <EditDealForm
+              deal={deal}
+              onCancel={() => setShowEditDialog(false)}
+              onSaved={() => {
+                setShowEditDialog(false)
+                fetchDeal(true)
+                fetchTimeline()
+              }}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Simulador de Roleplay (puerta de práctica) */}
       {simuladorAbierto && deal.leadId && (
