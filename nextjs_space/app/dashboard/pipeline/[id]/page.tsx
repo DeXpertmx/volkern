@@ -9,7 +9,6 @@ import { apiFetch } from '@/lib/api-client'
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
@@ -33,12 +32,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '@/components/ui/tabs'
+import { Progress } from '@/components/ui/progress'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -52,15 +46,12 @@ import {
   Calendar,
   User,
   Coins,
-  Edit,
   Trash2,
   Plus,
   Phone,
   Mail,
   MessageSquare,
   FileText,
-  Upload,
-  Download,
   Clock,
   TrendingUp,
   CheckCircle2,
@@ -83,6 +74,8 @@ import { GemmaDealCoach } from '@/components/deals/GemmaDealCoach'
 import Link from 'next/link'
 import { formatDistanceToNow, format } from 'date-fns'
 import { es } from 'date-fns/locale'
+import { formatearImporte } from '@/lib/moneda'
+import { useMonedaTenant } from '@/lib/use-moneda-tenant'
 
 interface Deal {
   id: string
@@ -167,6 +160,46 @@ interface TimelineStats {
   totalContratos: number
 }
 
+const ETIQUETAS_PRIORIDAD: Record<string, string> = {
+  urgente: 'Urgente',
+  alta: 'Alta',
+  media: 'Media',
+  baja: 'Baja',
+}
+
+const ETIQUETAS_TIPO: Record<string, string> = {
+  actividad: 'Actividad',
+  cita: 'Cita',
+  tarea: 'Tarea',
+  nota: 'Nota',
+  interaccion: 'Interacción',
+  cotizacion: 'Cotización',
+  contrato: 'Contrato',
+  cambio_etapa: 'Cambio de etapa',
+}
+
+const ETIQUETAS_ESTADO: Record<string, string> = {
+  activo: 'En curso',
+  pendiente: 'Pendiente',
+  completada: 'Completada',
+  cancelada: 'Cancelada',
+  confirmada: 'Confirmada',
+  no_asistio: 'No asistió',
+  borrador: 'Borrador',
+  enviada: 'Enviada',
+  aceptada: 'Aceptada',
+  rechazada: 'Rechazada',
+  ganado: 'Ganado',
+  perdido: 'Perdido',
+  firmado: 'Firmado',
+  vencido: 'Vencido',
+}
+
+/** «1 cita», «3 citas»: los recuentos del historial se leen como frases. */
+function plural(cantidad: number, singular: string, varios: string) {
+  return `${cantidad} ${cantidad === 1 ? singular : varios}`
+}
+
 export default function DealDetailPage() {
   const params = useParams()
   const router = useRouter()
@@ -178,6 +211,13 @@ export default function DealDetailPage() {
   const [timelineStats, setTimelineStats] = useState<TimelineStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [timelineFilter, setTimelineFilter] = useState<string>('all')
+  // Nombre y color reales de la etapa: `deal.etapa` guarda el nombre en unos
+  // deals y el id en otros (los creados por API), y la ficha mostraba el id.
+  const [etapaDetalle, setEtapaDetalle] = useState<{
+    nombre: string
+    color: string
+    probabilidad: number
+  } | null>(null)
   
   // Dialogs
   const [showNewActivityDialog, setShowNewActivityDialog] = useState(false)
@@ -202,6 +242,7 @@ export default function DealDetailPage() {
 
       const data = await response.json()
       setDeal(data.deal)
+      setEtapaDetalle(data.etapaDetalle ?? null)
       setPuertaActiva(
         typeof data.deal.tags === 'string' &&
           data.deal.tags.split(',').map((t: string) => t.trim()).includes(ETIQUETA_PUERTA)
@@ -282,13 +323,13 @@ export default function DealDetailPage() {
     }
   }
 
-  const formatCurrency = (value: number, currency: string = 'MXN') => {
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency,
-      minimumFractionDigits: 0,
-    }).format(value)
-  }
+  const monedaTenant = useMonedaTenant()
+
+  // La divisa manda el deal, no una constante: la ficha de un inmueble en euros
+  // salía con formato de pesos. `formatearImporte` es el único módulo que
+  // conoce divisas en la plataforma.
+  const formatCurrency = (value: number, currency?: string) =>
+    formatearImporte(value, currency || deal?.moneda || monedaTenant || 'EUR', 0)
 
   const getPriorityColor = (prioridad: string) => {
     switch (prioridad) {
@@ -389,50 +430,113 @@ export default function DealDetailPage() {
     )
   }
 
+  const contactoNombre = deal.contact?.nombre || deal.lead?.nombre || 'Sin contacto'
+  const contactoEmpresa = deal.company?.nombre || deal.lead?.empresa || null
+  const contactoEmail = deal.contact?.email || deal.lead?.email || null
+  const contactoTelefono = deal.contact?.telefono || deal.lead?.telefono || null
+  const subtituloContacto = [contactoNombre, deal.contact?.cargo, contactoEmpresa]
+    .filter(Boolean)
+    .join(' · ')
+
+  const etapaNombre = etapaDetalle?.nombre
+    || (deal.etapa ? deal.etapa.charAt(0).toUpperCase() + deal.etapa.slice(1) : 'Sin etapa')
+  const etapaColor = etapaDetalle?.color || '#94a3b8'
+
+  const estadoEtiqueta = ETIQUETAS_ESTADO[deal.estado] ?? deal.estado
+  const claseEstado =
+    deal.estado === 'ganado'
+      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+      : deal.estado === 'perdido'
+        ? 'border-destructive/30 bg-destructive/10 text-destructive'
+        : ''
+
+  const cierrePrevisto = deal.fechaEstimadaCierre ? new Date(deal.fechaEstimadaCierre) : null
+  const cierreVencido = Boolean(
+    cierrePrevisto && cierrePrevisto.getTime() < Date.now() && deal.estado === 'activo'
+  )
+
+  // Una tarjeta de detalles vacía solo ocupa sitio: si no hay nada que contar,
+  // no se pinta.
+  const hayDetalles = Boolean(
+    deal.descripcion
+      || deal.origen
+      || deal.tags
+      || deal.notasInternas
+      || (deal.estado === 'perdido' && deal.razonPerdida)
+  )
+
+  // Solo se cuentan los tipos que existen: seis insignias con ceros escondían
+  // la información útil entre ruido.
+  const resumenTimeline = timelineStats
+    ? [
+        timelineStats.totalActividades > 0
+          ? plural(timelineStats.totalActividades, 'actividad', 'actividades')
+          : null,
+        timelineStats.totalCitas > 0
+          ? plural(timelineStats.totalCitas, 'cita', 'citas')
+          : null,
+        timelineStats.totalTareas > 0
+          ? `${timelineStats.tareasCompletadas}/${timelineStats.totalTareas} tareas`
+          : null,
+        timelineStats.totalNotas > 0
+          ? plural(timelineStats.totalNotas, 'nota', 'notas')
+          : null,
+        timelineStats.totalInteracciones > 0
+          ? plural(timelineStats.totalInteracciones, 'interacción', 'interacciones')
+          : null,
+        timelineStats.totalCotizaciones > 0
+          ? plural(timelineStats.totalCotizaciones, 'cotización', 'cotizaciones')
+          : null,
+        timelineStats.totalContratos > 0
+          ? plural(timelineStats.totalContratos, 'contrato', 'contratos')
+          : null,
+      ].filter((texto): texto is string => Boolean(texto))
+    : []
+
   return (
-    <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+    <div className="flex-1 space-y-5 p-4 pt-6 md:p-8">
+      {/* Cabecera: el título no empuja las acciones fuera de la pantalla */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 items-start gap-2 sm:gap-3">
           <Link href="/dashboard/pipeline">
-            <Button variant="ghost" size="icon">
+            <Button variant="ghost" size="icon" className="shrink-0" aria-label="Volver al pipeline">
               <ArrowLeft className="h-5 w-5" />
             </Button>
           </Link>
-          <div>
-            <h2 className="text-3xl font-bold tracking-tight">{deal.titulo}</h2>
-            <p className="text-muted-foreground mt-1">
-              {deal.contact ? (
-                <>
-                  {deal.contact.nombre}
-                  {deal.contact.cargo && ` • ${deal.contact.cargo}`}
-                  {deal.company && ` • ${deal.company.nombre}`}
-                </>
-              ) : deal.lead && (
-                <>
-                  {deal.lead.nombre}
-                  {deal.lead.empresa && ` • ${deal.lead.empresa}`}
-                </>
-              )}
-            </p>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="break-words text-xl font-semibold tracking-tight sm:text-2xl">
+                {deal.titulo}
+              </h1>
+              <Badge variant="outline" className={claseEstado}>
+                {estadoEtiqueta}
+              </Badge>
+            </div>
+            <p className="mt-1 break-words text-sm text-muted-foreground">{subtituloContacto}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+
+        <div className="flex items-center gap-2 pl-11 sm:shrink-0 sm:pl-0">
           {deal.estado === 'activo' && (
             <>
-              <Button onClick={handleMarkAsWon} variant="default">
+              <Button onClick={handleMarkAsWon} size="sm" className="flex-1 sm:flex-none">
                 <CheckCircle2 className="h-4 w-4 mr-2" />
-                Marcar Ganado
+                Ganado
               </Button>
-              <Button onClick={handleMarkAsLost} variant="outline">
+              <Button
+                onClick={handleMarkAsLost}
+                size="sm"
+                variant="outline"
+                className="flex-1 sm:flex-none"
+              >
                 <XCircle className="h-4 w-4 mr-2" />
-                Marcar Perdido
+                Perdido
               </Button>
             </>
           )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" aria-label="Más acciones">
                 <MoreVertical className="h-5 w-5" />
               </Button>
             </DropdownMenuTrigger>
@@ -441,7 +545,7 @@ export default function DealDetailPage() {
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleDeleteDeal} className="text-destructive">
                 <Trash2 className="h-4 w-4 mr-2" />
-                Eliminar
+                Eliminar deal
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -460,7 +564,7 @@ export default function DealDetailPage() {
       {/* PUERTA DE PRÁCTICA (bucle riesgo → roleplay): oportunidad en riesgo
           crítico que exige ensayar con el cliente real antes de contactar. */}
       {puertaActiva && deal.leadId && (
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 rounded-lg border border-amber-500/50 bg-amber-50 dark:bg-amber-950/40 p-4">
+        <div className="flex flex-col items-start gap-3 rounded-lg border border-amber-500/50 bg-amber-50 p-4 dark:bg-amber-950/40 sm:flex-row sm:items-center">
           <GraduationCap className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
           <div className="flex-1">
             <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
@@ -472,157 +576,104 @@ export default function DealDetailPage() {
               con {deal.lead?.nombre ?? 'este cliente'} alcance {PUNTUACION_MINIMA} puntos.
             </p>
           </div>
-          <Button size="sm" onClick={() => setSimuladorAbierto(true)}>
+          <Button size="sm" className="w-full sm:w-auto" onClick={() => setSimuladorAbierto(true)}>
             <GraduationCap className="h-4 w-4 mr-2" />
             Practicar ahora
           </Button>
         </div>
       )}
 
-      {/* Info Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Valor</CardTitle>
-            <Coins className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
+      {/* Resumen: las cuatro cifras que se miran antes de decidir */}
+      <Card>
+        <CardContent className="grid grid-cols-2 gap-x-4 gap-y-5 p-4 sm:p-5 lg:grid-cols-4">
+          <div className="min-w-0 space-y-1">
+            <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+              <Coins className="h-3.5 w-3.5" />
+              Valor
+            </p>
+            <p className="truncate text-xl font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
               {formatCurrency(deal.valor, deal.moneda)}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Valor ponderado: {formatCurrency(deal.valor * deal.probabilidad / 100, deal.moneda)}
             </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Etapa</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold capitalize">{deal.etapa}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Probabilidad: {deal.probabilidad}%
+            <p className="truncate text-xs text-muted-foreground">
+              Ponderado {formatCurrency((deal.valor * deal.probabilidad) / 100, deal.moneda)}
             </p>
-          </CardContent>
-        </Card>
+          </div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Prioridad</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <Badge variant={getPriorityColor(deal.prioridad)} className="text-base">
-              {deal.prioridad}
+          <div className="min-w-0 space-y-1">
+            <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+              <TrendingUp className="h-3.5 w-3.5" />
+              Etapa
+            </p>
+            <p className="flex items-center gap-1.5 text-sm font-medium">
+              <span
+                aria-hidden
+                className="h-2 w-2 shrink-0 rounded-full"
+                style={{ backgroundColor: etapaColor }}
+              />
+              <span className="truncate">{etapaNombre}</span>
+            </p>
+            <Progress value={Math.min(100, Math.max(0, deal.probabilidad))} className="h-1.5" />
+            <p className="text-xs tabular-nums text-muted-foreground">
+              {deal.probabilidad}% de probabilidad
+            </p>
+          </div>
+
+          <div className="min-w-0 space-y-1">
+            <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+              <Clock className="h-3.5 w-3.5" />
+              Prioridad
+            </p>
+            <Badge variant={getPriorityColor(deal.prioridad)}>
+              {ETIQUETAS_PRIORIDAD[deal.prioridad] ?? deal.prioridad}
             </Badge>
-            {deal.fechaEstimadaCierre && (
-              <p className="text-xs text-muted-foreground mt-2">
-                Cierre estimado: {new Date(deal.fechaEstimadaCierre).toLocaleDateString('es-MX')}
-              </p>
-            )}
-          </CardContent>
-        </Card>
+            <p className="text-xs text-muted-foreground">
+              {cierrePrevisto ? (
+                <>
+                  Cierre previsto{' '}
+                  <span className={cierreVencido ? 'font-medium text-destructive' : 'text-foreground'}>
+                    {format(cierrePrevisto, 'd MMM yyyy', { locale: es })}
+                  </span>
+                  {cierreVencido && ' · vencido'}
+                </>
+              ) : (
+                'Sin fecha de cierre'
+              )}
+            </p>
+          </div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Asignado</CardTitle>
-            <User className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-sm font-medium">
+          <div className="min-w-0 space-y-1">
+            <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+              <User className="h-3.5 w-3.5" />
+              Responsable
+            </p>
+            <p className="truncate text-sm font-medium">
               {deal.usuarioAsignado?.name || 'Sin asignar'}
-            </div>
-            {deal.fechaCreacion && (
-              <p className="text-xs text-muted-foreground mt-2">
-                Creado {formatDistanceToNow(new Date(deal.fechaCreacion), { addSuffix: true, locale: es })}
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Creado {formatDistanceToNow(new Date(deal.fechaCreacion), { addSuffix: true, locale: es })}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* Acciones Rápidas */}
+      {/* Acciones rápidas: rejilla de dos columnas en móvil, fila en escritorio */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Acciones Rápidas</CardTitle>
+          <CardTitle className="text-base">Acciones rápidas</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Registra el seguimiento sin salir de la ficha
+          </p>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap gap-2">
-            <Dialog open={showNewNoteDialog} onOpenChange={setShowNewNoteDialog}>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <StickyNote className="h-4 w-4 mr-2" />
-                  Nueva Nota
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Nueva Nota</DialogTitle>
-                  <DialogDescription>Agrega una nota a este deal</DialogDescription>
-                </DialogHeader>
-                <NewNoteForm
-                  leadId={deal.leadId}
-                  dealId={deal.id}
-                  onSuccess={() => {
-                    setShowNewNoteDialog(false)
-                    fetchTimeline()
-                  }}
-                />
-              </DialogContent>
-            </Dialog>
-
-            <Dialog open={showNewTaskDialog} onOpenChange={setShowNewTaskDialog}>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <ListTodo className="h-4 w-4 mr-2" />
-                  Nueva Tarea
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Nueva Tarea</DialogTitle>
-                  <DialogDescription>Crea una tarea relacionada a este deal</DialogDescription>
-                </DialogHeader>
-                <NewTaskForm
-                  leadId={deal.leadId}
-                  onSuccess={() => {
-                    setShowNewTaskDialog(false)
-                    fetchTimeline()
-                  }}
-                />
-              </DialogContent>
-            </Dialog>
-
-            <Dialog open={showNewCitaDialog} onOpenChange={setShowNewCitaDialog}>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <CalendarPlus className="h-4 w-4 mr-2" />
-                  Agendar Cita
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Agendar Cita</DialogTitle>
-                  <DialogDescription>Programa una cita con el contacto</DialogDescription>
-                </DialogHeader>
-                <NewCitaForm
-                  leadId={deal.leadId}
-                  onSuccess={() => {
-                    setShowNewCitaDialog(false)
-                    fetchTimeline()
-                  }}
-                />
-              </DialogContent>
-            </Dialog>
-
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
             <Dialog open={showNewActivityDialog} onOpenChange={setShowNewActivityDialog}>
               <DialogTrigger asChild>
-                <Button variant="outline" size="sm">
+                <Button
+                  size="sm"
+                  className="order-first col-span-2 w-full justify-start sm:order-none sm:col-span-1 sm:w-auto"
+                >
                   <Plus className="h-4 w-4 mr-2" />
-                  Registrar Actividad
+                  Registrar actividad
                 </Button>
               </DialogTrigger>
               <DialogContent>
@@ -645,31 +696,102 @@ export default function DealDetailPage() {
               </DialogContent>
             </Dialog>
 
+            <Dialog open={showNewCitaDialog} onOpenChange={setShowNewCitaDialog}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm" className="w-full justify-start sm:w-auto">
+                  <CalendarPlus className="h-4 w-4 mr-2" />
+                  Agendar cita
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Agendar Cita</DialogTitle>
+                  <DialogDescription>Programa una cita con el contacto</DialogDescription>
+                </DialogHeader>
+                <NewCitaForm
+                  leadId={deal.leadId}
+                  onSuccess={() => {
+                    setShowNewCitaDialog(false)
+                    fetchTimeline()
+                  }}
+                />
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={showNewTaskDialog} onOpenChange={setShowNewTaskDialog}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm" className="w-full justify-start sm:w-auto">
+                  <ListTodo className="h-4 w-4 mr-2" />
+                  Nueva tarea
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Nueva Tarea</DialogTitle>
+                  <DialogDescription>Crea una tarea relacionada a este deal</DialogDescription>
+                </DialogHeader>
+                <NewTaskForm
+                  leadId={deal.leadId}
+                  onSuccess={() => {
+                    setShowNewTaskDialog(false)
+                    fetchTimeline()
+                  }}
+                />
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={showNewNoteDialog} onOpenChange={setShowNewNoteDialog}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm" className="w-full justify-start sm:w-auto">
+                  <StickyNote className="h-4 w-4 mr-2" />
+                  Nueva nota
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Nueva Nota</DialogTitle>
+                  <DialogDescription>Agrega una nota a este deal</DialogDescription>
+                </DialogHeader>
+                <NewNoteForm
+                  leadId={deal.leadId}
+                  dealId={deal.id}
+                  onSuccess={() => {
+                    setShowNewNoteDialog(false)
+                    fetchTimeline()
+                  }}
+                />
+              </DialogContent>
+            </Dialog>
+
             <Link href={`/dashboard/cotizaciones/nueva?dealId=${deal.id}`}>
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" className="w-full justify-start sm:w-auto">
                 <FileText className="h-4 w-4 mr-2" />
-                Nueva Cotización
+                Nueva cotización
               </Button>
             </Link>
           </div>
         </CardContent>
       </Card>
 
-      {/* Main Content - Timeline y Detalles */}
-      <div className="grid gap-6 md:grid-cols-3">
-        {/* Left Column - Timeline */}
-        <div className="md:col-span-2 space-y-4">
+      {/* Contenido: en móvil primero el cliente, después el historial */}
+      <div className="grid gap-5 lg:grid-cols-3">
+        <div className="order-2 space-y-4 lg:order-1 lg:col-span-2">
           <Card>
             <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">Timeline de la Oportunidad</CardTitle>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <CardTitle className="text-base sm:text-lg">Actividad de la oportunidad</CardTitle>
+                  <p className="text-xs text-muted-foreground">
+                    Todo lo que ha pasado en este deal, lo más reciente primero
+                  </p>
+                </div>
                 <Select value={timelineFilter} onValueChange={setTimelineFilter}>
-                  <SelectTrigger className="w-[180px]">
+                  <SelectTrigger className="w-full sm:w-[170px]" aria-label="Filtrar actividad">
                     <Filter className="h-4 w-4 mr-2" />
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="all">Todo</SelectItem>
                     <SelectItem value="actividad">Actividades</SelectItem>
                     <SelectItem value="cita">Citas</SelectItem>
                     <SelectItem value="tarea">Tareas</SelectItem>
@@ -680,111 +802,119 @@ export default function DealDetailPage() {
                   </SelectContent>
                 </Select>
               </div>
-              {timelineStats && (
-                <div className="flex flex-wrap gap-3 mt-3">
-                  <Badge variant="secondary">{timelineStats.totalActividades} actividades</Badge>
-                  <Badge variant="secondary">{timelineStats.totalCitas} citas</Badge>
-                  <Badge variant="secondary">{timelineStats.tareasCompletadas}/{timelineStats.totalTareas} tareas</Badge>
-                  <Badge variant="secondary">{timelineStats.totalNotas} notas</Badge>
-                  <Badge variant="secondary">{timelineStats.totalCotizaciones} cotizaciones</Badge>
-                  <Badge variant="secondary">{timelineStats.totalContratos} contratos</Badge>
-                </div>
+              {resumenTimeline.length > 0 && (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  {resumenTimeline.join(' · ')}
+                </p>
               )}
             </CardHeader>
             <CardContent>
               {filteredTimeline.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Clock className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                  <p>No hay elementos en el timeline</p>
-                  <p className="text-sm">Usa las acciones rápidas para agregar actividades</p>
+                <div className="py-10 text-center text-muted-foreground">
+                  <Clock className="mx-auto mb-3 h-10 w-10 opacity-40" />
+                  <p className="text-sm font-medium">Todavía no hay actividad</p>
+                  <p className="mt-1 text-sm">
+                    Registra la primera llamada, nota o cita con las acciones rápidas.
+                  </p>
                 </div>
               ) : (
                 <div className="relative">
                   {/* Línea vertical del timeline */}
                   <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-border" />
-                  
-                  <div className="space-y-4">
+
+                  <div className="space-y-3">
                     {filteredTimeline.map((item) => (
                       <div key={`${item.tipo}-${item.id}`} className="relative pl-10">
-                        {/* Icono del timeline */}
-                        <div className={`absolute left-0 top-1 h-8 w-8 rounded-full flex items-center justify-center text-white ${getTimelineColor(item)}`}>
+                        <div
+                          className={`absolute left-0 top-0 flex h-8 w-8 items-center justify-center rounded-full text-white ${getTimelineColor(item)}`}
+                        >
                           {getTimelineIcon(item)}
                         </div>
-                        
-                        <Card className="hover:shadow-sm transition-shadow">
-                          <CardContent className="p-4">
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <h4 className="font-semibold text-sm">{item.titulo}</h4>
-                                  <Badge variant="outline" className="text-xs capitalize">
-                                    {item.tipo}
+
+                        <div className="rounded-lg border bg-card p-3 transition-colors hover:bg-muted/40">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <h4 className="break-words text-sm font-medium">{item.titulo}</h4>
+                                <Badge variant="outline" className="text-[10px] font-normal">
+                                  {ETIQUETAS_TIPO[item.tipo] ?? item.tipo}
+                                </Badge>
+                                {item.estado && (
+                                  <Badge
+                                    variant={item.estado === 'completada' ? 'default' : 'secondary'}
+                                    className="text-[10px] font-normal"
+                                  >
+                                    {ETIQUETAS_ESTADO[item.estado] ?? item.estado.replace(/_/g, ' ')}
                                   </Badge>
-                                  {item.estado && (
-                                    <Badge 
-                                      variant={item.estado === 'completada' ? 'default' : 'secondary'} 
-                                      className="text-xs"
-                                    >
-                                      {item.estado}
-                                    </Badge>
-                                  )}
-                                </div>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                  {format(new Date(item.fecha), "d 'de' MMMM, yyyy 'a las' HH:mm", { locale: es })}
-                                  {item.usuario?.name && ` • ${item.usuario.name}`}
-                                </p>
+                                )}
                               </div>
-                              {item.duracion && (
-                                <span className="text-xs text-muted-foreground">
-                                  {item.duracion} min
+                              <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+                                <span>
+                                  {format(new Date(item.fecha), 'd MMM yyyy, HH:mm', { locale: es })}
+                                </span>
+                                <span className="text-muted-foreground/40">·</span>
+                                <span>
+                                  {formatDistanceToNow(new Date(item.fecha), {
+                                    addSuffix: true,
+                                    locale: es,
+                                  })}
+                                </span>
+                                {item.usuario?.name && (
+                                  <>
+                                    <span className="text-muted-foreground/40">·</span>
+                                    <span>{item.usuario.name}</span>
+                                  </>
+                                )}
+                              </p>
+                            </div>
+                            {item.duracion ? (
+                              <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                                {item.duracion} min
+                              </span>
+                            ) : null}
+                          </div>
+
+                          {item.descripcion && (
+                            <p className="mt-2 line-clamp-3 text-sm text-muted-foreground">
+                              {item.descripcion}
+                            </p>
+                          )}
+
+                          {/* Metadata específica por tipo */}
+                          {item.tipo === 'cita' && item.metadata && (
+                            <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
+                              {item.metadata.ubicacion && (
+                                <span className="flex items-center gap-1">
+                                  <MapPin className="h-3 w-3" />
+                                  {item.metadata.ubicacion}
                                 </span>
                               )}
+                              {item.metadata.linkReunion && (
+                                <a
+                                  href={item.metadata.linkReunion}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1 text-primary hover:underline"
+                                >
+                                  <LinkIcon className="h-3 w-3" />
+                                  Link de reunión
+                                </a>
+                              )}
                             </div>
-                            
-                            {item.descripcion && (
-                              <p className="text-sm mt-2 text-muted-foreground line-clamp-3">
-                                {item.descripcion}
-                              </p>
-                            )}
+                          )}
 
-                            {/* Metadata específica por tipo */}
-                            {item.tipo === 'cita' && item.metadata && (
-                              <div className="flex flex-wrap gap-3 mt-2 text-xs text-muted-foreground">
-                                {item.metadata.ubicacion && (
-                                  <span className="flex items-center gap-1">
-                                    <MapPin className="h-3 w-3" />
-                                    {item.metadata.ubicacion}
-                                  </span>
-                                )}
-                                {item.metadata.linkReunion && (
-                                  <a 
-                                    href={item.metadata.linkReunion} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer"
-                                    className="flex items-center gap-1 text-primary hover:underline"
-                                  >
-                                    <LinkIcon className="h-3 w-3" />
-                                    Link de reunión
-                                  </a>
-                                )}
-                              </div>
-                            )}
+                          {(item.tipo === 'cotizacion' || item.tipo === 'contrato') && item.metadata && (
+                            <p className="mt-2 text-sm font-medium tabular-nums text-emerald-700 dark:text-emerald-400">
+                              {formatCurrency(item.metadata.total || 0, item.metadata.moneda)}
+                            </p>
+                          )}
 
-                            {(item.tipo === 'cotizacion' || item.tipo === 'contrato') && item.metadata && (
-                              <div className="mt-2">
-                                <span className="text-sm font-medium text-green-600">
-                                  {formatCurrency(item.metadata.total || 0, item.metadata.moneda || 'MXN')}
-                                </span>
-                              </div>
-                            )}
-
-                            {item.resultado && (
-                              <Badge variant="outline" className="mt-2 text-xs">
-                                Resultado: {item.resultado}
-                              </Badge>
-                            )}
-                          </CardContent>
-                        </Card>
+                          {item.resultado && (
+                            <Badge variant="outline" className="mt-2 text-xs">
+                              Resultado: {item.resultado.replace(/_/g, ' ')}
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -794,43 +924,58 @@ export default function DealDetailPage() {
           </Card>
         </div>
 
-        {/* Right Column - Info & Links */}
-        <div className="space-y-6">
-          {/* Gemma Deal Coach */}
-          <GemmaDealCoach dealId={deal.id} />
-
+        <aside className="order-1 flex flex-col gap-4 lg:order-2">
           {/* Lead/Contact Info */}
           {(deal.lead || deal.contact) && (
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Información del Contacto</CardTitle>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Contacto</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <Label className="text-xs text-muted-foreground">Nombre</Label>
-                  <p className="font-medium">{deal.contact?.nombre || deal.lead?.nombre}</p>
+              <CardContent className="space-y-1">
+                <div className="flex items-start gap-2 pb-1">
+                  <User className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                  <div className="min-w-0">
+                    <p className="break-words text-sm font-medium">{contactoNombre}</p>
+                    {(deal.contact?.cargo || contactoEmpresa) && (
+                      <p className="break-words text-xs text-muted-foreground">
+                        {[deal.contact?.cargo, contactoEmpresa].filter(Boolean).join(' · ')}
+                      </p>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">Email</Label>
-                  <p className="text-sm">{deal.contact?.email || deal.lead?.email}</p>
-                </div>
-                {(deal.contact?.telefono || deal.lead?.telefono) && (
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Teléfono</Label>
-                    <p className="text-sm">{deal.contact?.telefono || deal.lead?.telefono}</p>
+
+                {contactoEmail && (
+                  <a
+                    href={`mailto:${contactoEmail}`}
+                    className="flex items-center gap-2 rounded-md px-1 py-1.5 text-sm hover:bg-muted hover:text-primary"
+                  >
+                    <Mail className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="truncate">{contactoEmail}</span>
+                  </a>
+                )}
+
+                {contactoTelefono && (
+                  <a
+                    href={`tel:${contactoTelefono.replace(/[^\d+]/g, '')}`}
+                    className="flex items-center gap-2 rounded-md px-1 py-1.5 text-sm tabular-nums hover:bg-muted hover:text-primary"
+                  >
+                    <Phone className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span>{contactoTelefono}</span>
+                  </a>
+                )}
+
+                {contactoEmpresa && (
+                  <div className="flex items-center gap-2 px-1 py-1.5 text-sm">
+                    <Briefcase className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="truncate">{contactoEmpresa}</span>
                   </div>
                 )}
-                {(deal.lead?.empresa || deal.company) && (
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Empresa</Label>
-                    <p className="text-sm">{deal.company?.nombre || deal.lead?.empresa}</p>
-                  </div>
-                )}
+
                 {deal.leadId && (
-                  <Link href={`/dashboard/leads/${deal.leadId}`}>
-                    <Button variant="outline" size="sm" className="w-full mt-2">
+                  <Link href={`/dashboard/leads/${deal.leadId}`} className="block pt-2">
+                    <Button variant="outline" size="sm" className="w-full">
                       <ExternalLink className="h-4 w-4 mr-2" />
-                      Ver Lead Completo
+                      Ver lead completo
                     </Button>
                   </Link>
                 )}
@@ -839,71 +984,84 @@ export default function DealDetailPage() {
           )}
 
           {/* Deal Details */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Detalles del Deal</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {deal.descripcion && (
-                <div>
-                  <Label className="text-xs text-muted-foreground">Descripción</Label>
-                  <p className="text-sm">{deal.descripcion}</p>
-                </div>
-              )}
-              {deal.origen && (
-                <div>
-                  <Label className="text-xs text-muted-foreground">Origen</Label>
-                  <p className="text-sm capitalize">{deal.origen}</p>
-                </div>
-              )}
-              {deal.tags && (
-                <div>
-                  <Label className="text-xs text-muted-foreground">Tags</Label>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {deal.tags.split(',').map((tag, index) => (
-                      <Badge key={index} variant="outline" className="text-xs">
-                        {tag.trim()}
-                      </Badge>
-                    ))}
+          {hayDetalles && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Detalles del deal</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {deal.descripcion && (
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Descripción</Label>
+                    <p className="text-sm">{deal.descripcion}</p>
                   </div>
-                </div>
-              )}
-              {deal.estado === 'perdido' && deal.razonPerdida && (
-                <div>
-                  <Label className="text-xs text-muted-foreground">Razón de Pérdida</Label>
-                  <p className="text-sm">{deal.razonPerdida}</p>
-                </div>
-              )}
-              {deal.notasInternas && (
-                <div>
-                  <Label className="text-xs text-muted-foreground">Notas Internas</Label>
-                  <p className="text-sm">{deal.notasInternas}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                )}
+                {deal.origen && (
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Origen</Label>
+                    <p className="text-sm capitalize">{deal.origen}</p>
+                  </div>
+                )}
+                {deal.tags && (
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Etiquetas</Label>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {deal.tags.split(',').map((tag, index) => (
+                        <Badge key={index} variant="outline" className="text-xs">
+                          {tag.trim()}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {deal.estado === 'perdido' && deal.razonPerdida && (
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Razón de pérdida</Label>
+                    <p className="text-sm">{deal.razonPerdida}</p>
+                  </div>
+                )}
+                {deal.notasInternas && (
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Notas internas</Label>
+                    <p className="text-sm">{deal.notasInternas}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
-          {/* Links Rápidos */}
+          {/* Links rápidos */}
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Acceso Rápido</CardTitle>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Documentos</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               <Link href={`/dashboard/cotizaciones?dealId=${deal.id}`}>
                 <Button variant="ghost" size="sm" className="w-full justify-start">
                   <FileText className="h-4 w-4 mr-2" />
-                  Ver Cotizaciones ({deal._count?.cotizaciones || 0})
+                  Cotizaciones
+                  <span className="ml-auto tabular-nums text-muted-foreground">
+                    {deal._count?.cotizaciones || 0}
+                  </span>
                 </Button>
               </Link>
               <Link href={`/dashboard/contratos?dealId=${deal.id}`}>
                 <Button variant="ghost" size="sm" className="w-full justify-start">
                   <ScrollText className="h-4 w-4 mr-2" />
-                  Ver Contratos ({deal._count?.contratos || 0})
+                  Contratos
+                  <span className="ml-auto tabular-nums text-muted-foreground">
+                    {deal._count?.contratos || 0}
+                  </span>
                 </Button>
               </Link>
             </CardContent>
           </Card>
-        </div>
+
+          {/* En escritorio el coach abre la columna; en móvil va al final */}
+          <div className="order-last lg:order-first">
+            <GemmaDealCoach dealId={deal.id} />
+          </div>
+        </aside>
       </div>
     </div>
   )

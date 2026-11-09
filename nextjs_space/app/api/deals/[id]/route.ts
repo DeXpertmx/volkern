@@ -95,7 +95,21 @@ export async function GET(
       return NextResponse.json({ error: 'Deal no encontrado' }, { status: 404 })
     }
 
-    return NextResponse.json({ deal })
+    // `etapa` guarda el nombre en unos deals y el id de la etapa en otros (los
+    // creados por API). La ficha mostraba el id crudo, así que aquí se resuelve
+    // una sola vez y se devuelve con nombre y color.
+    const camposEtapa = { nombre: true, color: true, probabilidad: true } as const
+    const etapaPorId = await prisma.pipelineStage.findFirst({
+      where: { id: deal.etapa, tenantId: user.tenantId },
+      select: camposEtapa,
+    })
+    const etapaDetalle = etapaPorId ?? await prisma.pipelineStage.findFirst({
+      where: { nombre: deal.etapa, tenantId: user.tenantId },
+      select: camposEtapa,
+      orderBy: { orden: 'asc' },
+    })
+
+    return NextResponse.json({ deal, etapaDetalle })
   } catch (error: any) {
     console.error('Error al obtener deal:', error)
     return NextResponse.json(
