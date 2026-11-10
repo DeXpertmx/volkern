@@ -6,7 +6,7 @@
 
 "use client";
 
-import React, { useState, useEffect, use } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -24,6 +24,8 @@ import {
   TreePine,
   Warehouse,
   Sun,
+  Wind,
+  Flame,
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
@@ -31,6 +33,7 @@ import {
   Heart,
 } from "lucide-react";
 import { PropertyContactForm } from "./PropertyContactForm";
+import { SERVICIOS_TODOS } from "@/lib/real-estate/property-editor-config";
 
 interface PropertyDetailProps {
   propertyId: string;
@@ -41,12 +44,21 @@ interface PropertyDetailProps {
 
 // ─── Feature Badge Helper ──────────────────────────────────────────────────────
 
+/**
+ * Claves reales de `customFieldValues` que guarda el editor inmobiliario.
+ * Coinciden con `buildCustomFieldValues`: `estacionamiento` (no «parking») y
+ * `alberca` (no «piscina»).
+ */
 const FEATURE_ICONS: Record<string, { icon: React.ReactNode; label: string }> = {
   ascensor: { icon: <Home className="w-4 h-4" />, label: "Ascensor" },
-  parking: { icon: <Car className="w-4 h-4" />, label: "Parking" },
-  piscina: { icon: <Waves className="w-4 h-4" />, label: "Piscina" },
+  estacionamiento: { icon: <Car className="w-4 h-4" />, label: "Parking" },
+  alberca: { icon: <Waves className="w-4 h-4" />, label: "Piscina" },
   jardin: { icon: <TreePine className="w-4 h-4" />, label: "Jardín" },
   trastero: { icon: <Warehouse className="w-4 h-4" />, label: "Trastero" },
+  terraza: { icon: <Sun className="w-4 h-4" />, label: "Terraza" },
+  balcon: { icon: <Home className="w-4 h-4" />, label: "Balcón" },
+  aire_acondicionado: { icon: <Wind className="w-4 h-4" />, label: "Aire acondicionado" },
+  calefaccion: { icon: <Flame className="w-4 h-4" />, label: "Calefacción" },
   amueblado: { icon: <Sun className="w-4 h-4" />, label: "Amueblado" },
 };
 
@@ -188,7 +200,25 @@ export const PropertyDetailComponent: React.FC<PropertyDetailProps> = ({
   // El precio se escribe en la divisa del inmueble, no en una fija.
   const formatPrice = (price: number, moneda: string) => formatearImporte(price, moneda, 0);
 
-  const booleans = ["ascensor", "parking", "piscina", "jardin", "trastero", "amueblado"];
+  const booleans = [
+    "ascensor",
+    "estacionamiento",
+    "alberca",
+    "jardin",
+    "trastero",
+    "terraza",
+    "balcon",
+    "aire_acondicionado",
+    "calefaccion",
+    "amueblado",
+  ];
+
+  // Servicios/equipamiento del editor por secciones (`servicios` en JSONB).
+  const servicios = Array.isArray(fields.servicios)
+    ? (fields.servicios as string[])
+        .map((id) => SERVICIOS_TODOS.find((s) => s.id === id)?.label)
+        .filter((label): label is string => Boolean(label))
+    : [];
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
@@ -341,6 +371,26 @@ export const PropertyDetailComponent: React.FC<PropertyDetailProps> = ({
                 </Badge>
               );
             })}
+            {fields.orientacion && (
+              <Badge variant="secondary" className="flex items-center gap-1.5 px-3 py-1.5 text-sm">
+                <MapPin className="w-4 h-4" />
+                {fields.orientacion}
+              </Badge>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Servicios y equipamiento */}
+      {servicios.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-xl font-semibold">Servicios y equipamiento</h2>
+          <div className="flex flex-wrap gap-2">
+            {servicios.map((label) => (
+              <Badge key={label} variant="outline" className="px-3 py-1.5 text-sm">
+                {label}
+              </Badge>
+            ))}
           </div>
         </div>
       )}

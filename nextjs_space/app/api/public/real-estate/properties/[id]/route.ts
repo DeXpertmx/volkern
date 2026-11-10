@@ -82,6 +82,9 @@ export async function GET(
           ...parseInmueble(property),
           media: property.media,
           metadata: property.metadata,
+          // El bloque Puck del detalle lee los campos crudos del editor
+          // (`ascensor`, `alberca`, `servicios`…), no solo los tipados.
+          customFieldValues: property.customFieldValues,
         },
       });
     });

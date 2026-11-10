@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { InmuebleParsed } from '@/lib/real-estate/property-helpers';
 import { formatearPrecioInmueble } from '@/lib/real-estate/operation-labels';
 import { ESCALA_ENERGETICA, esClaseEnTramite } from '@/lib/real-estate/energia';
+import { SERVICIOS_TODOS } from '@/lib/real-estate/property-editor-config';
 
 interface Props {
   property: InmuebleParsed;
@@ -85,8 +86,20 @@ export default function PropertyDetailClient({
 
   const statusInfo = statusLabels[property.status] || statusLabels.disponible;
 
+  // El editor por secciones cuenta los dormitorios en `habitaciones_detalle`
+  // y deja `habitaciones` como respaldo: manda el detalle si existe.
+  const dormitorios = property.bedrooms ?? property.roomsDetail?.dormitorio ?? null;
+
+  // Servicios marcados en el editor, con su rótulo legible.
+  const servicioLabels = (property.servicios || [])
+    .map((id) => SERVICIOS_TODOS.find((s) => s.id === id)?.label)
+    .filter((label): label is string => Boolean(label));
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    // `text-gray-900`: la ficha es un diseño claro, pero cuelga del tema global.
+    // Bajo `.dark` el `foreground` es casi blanco y todo texto sin clase de color
+    // (los valores del resumen) desaparecía sobre las tarjetas blancas.
+    <div className="min-h-screen bg-gray-50 text-gray-900">
       {/* Navigation Bar */}
       <header className="bg-white shadow-sm border-b sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -212,8 +225,8 @@ export default function PropertyDetailClient({
                 {property.builtM2 && (
                   <FeatureCard icon="🏗️" label="Construidos" value={`${property.builtM2} m²`} />
                 )}
-                {property.bedrooms && (
-                  <FeatureCard icon="🛏️" label="Habitaciones" value={`${property.bedrooms}`} />
+                {dormitorios && (
+                  <FeatureCard icon="🛏️" label="Habitaciones" value={`${dormitorios}`} />
                 )}
                 {property.bathrooms && (
                   <FeatureCard icon="🚿" label="Baños" value={`${property.bathrooms}`} />
@@ -229,12 +242,33 @@ export default function PropertyDetailClient({
                 {property.hasPool && <FeatureCard icon="🏊" label="Alberca" value="Sí" />}
                 {property.hasGarden && <FeatureCard icon="🌳" label="Jardín" value="Sí" />}
                 {property.hasStorageRoom && <FeatureCard icon="📦" label="Trastero" value="Sí" />}
+                {property.hasTerrace && <FeatureCard icon="🌤️" label="Terraza" value="Sí" />}
+                {property.hasBalcony && <FeatureCard icon="🪟" label="Balcón" value="Sí" />}
+                {property.hasAirConditioning && <FeatureCard icon="❄️" label="Aire acondicionado" value="Sí" />}
+                {property.hasHeating && <FeatureCard icon="🔥" label="Calefacción" value="Sí" />}
                 {property.furnished && <FeatureCard icon="🛋️" label="Amueblado" value="Sí" />}
                 {property.orientation && (
                   <FeatureCard icon="🧭" label="Orientación" value={property.orientation} />
                 )}
               </div>
             </div>
+
+            {/* Servicios y equipamiento marcados en el editor */}
+            {servicioLabels.length > 0 && (
+              <div className="bg-white rounded-2xl p-6 shadow-sm">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">Servicios y equipamiento</h2>
+                <div className="flex flex-wrap gap-2">
+                  {servicioLabels.map((label) => (
+                    <span
+                      key={label}
+                      className="rounded-full bg-gray-100 px-3 py-1.5 text-sm text-gray-700"
+                    >
+                      {label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Clasificación energética: letra, índices y escala A–G */}
             {(property.energyCert ||
@@ -497,6 +531,18 @@ export default function PropertyDetailClient({
                   <div className="flex justify-between">
                     <span className="text-gray-500">Baños</span>
                     <span className="font-medium">{property.bathrooms}</span>
+                  </div>
+                )}
+                {property.parking && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Estacionamientos</span>
+                    <span className="font-medium">{property.parking}</span>
+                  </div>
+                )}
+                {property.yearBuilt && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Antigüedad</span>
+                    <span className="font-medium">{property.yearBuilt} años</span>
                   </div>
                 )}
               </div>
