@@ -1872,10 +1872,8 @@ ${CID} .vp-attrib a:hover { color: var(--vp-accent); }
       });
       principal.appendChild(chips);
     }
-    grid.appendChild(principal);
-
-    // Datos y contacto
-    var lateral = el('div', 'vp-detalle-col');
+    // Datos del inmueble y calificación energética en la columna principal,
+    // debajo de las características: el lateral queda solo para el contacto.
     var fichas = el('ul', 'vp-fichas');
     if (propiedad.areaM2) fichas.appendChild(fichaDato('Superficie', propiedad.areaM2 + ' m²'));
     if (propiedad.builtM2) fichas.appendChild(fichaDato('Construidos', propiedad.builtM2 + ' m²'));
@@ -1886,17 +1884,21 @@ ${CID} .vp-attrib a:hover { color: var(--vp-accent); }
     if (propiedad.orientation) fichas.appendChild(fichaDato('Orientación', String(propiedad.orientation)));
     if (propiedad.propertyType) fichas.appendChild(fichaDato('Tipo', etiquetaTipo(propiedad.propertyType)));
     if (fichas.childNodes.length > 0) {
-      lateral.appendChild(el('h4', 'vp-detalle-h', 'Datos del inmueble'));
-      lateral.appendChild(fichas);
+      principal.appendChild(el('h4', 'vp-detalle-h', 'Datos del inmueble'));
+      principal.appendChild(fichas);
     }
 
     // Calificación energética: escala A–G con la clase del inmueble marcada.
     var escala = construirEscalaEnergetica(propiedad);
     if (escala) {
-      lateral.appendChild(el('h4', 'vp-detalle-h', 'Calificación energética'));
-      lateral.appendChild(escala);
+      principal.appendChild(el('h4', 'vp-detalle-h', 'Calificación energética'));
+      principal.appendChild(escala);
     }
 
+    grid.appendChild(principal);
+
+    // Contacto
+    var lateral = el('div', 'vp-detalle-col');
     lateral.appendChild(construirContacto(propiedad));
 
     grid.appendChild(lateral);
