@@ -187,7 +187,10 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
   const companyName = branding.companyName || tenant.nombre;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    // `text-gray-900`: el portal es un diseño claro, pero cuelga del tema global.
+    // Bajo `.dark` el `foreground` es casi blanco y lo que no lleva clase de
+    // color (opciones de los select, texto heredado) desaparecía sobre blanco.
+    <div className="min-h-screen bg-gray-50 text-gray-900">
       {/* Hero Carousel */}
       {heroProperties.length > 0 && (
         <HeroCarousel
@@ -217,7 +220,7 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
                 type="text"
                 name="q"
                 placeholder="Buscar por nombre o descripción..."
-                className="w-full border rounded-lg pl-9 pr-3 py-2 text-sm focus:ring-2 focus:outline-none focus:border-transparent"
+                className="w-full bg-white text-gray-900 border rounded-lg pl-9 pr-3 py-2 text-sm focus:ring-2 focus:outline-none focus:border-transparent"
                 defaultValue={filters.q || ''}
               />
             </div>
@@ -251,7 +254,7 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
               type="text"
               name="ciudad"
               placeholder="Ciudad o zona..."
-              className="border rounded-lg px-3 py-2 text-sm w-36"
+              className="bg-white text-gray-900 border rounded-lg px-3 py-2 text-sm w-36"
               defaultValue={filters.ciudad || ''}
             />
 
@@ -261,7 +264,7 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
               name="minPrecio"
               inputMode="numeric"
               placeholder="Mín"
-              className="border rounded-lg px-3 py-2 text-sm w-24"
+              className="bg-white text-gray-900 border rounded-lg px-3 py-2 text-sm w-24"
               defaultValue={filters.minPrecio || ''}
             />
             <span className="text-gray-400">—</span>
@@ -270,7 +273,7 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
               name="maxPrecio"
               inputMode="numeric"
               placeholder="Máx"
-              className="border rounded-lg px-3 py-2 text-sm w-24"
+              className="bg-white text-gray-900 border rounded-lg px-3 py-2 text-sm w-24"
               defaultValue={filters.maxPrecio || ''}
             />
             </div>
