@@ -108,6 +108,8 @@
   var state = {
     propiedades: [],
     slug: '',
+    // Datos de contacto directo que publica la API para este tenant.
+    whatsapp: null,
     total: 0,
     cargando: true,
     error: '',
@@ -1090,6 +1092,25 @@ ${CID} .vp-portal-link {
   text-align: center;
   text-decoration: underline;
 }
+${CID} .vp-whatsapp {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 11px 14px;
+  border-radius: 10px;
+  background: #0b7a6b;
+  color: #ffffff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.15s ease;
+}
+${CID} .vp-whatsapp:hover { background: #096a5d; }
+${CID} .vp-whatsapp:focus-visible { outline: 2px solid var(--vp-accent); outline-offset: 2px; }
+${CID} .vp-whatsapp svg { width: 18px; height: 18px; flex: 0 0 auto; }
 ${CID} .vp-hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
 ${CID} .vp-contacto [hidden] { display: none !important; }
 ${CID} .vp-skel-detalle { display: grid; gap: 10px; }
@@ -1620,8 +1641,61 @@ ${CID} .vp-attrib a:hover { color: var(--vp-accent); }
 
     bloque.appendChild(form);
     bloque.appendChild(exito);
+
+    // Acceso directo por WhatsApp justo debajo del formulario.
+    var botonWhatsapp = construirBotonWhatsapp(propiedad);
+    if (botonWhatsapp) bloque.appendChild(botonWhatsapp);
+
     bloque.appendChild(enlace);
     return bloque;
+  }
+
+  // ─── Contacto directo por WhatsApp ──────────────────────────────────────
+  // Solo aparece si el negocio tiene un número conectado y no ha apagado el
+  // botón desde su panel; la API pública decide ambos extremos.
+  function iconoWhatsapp() {
+    var NS = 'http://www.w3.org/2000/svg';
+    var nodo = document.createElementNS(NS, 'svg');
+    nodo.setAttribute('viewBox', '0 0 24 24');
+    nodo.setAttribute('fill', 'none');
+    nodo.setAttribute('stroke', 'currentColor');
+    nodo.setAttribute('stroke-width', '1.7');
+    nodo.setAttribute('stroke-linecap', 'round');
+    nodo.setAttribute('stroke-linejoin', 'round');
+    nodo.setAttribute('aria-hidden', 'true');
+    nodo.setAttribute('focusable', 'false');
+
+    var globo = document.createElementNS(NS, 'path');
+    globo.setAttribute(
+      'd',
+      'M20.5 11.6a8.4 8.4 0 0 1-12.4 7.4L3 20.5l1.5-4.9a8.4 8.4 0 1 1 16 0Z'
+    );
+    nodo.appendChild(globo);
+
+    var auricular = document.createElementNS(NS, 'path');
+    auricular.setAttribute(
+      'd',
+      'M8.6 8.3c.2-.5.5-.5.8-.5h.4c.2 0 .4 0 .5.4l.7 1.6c.1.2 0 .4-.1.6l-.5.6c-.1.2-.1.4 0 .6.5.8 1.2 1.4 2 1.8.2.1.4.1.6-.1l.6-.7c.2-.2.3-.2.5-.1l1.5.7c.2.1.3.2.3.4v.5c0 .6-.5 1.1-1.1 1.2-.5.1-1.1 0-1.9-.3-1.6-.6-2.9-1.9-3.5-3.4-.3-.7-.4-1.3-.3-1.9 0-.3.1-.5.2-.6Z'
+    );
+    nodo.appendChild(auricular);
+    return nodo;
+  }
+
+  function construirBotonWhatsapp(propiedad) {
+    var whatsapp = state.whatsapp;
+    if (!whatsapp || !whatsapp.activo || !whatsapp.numero) return null;
+
+    var nombre = propiedad && propiedad.nombre ? propiedad.nombre : 'esta propiedad';
+    var texto = 'Hola, me interesa ' + nombre + '. ¿Sigue disponible?';
+
+    var enlace = el('a', 'vp-whatsapp');
+    enlace.href = 'https://wa.me/' + whatsapp.numero + '?text=' + encodeURIComponent(texto);
+    enlace.target = '_blank';
+    enlace.rel = 'noopener noreferrer';
+    enlace.setAttribute('aria-label', 'Contactar por WhatsApp sobre ' + nombre);
+    enlace.appendChild(iconoWhatsapp());
+    enlace.appendChild(document.createTextNode('Contactar por WhatsApp'));
+    return enlace;
   }
 
   function construirGaleria(propiedad, imagenes) {
@@ -2102,6 +2176,8 @@ ${CID} .vp-attrib a:hover { color: var(--vp-accent); }
         state.propiedades = Array.isArray(datos.properties) ? datos.properties : [];
         state.total = datos && datos.pagination ? datos.pagination.total : state.propiedades.length;
         state.slug = datos && datos.tenant ? datos.tenant.slug || '' : '';
+        state.whatsapp =
+          datos && datos.tenant && datos.tenant.whatsapp ? datos.tenant.whatsapp : null;
         state.cargando = false;
         state.error = '';
       })

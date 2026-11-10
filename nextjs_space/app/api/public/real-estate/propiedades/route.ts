@@ -72,6 +72,42 @@ export const GET = async (req: NextRequest) => {
     );
   }
 
+  // Botón de WhatsApp: se muestra solo si el negocio tiene un número
+  // conectado y no lo ha apagado en su configuración. Si las tablas del
+  // tenant no están accesibles desde el catálogo público, se degrada a
+  // «sin botón» en lugar de romper el listado.
+  let whatsappNumero: string | null = null;
+  let whatsappActivo = false;
+
+  try {
+    const instancia = await prisma.tenantWhatsAppInstance.findUnique({
+      where: { tenantId },
+      select: { phoneNumber: true, status: true },
+    });
+    if (instancia?.status === 'connected' && instancia.phoneNumber) {
+      const digitos = instancia.phoneNumber.replace(/[^\d]/g, '');
+      if (digitos.length >= 8) {
+        whatsappNumero = digitos;
+        whatsappActivo = true;
+      }
+    }
+  } catch (error) {
+    console.warn('[Public Real Estate API] WhatsApp del negocio no disponible:', error);
+  }
+
+  if (whatsappNumero) {
+    try {
+      const ajuste = await prisma.configuracion.findUnique({
+        where: { tenantId_clave: { tenantId, clave: 'widgetWhatsappBoton' } },
+        select: { valor: true },
+      });
+      // Sin ajuste guardado el botón queda activado por defecto.
+      if (ajuste?.valor === 'false') whatsappActivo = false;
+    } catch {
+      // Sin tabla de configuración accesible: se mantiene el valor por defecto.
+    }
+  }
+
   const limite = Math.min(
     parseInt(searchParams.get('limite') || '50', 10),
     100
@@ -158,6 +194,10 @@ export const GET = async (req: NextRequest) => {
           id: tenant.id,
           nombre: tenant.nombre,
           slug: tenant.slug,
+          whatsapp: {
+            activo: whatsappActivo,
+            numero: whatsappNumero,
+          },
         },
         properties,
         pagination: {

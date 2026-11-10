@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
   Card,
@@ -42,7 +42,7 @@ const SCRIPT_ORIGIN = 'https://volkern.app';
  * Versión del widget. Al cambiar el script se sube este número para que los
  * sitios que ya lo tienen embebido no sigan sirviendo la copia cacheada.
  */
-const SCRIPT_VERSION = '8';
+const SCRIPT_VERSION = '9';
 const TITULO_POR_DEFECTO = 'Nuestras propiedades';
 const COLOR_POR_DEFECTO = '#2563eb';
 
@@ -86,6 +86,64 @@ export function EmbedSnippetCard({ tenantId, className }: EmbedSnippetCardProps)
   const [filtros, setFiltros] = useState(true);
   const [copiado, setCopiado] = useState(false);
   const [tab, setTab] = useState<'codigo' | 'vista'>('codigo');
+
+  // Botón de WhatsApp de la ficha: el número sale del «WhatsApp del Negocio»
+  // y el interruptor se guarda en la configuración del tenant, así que también
+  // afecta a los widgets que ya están embebidos en otras webs.
+  const [whatsappNumero, setWhatsappNumero] = useState<string | null>(null);
+  const [whatsappActivo, setWhatsappActivo] = useState(true);
+  const [guardandoWhatsapp, setGuardandoWhatsapp] = useState(false);
+
+  useEffect(() => {
+    if (!tenantId) return;
+    let vigente = true;
+
+    Promise.all([
+      fetch('/api/integraciones/whatsapp-negocio', { cache: 'no-store' }).then((r) =>
+        r.ok ? r.json() : null
+      ),
+      fetch('/api/configuracion', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)),
+    ])
+      .then(([negocio, config]) => {
+        if (!vigente) return;
+        const numero =
+          negocio?.connected && negocio?.instance?.phoneNumber
+            ? String(negocio.instance.phoneNumber)
+            : null;
+        setWhatsappNumero(numero);
+        const ajuste = config?.widgetWhatsappBoton;
+        setWhatsappActivo(
+          ajuste === undefined || ajuste === null ? true : ajuste === true || ajuste === 'true'
+        );
+      })
+      .catch(() => {
+        if (vigente) setWhatsappNumero(null);
+      });
+
+    return () => {
+      vigente = false;
+    };
+  }, [tenantId]);
+
+  const alternarWhatsapp = async (activo: boolean) => {
+    const anterior = whatsappActivo;
+    setWhatsappActivo(activo);
+    setGuardandoWhatsapp(true);
+    try {
+      const res = await fetch('/api/configuracion', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ widgetWhatsappBoton: activo }),
+      });
+      if (!res.ok) throw new Error('No se pudo guardar');
+      toast.success(activo ? 'Botón de WhatsApp activado' : 'Botón de WhatsApp desactivado');
+    } catch {
+      setWhatsappActivo(anterior);
+      toast.error('No se pudo guardar el ajuste');
+    } finally {
+      setGuardandoWhatsapp(false);
+    }
+  };
 
   const listo = Boolean(tenantId);
 
@@ -375,6 +433,24 @@ export function EmbedSnippetCard({ tenantId, className }: EmbedSnippetCardProps)
                 id="embed-ver-todas"
                 checked={verTodas}
                 onCheckedChange={setVerTodas}
+              />
+            </div>
+            <div className="flex items-center justify-between gap-4 border-t pt-3">
+              <div className="space-y-0.5">
+                <Label htmlFor="embed-whatsapp" className="text-sm font-medium">
+                  Botón de WhatsApp en la ficha
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {whatsappNumero
+                    ? `Bajo el formulario, un botón escribe a ${whatsappNumero} con el nombre del inmueble.`
+                    : 'Conecta tu WhatsApp del Negocio para poder activarlo.'}
+                </p>
+              </div>
+              <Switch
+                id="embed-whatsapp"
+                checked={whatsappActivo && Boolean(whatsappNumero)}
+                disabled={!whatsappNumero || guardandoWhatsapp}
+                onCheckedChange={alternarWhatsapp}
               />
             </div>
           </div>
