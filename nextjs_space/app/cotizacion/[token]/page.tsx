@@ -6,12 +6,13 @@ import { getPublicUrl } from '@/lib/s3-public-url'
 import CotizacionPublicView from './CotizacionPublicView'
 
 interface Props {
-  params: { token: string }
+  params: Promise<{ token: string }>
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { token } = await params
   const cotizacion = await prisma.cotizacion.findUnique({
-    where: { tokenPublico: params.token },
+    where: { tokenPublico: token },
     include: { tenant: true }
   })
 
@@ -26,8 +27,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function CotizacionPublicPage({ params }: Props) {
+  const { token } = await params
   const cotizacion = await prisma.cotizacion.findUnique({
-    where: { tokenPublico: params.token },
+    where: { tokenPublico: token },
     include: {
       items: { orderBy: { orden: 'asc' } },
       tenant: {

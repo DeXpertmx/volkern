@@ -4,14 +4,15 @@ import FirmaPortalView from './FirmaPortalView';
 import { resolvePlaceholders } from '@/lib/contratos/placeholders';
 
 interface PageProps {
-  params: { token: string };
+  params: Promise<{ token: string }>;
 }
 
 export const dynamic = 'force-dynamic';
 
 export default async function FirmaPortalPage({ params }: PageProps) {
+  const { token } = await params
   const contrato = await prisma.contrato.findUnique({
-    where: { tokenPublico: params.token },
+    where: { tokenPublico: token },
     include: {
       items: { orderBy: { orden: 'asc' } },
       signatureRequests: { orderBy: { createdAt: 'desc' }, take: 3 },
@@ -95,5 +96,5 @@ export default async function FirmaPortalPage({ params }: PageProps) {
     tenant: c.tenant,
   });
 
-  return <FirmaPortalView contrato={serialize(contrato)} token={params.token} />;
+  return <FirmaPortalView contrato={serialize(contrato)} token={token} />;
 }

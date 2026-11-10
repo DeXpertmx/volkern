@@ -10,7 +10,15 @@ interface EditorPageProps {
   params: { id: string };
 }
 
-export default function EditorPage({ params }: EditorPageProps) {
+import { useResolvedParams } from "@/lib/hooks/useResolvedParams";
+
+export default function EditorPage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = useResolvedParams(params);
+  if (!resolvedParams) return null;
+  return <EditorPageInner params={resolvedParams} />;
+}
+
+function EditorPageInner({ params }: EditorPageProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

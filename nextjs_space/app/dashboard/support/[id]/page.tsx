@@ -23,7 +23,15 @@ import { cn } from '@/lib/utils';
 
 const fetcher = (url: string) => fetch(url).then(res => res.json());
 
-export default function TicketDetailPage({ params }: { params: { id: string } }) {
+import { useResolvedParams } from '@/lib/hooks/useResolvedParams'
+
+export default function SupportTicketPage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = useResolvedParams(params)
+  if (!resolvedParams) return null
+  return <TicketDetailPageInner params={resolvedParams} />
+}
+
+function TicketDetailPageInner({ params }: { params: { id: string } }) {
   const router = useRouter();
   const { data: ticket, mutate } = useSWR(`/api/support/tickets/${params.id}`, fetcher);
   const [note, setNote] = useState('');

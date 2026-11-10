@@ -5,12 +5,13 @@ import { getPublicUrl } from '@/lib/s3-public-url'
 import ContratoPublicView from './ContratoPublicView'
 
 interface PageProps {
-  params: { token: string }
+  params: Promise<{ token: string }>
 }
 
 export default async function ContratoPublicPage({ params }: PageProps) {
+  const { token } = await params
   const contrato = await prisma.contrato.findUnique({
-    where: { tokenPublico: params.token },
+    where: { tokenPublico: token },
     include: {
       items: { orderBy: { orden: 'asc' } },
       tenant: {

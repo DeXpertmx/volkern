@@ -76,7 +76,15 @@ const estadoExecutionBadgeColor: Record<string, string> = {
   error: 'bg-red-500',
 };
 
-export default function CampanaDetallesPage({ params }: { params: { id: string } }) {
+import { useResolvedParams } from '@/lib/hooks/useResolvedParams';
+
+export default function CampanaDetallesPage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = useResolvedParams(params);
+  if (!resolvedParams) return null;
+  return <CampanaDetallesPageInner params={resolvedParams} />;
+}
+
+function CampanaDetallesPageInner({ params }: { params: { id: string } }) {
   const router = useRouter();
   const [campana, setCampana] = useState<CampaignDetails | null>(null);
   const [loading, setLoading] = useState(true);

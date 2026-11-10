@@ -11,7 +11,15 @@ import { ChevronLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 
-export default function EditQuizPage({ params }: { params: { id: string } }) {
+import { useResolvedParams } from '@/lib/hooks/useResolvedParams'
+
+export default function EditQuizPage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = useResolvedParams(params)
+  if (!resolvedParams) return null
+  return <EditQuizPageInner params={resolvedParams} />
+}
+
+function EditQuizPageInner({ params }: { params: { id: string } }) {
   const [quiz, setQuiz] = useState<Quiz | null>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()

@@ -3,9 +3,10 @@ import { AcademyQuiz } from '@/components/academy/AcademyQuiz';
 import { notFound } from 'next/navigation';
 import { ShieldCheck, GraduationCap } from 'lucide-react';
 
-export default async function QuizPage({ params }: { params: { slug: string } }) {
+export default async function QuizPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params
   const course = await prisma.curso.findUnique({
-    where: { urlSlug: params.slug },
+    where: { urlSlug: slug },
     include: {
       modulos: {
         include: {

@@ -9,12 +9,13 @@ import OrdenPublicView from './OrdenPublicView'
 export const dynamic = 'force-dynamic'
 
 interface Props {
-  params: { token: string }
+  params: Promise<{ token: string }>
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { token } = await params
   const orden = await prisma.ordenVenta.findUnique({
-    where: { tokenPublico: params.token },
+    where: { tokenPublico: token },
     include: { tenant: { select: { nombre: true } } }
   })
 
@@ -29,8 +30,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function OrdenPublicPage({ params }: Props) {
+  const { token } = await params
   const orden = await prisma.ordenVenta.findUnique({
-    where: { tokenPublico: params.token },
+    where: { tokenPublico: token },
     include: {
       items: { orderBy: { orden: 'asc' } },
       lead: { select: { id: true, nombre: true, email: true, empresa: true } },

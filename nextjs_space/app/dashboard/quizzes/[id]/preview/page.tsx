@@ -10,7 +10,15 @@ import { toast } from 'sonner'
 import { ChevronLeft, Eye } from 'lucide-react'
 import Link from 'next/link'
 
-export default function PreviewQuizPage({ params }: { params: { id: string } }) {
+import { useResolvedParams } from '@/lib/hooks/useResolvedParams'
+
+export default function PreviewQuizPage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = useResolvedParams(params)
+  if (!resolvedParams) return null
+  return <PreviewQuizPageInner params={resolvedParams} />
+}
+
+function PreviewQuizPageInner({ params }: { params: { id: string } }) {
   const [quiz, setQuiz] = useState<Quiz | null>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()

@@ -22,7 +22,15 @@ import { Badge } from '@/components/ui/badge'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 
-export default function VerifyCertificatePage({ params }: { params: { hash: string } }) {
+import { useResolvedParams } from '@/lib/hooks/useResolvedParams'
+
+export default function VerifyCertificatePageWrapper({ params }: { params: Promise<{ hash: string }> }) {
+  const resolvedParams = useResolvedParams(params)
+  if (!resolvedParams) return null
+  return <VerifyCertificatePage params={resolvedParams} />
+}
+
+function VerifyCertificatePage({ params }: { params: { hash: string } }) {
   const [data, setData] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
