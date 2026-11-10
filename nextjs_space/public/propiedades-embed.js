@@ -943,6 +943,36 @@ ${CID} .vp-chip {
   color: var(--vp-text);
   font-size: 0.78rem;
 }
+${CID} .vp-mapa {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--vp-border);
+  border-radius: 12px;
+  background: var(--vp-surface-2);
+  aspect-ratio: 16 / 9;
+}
+${CID} .vp-mapa iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+${CID} .vp-mapa-pie {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 8px 0 0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--vp-muted);
+}
+${CID} .vp-mapa-pie a {
+  color: var(--vp-accent);
+  font-weight: 600;
+  text-decoration: underline;
+}
 ${CID} .vp-escala-fila {
   display: flex;
   gap: 3px;
@@ -1467,6 +1497,53 @@ ${CID} .vp-attrib a:hover { color: var(--vp-accent); }
     return bloque;
   }
 
+  // ─── Mapa de la ubicación ───────────────────────────────────────────────
+  // OpenStreetMap incrustado: no necesita clave ni librerías y respeta el
+  // ancho del contenedor. Solo se dibuja si el inmueble tiene coordenadas.
+  function construirMapa(propiedad) {
+    var lat = Number(propiedad.lat);
+    var lng = Number(propiedad.lng);
+    if (!isFinite(lat) || !isFinite(lng)) return null;
+    if (lat === 0 && lng === 0) return null;
+
+    // Redondeo a 5 decimales: la resta de flotantes dejaba bbox con
+    // artefactos del tipo -87.09469999999999.
+    var redondear = function (n) { return Number(n.toFixed(5)); };
+    var margen = 0.01;
+    var bbox = [
+      redondear(lng - margen), redondear(lat - margen),
+      redondear(lng + margen), redondear(lat + margen),
+    ].join(',');
+    var punto = redondear(lat) + ',' + redondear(lng);
+
+    var bloque = el('div');
+    var marco = el('div', 'vp-mapa');
+    var mapa = document.createElement('iframe');
+    mapa.setAttribute('title', 'Ubicación de ' + (propiedad.nombre || 'la propiedad'));
+    mapa.setAttribute('loading', 'lazy');
+    mapa.setAttribute('referrerpolicy', 'no-referrer-when-downgrade');
+    mapa.src =
+      'https://www.openstreetmap.org/export/embed.html?bbox=' + bbox +
+      '&layer=mapnik&marker=' + punto;
+    marco.appendChild(mapa);
+    bloque.appendChild(marco);
+
+    var pie = el('p', 'vp-mapa-pie');
+    var lugar = [propiedad.address, propiedad.city].filter(Boolean).join(', ');
+    pie.appendChild(document.createTextNode(lugar || 'Ubicación del inmueble'));
+
+    var enlace = el('a', null, 'Ver en el mapa');
+    enlace.href =
+      'https://www.openstreetmap.org/?mlat=' + redondear(lat) + '&mlon=' + redondear(lng) +
+      '#map=16/' + redondear(lat) + '/' + redondear(lng);
+    enlace.target = '_blank';
+    enlace.rel = 'noopener noreferrer';
+    pie.appendChild(enlace);
+    bloque.appendChild(pie);
+
+    return bloque;
+  }
+
   function fichaDato(etiqueta, valor) {
     var nodo = el('li', 'vp-ficha');
     nodo.appendChild(el('span', null, etiqueta));
@@ -1893,6 +1970,13 @@ ${CID} .vp-attrib a:hover { color: var(--vp-accent); }
     if (escala) {
       principal.appendChild(el('h4', 'vp-detalle-h', 'Calificación energética'));
       principal.appendChild(escala);
+    }
+
+    // Ubicación: mapa con las coordenadas del inmueble, si las tiene.
+    var mapa = construirMapa(propiedad);
+    if (mapa) {
+      principal.appendChild(el('h4', 'vp-detalle-h', 'Ubicación'));
+      principal.appendChild(mapa);
     }
 
     grid.appendChild(principal);
