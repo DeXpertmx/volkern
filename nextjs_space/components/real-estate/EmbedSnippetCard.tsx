@@ -103,13 +103,22 @@ export function EmbedSnippetCard({ tenantId, className }: EmbedSnippetCardProps)
         r.ok ? r.json() : null
       ),
       fetch('/api/configuracion', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)),
+      fetch('/api/canales', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)),
     ])
-      .then(([negocio, config]) => {
+      .then(([negocio, config, canales]) => {
         if (!vigente) return;
-        const numero =
-          negocio?.connected && negocio?.instance?.phoneNumber
-            ? String(negocio.instance.phoneNumber)
-            : null;
+        // Misma regla que la API pública: número de la instancia y, si esa
+        // fila no lo tiene, el del canal de WhatsApp del tenant.
+        const instancia = negocio?.instance ?? null;
+        const delInstancia = instancia?.phoneNumber ? String(instancia.phoneNumber) : null;
+        const usarCanal = !instancia || instancia.status === 'connected';
+        const canalWhatsapp = usarCanal
+          ? (canales?.channels ?? []).find(
+              (c: { type?: string; isActive?: boolean; config?: { phoneNumber?: string } }) =>
+                c?.type === 'whatsapp' && c?.isActive !== false && c?.config?.phoneNumber
+            )
+          : null;
+        const numero = delInstancia || canalWhatsapp?.config?.phoneNumber || null;
         setWhatsappNumero(numero);
         const ajuste = config?.widgetWhatsappBoton;
         setWhatsappActivo(

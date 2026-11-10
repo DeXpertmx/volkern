@@ -72,28 +72,50 @@ export const GET = async (req: NextRequest) => {
     );
   }
 
-  // Botón de WhatsApp: se muestra solo si el negocio tiene un número
-  // conectado y no lo ha apagado en su configuración. Si las tablas del
-  // tenant no están accesibles desde el catálogo público, se degrada a
-  // «sin botón» en lugar de romper el listado.
+  // Botón de WhatsApp: se muestra solo si el negocio tiene un número de
+  // contacto y no lo ha apagado en su configuración. El número sale de la
+  // instancia conectada y, si esa fila aún no lo tiene, del canal de WhatsApp
+  // del tenant (el webhook no siempre llega a persistirlo en la instancia).
+  // Si nada de esto es accesible desde el catálogo, se degrada a «sin botón»
+  // en lugar de romper el listado.
+  const digitar = (valor: unknown): string | null => {
+    const digitos = String(valor ?? '').replace(/\D/g, '');
+    return digitos.length >= 8 ? digitos : null;
+  };
+
   let whatsappNumero: string | null = null;
-  let whatsappActivo = false;
+  let estadoInstancia: string | null = null;
 
   try {
     const instancia = await prisma.tenantWhatsAppInstance.findUnique({
       where: { tenantId },
       select: { phoneNumber: true, status: true },
     });
-    if (instancia?.status === 'connected' && instancia.phoneNumber) {
-      const digitos = instancia.phoneNumber.replace(/[^\d]/g, '');
-      if (digitos.length >= 8) {
-        whatsappNumero = digitos;
-        whatsappActivo = true;
-      }
+    estadoInstancia = instancia?.status ?? null;
+    if (instancia?.status === 'connected') {
+      whatsappNumero = digitar(instancia.phoneNumber);
     }
   } catch (error) {
     console.warn('[Public Real Estate API] WhatsApp del negocio no disponible:', error);
   }
+
+  // Respaldo por el canal: solo si no hay instancia, o si está conectada pero
+  // sin número guardado. Una instancia desconectada no debe ofrecer el botón.
+  if (!whatsappNumero && (estadoInstancia === null || estadoInstancia === 'connected')) {
+    try {
+      const canal = await prisma.channel.findFirst({
+        where: { tenantId, type: 'whatsapp', isActive: true },
+        orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+        select: { config: true },
+      });
+      const config = canal?.config as { phoneNumber?: unknown } | null;
+      whatsappNumero = digitar(config?.phoneNumber);
+    } catch (error) {
+      console.warn('[Public Real Estate API] Canal de WhatsApp no disponible:', error);
+    }
+  }
+
+  let whatsappActivo = Boolean(whatsappNumero);
 
   if (whatsappNumero) {
     try {
