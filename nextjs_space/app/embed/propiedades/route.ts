@@ -92,6 +92,6 @@ export async function GET(request: NextRequest) {
   if (params.get('filtros') === '0') atributos.push('data-filtros="false"');
 
   return documento(
-    `<div id="volkern-propiedades"></div>\n<script src="/propiedades-embed.js?v=7" ${atributos.join(' ')}></script>`
+    `<div id="volkern-propiedades"></div>\n<script src="/propiedades-embed.js?v=8" ${atributos.join(' ')}></script>`
   );
 }

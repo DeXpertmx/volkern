@@ -941,6 +941,34 @@ ${CID} .vp-chip {
   color: var(--vp-text);
   font-size: 0.78rem;
 }
+${CID} .vp-escala-fila {
+  display: flex;
+  gap: 3px;
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+}
+${CID} .vp-escala-letra {
+  flex: 1;
+  padding: 6px 0;
+  border-radius: 5px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-align: center;
+  opacity: 0.5;
+}
+${CID} .vp-escala-letra.vp-escala-activa {
+  opacity: 1;
+  box-shadow: inset 0 0 0 2px var(--vp-text), 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+${CID} .vp-escala-datos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
 ${CID} .vp-detail-cta {
   display: flex;
   flex-direction: column;
@@ -1367,6 +1395,57 @@ ${CID} .vp-attrib a:hover { color: var(--vp-accent); }
     ['hasHeating', 'Calefacción'],
   ];
 
+  var LETRAS_ENERGIA = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+
+  /**
+   * Escala A–G con la clase del inmueble marcada, más sus índices.
+   * La ficha del widget solo enseñaba la letra suelta («C»), que no dice si
+   * eso es bueno o malo: la calificación se lee comparándola con la escala.
+   */
+  function construirEscalaEnergetica(propiedad) {
+    var clase = String(propiedad.energyCert || '').trim().toUpperCase();
+    if (!ENERGIA[clase]) return null;
+
+    var bloque = el('div', 'vp-escala');
+    var fila = el('ul', 'vp-escala-fila');
+    LETRAS_ENERGIA.forEach(function (letra) {
+      var color = ENERGIA[letra];
+      var item = el('li', 'vp-escala-letra', letra);
+      item.style.background = color.fondo;
+      item.style.color = color.texto;
+      if (letra === clase) {
+        item.className += ' vp-escala-activa';
+        item.setAttribute('aria-current', 'true');
+        item.title = 'Clase energética ' + letra;
+      }
+      fila.appendChild(item);
+    });
+    bloque.appendChild(fila);
+
+    var datos = [];
+    if (propiedad.energyCertConsumption != null) {
+      datos.push(['Consumo', propiedad.energyCertConsumption + ' kWh/m²·año']);
+    }
+    if (propiedad.energyCertEmission != null) {
+      datos.push(['Emisiones', propiedad.energyCertEmission + ' kg CO₂/m²·año']);
+    }
+    if (propiedad.energyCertBody) {
+      datos.push(['Organismo', String(propiedad.energyCertBody)]);
+    }
+    if (propiedad.energyCertExpiry) {
+      datos.push(['Válido hasta', String(propiedad.energyCertExpiry)]);
+    }
+    if (datos.length > 0) {
+      var lista = el('ul', 'vp-escala-datos');
+      datos.forEach(function (par) {
+        lista.appendChild(fichaDato(par[0], par[1]));
+      });
+      bloque.appendChild(lista);
+    }
+
+    return bloque;
+  }
+
   function fichaDato(etiqueta, valor) {
     var nodo = el('li', 'vp-ficha');
     nodo.appendChild(el('span', null, etiqueta));
@@ -1730,13 +1809,18 @@ ${CID} .vp-attrib a:hover { color: var(--vp-accent); }
     if (propiedad.bathrooms) fichas.appendChild(fichaDato('Baños', String(propiedad.bathrooms)));
     if (propiedad.parking) fichas.appendChild(fichaDato('Estacionamientos', String(propiedad.parking)));
     if (propiedad.yearBuilt) fichas.appendChild(fichaDato('Antigüedad', propiedad.yearBuilt + ' años'));
+    if (propiedad.orientation) fichas.appendChild(fichaDato('Orientación', String(propiedad.orientation)));
     if (propiedad.propertyType) fichas.appendChild(fichaDato('Tipo', etiquetaTipo(propiedad.propertyType)));
-    if (propiedad.energyCert) {
-      fichas.appendChild(fichaDato('Certificado energético', String(propiedad.energyCert).toUpperCase()));
-    }
     if (fichas.childNodes.length > 0) {
       lateral.appendChild(el('h4', 'vp-detalle-h', 'Datos del inmueble'));
       lateral.appendChild(fichas);
+    }
+
+    // Calificación energética: escala A–G con la clase del inmueble marcada.
+    var escala = construirEscalaEnergetica(propiedad);
+    if (escala) {
+      lateral.appendChild(el('h4', 'vp-detalle-h', 'Calificación energética'));
+      lateral.appendChild(escala);
     }
 
     lateral.appendChild(construirContacto(propiedad));
