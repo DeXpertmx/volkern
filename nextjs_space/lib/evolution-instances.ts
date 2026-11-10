@@ -1322,6 +1322,13 @@ export async function refreshPlatformInstanceStatus(): Promise<{
       }
     }
 
+    // Último recurso: hay despliegues de Evolution que no devuelven el dueño
+    // ni en connectionState ni en fetchProfile; fetchInstances sí lo trae.
+    if (status === 'connected' && !finalInstance.phoneNumber) {
+      const recuperado = await refreshPlatformPhoneNumber()
+      if (recuperado) finalInstance = { ...finalInstance, phoneNumber: recuperado }
+    }
+
     return { success: true, status, instance: finalInstance }
   } catch (error) {
     console.error('Error al verificar estado de la instancia de plataforma:', error)
@@ -1330,6 +1337,103 @@ export async function refreshPlatformInstanceStatus(): Promise<{
       error: error instanceof Error ? error.message : 'Error desconocido',
     }
   }
+}
+
+/** Normaliza un número venido de Evolution (jid, owner o phone). */
+function normalizarNumeroEvolucion(raw: unknown): string | null {
+  const soloDigitos = String(raw ?? '').split('@')[0].replace(/\D/g, '')
+  return soloDigitos.length >= 8 ? soloDigitos : null
+}
+
+/**
+ * Recupera y guarda el número del WhatsApp de la PLATAFORMA cuando la instancia
+ * quedó conectada sin teléfono (el payload de CONNECTION_UPDATE no siempre lo
+ * trae). Prueba connectionState, fetchInstances y fetchProfile, y persiste el
+ * primero que responda para que la ficha del widget pueda usar el número del
+ * sistema cuando el negocio no tenga uno propio.
+ */
+export async function refreshPlatformPhoneNumber(): Promise<string | null> {
+  const { instance } = await getPlatformInstance()
+  if (!instance?.instanceName) return null
+  if (instance.phoneNumber) return instance.phoneNumber
+  if (instance.status !== 'connected') return null
+
+  const instanceName: string = instance.instanceName
+  const headers = { apikey: EVOLUTION_API_KEY }
+  let numero: string | null = null
+  let profileName: string | undefined
+
+  // 1. connectionState: en v2 suele incluir `instance.owner`, `wuid` o `phone`.
+  try {
+    const res = await fetch(`${EVOLUTION_API_URL}/instance/connectionState/${instanceName}`, { headers })
+    if (res.ok) {
+      const data = await res.json()
+      const detalle = data?.instance ?? data
+      numero = normalizarNumeroEvolucion(detalle?.owner ?? detalle?.ownerJid ?? detalle?.wuid ?? detalle?.phone)
+      profileName = detalle?.profileName ?? detalle?.name ?? undefined
+    }
+  } catch (error) {
+    console.warn('⚠️ No se pudo leer el número desde connectionState:', error)
+  }
+
+  // 2. fetchInstances: listado con owner/jid por instancia.
+  if (!numero) {
+    try {
+      const res = await fetch(
+        `${EVOLUTION_API_URL}/instance/fetchInstances?instanceName=${encodeURIComponent(instanceName)}`,
+        { headers }
+      )
+      if (res.ok) {
+        const json = await res.json()
+        const filas: any[] = Array.isArray(json) ? json : [json]
+        for (const fila of filas) {
+          const datos = fila?.instance ?? fila
+          const candidato = normalizarNumeroEvolucion(
+            datos?.owner ?? datos?.ownerJid ?? datos?.wuid ?? datos?.id ?? datos?.phone
+          )
+          if (candidato) {
+            numero = candidato
+            profileName = profileName ?? datos?.profileName ?? datos?.name
+            break
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️ No se pudo leer el número desde fetchInstances:', error)
+    }
+  }
+
+  // 3. fetchProfile con `me` como contacto propietario.
+  if (!numero) {
+    try {
+      const res = await fetch(`${EVOLUTION_API_URL}/chat/fetchProfile/${instanceName}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ number: 'me' }),
+      })
+      if (res.ok) {
+        const profile = await res.json()
+        numero = normalizarNumeroEvolucion(profile?.id ?? profile?.wuid ?? profile?.phone)
+        profileName = profileName ?? profile?.name ?? profile?.notify
+      }
+    } catch (error) {
+      console.warn('⚠️ No se pudo leer el número desde fetchProfile:', error)
+    }
+  }
+
+  if (!numero) return null
+
+  try {
+    await prisma.platformWhatsAppInstance.update({
+      where: { id: PLATFORM_INSTANCE_ROW_ID },
+      data: { phoneNumber: numero, ...(profileName ? { profileName } : {}) },
+    })
+    console.log(`✅ Número del WhatsApp de la plataforma guardado: ${numero.slice(0, 3)}***`)
+  } catch (error) {
+    console.warn('⚠️ No se pudo guardar el número de la plataforma:', error)
+  }
+
+  return numero
 }
 
 /**

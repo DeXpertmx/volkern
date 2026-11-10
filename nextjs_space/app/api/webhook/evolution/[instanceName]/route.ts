@@ -14,6 +14,7 @@ import {
   extractOwnerProfileFromConnection,
   getProfileInfo,
   isMessageKeyRecentlySent,
+  refreshPlatformPhoneNumber,
   verifyEvolutionWebhookToken
 } from '@/lib/evolution-instances';
 import { isChatRateLimited } from '@/lib/telegram/chat-rate-limit';
@@ -188,6 +189,14 @@ export async function POST(
           if (profile.profileName) pData.profileName = profile.profileName;
           if (profile.profilePicUrl) pData.profilePicUrl = profile.profilePicUrl;
           await prisma.platformWhatsAppInstance.update({ where: { id: platformInstance.id }, data: pData });
+          // El payload de conexión no siempre trae el número: se consulta a
+          // Evolution y se guarda, para que la ficha pueda ofrecerlo como
+          // número del sistema cuando el negocio no tenga uno propio.
+          if (!pData.phoneNumber) {
+            await refreshPlatformPhoneNumber().catch((err) =>
+              console.warn('⚠️ No se pudo recuperar el número de la plataforma:', err)
+            );
+          }
           console.log('✅ WhatsApp oficial de la plataforma conectado:', platformInstance.instanceName);
         } else if (pState === 'connecting') {
           pStatus = 'connecting';

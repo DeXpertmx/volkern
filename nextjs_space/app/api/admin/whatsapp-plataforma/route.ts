@@ -15,6 +15,7 @@ import {
   createPlatformInstance,
   deletePlatformInstance,
   getPlatformInstance,
+  refreshPlatformPhoneNumber,
   PLATFORM_INSTANCE_ROW_ID,
 } from '@/lib/evolution-instances';
 
@@ -41,6 +42,13 @@ export async function GET() {
     if (denied) return denied;
 
     const { instance, error } = await getPlatformInstance();
+
+    // Auto-reparación: si la instancia está conectada pero perdió el número
+    // (o se conectó con un payload sin dueño), se recupera al abrir el panel.
+    if (instance && instance.status === 'connected' && !instance.phoneNumber) {
+      const recuperado = await refreshPlatformPhoneNumber().catch(() => null);
+      if (recuperado) instance.phoneNumber = recuperado;
+    }
 
     if (!instance) {
       return NextResponse.json({
