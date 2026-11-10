@@ -91,6 +91,9 @@ export function EmbedSnippetCard({ tenantId, className }: EmbedSnippetCardProps)
   // y el interruptor se guarda en la configuración del tenant, así que también
   // afecta a los widgets que ya están embebidos en otras webs.
   const [whatsappNumero, setWhatsappNumero] = useState<string | null>(null);
+  // Quién opera el botón: el número del negocio o el del sistema. Solo cambia
+  // el texto; el interruptor funciona igual en ambos casos.
+  const [whatsappOrigen, setWhatsappOrigen] = useState<'empresa' | 'sistema' | null>(null);
   const [whatsappActivo, setWhatsappActivo] = useState(true);
   const [guardandoWhatsapp, setGuardandoWhatsapp] = useState(false);
 
@@ -103,30 +106,26 @@ export function EmbedSnippetCard({ tenantId, className }: EmbedSnippetCardProps)
         r.ok ? r.json() : null
       ),
       fetch('/api/configuracion', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)),
-      fetch('/api/canales', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)),
     ])
-      .then(([negocio, config, canales]) => {
+      .then(([negocio, config]) => {
         if (!vigente) return;
-        // Misma regla que la API pública: número de la instancia y, si esa
-        // fila no lo tiene, el del canal de WhatsApp del tenant.
-        const instancia = negocio?.instance ?? null;
-        const delInstancia = instancia?.phoneNumber ? String(instancia.phoneNumber) : null;
-        const usarCanal = !instancia || instancia.status === 'connected';
-        const canalWhatsapp = usarCanal
-          ? (canales?.channels ?? []).find(
-              (c: { type?: string; isActive?: boolean; config?: { phoneNumber?: string } }) =>
-                c?.type === 'whatsapp' && c?.isActive !== false && c?.config?.phoneNumber
-            )
-          : null;
-        const numero = delInstancia || canalWhatsapp?.config?.phoneNumber || null;
-        setWhatsappNumero(numero);
+        // El servidor ya resolvió qué número opera (negocio o sistema); aquí
+        // solo se muestra cuál es para poder encender o apagar el botón.
+        const widget = negocio?.widget ?? null;
+        setWhatsappNumero(widget?.numero ? String(widget.numero) : null);
+        setWhatsappOrigen(
+          widget?.origen === 'empresa' || widget?.origen === 'sistema' ? widget.origen : null
+        );
         const ajuste = config?.widgetWhatsappBoton;
         setWhatsappActivo(
           ajuste === undefined || ajuste === null ? true : ajuste === true || ajuste === 'true'
         );
       })
       .catch(() => {
-        if (vigente) setWhatsappNumero(null);
+        if (vigente) {
+          setWhatsappNumero(null);
+          setWhatsappOrigen(null);
+        }
       });
 
     return () => {
@@ -451,13 +450,17 @@ export function EmbedSnippetCard({ tenantId, className }: EmbedSnippetCardProps)
                 </Label>
                 <p className="text-xs text-muted-foreground">
                   {whatsappNumero
-                    ? `Bajo el formulario, un botón escribe a ${whatsappNumero} con el nombre del inmueble.`
-                    : 'Conecta tu WhatsApp del Negocio para poder activarlo.'}
+                    ? `Bajo el formulario, un botón escribe a ${whatsappNumero} con el nombre del inmueble.${
+                        whatsappOrigen === 'sistema'
+                          ? ' Es el número de Volkern, porque tu negocio aún no tiene uno propio conectado.'
+                          : ''
+                      }`
+                    : 'Cuando haya un número del negocio o de Volkern disponible podrás activarlo.'}
                 </p>
               </div>
               <Switch
                 id="embed-whatsapp"
-                checked={whatsappActivo && Boolean(whatsappNumero)}
+                checked={whatsappActivo}
                 disabled={!whatsappNumero || guardandoWhatsapp}
                 onCheckedChange={alternarWhatsapp}
               />

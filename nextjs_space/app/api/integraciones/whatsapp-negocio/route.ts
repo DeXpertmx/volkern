@@ -8,6 +8,7 @@ import {
   createTenantInstance,
   deleteTenantInstance,
 } from '@/lib/evolution-instances';
+import { resolverWhatsAppWidget } from '@/lib/real-estate/whatsapp-widget';
 
 /**
  * GET - Obtener la instancia de WhatsApp del NEGOCIO (tenant).
@@ -30,6 +31,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Usuario sin tenant' }, { status: 400 });
     }
 
+    // Número que atendería el botón de la ficha del widget: el del negocio o,
+    // si no tiene uno configurado, el del sistema. El panel solo necesita
+    // saber cuál es para mostrarlo y permitir encender o apagar el botón.
+    const widget = await resolverWhatsAppWidget(user.tenantId);
+
     const instance = await prisma.tenantWhatsAppInstance.findUnique({
       where: { tenantId: user.tenantId },
       select: {
@@ -51,7 +57,8 @@ export async function GET(request: NextRequest) {
     if (!instance) {
       return NextResponse.json({
         connected: false,
-        message: 'El negocio no tiene un WhatsApp conectado'
+        message: 'El negocio no tiene un WhatsApp conectado',
+        widget,
       });
     }
 
@@ -65,7 +72,8 @@ export async function GET(request: NextRequest) {
       instance: {
         ...instance,
         qrExpired
-      }
+      },
+      widget,
     });
   } catch (error) {
     console.error('Error al obtener WhatsApp del negocio:', error);
