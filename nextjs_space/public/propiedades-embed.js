@@ -930,7 +930,7 @@ ${CID} .vp-detail-head {
 }
 ${CID} .vp-detail-title {
   margin: 0 0 6px;
-  font-size: clamp(1.15rem, 2vw, 1.5rem);
+  font-size: clamp(1.3rem, 1.05rem + 1vw, 1.65rem);
   font-weight: 800;
   letter-spacing: -0.01em;
   line-height: 1.25;
@@ -964,7 +964,7 @@ ${CID} .vp-detail-precio-fila {
 }
 ${CID} .vp-detail-precio { text-align: left; }
 ${CID} .vp-detail-precio .vp-price {
-  font-size: clamp(1.6rem, 3.4vw, 2.1rem);
+  font-size: clamp(1.55rem, 1.15rem + 1.6vw, 2.25rem);
   color: var(--vp-accent);
 }
 ${CID} .vp-detail-tipo { font-size: 0.8rem; color: var(--vp-muted); text-transform: capitalize; }
@@ -986,7 +986,7 @@ ${CID} .vp-card-sec {
 }
 ${CID} .vp-features {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
   gap: 10px;
   margin: 0;
   padding: 0;
@@ -1005,6 +1005,18 @@ ${CID} .vp-feature-ico { flex: none; font-size: 1.15rem; line-height: 1; }
 ${CID} .vp-feature-txt { display: flex; flex-direction: column; min-width: 0; }
 ${CID} .vp-feature-label { font-size: 0.7rem; color: var(--vp-muted); }
 ${CID} .vp-feature-value { font-size: 0.86rem; font-weight: 700; color: var(--vp-text); }
+/* La calculadora es una sección más: su panel no repite tarjeta al colgar de una */
+${CID} .vp-card-sec > .vp-hipoteca .vp-hipo {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+@media (max-width: 520px) {
+  ${CID} .vp-detail-head { padding: 16px; }
+  ${CID} .vp-card-sec { padding: 14px 16px; }
+}
 ${CID} .vp-badges-detalle {
   display: flex;
   flex-wrap: wrap;
@@ -2578,7 +2590,13 @@ ${CID} .vp-hipo-aviso {
     // vio fotos, datos y mapa, y en el móvil deja de empujar el contenido hacia
     // abajo antes de que haya leído nada.
     var calculadora = construirCalculadoraHipotecaria(propiedad);
-    if (calculadora) raiz.appendChild(calculadora);
+    if (calculadora) {
+      // Va en la misma tarjeta que el resto de secciones; el panel de dentro
+      // deja de dibujar la suya para no encajonar una tarjeta en otra.
+      var seccionCalc = el('section', 'vp-card-sec');
+      seccionCalc.appendChild(calculadora);
+      raiz.appendChild(seccionCalc);
+    }
 
     raiz.appendChild(construirAtribucion());
 
