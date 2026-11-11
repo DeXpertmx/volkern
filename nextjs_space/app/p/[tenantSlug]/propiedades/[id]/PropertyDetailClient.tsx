@@ -216,15 +216,6 @@ export default function PropertyDetailClient({
               )}
             </div>
 
-            {/* Calculadora hipotecaria: solo tiene sentido en venta y con precio */}
-            {property.operationType === 'venta' && property.precioBase > 0 && (
-              <CalculadoraHipotecaria
-                precioInicial={property.precioBase}
-                moneda={property.moneda || tenant.moneda}
-                color={brandingColor}
-              />
-            )}
-
             {/* Key Features */}
             <div className="bg-white rounded-2xl p-6 shadow-sm">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Características</h2>
@@ -559,6 +550,19 @@ export default function PropertyDetailClient({
             </div>
           </div>
         </div>
+
+        {/* Calculadora hipotecaria al final: en venta y con precio, después de
+            los datos y el mapa, que es cuando el visitante ya decidió si le
+            interesa el inmueble. */}
+        {property.operationType === 'venta' && property.precioBase > 0 && (
+          <div className="mt-8">
+            <CalculadoraHipotecaria
+              precioInicial={property.precioBase}
+              moneda={property.moneda || tenant.moneda}
+              color={brandingColor}
+            />
+          </div>
+        )}
 
         {/* Related Properties */}
         {relatedProperties.length > 0 && (

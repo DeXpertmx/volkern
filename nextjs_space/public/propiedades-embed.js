@@ -2383,10 +2383,6 @@ ${CID} .vp-hipo-aviso {
     var grid = el('div', 'vp-detalle-grid');
     var principal = el('div', 'vp-detalle-col');
 
-    // La calculadora abre la columna principal: quien mira un inmueble en venta
-    // pregunta por la cuota antes que por los metros.
-    var calculadora = construirCalculadoraHipotecaria(propiedad);
-    if (calculadora) principal.appendChild(calculadora);
     var texto = String(propiedad.longDescription || propiedad.descripcion || '').trim();
     if (texto) {
       var bloqueDesc = el('div', 'vp-desc');
@@ -2462,6 +2458,13 @@ ${CID} .vp-hipo-aviso {
 
     grid.appendChild(lateral);
     raiz.appendChild(grid);
+
+    // La calculadora cierra la ficha, no la abre: llegados aquí el visitante ya
+    // vio fotos, datos y mapa, y en el móvil deja de empujar el contenido hacia
+    // abajo antes de que haya leído nada.
+    var calculadora = construirCalculadoraHipotecaria(propiedad);
+    if (calculadora) raiz.appendChild(calculadora);
+
     raiz.appendChild(construirAtribucion());
 
     return raiz;
