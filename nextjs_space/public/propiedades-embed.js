@@ -937,6 +937,74 @@ ${CID} .vp-detail-title {
 }
 ${CID} .vp-detail-precio { text-align: right; }
 ${CID} .vp-detail-precio .vp-price { font-size: 1.5rem; }
+
+/* Cabecera y secciones en tarjetas blancas, como la ficha del portal */
+${CID} .vp-detail-head {
+  padding: 20px 22px;
+  border: 1px solid var(--vp-border);
+  border-radius: 14px;
+  background: var(--vp-surface);
+  box-shadow: var(--vp-shadow);
+}
+${CID} .vp-detail-info {
+  display: flex;
+  flex: 1 1 260px;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+${CID} .vp-detail-info .vp-loc { margin: 0; }
+${CID} .vp-detail-precio-fila {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 14px;
+}
+${CID} .vp-detail-precio { text-align: left; }
+${CID} .vp-detail-precio .vp-price {
+  font-size: clamp(1.6rem, 3.4vw, 2.1rem);
+  color: var(--vp-accent);
+}
+${CID} .vp-detail-tipo { font-size: 0.8rem; color: var(--vp-muted); text-transform: capitalize; }
+${CID} .vp-detail-resumen {
+  margin: 12px 0 0;
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: var(--vp-muted);
+}
+${CID} .vp-card-sec {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 20px;
+  border: 1px solid var(--vp-border);
+  border-radius: 14px;
+  background: var(--vp-surface);
+  box-shadow: var(--vp-shadow);
+}
+${CID} .vp-features {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+${CID} .vp-feature {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--vp-surface-2);
+}
+${CID} .vp-feature-ico { flex: none; font-size: 1.15rem; line-height: 1; }
+${CID} .vp-feature-txt { display: flex; flex-direction: column; min-width: 0; }
+${CID} .vp-feature-label { font-size: 0.7rem; color: var(--vp-muted); }
+${CID} .vp-feature-value { font-size: 0.86rem; font-weight: 700; color: var(--vp-text); }
 ${CID} .vp-badges-detalle {
   display: flex;
   flex-wrap: wrap;
@@ -2329,9 +2397,12 @@ ${CID} .vp-hipo-aviso {
       raiz.appendChild(construirGaleria(propiedad, imagenes));
     }
 
-    // Cabecera: título, ubicación, insignias y precio.
+    // Cabecera en tarjeta, con la jerarquía de la ficha del portal: título,
+    // ubicación, precio grande en color de marca con el tipo a la derecha y el
+    // resumen debajo. Antes era texto suelto sobre el fondo y no se leía como
+    // una ficha.
     var cabecera = el('div', 'vp-detail-head');
-    var bloqueTitulo = el('div');
+    var bloqueTitulo = el('div', 'vp-detail-info');
     bloqueTitulo.appendChild(el('h3', 'vp-detail-title', propiedad.nombre || 'Propiedad'));
 
     var ubicacion = textoUbicacion(propiedad);
@@ -2357,8 +2428,8 @@ ${CID} .vp-hipo-aviso {
       insignias.appendChild(el('li', 'vp-chip', 'Destacada'));
     }
     if (insignias.childNodes.length > 0) bloqueTitulo.appendChild(insignias);
-    cabecera.appendChild(bloqueTitulo);
 
+    var filaPrecio = el('div', 'vp-detail-precio-fila');
     var bloquePrecio = el('div', 'vp-detail-precio');
     var precio = el('p', 'vp-price', importe(propiedad.precioBase, CONFIG.moneda || propiedad.moneda));
     var sufijo = sufijoPrecio(propiedad.operationType);
@@ -2376,14 +2447,23 @@ ${CID} .vp-hipo-aviso {
         el('p', 'vp-m2', importe(propiedad.precioBase / propiedad.areaM2, CONFIG.moneda || propiedad.moneda) + ' /m²')
       );
     }
-    cabecera.appendChild(bloquePrecio);
+    filaPrecio.appendChild(bloquePrecio);
+    if (propiedad.propertyType) {
+      filaPrecio.appendChild(el('span', 'vp-detail-tipo', etiquetaTipo(propiedad.propertyType)));
+    }
+    bloqueTitulo.appendChild(filaPrecio);
+
+    var resumen = String(propiedad.descripcion || '').trim();
+    if (resumen) bloqueTitulo.appendChild(el('p', 'vp-detail-resumen', resumen));
+
+    cabecera.appendChild(bloqueTitulo);
     raiz.appendChild(cabecera);
 
     // Descripción
     var grid = el('div', 'vp-detalle-grid');
     var principal = el('div', 'vp-detalle-col');
 
-    var texto = String(propiedad.longDescription || propiedad.descripcion || '').trim();
+    var texto = String(propiedad.longDescription || '').trim();
     if (texto) {
       var bloqueDesc = el('div', 'vp-desc');
       texto
@@ -2395,59 +2475,94 @@ ${CID} .vp-hipo-aviso {
         .forEach(function (parrafo) {
           bloqueDesc.appendChild(el('p', null, parrafo));
         });
-      principal.appendChild(el('h4', 'vp-detalle-h', 'Descripción'));
-      principal.appendChild(bloqueDesc);
+      var seccionDesc = el('section', 'vp-card-sec');
+      seccionDesc.appendChild(el('h4', 'vp-detalle-h', 'Descripción'));
+      seccionDesc.appendChild(bloqueDesc);
+      principal.appendChild(seccionDesc);
     }
 
-    // Características: banderas del inmueble + servicios del editor.
-    var extras = EXTRAS.filter(function (par) {
-      return propiedad[par[0]];
-    }).map(function (par) {
-      return par[1];
-    });
-    if (Array.isArray(propiedad.servicios)) {
-      propiedad.servicios.forEach(function (servicio) {
-        if (typeof servicio === 'string' && servicio.trim()) {
-          extras.push(etiquetaTipo(servicio.trim()));
-        }
-      });
+    // Características como fichas con icono, rótulo y valor, igual que en la
+    // ficha del portal. Los chips sueltos de antes decían «Piscina» o «Jardín»
+    // pero no cuánto medía ni cuántas habitaciones tenía: eso vivía en otra
+    // lista aparte y obligaba a cruzar dos bloques para entender el inmueble.
+    var rasgos = [];
+    function rasgo(icono, etiqueta, valor) {
+      if (valor === null || valor === undefined || valor === '') return;
+      rasgos.push([icono, etiqueta, String(valor)]);
     }
-    if (extras.length > 0) {
-      principal.appendChild(el('h4', 'vp-detalle-h', 'Características'));
+    rasgo('📐', 'Superficie', propiedad.areaM2 ? propiedad.areaM2 + ' m²' : '');
+    rasgo('🏗️', 'Construidos', propiedad.builtM2 ? propiedad.builtM2 + ' m²' : '');
+    rasgo('🛏️', 'Habitaciones', propiedad.bedrooms);
+    rasgo('🚿', 'Baños', propiedad.bathrooms);
+    rasgo('🚗', 'Estacionamientos', propiedad.parking);
+    rasgo('📅', 'Antigüedad', propiedad.yearBuilt ? propiedad.yearBuilt + ' años' : '');
+    rasgo('🧭', 'Orientación', propiedad.orientation);
+    rasgo('🏊', 'Alberca', propiedad.hasPool ? 'Sí' : '');
+    rasgo('🌳', 'Jardín', propiedad.hasGarden ? 'Sí' : '');
+    rasgo('🌤️', 'Terraza', propiedad.hasTerrace ? 'Sí' : '');
+    rasgo('🪟', 'Balcón', propiedad.hasBalcony ? 'Sí' : '');
+    rasgo('🛗', 'Ascensor', propiedad.hasElevator ? 'Sí' : '');
+    rasgo('📦', 'Trastero', propiedad.hasStorageRoom ? 'Sí' : '');
+    rasgo('🅿️', 'Parking', propiedad.hasParking ? 'Sí' : '');
+    rasgo('🛋️', 'Amueblado', propiedad.furnished ? 'Sí' : '');
+    rasgo('❄️', 'Aire acondicionado', propiedad.hasAirConditioning ? 'Sí' : '');
+    rasgo('🔥', 'Calefacción', propiedad.hasHeating ? 'Sí' : '');
+
+    // Los servicios del editor van aparte: son etiquetas, no datos con valor.
+    var servicios = Array.isArray(propiedad.servicios)
+      ? propiedad.servicios
+          .filter(function (servicio) {
+            return typeof servicio === 'string' && servicio.trim();
+          })
+          .map(function (servicio) {
+            return etiquetaTipo(servicio.trim());
+          })
+      : [];
+
+    if (rasgos.length > 0) {
+      var seccionRasgos = el('section', 'vp-card-sec');
+      seccionRasgos.appendChild(el('h4', 'vp-detalle-h', 'Características'));
+      var rejillaRasgos = el('ul', 'vp-features');
+      rasgos.forEach(function (dato) {
+        var item = el('li', 'vp-feature');
+        item.appendChild(el('span', 'vp-feature-ico', dato[0]));
+        var textoRasgo = el('span', 'vp-feature-txt');
+        textoRasgo.appendChild(el('span', 'vp-feature-label', dato[1]));
+        textoRasgo.appendChild(el('span', 'vp-feature-value', dato[2]));
+        item.appendChild(textoRasgo);
+        rejillaRasgos.appendChild(item);
+      });
+      seccionRasgos.appendChild(rejillaRasgos);
+      principal.appendChild(seccionRasgos);
+    }
+
+    if (servicios.length > 0) {
+      var seccionServicios = el('section', 'vp-card-sec');
+      seccionServicios.appendChild(el('h4', 'vp-detalle-h', 'Servicios y equipamiento'));
       var chips = el('ul', 'vp-chips');
-      extras.forEach(function (extra) {
-        chips.appendChild(el('li', 'vp-chip', extra));
+      servicios.forEach(function (servicio) {
+        chips.appendChild(el('li', 'vp-chip', servicio));
       });
-      principal.appendChild(chips);
-    }
-    // Datos del inmueble y calificación energética en la columna principal,
-    // debajo de las características: el lateral queda solo para el contacto.
-    var fichas = el('ul', 'vp-fichas');
-    if (propiedad.areaM2) fichas.appendChild(fichaDato('Superficie', propiedad.areaM2 + ' m²'));
-    if (propiedad.builtM2) fichas.appendChild(fichaDato('Construidos', propiedad.builtM2 + ' m²'));
-    if (propiedad.bedrooms) fichas.appendChild(fichaDato('Habitaciones', String(propiedad.bedrooms)));
-    if (propiedad.bathrooms) fichas.appendChild(fichaDato('Baños', String(propiedad.bathrooms)));
-    if (propiedad.parking) fichas.appendChild(fichaDato('Estacionamientos', String(propiedad.parking)));
-    if (propiedad.yearBuilt) fichas.appendChild(fichaDato('Antigüedad', propiedad.yearBuilt + ' años'));
-    if (propiedad.orientation) fichas.appendChild(fichaDato('Orientación', String(propiedad.orientation)));
-    if (propiedad.propertyType) fichas.appendChild(fichaDato('Tipo', etiquetaTipo(propiedad.propertyType)));
-    if (fichas.childNodes.length > 0) {
-      principal.appendChild(el('h4', 'vp-detalle-h', 'Datos del inmueble'));
-      principal.appendChild(fichas);
+      seccionServicios.appendChild(chips);
+      principal.appendChild(seccionServicios);
     }
 
     // Calificación energética: escala A–G con la clase del inmueble marcada.
     var escala = construirEscalaEnergetica(propiedad);
     if (escala) {
-      principal.appendChild(el('h4', 'vp-detalle-h', 'Calificación energética'));
-      principal.appendChild(escala);
+      var seccionEnergia = el('section', 'vp-card-sec');
+      seccionEnergia.appendChild(el('h4', 'vp-detalle-h', 'Calificación energética'));
+      seccionEnergia.appendChild(escala);
+      principal.appendChild(seccionEnergia);
     }
 
     // Ubicación: mapa con las coordenadas del inmueble, si las tiene.
     var mapa = construirMapa(propiedad);
     if (mapa) {
-      principal.appendChild(el('h4', 'vp-detalle-h', 'Ubicación'));
-      principal.appendChild(mapa);
+      var seccionMapa = el('section', 'vp-card-sec');
+      seccionMapa.appendChild(el('h4', 'vp-detalle-h', 'Ubicación'));
+      seccionMapa.appendChild(mapa);
+      principal.appendChild(seccionMapa);
     }
 
     grid.appendChild(principal);
