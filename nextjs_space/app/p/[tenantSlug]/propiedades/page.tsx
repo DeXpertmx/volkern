@@ -10,9 +10,11 @@ import {
 } from '@/lib/real-estate/operation-labels';
 import { resolveTenantBySlug } from '@/lib/real-estate/portal-utils';
 import { getEffectiveBranding } from '@/lib/branding';
-import { formatearImporte } from '@/lib/moneda';
+import { formatearImporte, monedaPredominante } from '@/lib/moneda';
 import { etiquetaClaseEnergetica } from '@/lib/real-estate/energia';
 import HeroCarousel from './HeroCarousel';
+import CalculadoraHipotecaria from '@/components/real-estate/CalculadoraHipotecaria';
+import BotonCalculadoraHipoteca from '@/components/real-estate/BotonCalculadoraHipoteca';
 
 export const revalidate = 60;
 
@@ -186,6 +188,14 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
   const logoUrl = branding.logoUrl || '';
   const companyName = branding.companyName || tenant.nombre;
 
+  // La calculadora solo tiene sentido si hay algo en venta: arranca con el
+  // inmueble más asequible del catálogo, que el visitante puede cambiar.
+  const enVenta = properties.filter((p) => p.operationType === 'venta' && p.precioBase > 0);
+  const precioVentaReferencia = enVenta.length > 0
+    ? Math.min(...enVenta.map((p) => p.precioBase))
+    : 0;
+  const monedaVenta = monedaPredominante(enVenta.map((p) => p.moneda)) || tenant.moneda;
+
   return (
     // `text-gray-900`: el portal es un diseño claro, pero cuelga del tema global.
     // Bajo `.dark` el `foreground` es casi blanco y lo que no lleva clase de
@@ -337,12 +347,25 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
 
               const energia = etiquetaClaseEnergetica(property.energyCert);
 
+              // Solo los inmuebles en venta con precio publicado tienen hipoteca
+              // que calcular: un alquiler con esta calculadora anunciaría una
+              // compra que nadie está ofreciendo.
+              const conHipoteca = property.operationType === 'venta' && property.precioBase > 0;
+
+              // La tarjeta sigue siendo un enlace, pero el botón de la
+              // calculadora no puede ir dentro de otro elemento interactivo: el
+              // enlace envuelve el contenido y el botón vive debajo, en la misma
+              // tarjeta.
               return (
-                <a
+                <div
                   key={property.id}
-                  href={`/p/${tenantSlug}/propiedades/${property.id}`}
                   className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden group flex flex-col"
                 >
+                  <a
+                    href={`/p/${tenantSlug}/propiedades/${property.id}`}
+                    className="flex flex-1 flex-col focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                    style={{ outlineColor: brandingColor }}
+                  >
                   {/* Image */}
                   <div className="relative h-48 bg-gray-200 overflow-hidden">
                     {imagen ? (
@@ -485,9 +508,33 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
                       </span>
                     </div>
                   </div>
-                </a>
+                  </a>
+
+                  {conHipoteca && (
+                    <div className="px-4 pb-4">
+                      <BotonCalculadoraHipoteca
+                        precio={property.precioBase}
+                        moneda={property.moneda}
+                        color={brandingColor}
+                        nombre={property.nombre}
+                      />
+                    </div>
+                  )}
+                </div>
               );
             })}
+          </div>
+        )}
+
+        {/* Calculadora hipotecaria: se apoya en el precio de venta más bajo
+            publicado para que el visitante vea una cuota real desde el inicio. */}
+        {precioVentaReferencia > 0 && (
+          <div className="mx-auto mt-14 max-w-4xl">
+            <CalculadoraHipotecaria
+              precioInicial={precioVentaReferencia}
+              moneda={monedaVenta}
+              color={brandingColor}
+            />
           </div>
         )}
       </main>

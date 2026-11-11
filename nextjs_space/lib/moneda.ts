@@ -492,3 +492,44 @@ export function formatearImporte(
 
   return valor.toLocaleString(locale, opciones);
 }
+
+/**
+ * Tipo de interés hipotecario de referencia de cada divisa, en porcentaje anual.
+ *
+ * Vive aquí por una razón y no por gusto: es una tabla con códigos de divisa, y
+ * este módulo es el único que puede tenerlos. Una calculadora hipotecaria no
+ * puede escribir `EUR` en una pantalla, y sin embargo una cuota al 3 % para un
+ * inmueble en pesos o en reales es una cifra que engaña al comprador.
+ *
+ * Son puntos de partida redondeados, no cotizaciones: el visitante los edita y
+ * el resultado se presenta siempre como estimación. Un mercado que no esté en la
+ * tabla usa el tipo por defecto, que es el de la plataforma.
+ */
+const INTERES_HIPOTECARIO_ORIENTATIVO: Record<string, number> = {
+  EUR: 3,
+  USD: 6.5,
+  MXN: 10.5,
+  GBP: 4.5,
+  CAD: 5,
+  BRL: 10.5,
+  CLP: 4.5,
+  COP: 11,
+  PEN: 8.5,
+  ARS: 40,
+  CNY: 3.5,
+  JPY: 1.5,
+};
+
+/** Tipo de partida cuando no hay divisa o no está en la tabla (`3` %). */
+export const INTERES_HIPOTECARIO_POR_DEFECTO = 3;
+
+/**
+ * Tipo con el que arranca la calculadora hipotecaria para esa divisa.
+ *
+ * Una divisa desconocida devuelve el tipo por defecto en vez de cero: una cuota
+ * a tipo cero afirmaría que el dinero es gratis.
+ */
+export function interesHipotecarioOrientativo(moneda: string | null | undefined): number {
+  const codigo = (moneda || '').trim().toUpperCase();
+  return INTERES_HIPOTECARIO_ORIENTATIVO[codigo] || INTERES_HIPOTECARIO_POR_DEFECTO;
+}

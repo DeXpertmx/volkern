@@ -202,8 +202,9 @@
     return null;
   }
 
-  function importe(valor, moneda) {
-    if (!valor || valor <= 0) return 'Precio a consultar';
+  function importe(valor, moneda, ceros) {
+    if ((!valor || valor <= 0) && !ceros) return 'Precio a consultar';
+    if (!valor || valor <= 0) valor = 0;
     try {
       return new Intl.NumberFormat('es-ES', {
         style: 'currency',
@@ -601,6 +602,75 @@ ${CID} .vp-card:focus-visible {
   outline: 2px solid var(--vp-accent);
   outline-offset: 3px;
 }
+
+/* ── Tarjeta con calculadora ───────────────────────────────── */
+${CID} .vp-card-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+${CID} .vp-card-wrap > .vp-card { flex: 1 1 auto; }
+${CID} .vp-card-hipo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid color-mix(in srgb, var(--vp-accent) 35%, var(--vp-border));
+  border-radius: 10px;
+  background: var(--vp-surface);
+  color: var(--vp-accent);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+${CID} .vp-card-hipo:hover {
+  background: color-mix(in srgb, var(--vp-accent) 8%, var(--vp-surface));
+  border-color: var(--vp-accent);
+}
+${CID} .vp-card-hipo:focus-visible { outline: 2px solid var(--vp-accent); outline-offset: 2px; }
+
+/* ── Calculadora en diálogo ────────────────────────────────── */
+${CID} .vp-modal-hipo {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow-y: auto;
+  padding: 24px 16px;
+  background: rgba(15, 23, 42, 0.55);
+}
+${CID} .vp-modal-hipo-caja {
+  position: relative;
+  width: 100%;
+  max-width: 720px;
+  padding: 18px;
+  border-radius: 16px;
+  background: var(--vp-surface);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.35);
+}
+${CID} .vp-modal-hipo-cerrar {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--vp-surface-2);
+  color: var(--vp-muted);
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+${CID} .vp-modal-hipo-cerrar:hover { color: var(--vp-text); }
 
 /* ── Imagen ───────────────────────────────────────────────── */
 ${CID} .vp-media {
@@ -1224,7 +1294,149 @@ ${CID} .vp-attrib a {
 }
 ${CID} .vp-attrib a:hover { color: var(--vp-accent); }
 
-/* ── Móvil ────────────────────────────────────────────────── */
+/* ── Calculadora hipotecaria ──────────────────────────────── */
+${CID} .vp-hipoteca {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+${CID} .vp-hipo {
+  padding: 18px;
+  border: 1px solid var(--vp-border);
+  border-radius: 14px;
+  background: var(--vp-surface);
+  box-shadow: var(--vp-shadow);
+}
+${CID} .vp-hipo-resumen {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-around;
+  gap: 18px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--vp-border);
+}
+${CID} .vp-hipo-anillo {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 132px;
+  height: 132px;
+  border-radius: 50%;
+  background: var(--vp-border);
+}
+${CID} .vp-hipo-hueco {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: var(--vp-surface);
+  text-align: center;
+}
+${CID} .vp-hipo-total { font-size: 0.98rem; font-weight: 800; letter-spacing: -0.01em; }
+${CID} .vp-hipo-total-sub { font-size: 0.68rem; color: var(--vp-muted); }
+${CID} .vp-hipo-leyenda {
+  flex: 1 1 200px;
+  max-width: 260px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+${CID} .vp-hipo-leyenda li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--vp-border);
+  font-size: 0.82rem;
+}
+${CID} .vp-hipo-leyenda li:last-child { border-bottom: 0; }
+${CID} .vp-hipo-etiqueta {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--vp-muted);
+}
+${CID} .vp-hipo-punto { flex: 0 0 auto; width: 9px; height: 9px; border-radius: 50%; }
+${CID} .vp-hipo-campos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+${CID} .vp-hipo-campo label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--vp-muted);
+}
+${CID} .vp-hipo-caja {
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  border: 1px solid var(--vp-border);
+  border-radius: 9px;
+  background: var(--vp-surface);
+}
+${CID} .vp-hipo-unidad {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  padding: 0 6px;
+  border-right: 1px solid var(--vp-border);
+  background: var(--vp-surface-2);
+  color: var(--vp-muted);
+  font-size: 0.72rem;
+}
+${CID} .vp-hipo-input {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--vp-border);
+  border-radius: 9px;
+  background: var(--vp-surface);
+  color: var(--vp-text);
+  font: inherit;
+  font-size: 0.85rem;
+}
+${CID} .vp-hipo-caja .vp-hipo-input { border: 0; border-radius: 0; }
+${CID} .vp-hipo-input:focus-visible { outline: 2px solid var(--vp-accent); outline-offset: 1px; }
+${CID} .vp-hipo-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+${CID} .vp-hipo-btn {
+  padding: 9px 20px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--vp-accent);
+  color: var(--vp-contrast);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+${CID} .vp-hipo-btn:hover { opacity: 0.92; }
+${CID} .vp-hipo-nota { margin: 0; font-size: 0.75rem; color: var(--vp-muted); }
+${CID} .vp-hipo-aviso {
+  margin: 10px 0 0;
+  font-size: 0.7rem;
+  line-height: 1.5;
+  color: var(--vp-muted);
+}
+
+/* ── Móvil ───────────────────────────────────────────────── */
 @media (max-width: 640px) {
   ${CID} .vp-grid { grid-template-columns: 1fr; }
   ${CID} .vp-list .vp-card { flex-direction: column; }
@@ -1430,7 +1642,16 @@ ${CID} .vp-attrib a:hover { color: var(--vp-accent); }
     tarjeta.appendChild(media);
     tarjeta.appendChild(cuerpo);
 
-    return tarjeta;
+    // El botón de la calculadora no puede ir dentro del enlace de la tarjeta
+    // (dos elementos interactivos anidados): la tarjeta se envuelve y el botón
+    // queda debajo, como parte de la misma pieza.
+    var envoltorio = el('div', 'vp-card-wrap');
+    envoltorio.appendChild(tarjeta);
+
+    var hipoteca = construirBotonHipoteca(propiedad);
+    if (hipoteca) envoltorio.appendChild(hipoteca);
+
+    return envoltorio;
   }
 
   var EXTRAS = [
@@ -1775,6 +1996,255 @@ ${CID} .vp-attrib a:hover { color: var(--vp-accent); }
     return enlace;
   }
 
+  // ─── Calculadora hipotecaria (solo venta) ──────────────────────────────
+  // Misma fórmula que la ficha del portal —sistema francés, cuota constante—
+  // para que el visitante vea la misma mensualidad aquí y allí. Solo se pinta
+  // en inmuebles en venta con precio publicado: un alquiler no tiene hipoteca.
+  function calcularHipoteca(datos) {
+    var precio = Number(datos.precio) > 0 ? Number(datos.precio) : 0;
+    var aportacion = Number(datos.aportacion) > 0 ? Number(datos.aportacion) : 0;
+    var principal = Math.max(precio - Math.min(aportacion, precio), 0);
+    var anios = Number(datos.anios) > 0 ? Number(datos.anios) : 1;
+    var meses = Math.round(anios * 12);
+    var interes = Number(datos.interes) > 0 ? Number(datos.interes) : 0;
+    var vinculaciones = Number(datos.vinculaciones) > 0 ? Number(datos.vinculaciones) : 0;
+    var seguros = Number(datos.seguros) > 0 ? Number(datos.seguros) : 0;
+    var tipo = interes / 100 / 12;
+    var cuota = 0;
+
+    if (principal > 0) {
+      cuota = tipo === 0
+        ? principal / meses
+        : (principal * tipo) / (1 - Math.pow(1 + tipo, -meses));
+    }
+    cuota = Math.round(cuota * 100) / 100;
+
+    return {
+      cuota: cuota,
+      intereses: Math.round(Math.max(cuota * meses - principal, 0)),
+      vinculaciones: vinculaciones,
+      seguros: seguros,
+      total: cuota + vinculaciones + seguros,
+    };
+  }
+
+  function construirCalculadoraHipotecaria(propiedad) {
+    if (!propiedad || propiedad.operationType !== 'venta') return null;
+    var precio = Number(propiedad.precioBase) || 0;
+    if (precio <= 0) return null;
+
+    var moneda = CONFIG.moneda || propiedad.moneda;
+
+    var bloque = el('div', 'vp-hipoteca');
+    bloque.appendChild(el('h4', 'vp-detalle-h', 'Calculadora hipotecaria'));
+
+    var panel = el('div', 'vp-hipo');
+    var resumen = el('div', 'vp-hipo-resumen');
+
+    var anillo = el('div', 'vp-hipo-anillo');
+    var hueco = el('div', 'vp-hipo-hueco');
+    var totalTexto = el('strong', 'vp-hipo-total', '');
+    hueco.appendChild(totalTexto);
+    hueco.appendChild(el('span', 'vp-hipo-total-sub', 'Mensuales'));
+    anillo.appendChild(hueco);
+    resumen.appendChild(anillo);
+
+    var leyenda = el('ul', 'vp-hipo-leyenda');
+    var valores = {};
+    [
+      ['capital', 'Capital + intereses', CONFIG.color],
+      ['vinculaciones', 'Vinculaciones', '#7dd3fc'],
+      ['seguros', 'Seguros', '#fcd34d'],
+    ].forEach(function (fila) {
+      var li = el('li');
+      var etiqueta = el('span', 'vp-hipo-etiqueta');
+      var punto = el('span', 'vp-hipo-punto');
+      punto.style.background = fila[2];
+      etiqueta.appendChild(punto);
+      etiqueta.appendChild(document.createTextNode(fila[1]));
+      var valor = el('strong', null, '');
+      valores[fila[0]] = valor;
+      li.appendChild(etiqueta);
+      li.appendChild(valor);
+      leyenda.appendChild(li);
+    });
+    resumen.appendChild(leyenda);
+    panel.appendChild(resumen);
+
+    var form = el('form', 'vp-hipo-form');
+    var rejilla = el('div', 'vp-hipo-campos');
+    var sufijoId = String(propiedad.id || 'inmueble').replace(/[^a-zA-Z0-9_-]/g, '');
+
+    function campo(nombre, etiqueta, valor, paso, unidad) {
+      var id = 'vp-hipo-' + nombre + '-' + sufijoId;
+      var envoltorio = el('div', 'vp-hipo-campo');
+      var label = el('label', null, etiqueta);
+      label.setAttribute('for', id);
+      envoltorio.appendChild(label);
+
+      var input = document.createElement('input');
+      input.type = 'number';
+      input.id = id;
+      input.name = nombre;
+      input.min = '0';
+      input.step = paso;
+      input.value = String(valor);
+      input.className = 'vp-hipo-input';
+
+      if (unidad) {
+        var caja = el('div', 'vp-hipo-caja');
+        caja.appendChild(el('span', 'vp-hipo-unidad', unidad));
+        caja.appendChild(input);
+        envoltorio.appendChild(caja);
+      } else {
+        envoltorio.appendChild(input);
+      }
+
+      rejilla.appendChild(envoltorio);
+      return input;
+    }
+
+    // El tipo de partida lo calcula el servidor según la divisa del inmueble y
+    // llega en la ficha: el widget no escribe códigos de divisa.
+    var interes = Number(propiedad.interesHipotecario);
+    if (!(interes > 0)) interes = 3;
+
+    var campos = {
+      precio: campo('precio', 'Precio inmueble', precio, '1000', ''),
+      aportacion: campo('aportacion', 'Aportación inicial', Math.round(precio * 0.2), '1000', ''),
+      interes: campo('interes', 'Interés', interes, '0.1', '%'),
+      anios: campo('anios', 'Años a pagar', 30, '1', ''),
+      vinculaciones: campo('vinculaciones', 'Vinculaciones', 0, '10', ''),
+      seguros: campo('seguros', 'Seguros', 0, '10', ''),
+    };
+
+    form.appendChild(rejilla);
+
+    var acciones = el('div', 'vp-hipo-acciones');
+    var boton = el('button', 'vp-hipo-btn', 'Calcular');
+    boton.type = 'submit';
+    acciones.appendChild(boton);
+    var interesesTexto = el('p', 'vp-hipo-nota', '');
+    acciones.appendChild(interesesTexto);
+    form.appendChild(acciones);
+    form.appendChild(
+      el('p', 'vp-hipo-aviso', 'Estimación orientativa: no incluye impuestos, gastos ni comisiones.')
+    );
+
+    function pintar() {
+      var resultado = calcularHipoteca({
+        precio: campos.precio.value,
+        aportacion: campos.aportacion.value,
+        interes: campos.interes.value,
+        anios: campos.anios.value,
+        vinculaciones: campos.vinculaciones.value,
+        seguros: campos.seguros.value,
+      });
+
+      var total = resultado.total;
+      var parte = function (valor) {
+        return total > 0 ? (valor / total) * 100 : 0;
+      };
+      var capital = parte(resultado.cuota);
+      var vinculaciones = parte(resultado.vinculaciones);
+
+      totalTexto.textContent = importe(total, moneda, true);
+      valores.capital.textContent = importe(resultado.cuota, moneda, true);
+      valores.vinculaciones.textContent = importe(resultado.vinculaciones, moneda, true);
+      valores.seguros.textContent = importe(resultado.seguros, moneda, true);
+      interesesTexto.textContent = 'Intereses totales: ' + importe(resultado.intereses, moneda, true);
+
+      anillo.style.background = total > 0
+        ? 'conic-gradient(' + CONFIG.color + ' 0 ' + capital + '%, #7dd3fc ' + capital + '% ' +
+          (capital + vinculaciones) + '%, #fcd34d ' + (capital + vinculaciones) + '% 100%)'
+        : 'var(--vp-border)';
+    }
+
+    form.addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      pintar();
+    });
+
+    pintar();
+    panel.appendChild(form);
+    bloque.appendChild(panel);
+
+    return bloque;
+  }
+
+  /**
+   * Botón de la tarjeta que abre la calculadora con el precio de ese inmueble.
+   * Solo en venta con precio: un alquiler no tiene hipoteca que calcular.
+   */
+  function construirBotonHipoteca(propiedad) {
+    if (!propiedad || propiedad.operationType !== 'venta') return null;
+    if (!(Number(propiedad.precioBase) > 0)) return null;
+
+    var boton = el('button', 'vp-card-hipo', 'Calcular hipoteca');
+    boton.type = 'button';
+    boton.setAttribute(
+      'aria-label',
+      'Calcular hipoteca de ' + (propiedad.nombre || 'la propiedad')
+    );
+    boton.addEventListener('click', function (evento) {
+      evento.preventDefault();
+      evento.stopPropagation();
+      abrirCalculadoraHipoteca(propiedad);
+    });
+    return boton;
+  }
+
+  // Diálogo de la calculadora abierto desde una tarjeta. Se cuelga del propio
+  // contenedor para heredar el CSS del widget y no tocar el documento del sitio
+  // que lo embebe.
+  var modalHipoteca = null;
+
+  function cerrarCalculadoraHipoteca() {
+    if (!modalHipoteca) return;
+    if (modalHipoteca.parentNode) modalHipoteca.parentNode.removeChild(modalHipoteca);
+    modalHipoteca = null;
+    document.removeEventListener('keydown', alPulsarEscapeHipoteca);
+  }
+
+  function alPulsarEscapeHipoteca(evento) {
+    if (evento.key !== 'Escape') return;
+    // La ficha del widget también escucha Escape: con la calculadora abierta,
+    // cerrar lo de abajo sería desconcertante.
+    evento.stopPropagation();
+    cerrarCalculadoraHipoteca();
+  }
+
+  function abrirCalculadoraHipoteca(propiedad) {
+    var bloque = construirCalculadoraHipotecaria(propiedad);
+    if (!bloque) return;
+    cerrarCalculadoraHipoteca();
+
+    var capa = el('div', 'vp-modal-hipo');
+    capa.setAttribute('role', 'dialog');
+    capa.setAttribute('aria-modal', 'true');
+    capa.setAttribute(
+      'aria-label',
+      'Calculadora hipotecaria de ' + (propiedad.nombre || 'la propiedad')
+    );
+    capa.addEventListener('click', function (evento) {
+      if (evento.target === capa) cerrarCalculadoraHipoteca();
+    });
+
+    var caja = el('div', 'vp-modal-hipo-caja');
+    var cerrar = el('button', 'vp-modal-hipo-cerrar', '✕');
+    cerrar.type = 'button';
+    cerrar.setAttribute('aria-label', 'Cerrar calculadora');
+    cerrar.addEventListener('click', cerrarCalculadoraHipoteca);
+    caja.appendChild(cerrar);
+    caja.appendChild(bloque);
+    capa.appendChild(caja);
+
+    container.appendChild(capa);
+    modalHipoteca = capa;
+    document.addEventListener('keydown', alPulsarEscapeHipoteca);
+    if (cerrar.focus) cerrar.focus();
+  }
+
   function construirGaleria(propiedad, imagenes) {
     var galeria = el('div');
     var marco = el('div', 'vp-galeria-main');
@@ -1912,6 +2382,11 @@ ${CID} .vp-attrib a:hover { color: var(--vp-accent); }
     // Descripción
     var grid = el('div', 'vp-detalle-grid');
     var principal = el('div', 'vp-detalle-col');
+
+    // La calculadora abre la columna principal: quien mira un inmueble en venta
+    // pregunta por la cuota antes que por los metros.
+    var calculadora = construirCalculadoraHipotecaria(propiedad);
+    if (calculadora) principal.appendChild(calculadora);
     var texto = String(propiedad.longDescription || propiedad.descripcion || '').trim();
     if (texto) {
       var bloqueDesc = el('div', 'vp-desc');
@@ -2167,6 +2642,10 @@ ${CID} .vp-attrib a:hover { color: var(--vp-accent); }
 
   // ─── Render ─────────────────────────────────────────────────────────────
   function render() {
+    // Un repintado se lleva por delante el nodo del diálogo: se cierra antes de
+    // vaciar el contenedor en vez de quedarse con una referencia muerta.
+    cerrarCalculadoraHipoteca();
+
     if (state.vista === 'detalle') {
       container.textContent = '';
       container.appendChild(construirDetalle());

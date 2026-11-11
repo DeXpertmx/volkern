@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, globalPrisma, getTenantDb, dbContext } from "@/lib/db";
 import { parseInmueble } from "@/lib/real-estate/property-helpers";
+import { interesHipotecarioOrientativo } from "@/lib/moneda";
 import { applyRateLimit, RATE_LIMIT_ACTIONS } from "@/lib/rate-limit-middleware";
 
 /**
@@ -77,9 +78,14 @@ export async function GET(
         data: { metadata: { ...(typeof property.metadata === 'object' ? property.metadata : {}), visits: ((property.metadata as any)?.visits || 0) + 1 } },
       });
 
+      const inmueble = parseInmueble(property);
+
       return NextResponse.json({
         property: {
-          ...parseInmueble(property),
+          ...inmueble,
+          // Tipo de partida de la calculadora del widget, resuelto con la divisa
+          // del inmueble para que el cliente no escriba códigos de divisa.
+          interesHipotecario: interesHipotecarioOrientativo(inmueble.moneda),
           media: property.media,
           metadata: property.metadata,
           // El bloque Puck del detalle lee los campos crudos del editor

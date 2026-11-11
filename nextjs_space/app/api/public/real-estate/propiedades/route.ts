@@ -12,6 +12,7 @@ const CACHE_HEADERS = {
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { parseInmueble } from '@/lib/real-estate/property-helpers';
+import { interesHipotecarioOrientativo } from '@/lib/moneda';
 import { resolverWhatsAppWidget } from '@/lib/real-estate/whatsapp-widget';
 import type { CatalogoItem } from '@prisma/client';
 
@@ -171,7 +172,12 @@ export const GET = async (req: NextRequest) => {
 
     const total = await prisma.catalogoItem.count({ where });
 
-    const properties = (items as unknown as CatalogoItem[]).map(parseInmueble);
+    // El widget no conoce la tabla de divisas: el tipo con el que arranca su
+    // calculadora hipotecaria se resuelve aquí, con la divisa de cada inmueble.
+    const properties = (items as unknown as CatalogoItem[]).map((item) => {
+      const inmueble = parseInmueble(item);
+      return { ...inmueble, interesHipotecario: interesHipotecarioOrientativo(inmueble.moneda) };
+    });
 
     return NextResponse.json(
       {

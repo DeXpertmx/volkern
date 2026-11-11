@@ -5,6 +5,7 @@ import type { InmuebleParsed } from '@/lib/real-estate/property-helpers';
 import { formatearPrecioInmueble } from '@/lib/real-estate/operation-labels';
 import { ESCALA_ENERGETICA, esClaseEnTramite } from '@/lib/real-estate/energia';
 import { SERVICIOS_TODOS } from '@/lib/real-estate/property-editor-config';
+import CalculadoraHipotecaria from '@/components/real-estate/CalculadoraHipotecaria';
 
 interface Props {
   property: InmuebleParsed;
@@ -214,6 +215,15 @@ export default function PropertyDetailClient({
                 <p className="mt-4 text-gray-600 leading-relaxed">{property.descripcion}</p>
               )}
             </div>
+
+            {/* Calculadora hipotecaria: solo tiene sentido en venta y con precio */}
+            {property.operationType === 'venta' && property.precioBase > 0 && (
+              <CalculadoraHipotecaria
+                precioInicial={property.precioBase}
+                moneda={property.moneda || tenant.moneda}
+                color={brandingColor}
+              />
+            )}
 
             {/* Key Features */}
             <div className="bg-white rounded-2xl p-6 shadow-sm">
