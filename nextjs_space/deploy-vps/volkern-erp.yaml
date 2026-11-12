@@ -110,6 +110,27 @@ services:
         - "traefik.http.routers.volkern_erp_custom.tls=true"
         - "traefik.http.routers.volkern_erp_custom.tls.certresolver=letsencryptresolver"
         - "traefik.http.routers.volkern_erp_custom.priority=2"
+        # Con dos servicios Traefik en el mismo contenedor (el del ERP y el del
+        # sitio de demo), un router sin `.service` explícito se queda sin
+        # destino y Traefik responde 404. Cada router declara el suyo.
+        - "traefik.http.routers.volkern_erp_main.service=volkern_erp"
+        - "traefik.http.routers.volkern_erp_www.service=volkern_erp"
+        - "traefik.http.routers.volkern_erp_tenant.service=volkern_erp"
+        - "traefik.http.routers.volkern_erp_dim.service=volkern_erp"
+        - "traefik.http.routers.volkern_erp_custom.service=volkern_erp"
+        # demo.volkern.app sirve la landing pública alojada fuera del ERP.
+        # Se proxya en el borde para que el visitante siga viendo
+        # demo.volkern.app (sin redirect): Traefik reenvía la petición al sitio
+        # estático y devuelve su respuesta, assets incluidos.
+        # passhostheader=false: al destino le llega su propio Host, no el del
+        # ERP, y así Cloudflare del sitio no rechaza la petición.
+        - "traefik.http.routers.volkern_erp_demo.rule=Host(`demo.volkern.app`)"
+        - "traefik.http.routers.volkern_erp_demo.priority=100"
+        - "traefik.http.routers.volkern_erp_demo.entrypoints=websecure"
+        - "traefik.http.routers.volkern_erp_demo.tls=true"
+        - "traefik.http.routers.volkern_erp_demo.service=volkern_demo_site"
+        - "traefik.http.services.volkern_demo_site.loadbalancer.server.url=https://volkern-realestate.freebuff.page"
+        - "traefik.http.services.volkern_demo_site.loadbalancer.passhostheader=false"
         - "traefik.http.services.volkern_erp.loadbalancer.server.port=3000"
 
 volumes:
