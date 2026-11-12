@@ -1531,7 +1531,7 @@ ${CID} .vp-hipo-aviso {
   ${CID} .vp-btn-filtros { flex: 1 1 100%; justify-content: center; }
   ${CID} .vp-detail-head { flex-direction: column; }
   ${CID} .vp-detail-precio { text-align: left; }
-  ${CID} .vp-detail-precio .vp-price { font-size: 1.3rem; }
+  /* El tamaño del precio lo fija su clamp; un valor fijo aquí lo pisaba. */
 }
 
 @media (prefers-reduced-motion: reduce) {
