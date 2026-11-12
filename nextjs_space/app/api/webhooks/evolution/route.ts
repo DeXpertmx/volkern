@@ -17,6 +17,10 @@ import { prisma } from '@/lib/db';
 import { processChatbotMessage } from '@/lib/chatbot-engine';
 import { isChatRateLimited } from '@/lib/telegram/chat-rate-limit';
 import { parseEvolutionMessage } from '@/lib/evolution/message-parser';
+import {
+  colaIdDesdeReferencia,
+  extraerReferenciaDeTexto,
+} from '@/lib/real-estate/referencia';
 
 // Respuesta 429 explícita: Evolution API reintenta el webhook con backoff y el
 // mensaje no se pierde (mismo patrón que el webhook de Telegram).
@@ -258,6 +262,78 @@ export async function POST(request: NextRequest) {
         data: { fechaUltimaActividad: new Date() },
       });
       console.log(`📝 Lead existente: ${lead.id}`);
+    }
+
+    // ========== PROPIEDAD CONSULTADA ==========
+    // El botón de WhatsApp de la ficha del widget adjunta la referencia del
+    // inmueble al mensaje precargado. Es lo único que llega junto al primer
+    // «hola», así que se lee del texto y se guarda en el lead: el asesor ve en
+    // el contacto qué propiedad estaba mirando el cliente.
+    const referenciaConsultada = extraerReferenciaDeTexto(message.message);
+
+    if (referenciaConsultada) {
+      try {
+        const condiciones: any[] = [
+          { sku: { equals: referenciaConsultada, mode: 'insensitive' } },
+        ];
+        const colaId = colaIdDesdeReferencia(referenciaConsultada);
+        if (colaId) condiciones.push({ id: { endsWith: colaId } });
+
+        const propiedadConsultada = await prisma.catalogoItem.findFirst({
+          where: {
+            tenantId,
+            tipo: 'inmueble',
+            OR: condiciones,
+          },
+          select: { id: true, nombre: true, sku: true },
+        });
+
+        if (propiedadConsultada) {
+          const referencia = propiedadConsultada.sku || referenciaConsultada;
+          const etiqueta = `Propiedad consultada: ${propiedadConsultada.nombre} (Ref: ${referencia})`;
+          const notasActuales = lead.notas || '';
+
+          // No se repite si el cliente vuelve a escribir sobre el mismo inmueble.
+          if (!notasActuales.includes(etiqueta)) {
+            const metadataActual =
+              lead.metadataExterna && typeof lead.metadataExterna === 'object'
+                ? (lead.metadataExterna as Record<string, unknown>)
+                : {};
+
+            await prisma.lead.update({
+              where: { id: lead.id },
+              data: {
+                notas: notasActuales ? `${notasActuales}\n\n${etiqueta}` : etiqueta,
+                metadataExterna: {
+                  ...metadataActual,
+                  propiedadId: propiedadConsultada.id,
+                  propiedadNombre: propiedadConsultada.nombre,
+                  propiedadReferencia: referencia,
+                },
+              },
+            });
+
+            // El detalle del lead lista las notas (`Note`): la referencia se
+            // deja ahí para que el asesor la vea en el contacto.
+            await prisma.note.create({
+              data: {
+                leadId: lead.id,
+                contenido: etiqueta,
+                metadata: {
+                  propiedadId: propiedadConsultada.id,
+                  propiedadReferencia: referencia,
+                  origen: 'whatsapp',
+                },
+              },
+            });
+
+            console.log(`🏠 Propiedad consultada guardada en el lead: ${referencia}`);
+          }
+        }
+      } catch (error) {
+        // El mensaje ya está guardado; no se pierde por no poder cruzar la referencia.
+        console.warn('⚠️ No se pudo registrar la propiedad consultada:', error);
+      }
     }
 
     // ========== CONVERSACIÓN ==========

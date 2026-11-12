@@ -83,6 +83,9 @@ export async function GET(
       return NextResponse.json({
         property: {
           ...inmueble,
+          // Referencia del catálogo: el widget la pone en el mensaje de
+          // WhatsApp para que el lead llegue al CRM con el inmueble exacto.
+          sku: property.sku,
           // Tipo de partida de la calculadora del widget, resuelto con la divisa
           // del inmueble para que el cliente no escriba códigos de divisa.
           interesHipotecario: interesHipotecarioOrientativo(inmueble.moneda),

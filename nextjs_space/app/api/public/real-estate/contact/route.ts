@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma, globalPrisma, getTenantDb, dbContext } from "@/lib/db";
 import { applyRateLimit, RATE_LIMIT_ACTIONS } from "@/lib/rate-limit-middleware";
 import { eventBus, EVENTS } from "@/lib/skills/event-bus";
+import { referenciaPropiedad } from "@/lib/real-estate/referencia";
 
 /**
  * POST /api/public/real-estate/contact
@@ -87,10 +88,13 @@ export async function POST(req: NextRequest) {
               tenantId: tenant.id,
               tipo: "inmueble",
             },
-            select: { id: true, nombre: true, metadata: true },
+            select: { id: true, nombre: true, metadata: true, sku: true, customFieldValues: true },
           })
         : null;
       const propertyName = property?.nombre || "";
+      // La referencia es lo que el asesor usa para identificar el inmueble en
+      // el CRM; se guarda junto al nombre para no depender de abrirlo.
+      const propertyReferencia = property ? referenciaPropiedad(property) : "";
 
       // 4. Crear lead desde la skill existente
       const { executeSkill } = await import("@/lib/skills");
@@ -100,11 +104,12 @@ export async function POST(req: NextRequest) {
         nombre: name,
         email,
         telefono: phone || "",
-        notas: `[Portal Inmobiliario] ${message || "Sin mensaje adicional"}${propertyName ? `\nPropiedad: ${propertyName}` : ""}${preferredDate ? `\nFecha preferida de visita: ${preferredDate}` : ""}${consent === true ? `\nConsentimiento de contacto aceptado (${new Date().toISOString()})` : ""}`,
+        notas: `[Portal Inmobiliario] ${message || "Sin mensaje adicional"}${propertyName ? `\nPropiedad: ${propertyName}${propertyReferencia ? ` (Ref: ${propertyReferencia})` : ""}` : ""}${preferredDate ? `\nFecha preferida de visita: ${preferredDate}` : ""}${consent === true ? `\nConsentimiento de contacto aceptado (${new Date().toISOString()})` : ""}`,
         fuente: "portal_inmobiliario" as any,
         metadataExterna: {
           propertyId: propertyId || null,
           propertyName,
+          propiedadReferencia: propertyReferencia || null,
           preferredVisitDate: preferredDate || null,
           sourceUrl: req.headers.get("referer") || "",
           userAgent: req.headers.get("user-agent") || "",
@@ -115,6 +120,22 @@ export async function POST(req: NextRequest) {
       // 5. Si la propiedad es de este tenant, registrar el interés en su metadata
       if (property && lead) {
         try {
+          // La ficha del lead muestra las notas (`Note`), no el campo `notas`,
+          // así que la referencia se registra también ahí: el asesor sabe qué
+          // inmueble consultó sin abrir la conversación.
+          if (propertyReferencia) {
+            await prisma.note.create({
+              data: {
+                leadId: lead.id,
+                contenido: `Propiedad consultada: ${propertyName} (Ref: ${propertyReferencia})`,
+                metadata: {
+                  propiedadId: property.id,
+                  propiedadReferencia: propertyReferencia,
+                } as any,
+              },
+            });
+          }
+
           const existingMetadata =
             typeof property.metadata === "object" && property.metadata !== null
               ? property.metadata

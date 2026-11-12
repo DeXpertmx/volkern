@@ -2065,12 +2065,33 @@ ${CID} .vp-hipo-aviso {
     return nodo;
   }
 
+  // Referencia con la que el asesor identifica el inmueble en el CRM. Misma
+  // regla que el servidor (lib/real-estate/referencia.ts): SKU del catálogo y,
+  // si no hay, un código estable derivado del id.
+  function referenciaDe(propiedad) {
+    if (!propiedad) return '';
+    if (propiedad.sku && String(propiedad.sku).trim()) return String(propiedad.sku).trim();
+    var campos = propiedad.customFieldValues || {};
+    if (campos.referencia) return String(campos.referencia).trim();
+    var meta = propiedad.metadata || {};
+    if (meta.referencia) return String(meta.referencia).trim();
+    if (!propiedad.id) return '';
+    return 'REF-' + String(propiedad.id).slice(-6).toUpperCase();
+  }
+
   function construirBotonWhatsapp(propiedad) {
     var whatsapp = state.whatsapp;
     if (!whatsapp || !whatsapp.activo || !whatsapp.numero) return null;
 
     var nombre = propiedad && propiedad.nombre ? propiedad.nombre : 'esta propiedad';
-    var texto = 'Hola, me interesa ' + nombre + '. ¿Sigue disponible?';
+    // La referencia va en el mensaje: es lo único que viaja con el «hola» del
+    // visitante hasta el CRM, donde el webhook la guarda en el lead.
+    var referencia = referenciaDe(propiedad);
+    var texto =
+      'Hola, me interesa ' +
+      nombre +
+      (referencia ? ' (Ref: ' + referencia + ')' : '') +
+      '. ¿Sigue disponible?';
 
     var enlace = el('a', 'vp-whatsapp');
     enlace.href = 'https://wa.me/' + whatsapp.numero + '?text=' + encodeURIComponent(texto);
