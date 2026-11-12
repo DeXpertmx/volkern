@@ -35,8 +35,8 @@ interface KpisPlataforma {
     nuevosClientes: number;
     cancelados: number;
     baseChurn: number;
-    trialsIniciados: number;
-    trialsConvertidos: number;
+    oportunidades: number;
+    convertidas: number;
     gastoMarketing: number | null;
     motivoSinCac: string | null;
   };
@@ -211,8 +211,8 @@ export default function SaaSMetricsPage() {
             </h2>
             <p className="text-[11px] font-bold text-slate-400 mt-1">
               {kpis.churnRate === null
-                ? 'Sin suscripciones registradas que medir'
-                : `${kpis.detalle.cancelados} cancelaciones sobre ${kpis.detalle.baseChurn} suscripciones`}
+                ? 'Sin cuentas previas que medir'
+                : `${kpis.detalle.cancelados} bajas sobre ${kpis.detalle.baseChurn} cuentas`}
             </p>
           </CardContent>
         </Card>
@@ -262,8 +262,8 @@ export default function SaaSMetricsPage() {
             </h2>
             <p className="text-[11px] font-bold text-slate-400 mt-1">
               {kpis.conversionRate === null
-                ? 'Sin pruebas iniciadas en el periodo'
-                : `${kpis.detalle.trialsConvertidos} de ${kpis.detalle.trialsIniciados} oportunidades pasaron a cliente`}
+                ? 'Sin cuentas nuevas en el periodo'
+                : `${kpis.detalle.convertidas} de ${kpis.detalle.oportunidades} cuentas nuevas ya son clientes`}
             </p>
           </CardContent>
         </Card>
@@ -301,8 +301,8 @@ export default function SaaSMetricsPage() {
               { label: 'Cuentas activas', valor: kpis.detalle.cuentasActivas },
               { label: 'Cuentas de pago', valor: kpis.detalle.cuentasPago },
               { label: 'Nuevas en el periodo', valor: kpis.detalle.nuevosClientes },
-              { label: 'Canceladas en el periodo', valor: kpis.detalle.cancelados },
-              { label: 'Suscripciones al inicio del periodo', valor: kpis.detalle.baseChurn },
+              { label: 'Bajas en el periodo', valor: kpis.detalle.cancelados },
+              { label: 'Cuentas al inicio del periodo', valor: kpis.detalle.baseChurn },
             ].map((fila) => (
               <div key={fila.label} className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest">

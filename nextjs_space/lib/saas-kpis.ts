@@ -39,8 +39,8 @@ export interface KpisPlataforma {
     nuevosClientes: number;
     cancelados: number;
     baseChurn: number;
-    trialsIniciados: number;
-    trialsConvertidos: number;
+    oportunidades: number;
+    convertidas: number;
     gastoMarketing: number | null;
     motivoSinCac: string | null;
   };
@@ -100,6 +100,12 @@ export function calcularTasaConversion(convertidas: number, totales: number): nu
   return (convertidas / totales) * 100;
 }
 
+/** Churn = bajas del periodo / cuentas al inicio del periodo. */
+export function calcularTasaChurn(base: number, bajas: number): number {
+  if (base <= 0) return 0;
+  return (bajas / base) * 100;
+}
+
 /**
  * Inversión de marketing mensual declarada por el operador. Vive en
  * `PlatformSettings.configuracion` para no añadir una tabla solo por un dato.
@@ -128,25 +134,8 @@ async function leerGastoMarketing(): Promise<{ valor: number | null; hayDato: bo
   }
 }
 
-/**
- * Conversión de oportunidad a cliente: suscripciones que arrancaron en prueba
- * en el periodo y hoy siguen activas, sobre las pruebas iniciadas.
- */
-async function contarConversionDeTrials(
-  periodoDias: number,
-): Promise<{ iniciados: number; convertidos: number }> {
-  const desde = new Date(Date.now() - periodoDias * 24 * 60 * 60 * 1000);
-
-  const trials = await globalPrisma.subscription.findMany({
-    where: { esTrial: true, fechaCreacion: { gte: desde } },
-    select: { estado: true },
-  });
-
-  return {
-    iniciados: trials.length,
-    convertidos: trials.filter((t) => t.estado === 'activa').length,
-  };
-}
+/** Estados con los que una cuenta deja de ser cliente en la plataforma. */
+const ESTADOS_DE_BAJA = ['cancelado', 'suspendido', 'inactivo'];
 
 export async function calcularKpisPlataforma(periodoDias: number = 30): Promise<KpisPlataforma> {
   const desde = new Date(Date.now() - periodoDias * 24 * 60 * 60 * 1000);
@@ -164,24 +153,38 @@ export async function calcularKpisPlataforma(periodoDias: number = 30): Promise<
   const arpa = calcularArpa(mrr, cuentasPago);
   const arr = SaaSMetricsService.calculateARR(mrr);
 
-  // La tasa de churn necesita una base de suscripciones; sin ella, 0 % no
-  // significaría «nadie se va», sino «no hay nada que medir».
-  const baseChurn = await globalPrisma.subscription.count({
-    where: { fechaCreacion: { lt: desde }, estado: { in: ['activa', 'trial'] } },
+  // Churn sobre cuentas, que es donde vive el estado comercial (el MRR también
+  // sale de ahí): base = cuentas que ya existían al empezar el periodo, bajas =
+  // las que pasaron a suspendida/cancelada dentro del periodo.
+  const baseChurn = await globalPrisma.tenant.count({
+    where: { estado: { in: ['activo', 'trial'] }, fechaCreacion: { lt: desde } },
   });
-  const churnRate = baseChurn > 0 ? await SaaSMetricsService.calculateChurnRate(periodoDias) : null;
+  const cancelados = await globalPrisma.tenant.count({
+    where: { estado: { in: ESTADOS_DE_BAJA }, fechaActualizacion: { gte: desde } },
+  });
+  const churnRate = baseChurn > 0
+    ? calcularTasaChurn(baseChurn, cancelados)
+    : null;
+  // Con churn 0 el LTV sería infinito: mejor no publicar una cifra inventada.
   const ltv = churnRate !== null && churnRate > 0
     ? SaaSMetricsService.calculateLTV(arpa, churnRate)
     : null;
 
-  const nuevosClientes = await SaaSMetricsService.calculateNewCustomers(periodoDias);
-  const cancelados = await SaaSMetricsService.calculateChurnedCustomers(periodoDias);
+  // Conversión de oportunidad a cliente: de las cuentas creadas en el periodo,
+  // cuántas ya están activas (cliente de pago) y cuántas siguen en prueba.
+  const cuentasNuevas = await globalPrisma.tenant.findMany({
+    where: { fechaCreacion: { gte: desde } },
+    select: { estado: true },
+  });
+  const oportunidades = cuentasNuevas.length;
+  const convertidas = cuentasNuevas.filter((c) => c.estado === 'activo').length;
+  const nuevosClientes = oportunidades;
+  const conversionRate = oportunidades > 0
+    ? calcularTasaConversion(convertidas, oportunidades)
+    : null;
 
   const { valor: gastoMarketing, hayDato } = await leerGastoMarketing();
   const cac = calcularCac(gastoMarketing, nuevosClientes);
-
-  const { iniciados, convertidos } = await contarConversionDeTrials(periodoDias);
-  const conversionRate = iniciados > 0 ? calcularTasaConversion(convertidos, iniciados) : null;
 
   let motivoSinCac: string | null = null;
   if (cac === null) {
@@ -209,8 +212,8 @@ export async function calcularKpisPlataforma(periodoDias: number = 30): Promise<
       nuevosClientes,
       cancelados,
       baseChurn,
-      trialsIniciados: iniciados,
-      trialsConvertidos: convertidos,
+      oportunidades,
+      convertidas,
       gastoMarketing: gastoMarketing ?? null,
       motivoSinCac,
     },

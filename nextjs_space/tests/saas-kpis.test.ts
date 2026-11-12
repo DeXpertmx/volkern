@@ -4,6 +4,7 @@ import {
   calcularArpa,
   calcularCac,
   calcularRatioLtvCac,
+  calcularTasaChurn,
   calcularTasaConversion,
   elegirMonedaPrincipal,
 } from '@/lib/saas-kpis';
@@ -83,6 +84,16 @@ describe('calcularRatioLtvCac', () => {
   it('sin CAC no hay ratio', () => {
     expect(calcularRatioLtvCac(3000, null)).toBeNull();
     expect(calcularRatioLtvCac(3000, 0)).toBeNull();
+  });
+});
+
+describe('calcularTasaChurn', () => {
+  it('2 bajas sobre 40 cuentas → 5 %', () => {
+    expect(calcularTasaChurn(40, 2)).toBe(5);
+  });
+
+  it('sin cuentas base → 0 (no divide entre cero)', () => {
+    expect(calcularTasaChurn(0, 3)).toBe(0);
   });
 });
 
