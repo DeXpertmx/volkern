@@ -25,17 +25,20 @@ export interface KpisPlataforma {
   mrr: number;
   arr: number;
   arpa: number;
-  churnRate: number;
-  ltv: number;
+  /** null cuando no hay suscripciones que puedan cancelarse: 0 % sería engañoso. */
+  churnRate: number | null;
+  ltv: number | null;
   /** null cuando no hay inversión de marketing registrada o no hubo clientes nuevos. */
   cac: number | null;
-  conversionRate: number;
+  /** null cuando no arrancó ninguna prueba en el periodo. */
+  conversionRate: number | null;
   ltvCac: number | null;
   detalle: {
     cuentasActivas: number;
     cuentasPago: number;
     nuevosClientes: number;
     cancelados: number;
+    baseChurn: number;
     trialsIniciados: number;
     trialsConvertidos: number;
     gastoMarketing: number | null;
@@ -146,6 +149,8 @@ async function contarConversionDeTrials(
 }
 
 export async function calcularKpisPlataforma(periodoDias: number = 30): Promise<KpisPlataforma> {
+  const desde = new Date(Date.now() - periodoDias * 24 * 60 * 60 * 1000);
+
   const cuentas = await globalPrisma.tenant.findMany({
     where: { estado: 'activo' },
     select: { mrr: true, moneda: true },
@@ -159,8 +164,15 @@ export async function calcularKpisPlataforma(periodoDias: number = 30): Promise<
   const arpa = calcularArpa(mrr, cuentasPago);
   const arr = SaaSMetricsService.calculateARR(mrr);
 
-  const churnRate = await SaaSMetricsService.calculateChurnRate(periodoDias);
-  const ltv = SaaSMetricsService.calculateLTV(arpa, churnRate);
+  // La tasa de churn necesita una base de suscripciones; sin ella, 0 % no
+  // significaría «nadie se va», sino «no hay nada que medir».
+  const baseChurn = await globalPrisma.subscription.count({
+    where: { fechaCreacion: { lt: desde }, estado: { in: ['activa', 'trial'] } },
+  });
+  const churnRate = baseChurn > 0 ? await SaaSMetricsService.calculateChurnRate(periodoDias) : null;
+  const ltv = churnRate !== null && churnRate > 0
+    ? SaaSMetricsService.calculateLTV(arpa, churnRate)
+    : null;
 
   const nuevosClientes = await SaaSMetricsService.calculateNewCustomers(periodoDias);
   const cancelados = await SaaSMetricsService.calculateChurnedCustomers(periodoDias);
@@ -169,7 +181,7 @@ export async function calcularKpisPlataforma(periodoDias: number = 30): Promise<
   const cac = calcularCac(gastoMarketing, nuevosClientes);
 
   const { iniciados, convertidos } = await contarConversionDeTrials(periodoDias);
-  const conversionRate = calcularTasaConversion(convertidos, iniciados);
+  const conversionRate = iniciados > 0 ? calcularTasaConversion(convertidos, iniciados) : null;
 
   let motivoSinCac: string | null = null;
   if (cac === null) {
@@ -190,12 +202,13 @@ export async function calcularKpisPlataforma(periodoDias: number = 30): Promise<
     ltv,
     cac,
     conversionRate,
-    ltvCac: calcularRatioLtvCac(ltv, cac),
+    ltvCac: calcularRatioLtvCac(ltv ?? 0, cac),
     detalle: {
       cuentasActivas: cuentas.length,
       cuentasPago,
       nuevosClientes,
       cancelados,
+      baseChurn,
       trialsIniciados: iniciados,
       trialsConvertidos: convertidos,
       gastoMarketing: gastoMarketing ?? null,

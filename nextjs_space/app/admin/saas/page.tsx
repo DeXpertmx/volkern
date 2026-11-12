@@ -24,16 +24,17 @@ interface KpisPlataforma {
   mrr: number;
   arr: number;
   arpa: number;
-  churnRate: number;
-  ltv: number;
+  churnRate: number | null;
+  ltv: number | null;
   cac: number | null;
-  conversionRate: number;
+  conversionRate: number | null;
   ltvCac: number | null;
   detalle: {
     cuentasActivas: number;
     cuentasPago: number;
     nuevosClientes: number;
     cancelados: number;
+    baseChurn: number;
     trialsIniciados: number;
     trialsConvertidos: number;
     gastoMarketing: number | null;
@@ -54,7 +55,8 @@ function formatearDinero(valor: number, moneda: string): string {
   }
 }
 
-function formatearPorcentaje(valor: number): string {
+function formatearPorcentaje(valor: number | null): string {
+  if (valor === null) return '—';
   return `${valor.toLocaleString('es-MX', { maximumFractionDigits: 1 })}%`;
 }
 
@@ -208,7 +210,9 @@ export default function SaaSMetricsPage() {
               {formatearPorcentaje(kpis.churnRate)}
             </h2>
             <p className="text-[11px] font-bold text-slate-400 mt-1">
-              {kpis.detalle.cancelados} cancelaciones en el periodo
+              {kpis.churnRate === null
+                ? 'Sin suscripciones registradas que medir'
+                : `${kpis.detalle.cancelados} cancelaciones sobre ${kpis.detalle.baseChurn} suscripciones`}
             </p>
           </CardContent>
         </Card>
@@ -220,9 +224,11 @@ export default function SaaSMetricsPage() {
             </div>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">LTV</p>
             <h2 className="text-3xl font-black text-[#1A365D] tracking-tighter">
-              {dinero(kpis.ltv)}
+              {kpis.ltv === null ? '—' : dinero(kpis.ltv)}
             </h2>
-            <p className="text-[11px] font-bold text-slate-400 mt-1">ARPA ÷ churn mensual</p>
+            <p className="text-[11px] font-bold text-slate-400 mt-1">
+              {kpis.ltv === null ? 'Necesita churn medible' : 'ARPA ÷ churn mensual'}
+            </p>
           </CardContent>
         </Card>
 
@@ -255,8 +261,9 @@ export default function SaaSMetricsPage() {
               {formatearPorcentaje(kpis.conversionRate)}
             </h2>
             <p className="text-[11px] font-bold text-slate-400 mt-1">
-              {kpis.detalle.trialsConvertidos} de {kpis.detalle.trialsIniciados} oportunidades pasaron a
-              cliente
+              {kpis.conversionRate === null
+                ? 'Sin pruebas iniciadas en el periodo'
+                : `${kpis.detalle.trialsConvertidos} de ${kpis.detalle.trialsIniciados} oportunidades pasaron a cliente`}
             </p>
           </CardContent>
         </Card>
@@ -295,6 +302,7 @@ export default function SaaSMetricsPage() {
               { label: 'Cuentas de pago', valor: kpis.detalle.cuentasPago },
               { label: 'Nuevas en el periodo', valor: kpis.detalle.nuevosClientes },
               { label: 'Canceladas en el periodo', valor: kpis.detalle.cancelados },
+              { label: 'Suscripciones al inicio del periodo', valor: kpis.detalle.baseChurn },
             ].map((fila) => (
               <div key={fila.label} className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest">
