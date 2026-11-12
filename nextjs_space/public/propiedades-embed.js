@@ -1005,6 +1005,12 @@ ${CID} .vp-feature-ico { flex: none; font-size: 1.15rem; line-height: 1; }
 ${CID} .vp-feature-txt { display: flex; flex-direction: column; min-width: 0; }
 ${CID} .vp-feature-label { font-size: 0.7rem; color: var(--vp-muted); }
 ${CID} .vp-feature-value { font-size: 0.86rem; font-weight: 700; color: var(--vp-text); }
+/* Tres columnas en pantallas anchas, como la ficha del portal: con cuatro, los
+   rótulos largos («Aire acondicionado») se parten en dos líneas y las fichas
+   dejan de tener la misma altura. */
+@media (min-width: 560px) {
+  ${CID} .vp-features { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 /* La calculadora es una sección más: su panel no repite tarjeta al colgar de una */
 ${CID} .vp-card-sec > .vp-hipoteca .vp-hipo {
   border: 0;
