@@ -149,6 +149,10 @@ export default function SaaSMetricsPage() {
         <p className="text-[#4A5568] font-bold text-xs uppercase tracking-widest opacity-60">
           Métricas vitales de la plataforma · últimos {kpis.periodoDias} días
         </p>
+        <p className="mt-3 text-[11px] font-bold text-slate-400">
+          Churn: bajas del periodo sobre las cuentas que ya eran clientes al inicio (misma
+          definición que el Churn Radar).
+        </p>
         {kpis.multiDivisa && (
           <p className="mt-3 text-[11px] font-bold text-amber-700 bg-amber-50 inline-block px-3 py-1 rounded-full">
             Cuentas en varias divisas: los importes se muestran en {kpis.moneda}, la de mayor MRR.

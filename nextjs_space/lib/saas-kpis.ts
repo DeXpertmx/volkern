@@ -1,5 +1,8 @@
 import { globalPrisma } from './db';
-import { SaaSMetricsService } from './saas-metrics';
+import { SaaSMetricsService, calcularVentanaChurn } from './saas-metrics';
+
+// La definición de churn vive en `saas-metrics` (única para toda la plataforma).
+export { calcularTasaChurn, calcularVentanaChurn } from './saas-metrics';
 
 /**
  * KPIs de negocio de la plataforma (MRR, ARR, ARPA, churn, LTV, CAC y
@@ -100,11 +103,6 @@ export function calcularTasaConversion(convertidas: number, totales: number): nu
   return (convertidas / totales) * 100;
 }
 
-/** Churn = bajas del periodo / cuentas al inicio del periodo. */
-export function calcularTasaChurn(base: number, bajas: number): number {
-  if (base <= 0) return 0;
-  return (bajas / base) * 100;
-}
 
 /**
  * Inversión de marketing mensual declarada por el operador. Vive en
@@ -134,8 +132,6 @@ async function leerGastoMarketing(): Promise<{ valor: number | null; hayDato: bo
   }
 }
 
-/** Estados con los que una cuenta deja de ser cliente en la plataforma. */
-const ESTADOS_DE_BAJA = ['cancelado', 'suspendido', 'inactivo'];
 
 export async function calcularKpisPlataforma(periodoDias: number = 30): Promise<KpisPlataforma> {
   const desde = new Date(Date.now() - periodoDias * 24 * 60 * 60 * 1000);
@@ -153,18 +149,11 @@ export async function calcularKpisPlataforma(periodoDias: number = 30): Promise<
   const arpa = calcularArpa(mrr, cuentasPago);
   const arr = SaaSMetricsService.calculateARR(mrr);
 
-  // Churn sobre cuentas, que es donde vive el estado comercial (el MRR también
-  // sale de ahí): base = cuentas que ya existían al empezar el periodo, bajas =
-  // las que pasaron a suspendida/cancelada dentro del periodo.
-  const baseChurn = await globalPrisma.tenant.count({
-    where: { estado: { in: ['activo', 'trial'] }, fechaCreacion: { lt: desde } },
-  });
-  const cancelados = await globalPrisma.tenant.count({
-    where: { estado: { in: ESTADOS_DE_BAJA }, fechaActualizacion: { gte: desde } },
-  });
-  const churnRate = baseChurn > 0
-    ? calcularTasaChurn(baseChurn, cancelados)
-    : null;
+  // Churn: misma definición que el radar de /admin/saas/churn.
+  const ventanaChurn = await calcularVentanaChurn(desde, new Date());
+  const baseChurn = ventanaChurn.base;
+  const cancelados = ventanaChurn.bajas;
+  const churnRate = ventanaChurn.tasa;
   // Con churn 0 el LTV sería infinito: mejor no publicar una cifra inventada.
   const ltv = churnRate !== null && churnRate > 0
     ? SaaSMetricsService.calculateLTV(arpa, churnRate)

@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma as proxyPrisma, globalPrisma, getTenantDb } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
+import { calcularVentanaChurn } from '@/lib/saas-metrics';
 
 // GET /api/admin/analytics - Obtener analíticas globales (Superadmin)
 // Este endpoint opera principalmente sobre el Control Plane (Global DB) y agrega datos de Tenants.
@@ -96,16 +97,10 @@ export const GET = withTenantAuth(async (req, auth) => {
     });
 
     // 4. Calcular tasas (MRR, Churn)
-    const churnedTenants = await globalPrisma.auditLog.count({
-      where: {
-        entidad: 'tenant',
-        accion: 'actualizar',
-        descripcion: { contains: 'suspendido' },
-        fechaCreacion: { gte: periodStart }
-      }
-    });
+    // Churn con la definición única de la plataforma, no con una variante local.
+    const ventanaChurn = await calcularVentanaChurn(periodStart, new Date());
 
-    const churnRate = activeTenants > 0 ? ((churnedTenants / activeTenants) * 100).toFixed(2) : '0.00';
+    const churnRate = ventanaChurn.tasa === null ? null : ventanaChurn.tasa.toFixed(2);
     const growthRate = activeTenants > 0 ? ((newTenants / activeTenants) * 100).toFixed(2) : '0.00';
 
     return NextResponse.json({
@@ -123,7 +118,9 @@ export const GET = withTenantAuth(async (req, auth) => {
       },
       metrics: {
         newTenants,
-        churnRate: parseFloat(churnRate),
+        churnRate: churnRate === null ? null : parseFloat(churnRate),
+        churnBajas: ventanaChurn.bajas,
+        churnBase: ventanaChurn.base,
         growthRate: parseFloat(growthRate),
         avgLeadsPerTenant: activeTenants > 0 ? Math.round(totalLeadsAggregated / (aggregationTenants.length || 1)) : 0
       },

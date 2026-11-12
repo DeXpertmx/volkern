@@ -3,7 +3,7 @@ import { globalPrisma } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 import { isSuperadminRequest } from '@/lib/auth-helpers';
-import { SaaSMetricsService } from '@/lib/saas-metrics';
+import { SaaSMetricsService, calcularVentanaChurn } from '@/lib/saas-metrics';
 
 export async function GET(request: NextRequest) {
   // Solo operadores Superadmin de la plataforma
@@ -27,9 +27,14 @@ export async function GET(request: NextRequest) {
     const totalMRR = currentMetrics.mrr || await SaaSMetricsService.calculateMRR();
     const arr = totalMRR * 12;
 
-    const churnRate = await SaaSMetricsService.calculateChurnRate(periodDays);
+    // Churn con la definición única (ver calcularVentanaChurn); así la tasa y
+    // el número de bajas de esta respuesta cuentan lo mismo.
+    const hastaChurn = new Date();
+    const desdeChurn = new Date(hastaChurn.getTime() - periodDays * 24 * 60 * 60 * 1000);
+    const ventanaChurn = await calcularVentanaChurn(desdeChurn, hastaChurn);
+    const churnRate = ventanaChurn.tasa ?? 0;
     const newCustomers = await SaaSMetricsService.calculateNewCustomers(periodDays);
-    const churnedCustomers = await SaaSMetricsService.calculateChurnedCustomers(periodDays);
+    const churnedCustomers = ventanaChurn.bajas;
     const expansionRevenue = await SaaSMetricsService.calculateExpansionRevenue(periodDays);
     const contractionRevenue = await SaaSMetricsService.calculateContractionRevenue(periodDays);
     const trialConversionRate = await SaaSMetricsService.calculateTrialConversionRate(periodDays);

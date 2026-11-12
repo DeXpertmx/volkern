@@ -27,6 +27,71 @@ export interface MetricHistoryItem {
   trialConversionRate: number;
 }
 
+/** Estados con los que una cuenta deja de ser cliente en la plataforma. */
+export const ESTADOS_DE_BAJA = ['cancelado', 'suspendido', 'inactivo'];
+
+export interface VentanaChurn {
+  desde: Date;
+  hasta: Date;
+  /** Cuentas que eran clientes al empezar la ventana. */
+  base: number;
+  /** Cuentas que causaron baja dentro de la ventana. */
+  bajas: number;
+  /** Porcentaje de bajas sobre la base; null si no había base que medir. */
+  tasa: number | null;
+}
+
+/** Churn = bajas del periodo / cuentas al inicio del periodo. */
+export function calcularTasaChurn(base: number, bajas: number): number {
+  if (base <= 0) return 0;
+  return (bajas / base) * 100;
+}
+
+/**
+ * ─── Definición única de churn de la plataforma ────────────────────────────
+ *
+ * Se mide sobre cuentas (`Tenant`), que es donde viven el estado comercial y
+ * el MRR. La tabla `Subscription` no se mantiene en producción: calcularlo ahí
+ * daría otro número para el mismo concepto.
+ *
+ *   base  = cuentas creadas antes de `desde` que seguían siendo clientes al
+ *           empezar la ventana: activas/en prueba, o dadas de baja después de
+ *           `desde` (estaban vivas al inicio).
+ *   bajas = cuentas que pasaron a cancelado/suspendido/inactivo con
+ *           `fechaActualizacion` dentro de [desde, hasta].
+ *   tasa  = bajas / base × 100, con null cuando no hay base.
+ *
+ * La consumen `/admin/saas` (KPIs), `/admin/saas/churn` (radar y evolución
+ * mensual), `/api/admin/saas-metrics` y `/api/admin/analytics`.
+ */
+export async function calcularVentanaChurn(desde: Date, hasta: Date): Promise<VentanaChurn> {
+  const [base, bajas] = await Promise.all([
+    globalPrisma.tenant.count({
+      where: {
+        fechaCreacion: { lt: desde },
+        OR: [
+          { estado: { in: ['activo', 'trial'] } },
+          { estado: { in: ESTADOS_DE_BAJA }, fechaActualizacion: { gte: desde } },
+        ],
+      },
+    }),
+    globalPrisma.tenant.count({
+      where: {
+        estado: { in: ESTADOS_DE_BAJA },
+        fechaActualizacion: { gte: desde, lte: hasta },
+      },
+    }),
+  ]);
+
+  return {
+    desde,
+    hasta,
+    base,
+    bajas,
+    tasa: base > 0 ? calcularTasaChurn(base, bajas) : null,
+  };
+}
+
 export class SaaSMetricsService {
   static async calculateMRR(tenantId?: string): Promise<number> {
     const whereClause = tenantId 
@@ -67,29 +132,10 @@ export class SaaSMetricsService {
   }
 
   static async calculateChurnRate(periodDays: number = 30): Promise<number> {
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - periodDays);
-    const endDate = new Date();
-
-    const cancelledSubscriptions = await globalPrisma.subscription.count({
-      where: {
-        estado: 'cancelada',
-        fechaCancelacion: {
-          gte: startDate,
-          lte: endDate
-        }
-      }
-    });
-
-    const startCustomers = await globalPrisma.subscription.count({
-      where: {
-        fechaCreacion: { lt: startDate },
-        estado: { in: ['activa', 'trial'] }
-      }
-    });
-
-    if (startCustomers === 0) return 0;
-    return (cancelledSubscriptions / startCustomers) * 100;
+    const hasta = new Date();
+    const desde = new Date(hasta.getTime() - periodDays * 24 * 60 * 60 * 1000);
+    const ventana = await calcularVentanaChurn(desde, hasta);
+    return ventana.tasa ?? 0;
   }
 
   static async calculateActiveCustomers(): Promise<number> {

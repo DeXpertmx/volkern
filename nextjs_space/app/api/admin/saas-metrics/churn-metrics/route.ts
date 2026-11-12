@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { globalPrisma } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 import { isSuperadminRequest } from '@/lib/auth-helpers';
+import { calcularVentanaChurn } from '@/lib/saas-metrics';
 
 export async function GET(request: NextRequest) {
   // Solo operadores Superadmin de la plataforma
@@ -16,46 +16,40 @@ export async function GET(request: NextRequest) {
     const periodDays = parseInt(searchParams.get('periodDays') || '90');
 
     const now = new Date();
-    const months: { month: string; churnRate: number; churned: number; total: number }[] = [];
+    const months: Array<{
+      month: string;
+      churnRate: number | null;
+      churned: number;
+      total: number;
+    }> = [];
 
+    // Mismo cálculo que /api/admin/saas-metrics/kpis (ver calcularVentanaChurn
+    // en lib/saas-metrics.ts): una sola definición para toda la plataforma.
     for (let i = Math.floor(periodDays / 30); i >= 0; i--) {
       const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
-      const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - i - 1, 1);
-      const prevMonthEnd = new Date(now.getFullYear(), now.getMonth() - i, 0);
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59, 999);
 
-      const totalAtStart = await globalPrisma.tenant.count({
-        where: {
-          fechaCreacion: { lt: monthStart },
-          estado: { in: ['activo', 'trial'] }
-        }
-      });
-
-      const churnedSubscriptions = await globalPrisma.subscription.findMany({
-        where: {
-          estado: 'cancelada',
-          fechaCancelacion: { gte: monthStart, lte: monthEnd }
-        },
-        select: { tenantId: true },
-        distinct: ['tenantId']
-      });
-      const churnedInMonth = churnedSubscriptions.length;
-
-      const churnRate = totalAtStart > 0 ? (churnedInMonth / totalAtStart) * 100 : 0;
+      const ventana = await calcularVentanaChurn(monthStart, monthEnd);
 
       months.push({
         month: monthStart.toLocaleDateString('es-ES', { month: 'short', year: '2-digit' }),
-        churnRate: Math.round(churnRate * 100) / 100,
-        churned: churnedInMonth,
-        total: totalAtStart
+        churnRate: ventana.tasa === null ? null : Math.round(ventana.tasa * 100) / 100,
+        churned: ventana.bajas,
+        total: ventana.base,
       });
     }
 
-    const avgChurnRate = months.length > 0
-      ? months.reduce((sum, m) => sum + m.churnRate, 0) / months.length
-      : 0;
+    const medibles = months.filter((m) => m.churnRate !== null);
+    const avgChurnRate = medibles.length > 0
+      ? medibles.reduce((sum, m) => sum + (m.churnRate as number), 0) / medibles.length
+      : null;
 
-    return NextResponse.json({ metrics: months, avgChurnRate: Math.round(avgChurnRate * 100) / 100 });
+    return NextResponse.json({
+      metrics: months,
+      avgChurnRate: avgChurnRate === null ? null : Math.round(avgChurnRate * 100) / 100,
+      definicion:
+        'Churn sobre cuentas: bajas (cancelada/suspendida/inactiva) del periodo / cuentas que ya eran clientes al inicio del periodo.',
+    });
   } catch (error) {
     console.error('[SaaS Churn Metrics] Error:', error);
     return NextResponse.json(
