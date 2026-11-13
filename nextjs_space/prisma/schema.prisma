@@ -7124,6 +7124,12 @@ model SaaSMetric {
   trialConversions    Int      @default(0)
   trialStarts         Int      @default(0)
   trialConversionRate Float    @default(0)
+  /// Tasa de churn con la definición única de la plataforma (ver
+  /// `calcularVentanaChurn`). Nullable: las filas anteriores a la unificación
+  /// no tienen tasa calculada y no se debe inventar.
+  churnRate           Float?
+  /// Cuentas que eran clientes al inicio de la ventana del snapshot.
+  churnBase           Int?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 

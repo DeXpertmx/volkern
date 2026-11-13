@@ -22,9 +22,41 @@ export interface MetricHistoryItem {
   mrr: number;
   arr: number;
   activeCustomers: number;
-  churnRate: number;
+  /** Tasa guardada en el snapshot; null si la fila es anterior a la unificación. */
+  churnRate: number | null;
   newCustomers: number;
   trialConversionRate: number;
+}
+
+/** Fila mínima de `saas_metrics` que necesita el histórico. */
+export interface FilaHistorialMetricas {
+  date: Date;
+  mrr: number;
+  arr: number;
+  activeCustomers: number;
+  churnRate: number | null;
+  newCustomers: number;
+  trialConversionRate: number;
+}
+
+/**
+ * Histórico con la tasa guardada en el snapshot.
+ *
+ * Antes se recalculaba aquí como `churnedCustomers / activeCustomers`, una
+ * segunda fórmula de churn que no coincidía con la definición única. Ahora la
+ * tasa la escribe `recordMetrics` con `calcularVentanaChurn` y esta función
+ * solo la transporta.
+ */
+export function mapearHistorialMetricas(filas: FilaHistorialMetricas[]): MetricHistoryItem[] {
+  return filas.map((m) => ({
+    date: m.date.toISOString().split('T')[0],
+    mrr: m.mrr,
+    arr: m.arr,
+    activeCustomers: m.activeCustomers,
+    churnRate: m.churnRate,
+    newCustomers: m.newCustomers,
+    trialConversionRate: m.trialConversionRate,
+  }));
 }
 
 // Los estados de baja viven en `tenant-estado`, junto con el sellado de la
@@ -156,15 +188,10 @@ export class SaaSMetricsService {
   }
 
   static async calculateChurnedCustomers(periodDays: number = 30): Promise<number> {
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - periodDays);
-
-    return await globalPrisma.subscription.count({
-      where: {
-        estado: 'cancelada',
-        fechaCancelacion: { gte: startDate }
-      }
-    });
+    const hasta = new Date();
+    const desde = new Date(hasta.getTime() - periodDays * 24 * 60 * 60 * 1000);
+    const ventana = await calcularVentanaChurn(desde, hasta);
+    return ventana.bajas;
   }
 
   static async calculateExpansionRevenue(periodDays: number = 30): Promise<number> {
@@ -235,8 +262,14 @@ export class SaaSMetricsService {
     const arr = this.calculateARR(mrr);
     const activeCustomers = await this.calculateActiveCustomers();
     const newCustomers = await this.calculateNewCustomers();
-    const churnedCustomers = await this.calculateChurnedCustomers();
-    const churnRate = await this.calculateChurnRate();
+    // Snapshot con la definición única de churn: se guardan la tasa y su base,
+    // no una tasa recalculable a posteriori con otra fórmula.
+    const hastaChurn = new Date();
+    const desdeChurn = new Date(hastaChurn.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const ventanaChurn = await calcularVentanaChurn(desdeChurn, hastaChurn);
+    const churnedCustomers = ventanaChurn.bajas;
+    const churnRate = ventanaChurn.tasa;
+    const churnBase = ventanaChurn.base;
     const expansionRevenue = await this.calculateExpansionRevenue();
     const contractionRevenue = await this.calculateContractionRevenue();
     const trialConversions = await globalPrisma.subscription.count({
@@ -270,6 +303,8 @@ export class SaaSMetricsService {
         newCustomers,
         churnedCustomers,
         activeCustomers,
+        churnRate,
+        churnBase,
         expansionRevenue,
         contractionRevenue,
         trialConversions,
@@ -284,6 +319,8 @@ export class SaaSMetricsService {
         newCustomers,
         churnedCustomers,
         activeCustomers,
+        churnRate,
+        churnBase,
         expansionRevenue,
         contractionRevenue,
         trialConversions,
@@ -294,7 +331,7 @@ export class SaaSMetricsService {
 
     return {
       ...(metrics as any),
-      churnRate,
+      churnRate: churnRate ?? 0,
       date: (metrics as any).date
     } as SaaSMetrics;
   }
@@ -311,15 +348,7 @@ export class SaaSMetricsService {
       orderBy: { date: 'asc' }
     });
 
-    return metrics.map(m => ({
-      date: m.date.toISOString().split('T')[0],
-      mrr: m.mrr,
-      arr: m.arr,
-      activeCustomers: m.activeCustomers,
-      churnRate: m.churnedCustomers / (m.activeCustomers || 1) * 100,
-      newCustomers: m.newCustomers,
-      trialConversionRate: m.trialConversionRate
-    }));
+    return mapearHistorialMetricas(metrics);
   }
 
   static async getCurrentMetrics(): Promise<SaaSMetrics> {
@@ -334,7 +363,9 @@ export class SaaSMetricsService {
     });
 
     if (todayMetrics) {
-      const churnRate = await this.calculateChurnRate();
+      // La tasa del snapshot ya viene de la definición única; se recalcula solo
+      // si la fila es anterior a la unificación.
+      const churnRate = todayMetrics.churnRate ?? (await this.calculateChurnRate());
       return { ...todayMetrics, churnRate, date: todayMetrics.date } as SaaSMetrics;
     }
 
