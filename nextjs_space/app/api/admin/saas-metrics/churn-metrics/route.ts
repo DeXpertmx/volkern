@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
       metrics: months,
       avgChurnRate: avgChurnRate === null ? null : Math.round(avgChurnRate * 100) / 100,
       definicion:
-        'Churn sobre cuentas: bajas (cancelada/suspendida/inactiva) del periodo / cuentas que ya eran clientes al inicio del periodo.',
+        'Churn sobre cuentas: cuentas con fecha de baja dentro del periodo / cuentas que ya eran clientes al inicio del periodo.',
     });
   } catch (error) {
     console.error('[SaaS Churn Metrics] Error:', error);

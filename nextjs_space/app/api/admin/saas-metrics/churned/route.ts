@@ -19,15 +19,10 @@ export async function GET(request: NextRequest) {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - periodDays);
 
+    // Misma definición que el resto de la plataforma: la baja se fecha en
+    // `Tenant.fechaBaja` (ver calcularVentanaChurn), no en la suscripción.
     const churnedTenants = await globalPrisma.tenant.findMany({
-      where: {
-        estado: 'cancelado',
-        subscriptions: {
-          some: {
-            fechaCancelacion: { gte: startDate }
-          }
-        }
-      },
+      where: { fechaBaja: { gte: startDate } },
       include: {
         subscriptions: {
           where: { estado: 'cancelada' },
@@ -36,7 +31,7 @@ export async function GET(request: NextRequest) {
           include: { plan: true }
         }
       },
-      orderBy: { fechaActualizacion: 'desc' }
+      orderBy: { fechaBaja: 'desc' }
     });
 
     const customers = await Promise.all(
@@ -45,7 +40,7 @@ export async function GET(request: NextRequest) {
         const planSlug = tenant.plan || sub?.plan?.slug || 'esencial';
         const planConfig = await getPlanConfig(planSlug);
         const createdAt = new Date(tenant.fechaCreacion);
-        const cancelledAt = sub?.fechaCancelacion ? new Date(sub.fechaCancelacion) : new Date();
+        const cancelledAt = tenant.fechaBaja ? new Date(tenant.fechaBaja) : new Date();
         const mesesActivo = Math.max(1, Math.round((cancelledAt.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24 * 30)));
 
         return {
@@ -53,7 +48,7 @@ export async function GET(request: NextRequest) {
           nombre: tenant.nombre,
           plan: planSlug,
           mrr: tenant.mrr || planConfig?.precio || 0,
-          fechaCancelacion: sub?.fechaCancelacion,
+          fechaCancelacion: tenant.fechaBaja,
           reason: (sub?.metadata as any)?.churnReason || null,
           mesesActivo
         };

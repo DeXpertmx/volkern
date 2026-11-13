@@ -6,6 +6,7 @@ import { withTenantAuth } from '@/lib/api-key-auth';
 import { stripe } from '@/lib/stripe';
 import { getPlanConfig } from '@/lib/plans';
 import { provisionTenantDatabase } from '@/lib/tenant-provisioning';
+import { aplicarEstadoTenant } from '@/lib/tenant-estado';
 
 import { appendFileSync } from 'fs';
 import { join } from 'path';
@@ -58,7 +59,9 @@ export const POST = withTenantAuth(async (req, auth, context) => {
           data: {
             estado: 'trial',
             fechaTrialInicio: tenant.fechaTrialInicio || new Date(),
-            fechaTrialFin: newTrialEnd
+            fechaTrialFin: newTrialEnd,
+            // Volver a prueba reactiva la cuenta: sin fecha de baja.
+            fechaBaja: null
           }
         });
 
@@ -67,19 +70,14 @@ export const POST = withTenantAuth(async (req, auth, context) => {
         break;
 
       case 'suspend':
-        await globalPrisma.tenant.update({
-          where: { id: tenantId },
-          data: { estado: 'suspendido' }
-        });
+        // Sella la fecha de baja (solo la primera vez).
+        await aplicarEstadoTenant(globalPrisma, tenantId, 'suspendido');
 
         result.message = 'Tenant suspendido';
         break;
 
       case 'reactivate':
-        await globalPrisma.tenant.update({
-          where: { id: tenantId },
-          data: { estado: 'activo' }
-        });
+        await aplicarEstadoTenant(globalPrisma, tenantId, 'activo');
 
         result.message = 'Tenant reactivado';
         break;
@@ -208,6 +206,7 @@ export const POST = withTenantAuth(async (req, auth, context) => {
               data: {
                 plan: planId,
                 estado: 'activo',
+                fechaBaja: null,
                 limites: planLimits as any,
                 mrr: planConfig.precio || 0,
                 moneda: planConfig.moneda.toUpperCase() || 'EUR',
@@ -228,6 +227,7 @@ export const POST = withTenantAuth(async (req, auth, context) => {
             data: {
               plan: planId,
               estado: 'activo',
+              fechaBaja: null,
               limites: planLimits as any,
               mrr: mrr || 0,
               configuracion: {

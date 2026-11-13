@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/db'
 import { normalizarSubdominio } from '@/lib/tenant-subdomain';
+import { datosCambioEstado } from '@/lib/tenant-estado';
 
 // GET /api/admin/tenants/[id] - Get tenant details
 export async function GET(
@@ -177,7 +178,8 @@ export async function PATCH(
         ...(nombre && { nombre }),
         ...(slug && { slug }),
         ...(plan && { plan }),
-        ...(estado && { estado }),
+        // Cambiar el estado sella o limpia la fecha de baja de la cuenta.
+        ...(estado && datosCambioEstado(estado, currentTenant.fechaBaja)),
         ...(dominio !== undefined && { dominio }),
         ...(billingEmail !== undefined && { billingEmail }),
         ...(stripeCustomerId !== undefined && { stripeCustomerId }),

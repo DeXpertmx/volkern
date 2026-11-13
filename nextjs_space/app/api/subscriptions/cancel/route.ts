@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { stripe } from '@/lib/stripe'
+import { aplicarEstadoTenant } from '@/lib/tenant-estado'
 
 export async function POST(request: NextRequest) {
   try {
@@ -44,13 +45,9 @@ export async function POST(request: NextRequest) {
 
     const periodEnd = canceledSubscription.current_period_end as number
 
-    // Actualizar tenant
-    await prisma.tenant.update({
-      where: { id: tenant.id },
-      data: {
-        estado: 'cancelado',
-        fechaVencimiento: new Date(periodEnd * 1000)
-      }
+    // Actualizar tenant (sella la fecha de baja para el cálculo de churn)
+    await aplicarEstadoTenant(prisma, tenant.id, 'cancelado', {
+      fechaVencimiento: new Date(periodEnd * 1000),
     })
 
     // Log de auditoría

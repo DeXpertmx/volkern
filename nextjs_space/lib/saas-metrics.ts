@@ -27,8 +27,9 @@ export interface MetricHistoryItem {
   trialConversionRate: number;
 }
 
-/** Estados con los que una cuenta deja de ser cliente en la plataforma. */
-export const ESTADOS_DE_BAJA = ['cancelado', 'suspendido', 'inactivo'];
+// Los estados de baja viven en `tenant-estado`, junto con el sellado de la
+// fecha correspondiente.
+export { ESTADOS_DE_BAJA } from './tenant-estado';
 
 export interface VentanaChurn {
   desde: Date;
@@ -54,11 +55,15 @@ export function calcularTasaChurn(base: number, bajas: number): number {
  * el MRR. La tabla `Subscription` no se mantiene en producción: calcularlo ahí
  * daría otro número para el mismo concepto.
  *
+ * La fecha que manda es `Tenant.fechaBaja`, escrita solo al entrar en un estado
+ * de baja (ver `datosCambioEstado` en `lib/tenant-estado.ts`). No se usa
+ * `fechaActualizacion`: ese campo cambia con cualquier edición de la cuenta y
+ * movería una baja de periodo.
+ *
  *   base  = cuentas creadas antes de `desde` que seguían siendo clientes al
- *           empezar la ventana: activas/en prueba, o dadas de baja después de
- *           `desde` (estaban vivas al inicio).
- *   bajas = cuentas que pasaron a cancelado/suspendido/inactivo con
- *           `fechaActualizacion` dentro de [desde, hasta].
+ *           empezar la ventana: sin fecha de baja, o con una posterior al
+ *           inicio (estaban vivas al comenzar).
+ *   bajas = cuentas con `fechaBaja` dentro de [desde, hasta].
  *   tasa  = bajas / base × 100, con null cuando no hay base.
  *
  * La consumen `/admin/saas` (KPIs), `/admin/saas/churn` (radar y evolución
@@ -69,17 +74,11 @@ export async function calcularVentanaChurn(desde: Date, hasta: Date): Promise<Ve
     globalPrisma.tenant.count({
       where: {
         fechaCreacion: { lt: desde },
-        OR: [
-          { estado: { in: ['activo', 'trial'] } },
-          { estado: { in: ESTADOS_DE_BAJA }, fechaActualizacion: { gte: desde } },
-        ],
+        OR: [{ fechaBaja: null }, { fechaBaja: { gte: desde } }],
       },
     }),
     globalPrisma.tenant.count({
-      where: {
-        estado: { in: ESTADOS_DE_BAJA },
-        fechaActualizacion: { gte: desde, lte: hasta },
-      },
+      where: { fechaBaja: { gte: desde, lte: hasta } },
     }),
   ]);
 

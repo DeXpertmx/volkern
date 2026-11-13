@@ -151,6 +151,9 @@ export async function archiveTenant(input: ArchiveTenantInput): Promise<ArchiveT
             data: {
                 estado: 'archived',
                 fechaVencimiento: archivedAt,
+                // Baja comercial: el churn la fechará por aquí y no por
+                // `fechaActualizacion`, que cambia con cualquier edición.
+                fechaBaja: archivedAt,
                 mrr: 0,
                 // Intentamos setear fechaArchivado si la columna existe; si no,
                 // Prisma rechazará con error de columna y cae al catch. Para

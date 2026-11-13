@@ -150,8 +150,8 @@ export default function SaaSMetricsPage() {
           Métricas vitales de la plataforma · últimos {kpis.periodoDias} días
         </p>
         <p className="mt-3 text-[11px] font-bold text-slate-400">
-          Churn: bajas del periodo sobre las cuentas que ya eran clientes al inicio (misma
-          definición que el Churn Radar).
+          Churn: cuentas con fecha de baja en el periodo sobre las que ya eran clientes al
+          inicio (misma definición que el Churn Radar).
         </p>
         {kpis.multiDivisa && (
           <p className="mt-3 text-[11px] font-bold text-amber-700 bg-amber-50 inline-block px-3 py-1 rounded-full">

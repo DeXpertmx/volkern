@@ -11,6 +11,7 @@ import { StripeMXService } from '@/lib/finance/mexico/stripe-mx-service'
 import { DUNNING_NOTIFICATION_DAYS, checkIfEventProcessed } from '@/lib/stripe/webhook-helpers'
 import { registrarCobroConfirmado } from '@/lib/hospitality/booking-payments'
 import { importeDesdeUnidadMinima } from '@/lib/moneda'
+import { aplicarEstadoTenant } from '@/lib/tenant-estado'
 
 async function markEventProcessed(
   stripeEventId: string,
@@ -237,13 +238,8 @@ async function handleTrialExpirationCheck(): Promise<void> {
   })
 
   for (const tenant of expiredTrials) {
-    await prisma.tenant.update({
-      where: { id: tenant.id },
-      data: {
-        estado: 'suspendido',
-        plan: 'basico'
-      }
-    })
+    // Sella `fechaBaja` al suspender el trial vencido.
+    await aplicarEstadoTenant(prisma, tenant.id, 'suspendido', { plan: 'basico' })
 
     await handleTrialExpiration(tenant.id)
   }
@@ -355,6 +351,7 @@ export async function POST(request: NextRequest) {
                 data: {
                   plan: resolvedPlan,
                   estado: 'activo',
+                  fechaBaja: null,
                   stripeCustomerId: session.customer as string,
                   ...(configuracion && { configuracion: configuracion as any }),
                 }
@@ -451,8 +448,8 @@ export async function POST(request: NextRequest) {
 
           if (subTenantId) {
             const currentPeriodEnd = subscription.current_period_end as number
+            const nuevoEstado = subscription.status === 'active' ? 'activo' : 'suspendido'
             const updateData: any = {
-              estado: subscription.status === 'active' ? 'activo' : 'suspendido',
               fechaVencimiento: new Date(currentPeriodEnd * 1000)
             }
 
@@ -475,10 +472,7 @@ export async function POST(request: NextRequest) {
               }
             }
 
-            await prisma.tenant.update({
-              where: { id: subTenantId },
-              data: updateData
-            })
+            await aplicarEstadoTenant(prisma, subTenantId, nuevoEstado, updateData)
 
             await handleSubscriptionUpdate(
               subTenantId,
@@ -498,12 +492,8 @@ export async function POST(request: NextRequest) {
           const { tenantId: subTenantId } = subscription.metadata || {}
 
           if (subTenantId) {
-            await prisma.tenant.update({
-              where: { id: subTenantId },
-              data: {
-                estado: 'cancelado',
-                fechaVencimiento: new Date(subscription.ended_at ? subscription.ended_at * 1000 : Date.now())
-              }
+            await aplicarEstadoTenant(prisma, subTenantId, 'cancelado', {
+              fechaVencimiento: new Date(subscription.ended_at ? subscription.ended_at * 1000 : Date.now())
             })
 
             const existingSub = await prisma.subscription.findFirst({
@@ -542,6 +532,7 @@ export async function POST(request: NextRequest) {
                 data: {
                   mrr,
                   estado: 'activo',
+                  fechaBaja: null,
                   fechaVencimiento: new Date(periodEnd * 1000)
                 }
               })
@@ -561,12 +552,7 @@ export async function POST(request: NextRequest) {
             const { tenantId: subTenantId } = fullSubscription.metadata || {}
 
             if (subTenantId) {
-              await prisma.tenant.update({
-                where: { id: subTenantId },
-                data: {
-                  estado: 'suspendido'
-                }
-              })
+              await aplicarEstadoTenant(prisma, subTenantId, 'suspendido')
 
               await handlePaymentFailureDunning(subTenantId, subscription as string)
 

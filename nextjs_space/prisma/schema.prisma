@@ -247,6 +247,11 @@ model Tenant {
   fechaCreacion      DateTime    @default(now())
   fechaActualizacion DateTime    @updatedAt
   fechaVencimiento   DateTime?
+  /// Fecha en la que la cuenta pasó a un estado de baja (suspendida/cancelada/
+  /// inactiva). Se escribe una sola vez y no se toca al editar otros campos,
+  /// a diferencia de `fechaActualizacion`. `null` en cuentas vivas. La usa el
+  /// cálculo de churn (ver `calcularVentanaChurn`).
+  fechaBaja          DateTime?
   billingEmail       String?
   dominio            String?
   fechaTrialFin      DateTime?
