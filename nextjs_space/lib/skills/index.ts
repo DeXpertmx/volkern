@@ -88,13 +88,115 @@ const findLeadByEmailWrapper = async (input: { email?: string; nombre?: string; 
     });
   }
 
+  // 3. Fallback por contacto: el CRM guarda como Contact a las personas ya
+  // convertidas, así que "busca a María" debe encontrarla aunque ya no sea un
+  // lead. Antes solo se miraba Lead y la respuesta era "no existe".
   if (!lead) {
+    const { prisma } = await import('@/lib/db');
+    const contacto = await prisma.contact.findFirst({
+      where: {
+        tenantId,
+        ...(email ? { email: { equals: email, mode: 'insensitive' } } : {}),
+        ...(nombre ? { nombre: { contains: nombre, mode: 'insensitive' } } : {}),
+      },
+      orderBy: { fechaCreacion: 'desc' },
+    });
+    if (contacto) return contacto;
+  }
+
+  if (!lead) {
+    const { prisma } = await import('@/lib/db');
+    const total = await prisma.lead.count({ where: { tenantId } });
     throw new Error(
-      `No encontré ningún lead${email ? ` con el email ${email}` : ''}${nombre ? ` con el nombre "${nombre}"` : ''}.`
+      `No encontré ninguna persona${email ? ` con el email ${email}` : ''}${nombre ? ` con el nombre "${nombre}"` : ''}, ni como lead ni como contacto. ` +
+        `El CRM tiene ${total} lead(s); dime el nombre completo o el email exacto.`
     );
   }
 
   return lead;
+};
+
+/**
+ * buscar_persona: búsqueda de personas en el CRM por nombre, email o teléfono,
+ * mirando leads Y contactos. Es la herramienta que usa el chat de administración
+ * (Telegram) para responder "¿cuál María?" o "dame el teléfono de X" con datos
+ * reales en vez de con una respuesta genérica.
+ */
+const buscarPersonaWrapper = async (input: {
+  tenantId: string;
+  nombre?: string;
+  email?: string;
+  telefono?: string;
+  limite?: number;
+}) => {
+  const { tenantId } = input;
+  if (!tenantId) throw new Error('tenantId es requerido');
+
+  const nombre = (input.nombre || '').trim();
+  const email = (input.email || '').trim();
+  const telefono = (input.telefono || '').trim();
+  const texto = nombre || email || telefono;
+  if (!texto) throw new Error('Dime el nombre, el email o el teléfono de la persona que busco.');
+
+  const limite = Math.min(Math.max(Number(input.limite) || 5, 1), 10);
+  const { prisma } = await import('@/lib/db');
+
+  const orLeads: any[] = [];
+  const orContactos: any[] = [];
+  if (nombre) {
+    orLeads.push({ nombre: { contains: nombre, mode: 'insensitive' } });
+    orContactos.push({ nombre: { contains: nombre, mode: 'insensitive' } });
+  }
+  if (email) {
+    orLeads.push({ email: { equals: email, mode: 'insensitive' } });
+    orContactos.push({ email: { equals: email, mode: 'insensitive' } });
+  }
+  if (telefono) {
+    const digits = telefono.replace(/\D/g, '');
+    orLeads.push({ telefono: { contains: digits || telefono } });
+    orContactos.push({ telefono: { contains: digits || telefono } });
+  }
+
+  const [leads, contactos] = await Promise.all([
+    prisma.lead.findMany({
+      where: { tenantId, OR: orLeads },
+      orderBy: { fechaCreacion: 'desc' },
+      take: limite,
+      select: { id: true, nombre: true, email: true, telefono: true, empresa: true, estado: true },
+    }),
+    prisma.contact.findMany({
+      where: { tenantId, tipo: 'person', OR: orContactos },
+      orderBy: { fechaCreacion: 'desc' },
+      take: limite,
+      select: { id: true, nombre: true, email: true, telefono: true, cargo: true },
+    }),
+  ]);
+
+  const lineas = [
+    ...leads.map((l: any) =>
+      `• Lead: ${l.nombre} — ${l.email}${l.telefono ? ` · ${l.telefono}` : ''}${l.empresa ? ` · ${l.empresa}` : ''} (${l.estado})`
+    ),
+    ...contactos.map((c: any) =>
+      `• Contacto: ${c.nombre} — ${c.email}${c.telefono ? ` · ${c.telefono}` : ''}${c.cargo ? ` · ${c.cargo}` : ''}`
+    ),
+  ];
+
+  if (lineas.length === 0) {
+    const total = await prisma.lead.count({ where: { tenantId } });
+    return {
+      success: true,
+      message:
+        `No hay ninguna persona que coincida con «${texto}» ni en leads ni en contactos. ` +
+        `El CRM tiene ${total} lead(s). Si quieres, dime «crea un lead ${texto}, email …» y lo registro.`,
+      data: { encontrados: [] },
+    };
+  }
+
+  return {
+    success: true,
+    message: `🔍 ${lineas.length} coincidencia(s) para «${texto}»:\n${lineas.join('\n')}`,
+    data: { leads, contactos },
+  };
 };
 
 /**
@@ -4250,6 +4352,7 @@ export const skills = {
   update_lead: updateLeadWrapper,
   get_lead: contactSkills.getLead,
   find_lead_by_email: findLeadByEmailWrapper,
+  buscar_persona: buscarPersonaWrapper,
   convert_lead: convertLeadWrapper,
   list_leads: contactSkills.listLeads,
   obtener_telefono: getPhoneByNameWrapper,
@@ -4548,6 +4651,7 @@ export function listSkills(): Array<{ name: SkillName; description: string; cate
     { name: 'create_lead', description: 'Crear un nuevo lead', category: 'leads' },
     { name: 'get_lead', description: 'Obtener lead por ID', category: 'leads' },
     { name: 'find_lead_by_email', description: 'Buscar lead por email', category: 'leads' },
+    { name: 'buscar_persona', description: 'Buscar personas por nombre, email o teléfono en leads y contactos', category: 'leads' },
     { name: 'convert_lead', description: 'Convertir lead a contacto', category: 'leads' },
     { name: 'list_leads', description: 'Listar todos los leads del tenant, con filtro por estado y paginación', category: 'leads' },
     // Conversaciones

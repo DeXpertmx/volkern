@@ -275,6 +275,11 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
   const { tenantId, message, channel } = input
   const startTime = Date.now()
 
+  // Id de la conversación para poder registrar el fallo si algo revienta a
+  // mitad del pipeline (antes no quedaba ningún rastro en la conversación y
+  // parecía que el bot simplemente no había contestado).
+  let conversacionEnCurso: string | null = null
+
   try {
     // Imports dinámicos para romper dependencia circular con lib/skills
     const [{ intentClassifier }, { SkillOrchestratorAgent }, { ExecutionEngine }] = await Promise.all([
@@ -313,6 +318,8 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
       contactEmail: input.contactEmail,
       leadId: input.leadId,
     })
+
+    conversacionEnCurso = conv.id
 
     if (channel === 'whatsapp') {
       const lastBotMsg = await prisma.message.findFirst({
@@ -966,6 +973,10 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
       summaryBlock,
       channel,
       contactName: input.contactName,
+      // El chat de Telegram lo usa el administrador de la empresa: el prompt
+      // de cliente ("asistente virtual de servicios") no sirve para preguntar
+      // por un lead y contestaba cosas sin relación.
+      isAdmin: channel === 'telegram',
     })
 
     const historyMessages: OpenRouterMessage[] = recentMessages.map(m => ({
@@ -978,6 +989,28 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
       ...historyMessages,
       { role: 'user', content: message },
     ]
+
+    // Chat de administración (Telegram): buscador real de personas en el CRM.
+    // Sin esta herramienta, un seguimiento como "¿cuál María?" acababa en el
+    // LLM de cliente, que no tiene acceso a leads ni contactos.
+    const esChatDeAdministracion = channel === 'telegram'
+    const ADMIN_TOOLS: OpenRouterTool[] = [{
+      type: 'function',
+      function: {
+        name: 'buscar_persona',
+        description:
+          'Busca personas en el CRM del administrador por nombre, email o teléfono, en leads y contactos. Úsala cuando pregunte por alguien concreto o como seguimiento de una búsqueda anterior ("¿cuál María?"). Devuelve los datos reales o avisa de que no hay coincidencias.',
+        parameters: {
+          type: 'object',
+          properties: {
+            nombre: { type: 'string', description: 'Nombre o parte del nombre de la persona' },
+            email: { type: 'string', description: 'Email exacto de la persona' },
+            telefono: { type: 'string', description: 'Teléfono de la persona' },
+          },
+          required: [],
+        },
+      },
+    }]
 
     // Definir herramienta buscar_catalogo para el LLM
     const CATALOG_TOOLS: OpenRouterTool[] = [{
@@ -1031,6 +1064,23 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
     let catalogQuickReplies: string[] | undefined;
 
     const executeTool = async (toolName: string, toolArgs: Record<string, any>): Promise<string> => {
+      if (toolName === 'buscar_persona') {
+        try {
+          const { skills } = await import('@/lib/skills')
+          const result = await (skills as any).buscar_persona({
+            tenantId,
+            nombre: typeof toolArgs?.nombre === 'string' ? toolArgs.nombre : undefined,
+            email: typeof toolArgs?.email === 'string' ? toolArgs.email : undefined,
+            telefono: typeof toolArgs?.telefono === 'string' ? toolArgs.telefono : undefined,
+            limite: 5,
+          })
+          return result?.message || JSON.stringify(result?.data ?? result)
+        } catch (err: any) {
+          console.warn('[ChatbotService] Error ejecutando buscar_persona tool:', err)
+          return `No pude consultar el CRM: ${err?.message || 'error desconocido'}`
+        }
+      }
+
       if (toolName === 'buscar_catalogo') {
         try {
           // Mapear argumentos del LLM al formato de buscarCatalogo
@@ -1068,7 +1118,11 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
       return JSON.stringify({ error: `Herramienta desconocida: ${toolName}` })
     }
 
-    const llmResponse = await callAssistantWithToolLoop(llmMessages, CATALOG_TOOLS, executeTool)
+    const llmResponse = await callAssistantWithToolLoop(
+      llmMessages,
+      esChatDeAdministracion ? ADMIN_TOOLS : CATALOG_TOOLS,
+      executeTool,
+    )
     const finalMessage = llmResponse.choices?.[0]?.message?.content
       || 'Lo siento, no pude procesar tu mensaje.'
 
@@ -1103,6 +1157,22 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
     }
   } catch (error) {
     console.error('[ChatbotService] Error:', error)
+    try {
+      if (conversacionEnCurso) {
+        await new ChatMemoryService(tenantId).addMessage({
+          conversationId: conversacionEnCurso,
+          content: '⚠️ No pude completar la acción. Intenta de nuevo en unos segundos.',
+          direction: 'saliente',
+          channel,
+          metadata: {
+            source: 'chatbot',
+            error: error instanceof Error ? error.message : String(error),
+          },
+        })
+      }
+    } catch (registroError) {
+      console.warn('[ChatbotService] No se pudo registrar el error en la conversación:', registroError)
+    }
     return {
       success: false,
       response: 'Lo siento, ocurrió un error. Intenta de nuevo.',
@@ -1121,8 +1191,28 @@ function buildSystemPrompt(params: {
   summaryBlock?: string
   channel: string
   contactName?: string
+  isAdmin?: boolean
 }): string {
-  const { config, tenant, services, context, kbSection, catalogSection, summaryBlock, channel, contactName } = params
+  const { config, tenant, services, context, kbSection, catalogSection, summaryBlock, channel, contactName, isAdmin } = params
+
+  // Chat de administración (Telegram): el interlocutor gestiona la empresa, no
+  // es un cliente. El prompt de abajo (servicios, precios, fiscalidad) respondía
+  // cosas sin relación a preguntas sobre el CRM.
+  if (isAdmin) {
+    return `Eres ${config.nombreAsistente || 'el asistente'} de ${tenant?.nombre || 'la empresa'}, en el canal de ADMINISTRACIÓN por Telegram.
+Quien te escribe es un administrador de la empresa y te pide gestionar su CRM (leads, contactos, citas, tareas), no un cliente.
+
+HERRAMIENTAS:
+- buscar_persona: busca por nombre, email o teléfono en leads y contactos. Úsala SIEMPRE que se pregunte por una persona concreta o cuando el mensaje sea el seguimiento de una búsqueda ("¿cuál María?", "y su teléfono?", "dame los datos de X").
+
+REGLAS:
+1. Responde en español, breve y con los datos reales del CRM. Nunca inventes nombres, emails, teléfonos ni estados.
+2. Si la búsqueda no devuelve coincidencias, dilo con claridad y ofrece registrarla como lead.
+3. Si falta un dato para ejecutar algo, pídelo en una sola pregunta.
+4. Las altas y cambios se hacen con órdenes directas ("crea un lead Nombre, email …, teléfono …"); si solo pregunta, contesta con información.
+
+FECHA: ${new Date().toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`
+  }
 
   const servicesInfo = services.map(s =>
     `- ${s.nombre}: ${s.descripcion || 'Sin descripción'} | ${s.duracionMinutos || '?'} min | $${s.precio} ${s.moneda || 'EUR'}`
