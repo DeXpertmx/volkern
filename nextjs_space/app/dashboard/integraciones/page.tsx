@@ -46,7 +46,8 @@ import {
   RefreshCw,
   Key,
   ArrowRight,
-  Building
+  Building,
+  AlertTriangle
 } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
@@ -464,6 +465,19 @@ export default function IntegracionesPage() {
     chatId: string | null
     desde: string | null
   } | null>(null)
+  // Estado REAL del webhook del bot: sin él el tenant no recibe ningún mensaje
+  // aunque el panel muestre la integración como conectada.
+  const [estadoWebhookTelegram, setEstadoWebhookTelegram] = useState<{
+    registrado: boolean
+    url: string | null
+    esperada: string
+    pendientes: number
+    ultimoError: string | null
+    ultimoErrorEn: string | null
+    tieneBot?: boolean
+  } | null>(null)
+  const [cargandoEstadoWebhook, setCargandoEstadoWebhook] = useState(false)
+  const [reparandoWebhook, setReparandoWebhook] = useState(false)
   const [cargandoEstadoVinculoTelegram, setCargandoEstadoVinculoTelegram] = useState(false)
   const [desvinculandoChatTelegram, setDesvinculandoChatTelegram] = useState(false)
 
@@ -592,7 +606,10 @@ export default function IntegracionesPage() {
 
     // El estado del vínculo se pide al servidor: el listado de integraciones no
     // distingue «hay bot» de «hay un chat recibiendo los avisos».
-    if (integracion.tipo === 'telegram') void cargarEstadoVinculoTelegram()
+    if (integracion.tipo === 'telegram') {
+      void cargarEstadoVinculoTelegram()
+      void cargarEstadoWebhookTelegram()
+    }
 
     // Inicializar con valores por defecto
     const defaultValues: any = {}
@@ -646,6 +663,57 @@ export default function IntegracionesPage() {
     setEnlaceTelegram(null)
     setExpiraEnlaceTelegram(null)
     setEstadoVinculoTelegram(null)
+    setEstadoWebhookTelegram(null)
+  }
+
+  /**
+   * Estado real del webhook del bot (registrado, URL, pendientes, último error).
+   * Sale del propio Telegram vía el servidor: el listado de integraciones no
+   * distingue «hay token guardado» de «Telegram entrega los mensajes».
+   */
+  const cargarEstadoWebhookTelegram = async () => {
+    setCargandoEstadoWebhook(true)
+    try {
+      const res = await fetch('/api/integraciones/telegram/webhook')
+      if (!res.ok) {
+        setEstadoWebhookTelegram(null)
+        return
+      }
+      const data = await res.json().catch(() => null)
+      setEstadoWebhookTelegram(data && typeof data === 'object' ? data : null)
+    } catch {
+      setEstadoWebhookTelegram(null)
+    } finally {
+      setCargandoEstadoWebhook(false)
+    }
+  }
+
+  /** Vuelve a registrar el webhook del bot (repara el que apunta a otro sitio). */
+  const repararWebhookTelegram = async () => {
+    setReparandoWebhook(true)
+    try {
+      const res = await fetch('/api/integraciones/telegram/webhook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ forzar: true }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data?.ok) {
+        toast.success('Webhook reparado', {
+          description: 'Telegram ya entrega los mensajes del bot a Volkern.',
+        })
+      } else {
+        toast.error('No se pudo reparar el webhook', {
+          description: data?.descripcion || data?.error || 'Revisa el token del bot e inténtalo de nuevo.',
+          duration: 10000,
+        })
+      }
+      await cargarEstadoWebhookTelegram()
+    } catch {
+      toast.error('No se pudo reparar el webhook')
+    } finally {
+      setReparandoWebhook(false)
+    }
   }
 
   const cargarEstadoVinculoTelegram = async () => {
@@ -1143,8 +1211,26 @@ export default function IntegracionesPage() {
         const data = await res.json()
 
         if (res.ok) {
-          toast.success('Integración guardada exitosamente')
-          cerrarDialog()
+          // Telegram: el guardado incluye el registro del webhook. Si no se pudo
+          // registrar (o el bot lo usa otra aplicación) NO se dice que todo está
+          // correcto: se avisa y se deja el diálogo abierto para repararlo.
+          const webhook = data?.webhook
+          if (selectedIntegracion.tipo === 'telegram' && webhook && !webhook.ok) {
+            toast.error(
+              webhook.conflicto
+                ? 'Bot guardado, pero su webhook apunta a otra aplicación'
+                : 'Bot guardado, pero el webhook no se registró',
+              {
+                description:
+                  `${webhook.descripcion || ''} Mientras no se repare, el bot no recibirá ningún mensaje.`.trim(),
+                duration: 12000,
+              }
+            )
+            await cargarEstadoWebhookTelegram()
+          } else {
+            toast.success('Integración guardada exitosamente')
+            cerrarDialog()
+          }
           await cargarIntegraciones()
         } else {
           toast.error(data.error || 'Error al guardar integración')
@@ -1865,6 +1951,105 @@ export default function IntegracionesPage() {
                     El enlace usa el bot guardado en esta integración: si aún no lo has conectado,
                     guarda primero el Bot Token en el campo de abajo.
                   </p>
+                </div>
+              )}
+
+              {/* Estado real del webhook del bot (solo Telegram) */}
+              {selectedIntegracion.tipo === 'telegram' && (
+                <div
+                  className={`rounded-xl border p-4 space-y-2 ${
+                    cargandoEstadoWebhook
+                      ? 'border-slate-200 bg-slate-50'
+                      : estadoWebhookTelegram?.registrado
+                        ? 'border-green-200 bg-green-50/60'
+                        : 'border-amber-200 bg-amber-50/60'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-2">
+                      {cargandoEstadoWebhook ? (
+                        <Loader2 className="mt-0.5 h-4 w-4 animate-spin text-slate-400" />
+                      ) : estadoWebhookTelegram?.registrado ? (
+                        <Check className="mt-0.5 h-4 w-4 text-green-600" />
+                      ) : (
+                        <AlertTriangle className="mt-0.5 h-4 w-4 text-amber-600" />
+                      )}
+                      <div className="space-y-0.5">
+                        <p className="text-sm font-semibold text-slate-900">Webhook del bot</p>
+                        <p className="text-xs text-slate-600">
+                          {cargandoEstadoWebhook
+                            ? 'Comprobando en Telegram…'
+                            : estadoWebhookTelegram?.registrado
+                              ? 'Registrado: Telegram entrega los mensajes a Volkern.'
+                              : estadoWebhookTelegram
+                                ? 'Sin registrar: el bot no recibe ningún mensaje.'
+                                : 'No se pudo comprobar el estado del webhook.'}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 shrink-0"
+                      onClick={repararWebhookTelegram}
+                      disabled={
+                        reparandoWebhook ||
+                        cargandoEstadoWebhook ||
+                        estadoWebhookTelegram?.tieneBot === false
+                      }
+                      title={
+                        estadoWebhookTelegram?.tieneBot === false
+                          ? 'Conecta primero el Bot Token'
+                          : 'Vuelve a registrar el webhook en Telegram'
+                      }
+                    >
+                      {reparandoWebhook ? (
+                        <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                      )}
+                      Reparar webhook
+                    </Button>
+                  </div>
+
+                  {estadoWebhookTelegram && (
+                    <dl className="grid gap-1 pl-6 text-[11px] text-slate-600">
+                      <div className="flex gap-1.5">
+                        <dt className="font-semibold">URL:</dt>
+                        <dd className="break-all font-mono">{estadoWebhookTelegram.url || '(ninguna)'}</dd>
+                      </div>
+                      {!estadoWebhookTelegram.registrado && estadoWebhookTelegram.url && (
+                        <div className="flex gap-1.5">
+                          <dt className="font-semibold">Esperada:</dt>
+                          <dd className="break-all font-mono">{estadoWebhookTelegram.esperada}</dd>
+                        </div>
+                      )}
+                      <div className="flex gap-1.5">
+                        <dt className="font-semibold">Pendientes:</dt>
+                        <dd>{estadoWebhookTelegram.pendientes}</dd>
+                      </div>
+                      {estadoWebhookTelegram.ultimoError && (
+                        <div className="flex gap-1.5 text-red-700">
+                          <dt className="font-semibold">Último error:</dt>
+                          <dd>
+                            {estadoWebhookTelegram.ultimoError}
+                            {estadoWebhookTelegram.ultimoErrorEn
+                              ? ` (${new Date(estadoWebhookTelegram.ultimoErrorEn).toLocaleString('es-ES')})`
+                              : ''}
+                          </dd>
+                        </div>
+                      )}
+                    </dl>
+                  )}
+
+                  {estadoWebhookTelegram && !estadoWebhookTelegram.registrado && (
+                    <p className="pl-6 text-[11px] text-amber-800 leading-relaxed">
+                      {estadoWebhookTelegram.url
+                        ? 'El bot está atendiendo otra aplicación: mientras siga así, Volkern no recibe sus mensajes. «Reparar webhook» lo vuelve a apuntar aquí.'
+                        : 'Guarda el Bot Token para que se registre automáticamente, o pulsa «Reparar webhook» si ya estaba guardado.'}
+                    </p>
+                  )}
                 </div>
               )}
 

@@ -6,6 +6,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { logAuditAction } from '@/lib/permissions';
 import { notifyDeveloperSensitiveAction } from '@/lib/telegram/developer-notify';
+import { registrarWebhookBot, type RegistroWebhook } from '@/lib/telegram/webhook-registro';
 
 // GET - Obtener todas las integraciones del tenant
 export async function GET() {
@@ -138,8 +139,21 @@ export async function POST(request: Request) {
       });
     }
 
+    // El panel guarda el bot de Telegram por esta ruta genérica: hay que
+    // registrar el webhook aquí o el tenant queda «conectado» sin recibir ni un
+    // mensaje. Se informa del resultado para que la UI no diga que todo va bien
+    // cuando el bot apunta a otra aplicación o Telegram rechazó el registro.
+    let webhook: RegistroWebhook | undefined;
+    if (tipo === 'telegram' && credenciales?.bot_token) {
+      webhook = await registrarWebhookBot(String(credenciales.bot_token));
+      if (!webhook.ok) {
+        console.warn('[Integraciones] Webhook de Telegram no registrado:', webhook.descripcion);
+      }
+    }
+
     return NextResponse.json({
       success: true,
+      webhook,
       integracion: {
         ...integracion,
         credenciales: { configurado: true }

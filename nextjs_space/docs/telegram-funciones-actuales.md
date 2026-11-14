@@ -526,7 +526,11 @@ Además: `NEXT_PUBLIC_APP_URL` / `NEXTAUTH_URL` (URL del webhook y del retorno d
    bot del sistema; si incluyen datos de un tenant concreto, revisar el ámbito.
 7. **Sin multimedia entrante utilizable.** Stickers, audio y vídeo se ignoran (solo documento/foto van
    a la bandeja de gastos).
-8. **Alta de webhook manual.** Ni `POST /api/integraciones/telegram` ni el onboarding registran el
-   webhook directo: eso se hace con `scripts/register-telegram-webhooks.ts` o queda en manos de Chatwoot.
-   No se automatiza al conectar el bot a propósito: si el tenant usa el inbox de Telegram de Chatwoot,
-   sobrescribir su webhook rompería el hub.
+8. **El webhook se registra al conectar el bot.** `POST /api/integraciones`, `POST
+   /api/integraciones/telegram`, el onboarding y el alta de partner llaman a `registrarWebhookBot`
+   (`lib/telegram/webhook-registro.ts`) con el `secret_token` derivado del bot. **No se pisa** un webhook
+   que apunte a otra aplicación: se devuelve `conflicto` y el panel avisa; solo el alta de superadmin
+   fuerza el registro. Ajustes → Integraciones → Telegram muestra el estado real (registrado, URL,
+   pendientes, último error) desde `GET /api/integraciones/telegram/webhook` y permite repararlo con
+   `POST` sobre la misma ruta. `scripts/register-telegram-webhooks.ts` sigue sirviendo para registrar
+   en lote bots ya existentes.
