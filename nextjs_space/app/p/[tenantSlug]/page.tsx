@@ -4,12 +4,7 @@ import { globalPrisma } from '@/lib/db';
 import { resolveTenantBySlug } from '@/lib/real-estate/portal-utils';
 import { getEffectiveBranding } from '@/lib/branding';
 import { parseInmuebles, type InmuebleParsed } from '@/lib/real-estate/property-helpers';
-import {
-  formatOperationLabel,
-  formatearPrecioInmueble,
-  operationBadgeColor,
-  priceSuffix,
-} from '@/lib/real-estate/operation-labels';
+import PortalPropertyCard from '@/components/real-estate/PortalPropertyCard';
 import PortalContactForm from './PortalContactForm';
 
 export const revalidate = 60;
@@ -83,89 +78,6 @@ async function getResumenCatalogo(tenantId: string): Promise<ResumenCatalogo> {
     enVenta,
     enAlquiler,
   };
-}
-
-function TarjetaInmueble({
-  property,
-  tenantSlug,
-  brandingColor,
-}: {
-  property: InmuebleParsed;
-  tenantSlug: string;
-  brandingColor: string;
-}) {
-  const imagen = Array.isArray(property.media) && property.media.length > 0
-    ? (property.media[0] as any)?.url || ''
-    : '';
-
-  return (
-    <a
-      href={`/p/${tenantSlug}/propiedades/${property.id}`}
-      className="group flex flex-col overflow-hidden rounded-xl bg-white shadow-sm transition-all duration-300 hover:shadow-lg focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-      style={{ outlineColor: brandingColor }}
-    >
-      <div className="relative h-44 overflow-hidden bg-gray-200">
-        {imagen ? (
-          <img
-            src={imagen}
-            alt={property.nombre}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-          />
-        ) : (
-          <div className="flex h-full items-center justify-center text-gray-300">
-            <svg className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                d="M3 9.75L12 3l9 6.75V21H3V9.75z" />
-            </svg>
-          </div>
-        )}
-
-        <div className="absolute left-3 top-3 flex flex-col gap-1.5">
-          {property.featured && (
-            <span className="rounded-md bg-amber-400 px-2 py-1 text-[10px] font-bold text-white shadow-md">
-              DESTACADA
-            </span>
-          )}
-          <span
-            className="self-start rounded-md px-2 py-1 text-[11px] font-semibold text-white shadow-md"
-            style={{ backgroundColor: operationBadgeColor(property.operationType) }}
-          >
-            {formatOperationLabel(property.operationType)}
-          </span>
-        </div>
-
-        <div className="absolute bottom-3 right-3 rounded-lg px-3 py-1.5 text-sm font-bold text-white shadow-lg backdrop-blur-sm"
-          style={{ backgroundColor: `${brandingColor}dd` }}
-        >
-          {formatearPrecioInmueble(property.precioBase, property.moneda)}
-          {priceSuffix(property.operationType) && (
-            <span className="text-xs font-normal opacity-80">{priceSuffix(property.operationType)}</span>
-          )}
-        </div>
-      </div>
-
-      <div className="flex flex-1 flex-col p-4">
-        <h3 className="truncate font-semibold text-gray-900">{property.nombre}</h3>
-        {property.city && (
-          <p className="mt-1 flex items-center gap-1 text-xs text-gray-400">
-            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            {property.city}
-          </p>
-        )}
-
-        <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-gray-100 pt-3 text-xs text-gray-500">
-          {property.areaM2 ? <span>{property.areaM2} m²</span> : null}
-          {property.bedrooms ? <span>{property.bedrooms} hab.</span> : null}
-          {property.bathrooms ? <span>{property.bathrooms} baños</span> : null}
-          {property.parking ? <span>{property.parking} estac.</span> : null}
-        </div>
-      </div>
-    </a>
-  );
 }
 
 export default async function PortalHomePage({ params }: Props) {
@@ -341,7 +253,7 @@ export default async function PortalHomePage({ params }: Props) {
           <>
             <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {catalogo.destacadas.map((property) => (
-                <TarjetaInmueble
+                <PortalPropertyCard
                   key={property.id}
                   property={property}
                   tenantSlug={tenantSlug}
