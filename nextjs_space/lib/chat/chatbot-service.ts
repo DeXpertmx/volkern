@@ -1344,7 +1344,12 @@ export function isWithinBusinessHours(config: any): boolean {
 
   const diasActivos = (config.diasActivos || '1,2,3,4,5').split(',')
   if (!diasActivos.includes(dayOfWeek)) return false
-  if (currentHour < (config.horarioInicio || 9) || currentHour >= (config.horarioFin || 18)) return false
+  // `??` y no `||`: un horario que empieza a las 0:00 es válido y con `||` se
+  // convertía en las 9:00, así que un chatbot configurado 0–24 seguía cerrado
+  // de madrugada.
+  const inicio = config.horarioInicio ?? 9
+  const fin = config.horarioFin ?? 18
+  if (currentHour < inicio || currentHour >= fin) return false
   return true
 }
 
