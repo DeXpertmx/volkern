@@ -88,18 +88,22 @@ export default function HeroCarousel({
 
                 {/* Top bar with logo */}
                 <div className="absolute top-0 left-0 right-0 z-20 px-6 md:px-12 py-5">
+                  {/* El logo vuelve a la portada del portal: el catálogo es una
+                      sección de esa portada, no la página de inicio. */}
                   <div className="max-w-7xl mx-auto flex items-center gap-3">
-                    {logoUrl ? (
-                      <img
-                        src={logoUrl}
-                        alt={companyName}
-                        className="h-8 md:h-10 w-auto object-contain brightness-0 invert"
-                      />
-                    ) : (
-                      <span className="text-white font-bold text-lg tracking-tight">
-                        {companyName}
-                      </span>
-                    )}
+                    <a href={`/p/${tenantSlug}`} className="flex items-center gap-3">
+                      {logoUrl ? (
+                        <img
+                          src={logoUrl}
+                          alt={companyName}
+                          className="h-8 md:h-10 w-auto object-contain brightness-0 invert"
+                        />
+                      ) : (
+                        <span className="text-white font-bold text-lg tracking-tight">
+                          {companyName}
+                        </span>
+                      )}
+                    </a>
                   </div>
                 </div>
 

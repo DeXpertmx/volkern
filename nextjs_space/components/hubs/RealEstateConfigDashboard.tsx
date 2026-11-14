@@ -672,7 +672,8 @@ export default function RealEstateConfigDashboard() {
                   <span className="text-sm text-muted-foreground font-mono">/propiedades</span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  URL pública: /p/{config.portalSlug || 'propiedades'}/propiedades
+                  Inicio: /p/{config.portalSlug || 'propiedades'} · Catálogo:{' '}
+                  /p/{config.portalSlug || 'propiedades'}/propiedades
                 </p>
               </div>
 
@@ -704,11 +705,11 @@ export default function RealEstateConfigDashboard() {
                     <div className="flex-1">
                       <h4 className="font-semibold text-sm">Portal Publicado</h4>
                       <p className="text-xs text-muted-foreground">
-                        Las propiedades disponibles se muestran públicamente en /p/{config.portalSlug}/propiedades
+                        La portada con las propiedades de la cuenta vive en /p/{config.portalSlug}; el catálogo completo, en /p/{config.portalSlug}/propiedades
                       </p>
                     </div>
                     <Button variant="outline" size="sm" asChild>
-                      <a href={`/p/${config.portalSlug || 'propiedades'}/propiedades`} target="_blank">
+                      <a href={`/p/${config.portalSlug || 'propiedades'}`} target="_blank">
                         <ExternalLink className="h-3.5 w-3.5 mr-1" />
                         Ver Portal
                       </a>
