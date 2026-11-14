@@ -2,6 +2,19 @@
 
 import { useState } from 'react';
 
+const CAMPOS_VACIOS = { name: '', email: '', phone: '', message: '', consent: false };
+type Campo = keyof typeof CAMPOS_VACIOS;
+
+/** Estado del envío: un solo valor en vez de tres banderas que pueden contradecirse. */
+type Estado =
+  | { tipo: 'inicial' }
+  | { tipo: 'enviando' }
+  | { tipo: 'enviado' }
+  | { tipo: 'error'; mensaje: string };
+
+const CLASE_CAMPO =
+  'w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900';
+
 /**
  * Formulario de contacto de la portada del portal.
  *
@@ -16,47 +29,43 @@ export default function PortalContactForm({
   tenantSlug: string;
   brandingColor: string;
 }) {
-  const [datos, setDatos] = useState({ name: '', email: '', phone: '', message: '' });
-  const [consent, setConsent] = useState(false);
-  const [enviando, setEnviando] = useState(false);
-  const [ok, setOk] = useState(false);
-  const [error, setError] = useState('');
+  const [datos, setDatos] = useState(CAMPOS_VACIOS);
+  const [estado, setEstado] = useState<Estado>({ tipo: 'inicial' });
+
+  const cambiar = (campo: Campo) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setDatos((previos) => ({
+      ...previos,
+      [campo]: campo === 'consent' ? (e.target as HTMLInputElement).checked : e.target.value,
+    }));
 
   const enviar = async (e: React.FormEvent) => {
     e.preventDefault();
-    setEnviando(true);
-    setError('');
+    setEstado({ tipo: 'enviando' });
 
     try {
       const res = await fetch('/api/public/real-estate/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          slug: tenantSlug,
-          name: datos.name,
-          email: datos.email,
-          phone: datos.phone,
-          message: datos.message,
-          consent,
-        }),
+        body: JSON.stringify({ slug: tenantSlug, ...datos }),
       });
 
-      if (res.ok) {
-        setOk(true);
-        setDatos({ name: '', email: '', phone: '', message: '' });
-        setConsent(false);
-      } else {
+      if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        setError(data.error || 'No pudimos enviar tu mensaje. Inténtalo de nuevo.');
+        setEstado({
+          tipo: 'error',
+          mensaje: data.error || 'No pudimos enviar tu mensaje. Inténtalo de nuevo.',
+        });
+        return;
       }
+
+      setDatos(CAMPOS_VACIOS);
+      setEstado({ tipo: 'enviado' });
     } catch {
-      setError('Error de conexión. Inténtalo de nuevo.');
-    } finally {
-      setEnviando(false);
+      setEstado({ tipo: 'error', mensaje: 'Error de conexión. Inténtalo de nuevo.' });
     }
   };
 
-  if (ok) {
+  if (estado.tipo === 'enviado') {
     return (
       <div className="rounded-2xl border p-6" style={{ borderColor: `${brandingColor}44` }}>
         <p className="text-lg font-semibold text-gray-900">Mensaje enviado</p>
@@ -65,7 +74,7 @@ export default function PortalContactForm({
         </p>
         <button
           type="button"
-          onClick={() => setOk(false)}
+          onClick={() => setEstado({ tipo: 'inicial' })}
           className="mt-4 text-sm font-medium hover:underline"
           style={{ color: brandingColor }}
         >
@@ -80,12 +89,7 @@ export default function PortalContactForm({
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="text-sm">
           <span className="mb-1 block text-gray-600">Nombre*</span>
-          <input
-            required
-            value={datos.name}
-            onChange={(e) => setDatos({ ...datos, name: e.target.value })}
-            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
-          />
+          <input required value={datos.name} onChange={cambiar('name')} className={CLASE_CAMPO} />
         </label>
         <label className="text-sm">
           <span className="mb-1 block text-gray-600">Email*</span>
@@ -93,26 +97,17 @@ export default function PortalContactForm({
             required
             type="email"
             value={datos.email}
-            onChange={(e) => setDatos({ ...datos, email: e.target.value })}
-            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+            onChange={cambiar('email')}
+            className={CLASE_CAMPO}
           />
         </label>
         <label className="text-sm sm:col-span-2">
           <span className="mb-1 block text-gray-600">Teléfono</span>
-          <input
-            value={datos.phone}
-            onChange={(e) => setDatos({ ...datos, phone: e.target.value })}
-            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
-          />
+          <input value={datos.phone} onChange={cambiar('phone')} className={CLASE_CAMPO} />
         </label>
         <label className="text-sm sm:col-span-2">
           <span className="mb-1 block text-gray-600">¿Qué estás buscando?</span>
-          <textarea
-            rows={3}
-            value={datos.message}
-            onChange={(e) => setDatos({ ...datos, message: e.target.value })}
-            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
-          />
+          <textarea rows={3} value={datos.message} onChange={cambiar('message')} className={CLASE_CAMPO} />
         </label>
       </div>
 
@@ -120,22 +115,22 @@ export default function PortalContactForm({
         <input
           type="checkbox"
           required
-          checked={consent}
-          onChange={(e) => setConsent(e.target.checked)}
+          checked={datos.consent}
+          onChange={cambiar('consent')}
           className="mt-0.5"
         />
         Acepto que me contacten por teléfono o email para responder a esta consulta.
       </label>
 
-      {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+      {estado.tipo === 'error' && <p className="mt-3 text-sm text-red-600">{estado.mensaje}</p>}
 
       <button
         type="submit"
-        disabled={enviando}
+        disabled={estado.tipo === 'enviando'}
         className="mt-4 w-full rounded-xl px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-60"
         style={{ backgroundColor: brandingColor }}
       >
-        {enviando ? 'Enviando…' : 'Enviar consulta'}
+        {estado.tipo === 'enviando' ? 'Enviando…' : 'Enviar consulta'}
       </button>
     </form>
   );

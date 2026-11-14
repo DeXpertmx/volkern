@@ -1,3 +1,4 @@
+import { cache, type CSSProperties } from 'react';
 import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { globalPrisma } from '@/lib/db';
@@ -13,46 +14,18 @@ interface Props {
   params: Promise<{ tenantSlug: string }>;
 }
 
-/**
- * Home del portal público de una cuenta (matriz o franquiciado).
- *
- * Es la misma plantilla para toda la red: el diseño no se copia por oficina, se
- * alimenta con su marca y su catálogo. Manda lo que esa cuenta tiene publicado —
- * primero lo marcado como destacado — y solo después el resto, para que la
- * portada de una oficina pequeña no parezca vacía.
- */
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { tenantSlug } = await params;
-  const tenant = await resolveTenantBySlug(tenantSlug);
-  if (!tenant) return { title: 'Portal no encontrado' };
-
-  const branding = await getEffectiveBranding(tenant.id);
-  const companyName = branding.companyName || tenant.nombre;
-
-  return {
-    title: `${companyName} | Inmuebles en venta y alquiler`,
-    description: `Catálogo de propiedades de ${companyName}. Contacta directamente con la oficina para visitas y consultas.`,
-    openGraph: {
-      title: `${companyName} | Inmuebles en venta y alquiler`,
-      description: `Catálogo de propiedades de ${companyName}.`,
-      type: 'website',
-      ...(branding.logoUrl ? { images: [{ url: branding.logoUrl }] } : {}),
-    },
-  };
-}
-
 interface ResumenCatalogo {
-  destacadas: InmuebleParsed[];
+  propiedades: InmuebleParsed[];
   total: number;
   enVenta: number;
   enAlquiler: number;
 }
 
 /**
- * Inmuebles de la portada: los suyos, con los destacados arriba.
+ * Inmuebles de la portada: los de la cuenta, con los destacados arriba.
  *
- * El orden lo resuelve la consulta (`destacado desc`) y no una mezcla con otras
- * cuentas: la portada de una oficina enseña su cartera, no la de la matriz.
+ * El orden lo resuelve la consulta (`destacado desc`): la portada de una oficina
+ * enseña su cartera, no la de la matriz.
  */
 async function getResumenCatalogo(tenantId: string): Promise<ResumenCatalogo> {
   const base = { tenantId, tipo: 'inmueble', activo: true };
@@ -72,28 +45,79 @@ async function getResumenCatalogo(tenantId: string): Promise<ResumenCatalogo> {
     }),
   ]);
 
-  return {
-    destacadas: parseInmuebles(items),
-    total,
-    enVenta,
-    enAlquiler,
-  };
+  return { propiedades: parseInmuebles(items), total, enVenta, enAlquiler };
 }
 
-export default async function PortalHomePage({ params }: Props) {
-  const { tenantSlug } = await params;
+/**
+ * Datos de la portada de una cuenta: tenant, marca y catálogo.
+ *
+ * `cache` es por petición, así que `generateMetadata` y la página comparten una
+ * sola resolución del tenant en vez de hacer cada una su `findUnique`. No cachea
+ * entre peticiones: de eso se encarga `revalidate`.
+ */
+const cargarPortada = cache(async (tenantSlug: string) => {
   const tenant = await resolveTenantBySlug(tenantSlug);
-  if (!tenant) notFound();
+  if (!tenant) return null;
 
   const [branding, catalogo] = await Promise.all([
     getEffectiveBranding(tenant.id),
     getResumenCatalogo(tenant.id),
   ]);
 
-  const brandingColor = branding.primaryColor || '#3b82f6';
-  const logoUrl = branding.logoUrl || '';
-  const companyName = branding.companyName || tenant.nombre;
+  return {
+    companyName: branding.companyName || tenant.nombre,
+    brandingColor: branding.primaryColor || '#3b82f6',
+    logoUrl: branding.logoUrl || '',
+    catalogo,
+  };
+});
+
+/**
+ * Home del portal público de una cuenta (matriz o franquiciado).
+ *
+ * Es la misma plantilla para toda la red: el diseño no se copia por oficina, se
+ * alimenta con su marca y su catálogo.
+ */
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { tenantSlug } = await params;
+  const portada = await cargarPortada(tenantSlug);
+  if (!portada) return { title: 'Portal no encontrado' };
+
+  const { companyName, logoUrl } = portada;
+  const title = `${companyName} | Inmuebles en venta y alquiler`;
+
+  return {
+    title,
+    description: `Catálogo de propiedades de ${companyName}. Contacta directamente con la oficina para visitas y consultas.`,
+    openGraph: {
+      title,
+      description: `Catálogo de propiedades de ${companyName}.`,
+      type: 'website',
+      ...(logoUrl ? { images: [{ url: logoUrl }] } : {}),
+    },
+  };
+}
+
+export default async function PortalHomePage({ params }: Props) {
+  const { tenantSlug } = await params;
+  const portada = await cargarPortada(tenantSlug);
+  if (!portada) notFound();
+
+  const { companyName, brandingColor, logoUrl, catalogo } = portada;
   const catalogoUrl = `/p/${tenantSlug}/propiedades`;
+  // El anillo de foco de los campos hereda el color de marca desde el formulario.
+  const anilloMarca = { '--tw-ring-color': brandingColor } as CSSProperties;
+  const claseCampo =
+    'rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2';
+
+  const resumen = [
+    {
+      valor: catalogo.total,
+      etiqueta: catalogo.total === 1 ? 'propiedad publicada' : 'propiedades publicadas',
+    },
+    ...(catalogo.enVenta > 0 ? [{ valor: catalogo.enVenta, etiqueta: 'en venta' }] : []),
+    ...(catalogo.enAlquiler > 0 ? [{ valor: catalogo.enAlquiler, etiqueta: 'en alquiler' }] : []),
+  ];
 
   return (
     // Mismo criterio que el catálogo: el portal es claro y cuelga del tema
@@ -135,9 +159,9 @@ export default async function PortalHomePage({ params }: Props) {
       </header>
 
       {/* Portada */}
-      <section className="relative overflow-hidden" style={{ backgroundColor: brandingColor }}>
+      <section className="relative overflow-hidden">
         <div
-          className="absolute inset-0 opacity-90"
+          className="absolute inset-0"
           style={{ background: `linear-gradient(135deg, ${brandingColor} 0%, ${brandingColor}bb 60%, #0f172a 100%)` }}
         />
         <div className="relative mx-auto max-w-7xl px-4 py-16 sm:py-20">
@@ -148,25 +172,15 @@ export default async function PortalHomePage({ params }: Props) {
             {companyName}
           </h1>
           <p className="mt-4 max-w-xl text-sm leading-relaxed text-white/85 sm:text-base">
-            Compra, venta y alquiler de inmuebles. Atención directa por parte de la oficina, con
-            visitas concertadas y acompañamiento hasta la firma.
+            Compra, venta y alquiler de inmuebles con atención directa de la oficina.
           </p>
 
           <div className="mt-6 flex flex-wrap items-center gap-4 text-xs text-white/80">
-            <span>
-              <strong className="text-base text-white">{catalogo.total}</strong>{' '}
-              {catalogo.total === 1 ? 'propiedad publicada' : 'propiedades publicadas'}
-            </span>
-            {catalogo.enVenta > 0 && (
-              <span>
-                <strong className="text-base text-white">{catalogo.enVenta}</strong> en venta
+            {resumen.map(({ valor, etiqueta }) => (
+              <span key={etiqueta}>
+                <strong className="text-base text-white">{valor}</strong> {etiqueta}
               </span>
-            )}
-            {catalogo.enAlquiler > 0 && (
-              <span>
-                <strong className="text-base text-white">{catalogo.enAlquiler}</strong> en alquiler
-              </span>
-            )}
+            ))}
           </div>
 
           {/* Buscador: reenvía al catálogo con los filtros ya puestos */}
@@ -174,22 +188,23 @@ export default async function PortalHomePage({ params }: Props) {
             method="GET"
             action={catalogoUrl}
             className="mt-8 flex flex-wrap items-center gap-2 rounded-2xl bg-white/95 p-3 shadow-xl"
+            style={anilloMarca}
           >
             <input
               type="text"
               name="q"
+              aria-label="Buscar por nombre o descripción"
               placeholder="Buscar por nombre o descripción…"
-              className="min-w-[180px] flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2"
-              style={{ ['--tw-ring-color' as any]: brandingColor }}
+              className={`min-w-[180px] flex-1 ${claseCampo}`}
             />
-            <select name="operacion" className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900">
+            <select name="operacion" aria-label="Operación" className={claseCampo}>
               <option value="">Operación</option>
               <option value="venta">En venta</option>
               <option value="alquiler">En alquiler</option>
               <option value="alquiler_temporada">Renta vacacional</option>
               <option value="traspaso">Traspaso</option>
             </select>
-            <select name="tipo" className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900">
+            <select name="tipo" aria-label="Tipo de inmueble" className={claseCampo}>
               <option value="">Tipo</option>
               <option value="Casa">Casa</option>
               <option value="Departamento">Departamento</option>
@@ -200,9 +215,9 @@ export default async function PortalHomePage({ params }: Props) {
             <input
               type="text"
               name="ciudad"
+              aria-label="Ciudad o zona"
               placeholder="Ciudad o zona"
-              className="w-32 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2"
-              style={{ ['--tw-ring-color' as any]: brandingColor }}
+              className={`w-32 ${claseCampo}`}
             />
             <button
               type="submit"
@@ -215,27 +230,12 @@ export default async function PortalHomePage({ params }: Props) {
         </div>
       </section>
 
-      {/* Propiedades: primero lo que esta oficina tiene publicado */}
+      {/* Propiedades de esta oficina */}
       <main className="mx-auto max-w-7xl px-4 py-12">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">Propiedades destacadas</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              Selección del catálogo de {companyName}.
-            </p>
-          </div>
-          {catalogo.total > 0 && (
-            <a
-              href={catalogoUrl}
-              className="text-sm font-medium hover:underline"
-              style={{ color: brandingColor }}
-            >
-              Ver las {catalogo.total} propiedades →
-            </a>
-          )}
-        </div>
+        <h2 className="text-2xl font-bold text-gray-900">Propiedades destacadas</h2>
+        <p className="mt-1 text-sm text-gray-500">Selección del catálogo de {companyName}.</p>
 
-        {catalogo.destacadas.length === 0 ? (
+        {catalogo.propiedades.length === 0 ? (
           <div className="mt-8 rounded-2xl border border-dashed border-gray-300 bg-white p-10 text-center">
             <p className="text-lg text-gray-500">Todavía no hay propiedades publicadas.</p>
             <p className="mt-2 text-sm text-gray-400">
@@ -252,7 +252,7 @@ export default async function PortalHomePage({ params }: Props) {
         ) : (
           <>
             <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {catalogo.destacadas.map((property) => (
+              {catalogo.propiedades.map((property) => (
                 <PortalPropertyCard
                   key={property.id}
                   property={property}
@@ -261,7 +261,7 @@ export default async function PortalHomePage({ params }: Props) {
                 />
               ))}
             </div>
-            {catalogo.total > catalogo.destacadas.length && (
+            {catalogo.total > catalogo.propiedades.length && (
               <div className="mt-8 text-center">
                 <a
                   href={catalogoUrl}
@@ -286,18 +286,19 @@ export default async function PortalHomePage({ params }: Props) {
               opciones concretas. Sin compromiso.
             </p>
             <ul className="mt-6 space-y-2 text-sm text-gray-600">
-              <li className="flex items-start gap-2">
-                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: brandingColor }} />
-                Visitas concertadas y acompañamiento hasta la firma.
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: brandingColor }} />
-                Valoración de tu inmueble y estrategia de publicación.
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: brandingColor }} />
-                Atención directa de la oficina, sin intermediarios.
-              </li>
+              {[
+                'Visitas concertadas y acompañamiento hasta la firma.',
+                'Valoración de tu inmueble y estrategia de publicación.',
+                'Atención directa de la oficina, sin intermediarios.',
+              ].map((ventaja) => (
+                <li key={ventaja} className="flex items-start gap-2">
+                  <span
+                    className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: brandingColor }}
+                  />
+                  {ventaja}
+                </li>
+              ))}
             </ul>
           </div>
 
