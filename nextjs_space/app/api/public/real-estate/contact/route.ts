@@ -5,6 +5,7 @@ import { prisma, globalPrisma, getTenantDb, dbContext } from "@/lib/db";
 import { applyRateLimit, RATE_LIMIT_ACTIONS } from "@/lib/rate-limit-middleware";
 import { eventBus, EVENTS } from "@/lib/skills/event-bus";
 import { referenciaPropiedad } from "@/lib/real-estate/referencia";
+import { resolveTenantBySlug } from "@/lib/real-estate/portal-utils";
 
 /**
  * POST /api/public/real-estate/contact
@@ -46,11 +47,14 @@ export async function POST(req: NextRequest) {
 
     // 1. Resolver tenant. El widget embebible solo conoce el id (data-tenant-id),
     // así que se admite también; el slug sigue teniendo prioridad.
+    //
+    // El slug se resuelve con la MISMA función que las páginas del portal
+    // (`resolveTenantBySlug`), que además admite el alias `portalSlug`. Con un
+    // `findUnique` por `Tenant.slug` a secas, una oficina que publica su portal en
+    // un alias (caso normal de una franquicia) recibía un 404 al enviar el
+    // formulario aunque la portada y la ficha se vieran bien.
     const tenant = slug
-      ? await globalPrisma.tenant.findUnique({
-          where: { slug },
-          select: { id: true, nombre: true, subdomain: true },
-        })
+      ? await resolveTenantBySlug(String(slug))
       : await globalPrisma.tenant.findUnique({
           where: { id: String(tenantIdBody) },
           select: { id: true, nombre: true, subdomain: true },

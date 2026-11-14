@@ -17,6 +17,9 @@ import { NextRequest } from 'next/server';
 const mockPrisma = vi.hoisted(() => ({
   catalogoItem: { findFirst: vi.fn(), findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
   contact: { findFirst: vi.fn(), update: vi.fn() },
+  // El formulario deja una nota con la referencia del inmueble consultado; sin
+  // este mock la nota lanzaba y el bloque de la propiedad se abortaba en silencio.
+  note: { create: vi.fn() },
   captacion: {
     create: vi.fn(),
     findFirst: vi.fn(),
@@ -30,6 +33,8 @@ const mockPrisma = vi.hoisted(() => ({
 
 const mockGlobalPrisma = vi.hoisted(() => ({
   tenant: { findUnique: vi.fn(), findMany: vi.fn() },
+  // El alias del portal (`portalSlug`) se guarda en `Configuracion`.
+  configuracion: { findFirst: vi.fn() },
 }));
 
 const mockEjecutarSkill = vi.hoisted(() => vi.fn());
@@ -190,6 +195,10 @@ describe('captaciones — pertenencia de las relaciones', () => {
 describe('POST /api/public/real-estate/contact', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // `clearAllMocks` no borra las implementaciones: sin `mockReset`, el alias
+    // del test anterior seguiría resolviendo tenants en los siguientes.
+    mockGlobalPrisma.tenant.findUnique.mockReset();
+    mockGlobalPrisma.configuracion.findFirst.mockReset();
     mockGlobalPrisma.tenant.findUnique.mockResolvedValue({ id: 't1', nombre: 'Inmobiliaria Uno' });
     mockEjecutarSkill.mockResolvedValue({ id: 'lead-1', email: 'vecino@test.com' });
   });
@@ -205,6 +214,50 @@ describe('POST /api/public/real-estate/contact', () => {
       }),
     });
   }
+
+  it('acepta el alias portalSlug y crea el lead en esa cuenta', async () => {
+    // Sin coincidencia por `Tenant.slug`: el portal se publica con un alias.
+    mockGlobalPrisma.tenant.findUnique.mockImplementation(async (args: any) =>
+      args?.where?.slug
+        ? null
+        : { id: 't1', nombre: 'Inmobiliaria Uno', subdomain: null },
+    );
+    mockGlobalPrisma.configuracion.findFirst.mockResolvedValue({ tenantId: 't1' });
+    mockPrisma.catalogoItem.findFirst.mockResolvedValue(null);
+
+    const res = await ContactoPOST(
+      new NextRequest('http://localhost/api/public/real-estate/contact', {
+        method: 'POST',
+        body: JSON.stringify({
+          slug: 'casas-del-sur',
+          name: 'Vecina',
+          email: 'vecina@test.com',
+          message: 'Busco piso',
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(mockEjecutarSkill).toHaveBeenCalledWith(
+      'create_lead',
+      expect.objectContaining({ tenantId: 't1', email: 'vecina@test.com' }),
+    );
+  });
+
+  it('sigue devolviendo 404 cuando el slug no existe ni como alias', async () => {
+    mockGlobalPrisma.tenant.findUnique.mockResolvedValue(null);
+    mockGlobalPrisma.configuracion.findFirst.mockResolvedValue(null);
+
+    const res = await ContactoPOST(
+      new NextRequest('http://localhost/api/public/real-estate/contact', {
+        method: 'POST',
+        body: JSON.stringify({ slug: 'no-existe', name: 'X', email: 'x@test.com' }),
+      }),
+    );
+
+    expect(res.status).toBe(404);
+    expect(mockEjecutarSkill).not.toHaveBeenCalled();
+  });
 
   it('no escribe en una propiedad de otra cuenta', async () => {
     mockPrisma.catalogoItem.findFirst.mockResolvedValue(null);
