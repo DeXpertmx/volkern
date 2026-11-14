@@ -1401,6 +1401,10 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       if (nombre) extracted.nombre = nombre
       const empresa = this.extractEmpresaDe(message)
       if (empresa) extracted.empresa = empresa
+      // Dirección del lead (en inmobiliaria, la del inmueble de interés):
+      // "crea un lead …, dirección Canalejas 26 bajo 29700 Vélez Málaga".
+      const direccion = message.match(/\bdirecci[oó]n\s*:?\s*([^,;\n]+?)(?=\s*(?:,|;|\n|$|\bemail\b|\btel[eé]fono\b))/i)?.[1]?.trim()
+      if (direccion) extracted.direccion = direccion
       return { intent: 'crear_lead', confidence: 0.85, extractedParams: extracted }
     }
 

@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { provisionTenant, addWhatsAppChannel } from '@/lib/provisioning/tenant-provisioner';
+import { registrarWebhookBot } from '@/lib/telegram/webhook-registro';
 
 /**
  * Valida un token de bot de Telegram
@@ -221,6 +222,13 @@ export async function POST(req: NextRequest) {
       }
 
       provisioningResult = { success: true };
+    }
+
+    // 3b. Registrar el webhook del bot en Telegram (por tenant). Sin esto el
+    // alta queda «conectada» en el panel pero el bot no recibe mensajes.
+    const webhookBot = await registrarWebhookBot(botToken);
+    if (!webhookBot.ok) {
+      console.warn('[Onboarding] Webhook de Telegram no registrado:', webhookBot.descripcion);
     }
 
     // 4. Actualizar progreso de onboarding

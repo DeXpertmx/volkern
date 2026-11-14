@@ -1135,7 +1135,7 @@ const updateLeadWrapper = async (input: { tenantId: string; email?: string; nomb
   throw new Error(`No se encontró ningún contacto ni lead para actualizar.`);
 };
 
-const createLeadWrapper = async (input: { tenantId: string; nombre: string; email?: string; telefono?: string; notas?: string; contexto?: string; empresa?: string; origen?: string; fuente?: string; cargo?: string; userId?: string; etiquetas?: string[] }) => {
+const createLeadWrapper = async (input: { tenantId: string; nombre: string; email?: string; telefono?: string; direccion?: string; notas?: string; contexto?: string; empresa?: string; origen?: string; fuente?: string; cargo?: string; userId?: string; etiquetas?: string[] }) => {
   const { contexto, notas, origen, cargo, userId, etiquetas, ...rest } = input;
   const realUserId = await resolveRealUserId(input.tenantId, userId);
   return contactSkills.createLead({

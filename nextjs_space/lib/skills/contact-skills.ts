@@ -57,6 +57,8 @@ export interface CreateLeadInput {
   cargo?: string;
   empresa?: string;
   linkedin?: string;
+  /** Dirección postal del lead (en inmobiliaria: dirección del inmueble de interés). */
+  direccion?: string;
   asignadoA?: string;
   /** Etiquetas del lead en CSV (es el formato que guarda y parte la UI). */
   tags?: string;
@@ -204,7 +206,7 @@ export async function updateContact(input: UpdateContactInput) {
  * Crear un nuevo lead
  */
 export async function createLead(input: CreateLeadInput) {
-  const { tenantId, nombre, email, telefono, notas, fuente, cargo, empresa, linkedin, tags, asignadoA, userId, source = 'app' } = input;
+  const { tenantId, nombre, email, telefono, notas, fuente, cargo, empresa, linkedin, direccion, tags, asignadoA, userId, source = 'app' } = input;
 
   // 1. Validación
   if (!tenantId) throw new Error('tenantId es requerido');
@@ -234,6 +236,7 @@ export async function createLead(input: CreateLeadInput) {
       cargo,
       empresa,
       linkedin,
+      direccion,
       tags,
       asignadoA: asignadoAValido,
       estado: 'nuevo',

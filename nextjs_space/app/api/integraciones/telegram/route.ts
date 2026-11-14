@@ -6,6 +6,7 @@ import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { chatwootApi } from '@/lib/nexus/chatwoot-api';
 import { encrypt, decrypt } from '@/lib/core/crypto';
+import { estadoWebhookBot, registrarWebhookBot } from '@/lib/telegram/webhook-registro';
 import crypto from 'crypto';
 
 /**
@@ -138,8 +139,13 @@ export async function GET(req: NextRequest) {
 
     const botUsername = realBotUsername || fallbackUsername || null;
 
+    // Estado real del webhook: si el bot no apunta a Volkern no recibirá ni un
+    // mensaje aunque el panel diga «conectado».
+    const webhook = await estadoWebhookBot(botToken || '');
+
     return NextResponse.json({
       configured: true,
+      webhook,
       integration: {
         id: channel?.id || legacyIntegration?.id,
         name: channel?.name || legacyIntegration?.nombre,
@@ -319,6 +325,15 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // 6b. Registrar el webhook del bot en Telegram. Sin esto el tenant queda
+    // «conectado» en el panel pero el bot no recibe ningún mensaje: el token se
+    // guardaba y Telegram seguía sin apuntar al endpoint. No se pisa un webhook
+    // que apunte a otra aplicación.
+    const webhook = await registrarWebhookBot(bot_token);
+    if (!webhook.ok) {
+      console.warn('[Telegram POST] Webhook no registrado:', webhook.descripcion);
+    }
+
     // 7. Habilitar Nexus en el tenant
     await prisma.tenant.update({
       where: { id: user.tenantId },
@@ -344,8 +359,11 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'Telegram Bot configurado correctamente',
+      message: webhook.ok
+        ? 'Telegram Bot configurado correctamente'
+        : 'Telegram Bot guardado, pero el webhook no se pudo registrar',
       botInfo: validation.botInfo,
+      webhook,
       channel: {
         id: channel.id,
         name: channel.name,

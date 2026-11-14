@@ -23,6 +23,7 @@ describe('clasificación de mensajes reales de Telegram', () => {
       email: 'inmogilmorla@gmail.com',
       telefono: '692155565',
       empresa: 'Gil-Morla servicios inmobiliarios',
+      direccion: 'Canalejas 26 bajo 29700 Vélez Málaga',
     });
   });
 

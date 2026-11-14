@@ -292,10 +292,23 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
       return { success: false, response: '', error: 'Chatbot desactivado' }
     }
 
-    if (input.metadata?.isTest === true) {
+    // El horario comercial es para CLIENTES (WhatsApp, widget web). El chat de
+    // Telegram es la operación interna de la empresa: aplicarle el horario
+    // dejaba al administrador sin poder crear leads ni consultar el CRM los
+    // fines de semana o fuera de las 9–18 UTC, sin ningún mensaje que lo
+    // explicara.
+    const canalOperativoInterno = channel === 'telegram'
+    if (input.metadata?.isTest === true || canalOperativoInterno) {
+      // sin restricción de horario
     } else if (!isWithinBusinessHours(config)) {
       if (config.mensajeFueraHorario) {
         return { success: true, response: config.mensajeFueraHorario, fueraHorario: true }
+      }
+      return {
+        success: true,
+        response:
+          'Fuera del horario de atención. En cuanto abramos te respondo; si es urgente, deja tu mensaje y lo veremos a primera hora.',
+        fueraHorario: true,
       }
     }
 
@@ -1010,6 +1023,23 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
           required: [],
         },
       },
+    }, {
+      type: 'function',
+      function: {
+        name: 'buscar_inmueble',
+        description:
+          'Busca inmuebles en la cartera del tenant (catálogo inmobiliario) por ciudad, precio, habitaciones o texto libre. Úsala cuando el administrador pregunte por propiedades, captaciones o qué hay disponible para un cliente.',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: 'Texto libre (ej: "ático en Málaga centro", "chalet con piscina")' },
+            ciudad: { type: 'string', description: 'Ciudad o zona del inmueble' },
+            precioMax: { type: 'number', description: 'Precio máximo' },
+            habitaciones: { type: 'string', description: 'Número de habitaciones' },
+          },
+          required: [],
+        },
+      },
     }]
 
     // Definir herramienta buscar_catalogo para el LLM
@@ -1078,6 +1108,30 @@ export async function processMessage(input: ChatbotInput): Promise<ChatbotOutput
         } catch (err: any) {
           console.warn('[ChatbotService] Error ejecutando buscar_persona tool:', err)
           return `No pude consultar el CRM: ${err?.message || 'error desconocido'}`
+        }
+      }
+
+      if (toolName === 'buscar_inmueble') {
+        try {
+          const { skills } = await import('@/lib/skills')
+          const filtrosCustom: Record<string, string> = {}
+          if (typeof toolArgs?.ciudad === 'string' && toolArgs.ciudad) filtrosCustom.ciudad = toolArgs.ciudad
+          if (typeof toolArgs?.habitaciones === 'string' && toolArgs.habitaciones) {
+            filtrosCustom.habitaciones = toolArgs.habitaciones
+          }
+          const result = await skills.buscar_catalogo({
+            tenantId,
+            query: typeof toolArgs?.query === 'string' ? toolArgs.query : undefined,
+            tipo: 'inmueble',
+            precioMax: typeof toolArgs?.precioMax === 'number' ? toolArgs.precioMax : undefined,
+            filtrosCustom: Object.keys(filtrosCustom).length > 0 ? filtrosCustom : undefined,
+            limit: 8,
+          })
+          if (result?.quickReplies?.length) catalogQuickReplies = result.quickReplies
+          return result?.message || 'No hay inmuebles que coincidan con esa búsqueda.'
+        } catch (err) {
+          console.warn('[ChatbotService] Error ejecutando buscar_inmueble tool:', err)
+          return 'No pude consultar la cartera de inmuebles ahora mismo.'
         }
       }
 
@@ -1204,6 +1258,7 @@ Quien te escribe es un administrador de la empresa y te pide gestionar su CRM (l
 
 HERRAMIENTAS:
 - buscar_persona: busca por nombre, email o teléfono en leads y contactos. Úsala SIEMPRE que se pregunte por una persona concreta o cuando el mensaje sea el seguimiento de una búsqueda ("¿cuál María?", "y su teléfono?", "dame los datos de X").
+- buscar_inmueble: busca en la cartera de inmuebles (ciudad, precio, habitaciones, texto libre). Úsala cuando pregunte qué inmuebles hay, qué encaja con un cliente o por una captación concreta.
 
 REGLAS:
 1. Responde en español, breve y con los datos reales del CRM. Nunca inventes nombres, emails, teléfonos ni estados.

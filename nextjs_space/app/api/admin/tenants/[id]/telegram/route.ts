@@ -9,6 +9,7 @@ import {
     type TelegramActor,
 } from '@/lib/provisioning/tenant-provisioner';
 import { decrypt } from '@/lib/core/crypto';
+import { registrarWebhookBot } from '@/lib/telegram/webhook-registro';
 import crypto from 'crypto';
 
 /**
@@ -139,12 +140,21 @@ export async function POST(
             );
         }
 
+        // El bot recién conectado tiene que apuntar al webhook de Volkern o no
+        // recibirá ni un mensaje. Superadmin conectando el bot de un partner:
+        // se fuerza el registro porque el bot es nuevo para Volkern.
+        const webhook = await registrarWebhookBot(botToken, { forzar: true });
+        if (!webhook.ok) {
+            console.warn('[AdminTelegram] Webhook no registrado:', webhook.descripcion);
+        }
+
         return NextResponse.json({
             success: true,
             state: result.state,
             telegramInboxId: result.telegramInboxId,
             telegramChannelId: result.telegramChannelId,
             hubConfigId: result.hubConfigId,
+            webhook,
         });
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : 'Error inesperado';
