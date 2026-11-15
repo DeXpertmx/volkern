@@ -15,6 +15,12 @@ import { colorTextoEnClaro, fondoConTextoBlanco } from '@/lib/real-estate/contra
 import { tokensPortal } from '@/lib/real-estate/portal-templates';
 import { getPlantillaPortal } from '@/lib/real-estate/portal-plantilla';
 import {
+  ANCHOS_HERO,
+  SIZES_HERO,
+  srcSetImagenPortal,
+  urlPortadaInmueble,
+} from '@/lib/real-estate/portal-imagenes';
+import {
   OPERACIONES_PORTAL,
   TIPOS_INMUEBLE_PORTAL,
   etiquetaOperacionPortal,
@@ -145,6 +151,16 @@ export default async function PortalHomePage({ params }: Props) {
     // Mismo criterio que el catálogo: el portal es claro y cuelga del tema
     // global, donde `foreground` se vuelve casi blanco bajo `.dark`.
     <div className="min-h-screen bg-gray-50 text-gray-900">
+      {/* Con hero de fotos, la primera diapositiva es el LCP: se pide desde el
+          HTML con las mismas variantes del `srcset`, sin esperar a hidratar. */}
+      {plantilla !== 'marca' && catalogo.propiedades[0] && (
+        <link
+          rel="preload"
+          as="image"
+          imageSrcSet={srcSetImagenPortal(urlPortadaInmueble(catalogo.propiedades[0].media), ANCHOS_HERO)}
+          imageSizes={SIZES_HERO}
+        />
+      )}
       <PortalAnalyticsBeacon slug={tenantSlug} tipo="visita_portada" />
 
       {/* Cabecera */}
@@ -290,13 +306,14 @@ export default async function PortalHomePage({ params }: Props) {
         ) : (
           <>
             <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {catalogo.propiedades.map((property) => (
+              {catalogo.propiedades.map((property, index) => (
                 <PortalPropertyCard
                   key={property.id}
                   property={property}
                   tenantSlug={tenantSlug}
                   brandingColor={brandingColor}
                   plantilla={plantilla}
+                  prioridad={index === 0}
                 />
               ))}
             </div>

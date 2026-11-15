@@ -6,6 +6,13 @@ import Autoplay from 'embla-carousel-autoplay';
 import type { InmuebleParsed } from '@/lib/real-estate/property-helpers';
 import { formatOperationLabel, formatearPrecioInmueble } from '@/lib/real-estate/operation-labels';
 import { fondoConTextoBlanco } from '@/lib/real-estate/contraste';
+import {
+  ANCHOS_HERO,
+  SIZES_HERO,
+  srcSetImagenPortal,
+  urlImagenPortal,
+  urlPortadaInmueble,
+} from '@/lib/real-estate/portal-imagenes';
 
 interface Props {
   properties: InmuebleParsed[];
@@ -60,9 +67,8 @@ export default function HeroCarousel({
       {/* Carousel */}
       <div ref={emblaRef} className="overflow-hidden">
         <div className="flex">              {properties.map((property, index) => {
-            const imagen = Array.isArray(property.media) && property.media.length > 0
-              ? (property.media[0] as any)?.url || ''
-              : '';
+            const imagen = urlPortadaInmueble(property.media);
+            const primera = index === 0;
 
             // El badge y el CTA llevan etiqueta blanca: con una marca clara se
             // usa su versión oscurecida para que el texto no desaparezca.
@@ -76,8 +82,13 @@ export default function HeroCarousel({
                 {/* Background Image */}
                 {imagen ? (
                   <img
-                    src={imagen}
+                    src={urlImagenPortal(imagen, 1080)}
+                    srcSet={srcSetImagenPortal(imagen, ANCHOS_HERO)}
+                    sizes={SIZES_HERO}
                     alt={property.nombre}
+                    loading={primera ? 'eager' : 'lazy'}
+                    fetchPriority={primera ? 'high' : 'auto'}
+                    decoding="async"
                     className="absolute inset-0 w-full h-full object-cover"
                   />
                 ) : (

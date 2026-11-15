@@ -13,6 +13,12 @@ import { fondoConTextoBlanco } from '@/lib/real-estate/contraste';
 import { tokensPortal } from '@/lib/real-estate/portal-templates';
 import { getPlantillaPortal } from '@/lib/real-estate/portal-plantilla';
 import {
+  ANCHOS_HERO,
+  SIZES_HERO,
+  srcSetImagenPortal,
+  urlPortadaInmueble,
+} from '@/lib/real-estate/portal-imagenes';
+import {
   OPERACIONES_PORTAL,
   TIPOS_INMUEBLE_PORTAL,
   etiquetaOperacionPortal,
@@ -201,6 +207,15 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
     // Bajo `.dark` el `foreground` es casi blanco y lo que no lleva clase de
     // color (opciones de los select, texto heredado) desaparecía sobre blanco.
     <div className="min-h-screen bg-gray-50 text-gray-900">
+      {/* Foto del hero: es el LCP del catálogo, así que se pide desde el HTML. */}
+      {plantilla !== 'marca' && heroProperties[0] && (
+        <link
+          rel="preload"
+          as="image"
+          imageSrcSet={srcSetImagenPortal(urlPortadaInmueble(heroProperties[0].media), ANCHOS_HERO)}
+          imageSizes={SIZES_HERO}
+        />
+      )}
       {/* Mismo tratamiento de hero que la portada, según la plantilla */}
       {plantilla === 'marca' ? (
         <PortalHeroMarca companyName={companyName} brandingColor={brandingColor} />
@@ -339,13 +354,14 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {properties.map((property) => (
+            {properties.map((property, index) => (
               <PortalPropertyCard
                 key={property.id}
                 property={property}
                 tenantSlug={tenantSlug}
                 brandingColor={brandingColor}
                 plantilla={plantilla}
+                prioridad={index === 0}
               />
             ))}
           </div>

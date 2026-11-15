@@ -10,6 +10,13 @@ import { formatearImporte } from '@/lib/moneda';
 import { colorTextoEnClaro, fondoConTextoBlanco } from '@/lib/real-estate/contraste';
 import BotonCalculadoraHipoteca from '@/components/real-estate/BotonCalculadoraHipoteca';
 import { tokensPortal, type PlantillaPortal } from '@/lib/real-estate/portal-templates';
+import {
+  ANCHOS_TARJETA,
+  SIZES_TARJETA,
+  srcSetImagenPortal,
+  urlImagenPortal,
+  urlPortadaInmueble,
+} from '@/lib/real-estate/portal-imagenes';
 
 /**
  * Tarjeta de inmueble del portal público.
@@ -23,16 +30,17 @@ export default function PortalPropertyCard({
   tenantSlug,
   brandingColor,
   plantilla,
+  prioridad = false,
 }: {
   property: InmuebleParsed;
   tenantSlug: string;
   brandingColor: string;
   /** Plantilla del portal: fija el radio y la tipografía de la tarjeta. */
   plantilla: PlantillaPortal;
+  /** Tarjeta que se ve al abrir la página: se carga ya y con prioridad alta. */
+  prioridad?: boolean;
 }) {
-  const imagen = Array.isArray(property.media) && property.media.length > 0
-    ? (property.media[0] as any)?.url || ''
-    : '';
+  const imagen = urlPortadaInmueble(property.media);
 
   const pricePerM2 = property.areaM2 && property.areaM2 > 0
     ? Math.round(property.precioBase / property.areaM2)
@@ -65,8 +73,13 @@ export default function PortalPropertyCard({
         <div className="relative h-48 bg-gray-200 overflow-hidden">
           {imagen ? (
             <img
-              src={imagen}
+              src={urlImagenPortal(imagen, 640)}
+              srcSet={srcSetImagenPortal(imagen, ANCHOS_TARJETA)}
+              sizes={SIZES_TARJETA}
               alt={property.nombre}
+              loading={prioridad ? 'eager' : 'lazy'}
+              fetchPriority={prioridad ? 'high' : 'auto'}
+              decoding="async"
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             />
           ) : (

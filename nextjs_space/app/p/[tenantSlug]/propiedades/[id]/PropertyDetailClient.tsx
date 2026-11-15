@@ -29,6 +29,17 @@ import {
   mensajeWhatsappPropiedad,
   urlWhatsapp,
 } from '@/lib/real-estate/portal-branding';
+import {
+  ANCHOS_FICHA,
+  ANCHOS_MINIATURA,
+  ANCHOS_TARJETA,
+  SIZES_FICHA,
+  SIZES_MINIATURA,
+  SIZES_TARJETA,
+  srcSetImagenPortal,
+  urlImagenPortal,
+  urlPortadaInmueble,
+} from '@/lib/real-estate/portal-imagenes';
 
 const ESTADOS_FICHA: Record<string, { label: string; color: string }> = {
   disponible: { label: 'Disponible', color: '#10b981' },
@@ -244,8 +255,13 @@ export default function PropertyDetailClient({
           <div className="relative h-[400px] md:h-[500px] bg-gray-100">
             {images.length > 0 ? (
               <img
-                src={images[selectedImage]?.url || ''}
+                src={urlImagenPortal(images[selectedImage]?.url || '', 1280)}
+                srcSet={srcSetImagenPortal(images[selectedImage]?.url || '', ANCHOS_FICHA)}
+                sizes={SIZES_FICHA}
                 alt={images[selectedImage]?.alt || property.nombre}
+                loading="eager"
+                fetchPriority="high"
+                decoding="async"
                 className="w-full h-full object-cover"
               />
             ) : (
@@ -297,7 +313,15 @@ export default function PropertyDetailClient({
                   }`}
                   style={{ borderColor: idx === selectedImage ? acento : undefined }}
                 >
-                  <img src={img.url} alt={img.alt} className="w-full h-full object-cover" />
+                  <img
+                    src={urlImagenPortal(img.url, 160)}
+                    srcSet={srcSetImagenPortal(img.url, ANCHOS_MINIATURA)}
+                    sizes={SIZES_MINIATURA}
+                    alt={img.alt}
+                    loading="lazy"
+                    decoding="async"
+                    className="w-full h-full object-cover"
+                  />
                 </button>
               ))}
             </div>
@@ -732,9 +756,7 @@ export default function PropertyDetailClient({
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Propiedades Relacionadas</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {relatedProperties.map((rp) => {
-                const rpImages = Array.isArray(rp.media)
-                  ? rp.media.map((m: any) => (typeof m === 'string' ? m : m.url))
-                  : [];
+                const rpPortada = urlPortadaInmueble(rp.media);
                 return (
                   <a
                     key={rp.id}
@@ -742,8 +764,16 @@ export default function PropertyDetailClient({
                     className={`bg-white ${tokens.radio} shadow-sm hover:shadow-md transition-shadow overflow-hidden group`}
                   >
                     <div className="relative h-44 bg-gray-200">
-                      {rpImages[0] ? (
-                        <img src={rpImages[0]} alt={rp.nombre} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                      {rpPortada ? (
+                        <img
+                          src={urlImagenPortal(rpPortada, 640)}
+                          srcSet={srcSetImagenPortal(rpPortada, ANCHOS_TARJETA)}
+                          sizes={SIZES_TARJETA}
+                          alt={rp.nombre}
+                          loading="lazy"
+                          decoding="async"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
                       ) : (
                         <div className="flex items-center justify-center h-full text-gray-300">
                           <svg className="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">

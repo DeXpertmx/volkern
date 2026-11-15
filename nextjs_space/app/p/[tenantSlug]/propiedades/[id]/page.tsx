@@ -14,6 +14,11 @@ import {
 } from '@/lib/real-estate/portal-seo';
 import { headers } from 'next/headers';
 import { whereCatalogoVigente } from '@/lib/real-estate/portal-vigencia';
+import {
+  ANCHOS_FICHA,
+  SIZES_FICHA,
+  srcSetImagenPortal,
+} from '@/lib/real-estate/portal-imagenes';
 import PropertyDetailClient from './PropertyDetailClient';
 
 export const revalidate = 60;
@@ -157,6 +162,16 @@ export default async function PropertyDetailPage({ params }: Props) {
 
   return (
     <>
+      {/* La foto principal es el LCP de la ficha: se pide desde el HTML, con las
+          mismas variantes del `srcset`, en vez de esperar a hidratar. */}
+      {images[0]?.url && (
+        <link
+          rel="preload"
+          as="image"
+          imageSrcSet={srcSetImagenPortal(images[0].url, ANCHOS_FICHA)}
+          imageSizes={SIZES_FICHA}
+        />
+      )}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
