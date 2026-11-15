@@ -53,6 +53,10 @@ export const GET = withTenantAuth(async (request, auth) => {
 
     // Agregar el tenantId a la respuesta para usar en códigos de embed
     configObj._tenantId = tenantId;
+    // Slug público de la cuenta: es el único segmento que resuelve /p/<slug>.
+    // El id no sirve como URL (dejaba enlaces 404 en el panel), así que el slug
+    // viaja con la configuración en vez de deducirse en el cliente.
+    configObj._tenantSlug = auth.tenant!.slug;
 
     return NextResponse.json(configObj);
   } catch (error) {

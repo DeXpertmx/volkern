@@ -90,6 +90,8 @@ interface RealEstateConfig {
   defaultSplitAgent: number
   defaultSplitAgency: number
   portalSlug: string
+  /** Slug público de la cuenta (lo devuelve /api/configuracion como `_tenantSlug`). */
+  _tenantSlug?: string
   portalCustomDomain: string
   portalEnabled: boolean
   portalTheme: Record<string, any>
@@ -422,7 +424,7 @@ export default function RealEstateConfigDashboard() {
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground mt-2">
-              /p/{config.portalSlug || 'propiedades'}
+              {config._tenantSlug ? `/p/${config._tenantSlug}` : '—'}
             </p>
           </CardContent>
         </Card>
@@ -659,7 +661,7 @@ export default function RealEstateConfigDashboard() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="portal-slug">Slug del Portal</Label>
+                <Label htmlFor="portal-slug">Alias del portal (opcional)</Label>
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-muted-foreground font-mono">/p/</span>
                   <Input
@@ -667,13 +669,17 @@ export default function RealEstateConfigDashboard() {
                     value={config.portalSlug}
                     onChange={(e) => setConfig(prev => ({ ...prev, portalSlug: e.target.value }))}
                     className="max-w-xs font-mono"
-                    placeholder="propiedades"
+                    placeholder="mi-oficina"
                   />
                   <span className="text-sm text-muted-foreground font-mono">/propiedades</span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Inicio: /p/{config.portalSlug || 'propiedades'} · Catálogo:{' '}
-                  /p/{config.portalSlug || 'propiedades'}/propiedades
+                  Dirección de tu portal:{' '}
+                  <code className="text-xs bg-muted px-1 py-0.5 rounded">
+                    /p/{config._tenantSlug || 'tu-slug'}
+                  </code>
+                  . El alias es opcional, debe ser único en la plataforma y responde en
+                  paralelo.
                 </p>
               </div>
 
@@ -705,15 +711,22 @@ export default function RealEstateConfigDashboard() {
                     <div className="flex-1">
                       <h4 className="font-semibold text-sm">Portal Publicado</h4>
                       <p className="text-xs text-muted-foreground">
-                        La portada con las propiedades de la cuenta vive en /p/{config.portalSlug}; el catálogo completo, en /p/{config.portalSlug}/propiedades
+                        La portada con las propiedades de la cuenta vive en /p/{config._tenantSlug}; el catálogo completo, en /p/{config._tenantSlug}/propiedades
                       </p>
                     </div>
-                    <Button variant="outline" size="sm" asChild>
-                      <a href={`/p/${config.portalSlug || 'propiedades'}`} target="_blank">
+                    {config._tenantSlug ? (
+                      <Button variant="outline" size="sm" asChild>
+                        <a href={`/p/${config._tenantSlug}`} target="_blank">
+                          <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                          Ver Portal
+                        </a>
+                      </Button>
+                    ) : (
+                      <Button variant="outline" size="sm" disabled title="Cargando los datos de tu cuenta">
                         <ExternalLink className="h-3.5 w-3.5 mr-1" />
                         Ver Portal
-                      </a>
-                    </Button>
+                      </Button>
+                    )}
                   </div>
                 </div>
               )}

@@ -96,6 +96,9 @@ export function EmbedSnippetCard({ tenantId, className }: EmbedSnippetCardProps)
   const [whatsappOrigen, setWhatsappOrigen] = useState<'empresa' | 'sistema' | null>(null);
   const [whatsappActivo, setWhatsappActivo] = useState(true);
   const [guardandoWhatsapp, setGuardandoWhatsapp] = useState(false);
+  // Slug público de la cuenta para el enlace al portal. El `tenantId` no vale:
+  // /p/<slug> resuelve por slug (o su alias), y con el id el enlace daba 404.
+  const [slugPortal, setSlugPortal] = useState<string | null>(null);
 
   useEffect(() => {
     if (!tenantId) return;
@@ -120,11 +123,17 @@ export function EmbedSnippetCard({ tenantId, className }: EmbedSnippetCardProps)
         setWhatsappActivo(
           ajuste === undefined || ajuste === null ? true : ajuste === true || ajuste === 'true'
         );
+        setSlugPortal(
+          typeof config?._tenantSlug === 'string' && config._tenantSlug.trim()
+            ? config._tenantSlug.trim()
+            : null
+        );
       })
       .catch(() => {
         if (vigente) {
           setWhatsappNumero(null);
           setWhatsappOrigen(null);
+          setSlugPortal(null);
         }
       });
 
@@ -589,16 +598,19 @@ export function EmbedSnippetCard({ tenantId, className }: EmbedSnippetCardProps)
             <p className="text-xs text-muted-foreground">
               ¿Prefieres un portal propio? Volkern también lo genera por ti.
             </p>
-            <Button variant="outline" size="sm" asChild>
-              <a
-                href={`/p/${tenantId || ''}/propiedades`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
+            {slugPortal ? (
+              <Button variant="outline" size="sm" asChild>
+                <a href={`/p/${slugPortal}/propiedades`} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                  Ver portal
+                </a>
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" disabled title="Cargando los datos de tu cuenta">
                 <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
                 Ver portal
-              </a>
-            </Button>
+              </Button>
+            )}
           </div>
 
           {!listo && (
