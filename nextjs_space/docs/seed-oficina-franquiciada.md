@@ -44,10 +44,14 @@ aborta con un mensaje claro y no escribe nada.
 
 Se puede ejecutar tantas veces como quieras:
 
-- El tenant se resuelve por `slug` con `upsert`: la segunda vez actualiza marca,
-  plan, moneda y módulos en lugar de duplicar.
+- El tenant se resuelve por `slug`: la segunda vez se actualiza en lugar de
+  duplicarse.
 - Los inmuebles se resuelven por la clave única `(tenantId, sku)` con `upsert`, así
   que se actualizan en su sitio y nunca se crean dos copias del mismo `VN-00x`.
+- Todo va en una transacción: si falla un inmueble no queda una oficina a medias.
+- Reejecutar **restaura** los valores del script: nombre, plan, moneda, módulos y
+  marca vuelven a los de arriba, y los cuatro inmuebles recuperan sus datos. Si
+  alguien los cambió desde el panel, el seed lo deshace.
 - Si existiera un tenant `vre-norte` que **no** cuelga de `vre`, el script aborta:
   sería otra cuenta real con el mismo slug y no se toca.
 
@@ -64,14 +68,21 @@ npx tsx --require ./scripts/cargar-entorno.cjs scripts/seed-oficina-vre-norte.ts
 ```
 
 Borra los cuatro inmuebles sembrados (`VN-001` … `VN-004`) y el tenant
-`vre-norte`. La matriz `vre` y sus inmuebles no se tocan.
+`vre-norte` en una sola transacción: o se van los dos, o no se toca nada. La
+matriz `vre` y sus inmuebles no se tocan.
 
-Salvaguardas:
+Se niega a borrar —y dice qué lo impide— si la oficina ya tiene datos que no ha
+creado el seed:
 
-- Si la oficina ya tiene **usuarios o leads**, el script se niega a borrarla y
-  dice cuántos hay: son datos que no creó el seed y hay que quitarlos a mano si
-  de verdad se quiere eliminar la cuenta.
-- Un tenant `vre-norte` que no sea hijo de `vre` tampoco se borra.
+- **usuarios**, **leads** o **contactos** (por ejemplo, si alguien llegó a enviar
+  el formulario de contacto del portal), o
+- **inmuebles** que no sean los cuatro de ejemplo.
+
+Si aun así Prisma bloquea el borrado por otra relación (configuración, pipelines,
+automatizaciones…), el script lo explica en lugar de soltar el error técnico:
+esos registros hay que quitarlos desde el panel o con Prisma Studio.
+
+Un tenant `vre-norte` que no sea hijo de `vre` tampoco se borra.
 
 ## Notas
 

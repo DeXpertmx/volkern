@@ -4,7 +4,7 @@
  * Sirve para enseñar cómo queda la landing propia de una oficina dentro de la
  * red: el portal es la misma plantilla para todos, pero esta cuenta tiene su
  * propia marca y su propio catálogo, así que `/p/vre-norte` no se parece al de
- * la matriz en contenido ni en color.
+ * la matriz ni en color ni en contenido.
  *
  * Crea (o actualiza, si ya existe):
  *   - Un `Tenant` hijo de `vre` con slug `vre-norte`, moneda EUR, los módulos de
@@ -22,11 +22,11 @@
  *
  * Solo para bases de desarrollo: apunta al `DATABASE_URL` del entorno cargado.
  * Aborta si `vre-norte` existe pero NO es hija de `vre` (sería una cuenta real
- * con el mismo slug), y el borrado se niega si la oficina ya tiene usuarios o
- * leads, para no arrastrar datos que no ha creado este script.
+ * con el mismo slug), y el borrado se niega si la oficina ya tiene datos que no
+ * ha creado este script.
  */
 
-import { PrismaClient, type Prisma } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -148,13 +148,13 @@ const INMUEBLES: InmuebleSeed[] = [
   },
 ];
 
-/** Payload del catálogo: el mismo en el alta y en la actualización. */
-function datosInmueble(tenantId: string, d: InmuebleSeed): Prisma.CatalogoItemUncheckedCreateInput {
+const SKUS = INMUEBLES.map((inmueble) => inmueble.sku);
+
+/** Cuerpo del inmueble: el mismo en el alta y en la actualización. */
+function cuerpoInmueble(d: InmuebleSeed): Omit<Prisma.CatalogoItemUncheckedCreateInput, 'tenantId' | 'sku'> {
   return {
-    tenantId,
     nombre: d.nombre,
     descripcion: d.descripcion,
-    sku: d.sku,
     tipo: 'inmueble',
     precioBase: d.precio,
     moneda: 'EUR',
@@ -185,7 +185,7 @@ function datosInmueble(tenantId: string, d: InmuebleSeed): Prisma.CatalogoItemUn
   };
 }
 
-async function matrizOVariar() {
+async function buscarMatriz() {
   const matriz = await prisma.tenant.findUnique({ where: { slug: MATRIZ_SLUG } });
   if (!matriz) {
     throw new Error(
@@ -199,7 +199,7 @@ async function matrizOVariar() {
  * La oficina existente se reutiliza solo si de verdad es hija de la matriz: un
  * tenant con el mismo slug que no cuelgue de ella es otra cuenta y no se toca.
  */
-async function oficinaExistente(matrizId: string) {
+async function buscarOficina(matrizId: string) {
   const oficina = await prisma.tenant.findUnique({ where: { slug: OFICINA.slug } });
   if (oficina && oficina.parentId !== matrizId) {
     throw new Error(
@@ -210,83 +210,104 @@ async function oficinaExistente(matrizId: string) {
 }
 
 async function sembrar() {
-  const matriz = await matrizOVariar();
-  const existente = await oficinaExistente(matriz.id);
+  const matriz = await buscarMatriz();
+  const existente = await buscarOficina(matriz.id);
 
-  const oficina = await prisma.tenant.upsert({
-    where: { slug: OFICINA.slug },
-    create: {
-      slug: OFICINA.slug,
-      nombre: OFICINA.nombre,
-      accountType: 'BUSINESS',
-      parentId: matriz.id,
-      plan: 'agency-slot',
-      moneda: OFICINA.moneda,
-      estado: 'activo',
-      billingEmail: OFICINA.billingEmail,
-      enabledModules: matriz.enabledModules,
-      brandingConfig: OFICINA.brandingConfig,
-    },
-    update: {
-      nombre: OFICINA.nombre,
-      parentId: matriz.id,
-      plan: 'agency-slot',
-      moneda: OFICINA.moneda,
-      estado: 'activo',
-      billingEmail: OFICINA.billingEmail,
-      enabledModules: matriz.enabledModules,
-      brandingConfig: OFICINA.brandingConfig,
-    },
-  });
+  // Reejecutar restaura esto tal cual: si alguien cambió la marca o los módulos
+  // desde el panel, el seed los devuelve a los valores de aquí.
+  const camposOficina = {
+    nombre: OFICINA.nombre,
+    parentId: matriz.id,
+    plan: 'agency-slot',
+    moneda: OFICINA.moneda,
+    estado: 'activo',
+    billingEmail: OFICINA.billingEmail,
+    enabledModules: matriz.enabledModules,
+    brandingConfig: OFICINA.brandingConfig,
+  };
 
-  for (const inmueble of INMUEBLES) {
-    const datos = datosInmueble(oficina.id, inmueble);
-    await prisma.catalogoItem.upsert({
-      where: { tenantId_sku: { tenantId: oficina.id, sku: inmueble.sku } },
-      create: datos,
-      update: datos,
-    });
-  }
+  await prisma.$transaction(async (tx) => {
+    const oficina = existente
+      ? await tx.tenant.update({ where: { id: existente.id }, data: camposOficina })
+      : await tx.tenant.create({
+          data: { slug: OFICINA.slug, accountType: 'BUSINESS', ...camposOficina },
+        });
 
-  const total = await prisma.catalogoItem.count({
-    where: { tenantId: oficina.id, tipo: 'inmueble', sku: { in: INMUEBLES.map((i) => i.sku) } },
+    for (const inmueble of INMUEBLES) {
+      const datos = { tenantId: oficina.id, sku: inmueble.sku, ...cuerpoInmueble(inmueble) };
+      await tx.catalogoItem.upsert({
+        where: { tenantId_sku: { tenantId: oficina.id, sku: inmueble.sku } },
+        create: datos,
+        update: datos,
+      });
+    }
   });
 
   console.log(
-    `${existente ? 'Actualizada' : 'Creada'} la oficina "${OFICINA.nombre}" (${OFICINA.slug}) hija de ${MATRIZ_SLUG}: ${total}/${INMUEBLES.length} inmuebles de ejemplo.`,
+    `${existente ? 'Actualizada' : 'Creada'} la oficina "${OFICINA.nombre}" (${OFICINA.slug}) hija de ${MATRIZ_SLUG}: ${INMUEBLES.length} inmuebles de ejemplo.`,
   );
   console.log(`Portal: /p/${OFICINA.slug} · Catálogo: /p/${OFICINA.slug}/propiedades`);
 }
 
+/**
+ * Qué impide borrar la oficina sin arrastrar datos que no son del seed. Cubre lo
+ * que puede aparecer usando la cuenta de verdad (usuarios, leads y contactos del
+ * portal) y cualquier inmueble que no sea uno de los cuatro de ejemplo.
+ */
+async function datosAjenos(tenantId: string): Promise<string[]> {
+  const [items, usuarios, leads, contactos] = await Promise.all([
+    prisma.catalogoItem.count({ where: { tenantId } }),
+    prisma.user.count({ where: { tenantId } }),
+    prisma.lead.count({ where: { tenantId } }),
+    prisma.contact.count({ where: { tenantId } }),
+  ]);
+
+  const motivos: string[] = [];
+  const inmueblesExtra = items - INMUEBLES.length;
+  if (inmueblesExtra > 0) motivos.push(`${inmueblesExtra} inmueble(s) que no ha creado el seed`);
+  if (usuarios > 0) motivos.push(`${usuarios} usuario(s)`);
+  if (leads > 0) motivos.push(`${leads} lead(s)`);
+  if (contactos > 0) motivos.push(`${contactos} contacto(s)`);
+  return motivos;
+}
+
 async function borrar() {
-  const matriz = await matrizOVariar();
-  const oficina = await oficinaExistente(matriz.id);
+  const matriz = await buscarMatriz();
+  const oficina = await buscarOficina(matriz.id);
 
   if (!oficina) {
     console.log(`No existe la oficina "${OFICINA.slug}": nada que borrar.`);
     return;
   }
 
-  // Solo se borra lo que siembra este script. Si la oficina ya se usó de verdad
-  // (usuarios, leads), se avisa en vez de arrastrar datos ajenos.
-  const [usuarios, leads] = await Promise.all([
-    prisma.user.count({ where: { tenantId: oficina.id } }),
-    prisma.lead.count({ where: { tenantId: oficina.id } }),
-  ]);
-
-  if (usuarios > 0 || leads > 0) {
+  const motivos = await datosAjenos(oficina.id);
+  if (motivos.length > 0) {
     throw new Error(
-      `La oficina "${OFICINA.slug}" tiene ${usuarios} usuario(s) y ${leads} lead(s). No se borra automáticamente: elimina antes esos datos si de verdad quieres quitarla.`,
+      `La oficina "${OFICINA.slug}" tiene ${motivos.join(', ')}. No se borra automáticamente: quita antes esos datos si de verdad quieres eliminarla.`,
     );
   }
 
-  const inmuebles = await prisma.catalogoItem.deleteMany({
-    where: { tenantId: oficina.id, sku: { in: INMUEBLES.map((i) => i.sku) } },
-  });
-  await prisma.tenant.delete({ where: { id: oficina.id } });
+  try {
+    // En una sola transacción: o se van los inmuebles y la cuenta, o no se toca
+    // nada (un borrado a medias dejaría una oficina sin catálogo).
+    await prisma.$transaction([
+      prisma.catalogoItem.deleteMany({ where: { tenantId: oficina.id, sku: { in: SKUS } } }),
+      prisma.tenant.delete({ where: { id: oficina.id } }),
+    ]);
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      (error.code === 'P2003' || error.code === 'P2014')
+    ) {
+      throw new Error(
+        `La oficina "${OFICINA.slug}" todavía tiene registros asociados (configuración, pipelines, automatizaciones…) que Prisma no permite dejar colgando. Elimínalos desde el panel o con Prisma Studio y vuelve a intentarlo.`,
+      );
+    }
+    throw error;
+  }
 
   console.log(
-    `Borrada la oficina "${OFICINA.nombre}" (${OFICINA.slug}) y sus ${inmuebles.count} inmuebles de ejemplo.`,
+    `Borrada la oficina "${OFICINA.nombre}" (${OFICINA.slug}) y sus ${INMUEBLES.length} inmuebles de ejemplo.`,
   );
 }
 
