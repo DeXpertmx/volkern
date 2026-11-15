@@ -14,7 +14,7 @@ catálogo.
 | Módulos | los mismos que la matriz (`enabledModules` se copia) |
 | Marca | ámbar `#b45309`, nombre comercial «VRE Norte» y logo propio en `brandingConfig` |
 | Inmuebles | 4 ejemplos con SKU `VN-001` … `VN-004` (2 destacados, 3 en venta y 1 en alquiler) |
-| Portal | `http://localhost:3000/p/vre-norte` y `/p/vre-norte/propiedades` (con el servidor de desarrollo) |
+| Portal | `http://localhost:3010/p/vre-norte` y `/p/vre-norte/propiedades` (con el servidor de desarrollo en el puerto 3010) |
 
 Los inmuebles son propios de la oficina: la matriz no los ve en su catálogo y la
 oficina no ve los de la matriz. Es el aislamiento normal por `tenantId`.
@@ -79,5 +79,7 @@ Salvaguardas:
   base de producción: crearía una cuenta de ejemplo con su catálogo.
 - Las fotos son URLs de Unsplash, así que la landing necesita salida a internet
   para verse completa.
-- Si cambias los datos de ejemplo, sube también el `sku` o el nombre en el
-  `README` de este documento: el seed actualiza por `sku`, no por nombre.
+- Si cambias los datos de ejemplo, actualiza también esta página y el script
+  `scripts/seed-oficina-vre-norte.ts`: el seed actualiza por `sku`, no por
+  nombre, así que un `sku` nuevo crea otro inmueble en vez de renombrar el que
+  ya existe.
