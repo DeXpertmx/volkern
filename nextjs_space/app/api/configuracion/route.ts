@@ -5,7 +5,7 @@ import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { getDownloadUrl } from '@/lib/s3';
 import { AuditService } from '@/lib/audit-service';
-import { clearBrandingCache } from '@/lib/branding';
+import { clearBrandingCache, getEffectiveBranding } from '@/lib/branding';
 
 // Intenta parsear un valor guardado como JSON; si no, lo devuelve crudo
 function tryParse(valor: string): any {
@@ -57,6 +57,14 @@ export const GET = withTenantAuth(async (request, auth) => {
     // El id no sirve como URL (dejaba enlaces 404 en el panel), así que el slug
     // viaja con la configuración en vez de deducirse en el cliente.
     configObj._tenantSlug = auth.tenant!.slug;
+    // Marca efectiva (con cascada oficina → matriz) para las vistas previas del
+    // panel: el selector de plantilla se pinta con el color y el logo reales.
+    const branding = await getEffectiveBranding(tenantId);
+    configObj._tenantBranding = {
+      primaryColor: branding.primaryColor,
+      logoUrl: branding.logoUrl,
+      companyName: branding.companyName,
+    };
 
     return NextResponse.json(configObj);
   } catch (error) {

@@ -8,6 +8,15 @@ import { monedaPredominante } from '@/lib/moneda';
 import HeroCarousel from './HeroCarousel';
 import CalculadoraHipotecaria from '@/components/real-estate/CalculadoraHipotecaria';
 import PortalPropertyCard from '@/components/real-estate/PortalPropertyCard';
+import { fondoConTextoBlanco } from '@/lib/real-estate/contraste';
+import { tokensPortal } from '@/lib/real-estate/portal-templates';
+import { getPlantillaPortal } from '@/lib/real-estate/portal-plantilla';
+import {
+  OPERACIONES_PORTAL,
+  TIPOS_INMUEBLE_PORTAL,
+  etiquetaOperacionPortal,
+} from '@/lib/real-estate/portal-filtros';
+import PortalHeroMarca from '@/components/real-estate/PortalHeroMarca';
 
 export const revalidate = 60;
 
@@ -178,6 +187,10 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
 
   const branding = await getEffectiveBranding(tenant.id);
   const brandingColor = branding.primaryColor || '#3b82f6';
+  // Botones con etiqueta blanca: la marca se oscurece si hace falta contraste.
+  const accion = fondoConTextoBlanco(brandingColor);
+  const plantilla = await getPlantillaPortal(tenant.id);
+  const tokens = tokensPortal(plantilla);
   const logoUrl = branding.logoUrl || '';
   const companyName = branding.companyName || tenant.nombre;
 
@@ -194,8 +207,10 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
     // Bajo `.dark` el `foreground` es casi blanco y lo que no lleva clase de
     // color (opciones de los select, texto heredado) desaparecía sobre blanco.
     <div className="min-h-screen bg-gray-50 text-gray-900">
-      {/* Hero Carousel */}
-      {heroProperties.length > 0 && (
+      {/* Mismo tratamiento de hero que la portada, según la plantilla */}
+      {plantilla === 'marca' ? (
+        <PortalHeroMarca companyName={companyName} brandingColor={brandingColor} />
+      ) : heroProperties.length > 0 ? (
         <HeroCarousel
           properties={heroProperties}
           tenantSlug={tenantSlug}
@@ -203,7 +218,7 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
           logoUrl={logoUrl}
           companyName={companyName}
         />
-      )}
+      ) : null}
 
       {/* Filters Bar */}
       <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b shadow-sm">
@@ -223,41 +238,42 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
                 type="text"
                 name="q"
                 placeholder="Buscar por nombre o descripción..."
-                className="w-full bg-white text-gray-900 border rounded-lg pl-9 pr-3 py-2 text-sm focus:ring-2 focus:outline-none focus:border-transparent"
+                className={`w-full bg-white text-gray-900 border ${tokens.radioControl} pl-9 pr-3 py-2 text-sm focus:ring-2 focus:outline-none focus:border-transparent`}
                 defaultValue={filters.q || ''}
               />
             </div>
 
             <select
               name="operacion"
-              className="border rounded-lg px-3 py-2 text-sm bg-white"
+              className={`border ${tokens.radioControl} px-3 py-2 text-sm bg-white`}
               defaultValue={filters.operacion || ''}
             >
               <option value="">Todas las ops.</option>
-              <option value="venta">En Venta</option>
-              <option value="alquiler">En Alquiler</option>
-              <option value="alquiler_temporada">Renta Vacacional</option>
-              <option value="traspaso">Traspaso</option>
+              {OPERACIONES_PORTAL.map((op) => (
+                <option key={op} value={op}>
+                  {etiquetaOperacionPortal(op)}
+                </option>
+              ))}
             </select>
 
             <select
               name="tipo"
-              className="border rounded-lg px-3 py-2 text-sm bg-white"
+              className={`border ${tokens.radioControl} px-3 py-2 text-sm bg-white`}
               defaultValue={filters.tipo || ''}
             >
               <option value="">Todos los tipos</option>
-              <option value="Casa">Casa</option>
-              <option value="Departamento">Departamento</option>
-              <option value="Oficina">Oficina</option>
-              <option value="Local Comercial">Local Comercial</option>
-              <option value="Terreno">Terreno</option>
+              {TIPOS_INMUEBLE_PORTAL.map((tipo) => (
+                <option key={tipo} value={tipo}>
+                  {tipo}
+                </option>
+              ))}
             </select>
 
             <input
               type="text"
               name="ciudad"
               placeholder="Ciudad o zona..."
-              className="bg-white text-gray-900 border rounded-lg px-3 py-2 text-sm w-36"
+              className={`bg-white text-gray-900 border ${tokens.radioControl} px-3 py-2 text-sm w-36`}
               defaultValue={filters.ciudad || ''}
             />
 
@@ -267,7 +283,7 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
               name="minPrecio"
               inputMode="numeric"
               placeholder="Mín"
-              className="bg-white text-gray-900 border rounded-lg px-3 py-2 text-sm w-24"
+              className={`bg-white text-gray-900 border ${tokens.radioControl} px-3 py-2 text-sm w-24`}
               defaultValue={filters.minPrecio || ''}
             />
             <span className="text-gray-400">—</span>
@@ -276,15 +292,15 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
               name="maxPrecio"
               inputMode="numeric"
               placeholder="Máx"
-              className="bg-white text-gray-900 border rounded-lg px-3 py-2 text-sm w-24"
+              className={`bg-white text-gray-900 border ${tokens.radioControl} px-3 py-2 text-sm w-24`}
               defaultValue={filters.maxPrecio || ''}
             />
             </div>
 
             <button
               type="submit"
-              className="px-4 py-2 text-sm font-medium text-white rounded-lg hover:opacity-90 transition flex items-center gap-1.5"
-              style={{ backgroundColor: brandingColor }}
+              className={`px-4 py-2 text-sm font-medium text-white ${tokens.radioControl} hover:opacity-90 transition flex items-center gap-1.5`}
+              style={{ backgroundColor: accion }}
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -335,6 +351,7 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
                 property={property}
                 tenantSlug={tenantSlug}
                 brandingColor={brandingColor}
+                plantilla={plantilla}
               />
             ))}
           </div>
@@ -347,7 +364,7 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
             <CalculadoraHipotecaria
               precioInicial={precioVentaReferencia}
               moneda={monedaVenta}
-              color={brandingColor}
+              color={accion}
             />
           </div>
         )}

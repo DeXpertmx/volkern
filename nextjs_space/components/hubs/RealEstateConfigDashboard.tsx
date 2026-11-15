@@ -61,6 +61,13 @@ import {
   TrendingUp,
 } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { fondoHeroMarca } from '@/lib/real-estate/contraste'
+import {
+  PLANTILLAS_PORTAL,
+  PLANTILLAS_PORTAL_INFO,
+  normalizarPlantilla,
+  type PlantillaPortal,
+} from '@/lib/real-estate/portal-templates'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -94,6 +101,10 @@ interface RealEstateConfig {
   _tenantSlug?: string
   portalCustomDomain: string
   portalEnabled: boolean
+  /** Hero de la portada: carrusel de fotos o bloque de color de marca. */
+  plantillaPortal: PlantillaPortal
+  /** Marca efectiva que devuelve /api/configuracion, para pintar las vistas previas. */
+  _tenantBranding?: { primaryColor?: string; logoUrl?: string; companyName?: string }
   portalTheme: Record<string, any>
   exportFormats: string[]
   autoExportEnabled: boolean
@@ -134,6 +145,40 @@ function StatusItem({
   )
 }
 
+/**
+ * Miniatura de cada plantilla con los colores reales de la cuenta.
+ *
+ * No es un icono genérico: usa el color de marca como lo hará la portada
+ * (incluido el ajuste de contraste), así que el panel enseña de verdad cómo
+ * quedará el hero antes de guardar.
+ */
+function MiniaturaPlantilla({ plantilla, color }: { plantilla: PlantillaPortal; color: string }) {
+  if (plantilla === 'marca') {
+    const { base, fin, texto } = fondoHeroMarca(color)
+    return (
+      <div
+        className="flex h-20 w-full flex-col justify-center gap-1.5 overflow-hidden rounded-md px-3"
+        style={{ backgroundImage: `linear-gradient(135deg, ${base} 0%, ${fin} 100%)` }}
+        aria-hidden="true"
+      >
+        <span className="h-1.5 w-10 rounded-full" style={{ backgroundColor: texto, opacity: 0.7 }} />
+        <span className="h-2.5 w-24 rounded" style={{ backgroundColor: texto, opacity: 0.95 }} />
+        <span className="h-1.5 w-16 rounded-full" style={{ backgroundColor: texto, opacity: 0.55 }} />
+      </div>
+    )
+  }
+
+  return (
+    <div
+      className="flex h-20 w-full items-end gap-2 overflow-hidden rounded-md bg-[linear-gradient(115deg,#94a3b8_0%,#334155_55%,#0f172a_100%)] px-3 pb-3"
+      aria-hidden="true"
+    >
+      <span className="h-1.5 w-14 rounded-full bg-white/85" />
+      <span className="h-1.5 w-6 rounded-full bg-white/45" />
+    </div>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function RealEstateConfigDashboard() {
@@ -153,6 +198,7 @@ export default function RealEstateConfigDashboard() {
     portalSlug: 'propiedades',
     portalCustomDomain: '',
     portalEnabled: true,
+    plantillaPortal: 'foto',
     portalTheme: {},
     exportFormats: ['xml', 'csv'],
     autoExportEnabled: false,
@@ -210,6 +256,9 @@ export default function RealEstateConfigDashboard() {
         setConfig(prev => ({
           ...prev,
           ...cfg,
+          // La configuración guarda la clave en snake_case (`plantilla_portal`);
+          // el estado del panel la usa en camelCase.
+          plantillaPortal: normalizarPlantilla(cfg.plantilla_portal),
           propertyCount,
         }))
       } else {
@@ -252,6 +301,7 @@ export default function RealEstateConfigDashboard() {
             portalSlug: config.portalSlug,
             portalCustomDomain: config.portalCustomDomain,
             portalEnabled: config.portalEnabled,
+            plantilla_portal: config.plantillaPortal,
             autoExportEnabled: config.autoExportEnabled,
             autoExportFormat: config.autoExportFormat,
             exportFormats: config.exportFormats,
@@ -658,6 +708,47 @@ export default function RealEstateConfigDashboard() {
                   checked={config.portalEnabled}
                   onCheckedChange={(v) => setConfig(prev => ({ ...prev, portalEnabled: v }))}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Plantilla de la portada</Label>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {PLANTILLAS_PORTAL.map((plantilla) => {
+                    const info = PLANTILLAS_PORTAL_INFO[plantilla]
+                    const activa = config.plantillaPortal === plantilla
+                    return (
+                      <button
+                        key={plantilla}
+                        type="button"
+                        onClick={() => setConfig(prev => ({ ...prev, plantillaPortal: plantilla }))}
+                        aria-pressed={activa}
+                        className={`rounded-xl border p-3 text-left transition ${
+                          activa
+                            ? 'border-primary bg-primary/5 ring-2 ring-primary/30'
+                            : 'border-border hover:border-primary/40'
+                        }`}
+                      >
+                        <MiniaturaPlantilla
+                          plantilla={plantilla}
+                          color={config._tenantBranding?.primaryColor || '#3b82f6'}
+                        />
+                        <div className="mt-2 flex items-center gap-2">
+                          <span className="text-sm font-medium">{info.nombre}</span>
+                          {activa && (
+                            <Badge variant="success" className="ml-auto text-[9px] font-black uppercase">
+                              Activa
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="mt-0.5 text-xs text-muted-foreground">{info.descripcion}</p>
+                      </button>
+                    )
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  El texto del hero se ajusta solo al color de marca para no perder legibilidad.
+                  La vista previa se publica al guardar.
+                </p>
               </div>
 
               <div className="space-y-2">

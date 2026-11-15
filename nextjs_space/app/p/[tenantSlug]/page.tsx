@@ -6,7 +6,17 @@ import { resolveTenantBySlug } from '@/lib/real-estate/portal-utils';
 import { getEffectiveBranding } from '@/lib/branding';
 import { parseInmuebles, type InmuebleParsed } from '@/lib/real-estate/property-helpers';
 import PortalPropertyCard from '@/components/real-estate/PortalPropertyCard';
+import HeroCarousel from './propiedades/HeroCarousel';
+import PortalHeroMarca from '@/components/real-estate/PortalHeroMarca';
 import PortalContactForm from './PortalContactForm';
+import { colorTextoEnClaro, fondoConTextoBlanco } from '@/lib/real-estate/contraste';
+import { tokensPortal } from '@/lib/real-estate/portal-templates';
+import { getPlantillaPortal } from '@/lib/real-estate/portal-plantilla';
+import {
+  OPERACIONES_PORTAL,
+  TIPOS_INMUEBLE_PORTAL,
+  etiquetaOperacionPortal,
+} from '@/lib/real-estate/portal-filtros';
 
 export const revalidate = 60;
 
@@ -59,9 +69,10 @@ const cargarPortada = cache(async (tenantSlug: string) => {
   const tenant = await resolveTenantBySlug(tenantSlug);
   if (!tenant) return null;
 
-  const [branding, catalogo] = await Promise.all([
+  const [branding, catalogo, plantilla] = await Promise.all([
     getEffectiveBranding(tenant.id),
     getResumenCatalogo(tenant.id),
+    getPlantillaPortal(tenant.id),
   ]);
 
   return {
@@ -69,6 +80,7 @@ const cargarPortada = cache(async (tenantSlug: string) => {
     brandingColor: branding.primaryColor || '#3b82f6',
     logoUrl: branding.logoUrl || '',
     catalogo,
+    plantilla,
   };
 });
 
@@ -103,12 +115,17 @@ export default async function PortalHomePage({ params }: Props) {
   const portada = await cargarPortada(tenantSlug);
   if (!portada) notFound();
 
-  const { companyName, brandingColor, logoUrl, catalogo } = portada;
+  const { companyName, brandingColor, logoUrl, catalogo, plantilla } = portada;
   const catalogoUrl = `/p/${tenantSlug}/propiedades`;
+  // El color de marca se usa derivado: `accion` para fondos con etiqueta
+  // blanca y `acento` para textos sobre blanco. Con un color claro el panel
+  // sigue mostrando la marca, pero el texto deja de perderse.
+  const accion = fondoConTextoBlanco(brandingColor);
+  const acento = colorTextoEnClaro(brandingColor);
+  const tokens = tokensPortal(plantilla);
   // El anillo de foco de los campos hereda el color de marca desde el formulario.
   const anilloMarca = { '--tw-ring-color': brandingColor } as CSSProperties;
-  const claseCampo =
-    'rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2';
+  const claseCampo = `${tokens.radioControl} border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2`;
 
   const resumen = [
     {
@@ -132,7 +149,7 @@ export default async function PortalHomePage({ params }: Props) {
             ) : (
               <span
                 className="flex h-8 w-8 items-center justify-center rounded-lg text-sm font-black text-white"
-                style={{ backgroundColor: brandingColor }}
+                style={{ backgroundColor: accion }}
               >
                 {companyName.charAt(0).toUpperCase()}
               </span>
@@ -150,7 +167,7 @@ export default async function PortalHomePage({ params }: Props) {
             <a
               href={catalogoUrl}
               className="rounded-lg px-3 py-1.5 text-sm font-medium text-white transition hover:opacity-90"
-              style={{ backgroundColor: brandingColor }}
+              style={{ backgroundColor: accion }}
             >
               Ver catálogo
             </a>
@@ -158,27 +175,36 @@ export default async function PortalHomePage({ params }: Props) {
         </div>
       </header>
 
-      {/* Portada */}
-      <section className="relative overflow-hidden">
-        <div
-          className="absolute inset-0"
-          style={{ background: `linear-gradient(135deg, ${brandingColor} 0%, ${brandingColor}bb 60%, #0f172a 100%)` }}
+      {/* Portada según la plantilla elegida por la cuenta */}
+      {plantilla === 'marca' ? (
+        <PortalHeroMarca
+          companyName={companyName}
+          brandingColor={brandingColor}
+          ctaHref="#contacto"
         />
-        <div className="relative mx-auto max-w-7xl px-4 py-16 sm:py-20">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/70">
-            Inmobiliaria
-          </p>
-          <h1 className="mt-3 max-w-2xl text-3xl font-black leading-tight text-white sm:text-4xl">
-            {companyName}
-          </h1>
-          <p className="mt-4 max-w-xl text-sm leading-relaxed text-white/85 sm:text-base">
-            Compra, venta y alquiler de inmuebles con atención directa de la oficina.
-          </p>
+      ) : (
+        <HeroCarousel
+          properties={catalogo.propiedades}
+          tenantSlug={tenantSlug}
+          brandingColor={brandingColor}
+          logoUrl={logoUrl}
+          companyName={companyName}
+          showLogo={false}
+        />
+      )}
 
-          <div className="mt-6 flex flex-wrap items-center gap-4 text-xs text-white/80">
+      {/* Resumen y buscador, en una banda bajo el hero */}
+      <section className="border-b border-gray-200 bg-white">
+        <div className="mx-auto max-w-7xl px-4 py-6">
+          {/* Con el hero de marca el h1 ya va dentro del bloque de color. */}
+          {plantilla !== 'marca' && (
+            <h1 className="sr-only">{companyName} — inmuebles en venta y alquiler</h1>
+          )}
+
+          <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500">
             {resumen.map(({ valor, etiqueta }) => (
               <span key={etiqueta}>
-                <strong className="text-base text-white">{valor}</strong> {etiqueta}
+                <strong className="text-base text-gray-900">{valor}</strong> {etiqueta}
               </span>
             ))}
           </div>
@@ -187,7 +213,7 @@ export default async function PortalHomePage({ params }: Props) {
           <form
             method="GET"
             action={catalogoUrl}
-            className="mt-8 flex flex-wrap items-center gap-2 rounded-2xl bg-white/95 p-3 shadow-xl"
+            className="mt-4 flex flex-wrap items-center gap-2"
             style={anilloMarca}
           >
             <input
@@ -199,18 +225,19 @@ export default async function PortalHomePage({ params }: Props) {
             />
             <select name="operacion" aria-label="Operación" className={claseCampo}>
               <option value="">Operación</option>
-              <option value="venta">En venta</option>
-              <option value="alquiler">En alquiler</option>
-              <option value="alquiler_temporada">Renta vacacional</option>
-              <option value="traspaso">Traspaso</option>
+              {OPERACIONES_PORTAL.map((op) => (
+                <option key={op} value={op}>
+                  {etiquetaOperacionPortal(op)}
+                </option>
+              ))}
             </select>
             <select name="tipo" aria-label="Tipo de inmueble" className={claseCampo}>
               <option value="">Tipo</option>
-              <option value="Casa">Casa</option>
-              <option value="Departamento">Departamento</option>
-              <option value="Oficina">Oficina</option>
-              <option value="Local Comercial">Local Comercial</option>
-              <option value="Terreno">Terreno</option>
+              {TIPOS_INMUEBLE_PORTAL.map((tipo) => (
+                <option key={tipo} value={tipo}>
+                  {tipo}
+                </option>
+              ))}
             </select>
             <input
               type="text"
@@ -221,8 +248,8 @@ export default async function PortalHomePage({ params }: Props) {
             />
             <button
               type="submit"
-              className="rounded-lg px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
-              style={{ backgroundColor: brandingColor }}
+              className={`${tokens.radioControl} px-4 py-2 text-sm font-medium text-white transition hover:opacity-90`}
+              style={{ backgroundColor: accion }}
             >
               Buscar
             </button>
@@ -232,7 +259,7 @@ export default async function PortalHomePage({ params }: Props) {
 
       {/* Propiedades de esta oficina */}
       <main className="mx-auto max-w-7xl px-4 py-12">
-        <h2 className="text-2xl font-bold text-gray-900">Propiedades destacadas</h2>
+        <h2 className={`text-2xl ${tokens.titulo} text-gray-900`}>Propiedades destacadas</h2>
         <p className="mt-1 text-sm text-gray-500">Selección del catálogo de {companyName}.</p>
 
         {catalogo.propiedades.length === 0 ? (
@@ -243,8 +270,8 @@ export default async function PortalHomePage({ params }: Props) {
             </p>
             <a
               href="#contacto"
-              className="mt-5 inline-block rounded-lg px-4 py-2 text-sm font-medium text-white"
-              style={{ backgroundColor: brandingColor }}
+              className={`mt-5 inline-block ${tokens.radioControl} px-4 py-2 text-sm font-medium text-white`}
+              style={{ backgroundColor: accion }}
             >
               Contactar
             </a>
@@ -258,6 +285,7 @@ export default async function PortalHomePage({ params }: Props) {
                   property={property}
                   tenantSlug={tenantSlug}
                   brandingColor={brandingColor}
+                  plantilla={plantilla}
                 />
               ))}
             </div>
@@ -265,8 +293,8 @@ export default async function PortalHomePage({ params }: Props) {
               <div className="mt-8 text-center">
                 <a
                   href={catalogoUrl}
-                  className="inline-block rounded-xl border px-6 py-3 text-sm font-medium transition hover:bg-white"
-                  style={{ borderColor: brandingColor, color: brandingColor }}
+                  className={`inline-block ${tokens.radio} border px-6 py-3 text-sm font-medium transition hover:bg-white`}
+                  style={{ borderColor: acento, color: acento }}
                 >
                   Ver todas las propiedades ({catalogo.total})
                 </a>
@@ -294,7 +322,7 @@ export default async function PortalHomePage({ params }: Props) {
                 <li key={ventaja} className="flex items-start gap-2">
                   <span
                     className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: brandingColor }}
+                    style={{ backgroundColor: acento }}
                   />
                   {ventaja}
                 </li>

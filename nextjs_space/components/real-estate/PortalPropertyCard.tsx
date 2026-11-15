@@ -7,7 +7,9 @@ import {
 } from '@/lib/real-estate/operation-labels';
 import { etiquetaClaseEnergetica } from '@/lib/real-estate/energia';
 import { formatearImporte } from '@/lib/moneda';
+import { colorTextoEnClaro, fondoConTextoBlanco } from '@/lib/real-estate/contraste';
 import BotonCalculadoraHipoteca from '@/components/real-estate/BotonCalculadoraHipoteca';
+import { tokensPortal, type PlantillaPortal } from '@/lib/real-estate/portal-templates';
 
 /**
  * Tarjeta de inmueble del portal público.
@@ -20,10 +22,13 @@ export default function PortalPropertyCard({
   property,
   tenantSlug,
   brandingColor,
+  plantilla,
 }: {
   property: InmuebleParsed;
   tenantSlug: string;
   brandingColor: string;
+  /** Plantilla del portal: fija el radio y la tipografía de la tarjeta. */
+  plantilla: PlantillaPortal;
 }) {
   const imagen = Array.isArray(property.media) && property.media.length > 0
     ? (property.media[0] as any)?.url || ''
@@ -35,6 +40,12 @@ export default function PortalPropertyCard({
 
   const energia = etiquetaClaseEnergetica(property.energyCert);
 
+  // `accion` pinta fondos con etiqueta blanca (precio, calculadora) y `acento`
+  // textos sobre blanco. Con una marca clara ambos se oscurecen lo justo.
+  const tokens = tokensPortal(plantilla);
+  const accion = fondoConTextoBlanco(brandingColor);
+  const acento = colorTextoEnClaro(brandingColor);
+
   // Solo los inmuebles en venta con precio publicado tienen hipoteca que
   // calcular: un alquiler con esta calculadora anunciaría una compra que nadie
   // está ofreciendo.
@@ -44,11 +55,11 @@ export default function PortalPropertyCard({
   // de otro elemento interactivo: el enlace envuelve el contenido y el botón
   // vive debajo, en la misma tarjeta.
   return (
-    <div className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden group flex flex-col">
+    <div className={`bg-white ${tokens.radio} shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden group flex flex-col`}>
       <a
         href={`/p/${tenantSlug}/propiedades/${property.id}`}
         className="flex flex-1 flex-col focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-        style={{ outlineColor: brandingColor }}
+        style={{ outlineColor: acento }}
       >
         {/* Imagen */}
         <div className="relative h-48 bg-gray-200 overflow-hidden">
@@ -104,8 +115,8 @@ export default function PortalPropertyCard({
           {/* Precio sobre la imagen */}
           <div className="absolute bottom-3 right-3">
             <div
-              className="text-white text-sm font-bold px-3 py-1.5 rounded-lg shadow-lg backdrop-blur-sm"
-              style={{ backgroundColor: `${brandingColor}dd` }}
+              className={`text-white text-sm font-bold px-3 py-1.5 ${tokens.radioControl} shadow-lg backdrop-blur-sm`}
+              style={{ backgroundColor: `${accion}dd` }}
             >
               {formatearPrecioInmueble(property.precioBase, property.moneda)}
               {priceSuffix(property.operationType) && (
@@ -117,7 +128,7 @@ export default function PortalPropertyCard({
 
         {/* Datos */}
         <div className="p-4 flex-1 flex flex-col">
-          <h3 className="font-semibold text-gray-900 truncate group-hover:text-blue-600 transition-colors">
+          <h3 className={`${tokens.titulo} text-gray-900 truncate transition-colors`}>
             {property.nombre}
           </h3>
 
@@ -186,7 +197,7 @@ export default function PortalPropertyCard({
             )}
             <span
               className="text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity"
-              style={{ color: brandingColor }}
+              style={{ color: acento }}
             >
               Ver detalle →
             </span>
@@ -199,7 +210,7 @@ export default function PortalPropertyCard({
           <BotonCalculadoraHipoteca
             precio={property.precioBase}
             moneda={property.moneda}
-            color={brandingColor}
+            color={accion}
             nombre={property.nombre}
           />
         </div>

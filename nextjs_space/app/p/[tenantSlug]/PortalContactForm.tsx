@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { colorTextoEnClaro, fondoConTextoBlanco } from '@/lib/real-estate/contraste';
 
 const CAMPOS_VACIOS = { name: '', email: '', phone: '', message: '', consent: false };
 type Campo = keyof typeof CAMPOS_VACIOS;
@@ -31,6 +32,11 @@ export default function PortalContactForm({
 }) {
   const [datos, setDatos] = useState(CAMPOS_VACIOS);
   const [estado, setEstado] = useState<Estado>({ tipo: 'inicial' });
+  // Mismo criterio que el resto del portal: el botón oscurece la marca lo
+  // justo para que su etiqueta blanca se lea, y los enlaces se aclaran u
+  // oscurecen para leerse sobre el fondo gris claro del formulario.
+  const accion = fondoConTextoBlanco(brandingColor);
+  const acento = colorTextoEnClaro(brandingColor);
 
   const cambiar = (campo: Campo) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setDatos((previos) => ({
@@ -76,7 +82,7 @@ export default function PortalContactForm({
           type="button"
           onClick={() => setEstado({ tipo: 'inicial' })}
           className="mt-4 text-sm font-medium hover:underline"
-          style={{ color: brandingColor }}
+          style={{ color: acento }}
         >
           Enviar otra consulta
         </button>
@@ -128,7 +134,7 @@ export default function PortalContactForm({
         type="submit"
         disabled={estado.tipo === 'enviando'}
         className="mt-4 w-full rounded-xl px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-60"
-        style={{ backgroundColor: brandingColor }}
+        style={{ backgroundColor: accion }}
       >
         {estado.tipo === 'enviando' ? 'Enviando…' : 'Enviar consulta'}
       </button>

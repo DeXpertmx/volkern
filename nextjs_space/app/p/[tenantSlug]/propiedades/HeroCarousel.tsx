@@ -5,6 +5,7 @@ import useEmblaCarousel from 'embla-carousel-react';
 import Autoplay from 'embla-carousel-autoplay';
 import type { InmuebleParsed } from '@/lib/real-estate/property-helpers';
 import { formatOperationLabel, formatearPrecioInmueble } from '@/lib/real-estate/operation-labels';
+import { fondoConTextoBlanco } from '@/lib/real-estate/contraste';
 
 interface Props {
   properties: InmuebleParsed[];
@@ -12,6 +13,8 @@ interface Props {
   brandingColor: string;
   logoUrl?: string;
   companyName: string;
+  /** La portada ya lleva el logo en su cabecera; ahí no hace falta repetirlo. */
+  showLogo?: boolean;
 }
 
 export default function HeroCarousel({
@@ -20,6 +23,7 @@ export default function HeroCarousel({
   brandingColor,
   logoUrl,
   companyName,
+  showLogo = true,
 }: Props) {
   const [emblaRef, emblaApi] = useEmblaCarousel(
     { loop: true, align: 'start', skipSnaps: false },
@@ -60,7 +64,9 @@ export default function HeroCarousel({
               ? (property.media[0] as any)?.url || ''
               : '';
 
-            const gradientFrom = brandingColor || '#3b82f6';
+            // El badge y el CTA llevan etiqueta blanca: con una marca clara se
+            // usa su versión oscurecida para que el texto no desaparezca.
+            const gradientFrom = fondoConTextoBlanco(brandingColor || '#3b82f6');
 
             return (
               <div
@@ -87,6 +93,7 @@ export default function HeroCarousel({
                 />
 
                 {/* Top bar with logo */}
+                {showLogo && (
                 <div className="absolute top-0 left-0 right-0 z-20 px-6 md:px-12 py-5">
                   {/* El logo vuelve a la portada del portal: el catálogo es una
                       sección de esa portada, no la página de inicio. */}
@@ -106,6 +113,7 @@ export default function HeroCarousel({
                     </a>
                   </div>
                 </div>
+                )}
 
                 {/* Content */}
                 <div className="relative z-10 w-full px-6 md:px-12">

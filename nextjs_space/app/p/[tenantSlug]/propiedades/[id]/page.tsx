@@ -5,6 +5,7 @@ import { parseInmueble } from '@/lib/real-estate/property-helpers';
 import { resolveTenantBySlug } from '@/lib/real-estate/portal-utils';
 import { getEffectiveBranding } from '@/lib/branding';
 import { formatearPrecioInmueble } from '@/lib/real-estate/operation-labels';
+import { getPlantillaPortal } from '@/lib/real-estate/portal-plantilla';
 import PropertyDetailClient from './PropertyDetailClient';
 
 export const revalidate = 60;
@@ -106,15 +107,16 @@ export default async function PropertyDetailPage({ params }: Props) {
 
   const relatedProperties = await getRelatedProperties(tenant.id, property);
 
-  const branding = await getEffectiveBranding(tenant.id);
+  const [branding, plantilla] = await Promise.all([
+    getEffectiveBranding(tenant.id),
+    getPlantillaPortal(tenant.id),
+  ]);
   const brandingColor = branding.primaryColor!;
 
   // Obtener imágenes del array media
   const images = Array.isArray(property.media)
     ? property.media.map((m: any) => (typeof m === 'string' ? { url: m, alt: property.nombre } : { url: m.url, alt: m.alt || property.nombre }))
     : [];
-
-  const mainImage = images.length > 0 ? images[0].url : '';
 
   // El precio se escribe en la divisa del inmueble (o la del portal), no en euros
   // ni en la convención mexicana por defecto. Los inmuebles que no publican
@@ -127,8 +129,8 @@ export default async function PropertyDetailPage({ params }: Props) {
       tenant={tenant}
       tenantSlug={tenantSlug}
       brandingColor={brandingColor}
+      plantilla={plantilla}
       images={images}
-      mainImage={mainImage}
       formattedPrice={formattedPrice}
       relatedProperties={relatedProperties}
     />

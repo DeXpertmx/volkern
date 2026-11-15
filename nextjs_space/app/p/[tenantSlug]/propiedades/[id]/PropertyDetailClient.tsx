@@ -2,18 +2,36 @@
 
 import { useState } from 'react';
 import type { InmuebleParsed } from '@/lib/real-estate/property-helpers';
-import { formatearPrecioInmueble } from '@/lib/real-estate/operation-labels';
+import {
+  formatOperationLabel,
+  formatearPrecioInmueble,
+  priceSuffix,
+} from '@/lib/real-estate/operation-labels';
+import {
+  colorTextoEnClaro,
+  fondoConTextoBlanco,
+  fondoHeroMarca,
+} from '@/lib/real-estate/contraste';
+import { tokensPortal, type PlantillaPortal } from '@/lib/real-estate/portal-templates';
 import { ESCALA_ENERGETICA, esClaseEnTramite } from '@/lib/real-estate/energia';
 import { SERVICIOS_TODOS } from '@/lib/real-estate/property-editor-config';
 import CalculadoraHipotecaria from '@/components/real-estate/CalculadoraHipotecaria';
 
+const ESTADOS_FICHA: Record<string, { label: string; color: string }> = {
+  disponible: { label: 'Disponible', color: '#10b981' },
+  reservada: { label: 'Reservada', color: '#f59e0b' },
+  vendida: { label: 'Vendida', color: '#ef4444' },
+  alquilada: { label: 'Alquilada', color: '#8b5cf6' },
+};
+
 interface Props {
   property: InmuebleParsed;
-  tenant: { id: string; nombre: string; moneda: string; brandingConfig: any };
+  tenant: { id: string; nombre: string; moneda: string };
   tenantSlug: string;
   brandingColor: string;
+  /** Plantilla del portal: mismo hero, radios y tipografía que el resto. */
+  plantilla: PlantillaPortal;
   images: Array<{ url: string; alt: string }>;
-  mainImage: string;
   formattedPrice: string;
   relatedProperties: InmuebleParsed[];
 }
@@ -23,8 +41,8 @@ export default function PropertyDetailClient({
   tenant,
   tenantSlug,
   brandingColor,
+  plantilla,
   images,
-  mainImage,
   formattedPrice,
   relatedProperties,
 }: Props) {
@@ -34,6 +52,11 @@ export default function PropertyDetailClient({
   const [contactLoading, setContactLoading] = useState(false);
   const [contactSuccess, setContactSuccess] = useState(false);
   const [contactError, setContactError] = useState('');
+
+  const tokens = tokensPortal(plantilla);
+  const accion = fondoConTextoBlanco(brandingColor);
+  const acento = colorTextoEnClaro(brandingColor);
+  const heroMarca = tokens.hero === 'marca' ? fondoHeroMarca(brandingColor) : null;
 
   const handleContactSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,24 +91,7 @@ export default function PropertyDetailClient({
     }
   };
 
-  const operationLabels: Record<string, string> = {
-    venta: 'En Venta',
-    alquiler: 'En Alquiler',
-    alquiler_temporada: 'Renta Vacacional',
-    traspaso: 'Traspaso',
-  };
-
-  const priceSuffixFor = (op: string | null | undefined): string =>
-    op === 'alquiler' ? '/mes' : op === 'alquiler_temporada' ? '/noche' : '';
-
-  const statusLabels: Record<string, { label: string; color: string }> = {
-    disponible: { label: 'Disponible', color: '#10b981' },
-    reservada: { label: 'Reservada', color: '#f59e0b' },
-    vendida: { label: 'Vendida', color: '#ef4444' },
-    alquilada: { label: 'Alquilada', color: '#8b5cf6' },
-  };
-
-  const statusInfo = statusLabels[property.status] || statusLabels.disponible;
+  const statusInfo = ESTADOS_FICHA[property.status] || ESTADOS_FICHA.disponible;
 
   // El editor por secciones cuenta los dormitorios en `habitaciones_detalle`
   // y deja `habitaciones` como respaldo: manda el detalle si existe.
@@ -117,8 +123,43 @@ export default function PropertyDetailClient({
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-6">
+        {/* La plantilla de marca abre la ficha con el bloque de color, igual
+            que la portada y el catálogo: las tres páginas se abren igual. */}
+        {heroMarca && (
+          <div
+            className={`mb-6 overflow-hidden ${tokens.radio}`}
+            style={{
+              backgroundImage: `linear-gradient(135deg, ${heroMarca.base} 0%, ${heroMarca.fin} 100%)`,
+              color: heroMarca.texto,
+            }}
+          >
+            <div className="px-6 py-8 md:px-10 md:py-12">
+              <div className="flex flex-wrap items-center gap-3">
+                <span
+                  className="inline-block rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-widest"
+                  style={{ borderColor: `${heroMarca.texto}55` }}
+                >
+                  {formatOperationLabel(property.operationType)}
+                </span>
+                <span className="text-xs font-medium opacity-80">{statusInfo.label}</span>
+              </div>
+              <h1 className={`mt-3 ${tokens.tituloPrincipal}`}>{property.nombre}</h1>
+              {(property.address || property.city) && (
+                <p className="mt-2 text-sm opacity-85">
+                  {[property.address, property.city].filter(Boolean).join(', ')}
+                </p>
+              )}
+              <p className="mt-4 text-3xl font-bold">
+                {formattedPrice}
+                <span className="text-base font-normal opacity-70">
+                  {priceSuffix(property.operationType)}
+                </span>
+              </p>
+            </div>
+          </div>
+        )}
         {/* Image Gallery */}
-        <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-8">
+        <div className={`bg-white ${tokens.radio} shadow-sm overflow-hidden mb-8`}>
           <div className="relative h-[400px] md:h-[500px] bg-gray-100">
             {images.length > 0 ? (
               <img
@@ -136,18 +177,23 @@ export default function PropertyDetailClient({
               </div>
             )}
 
-            {/* Badges */}
+            {/* Insignias: con hero de marca, operación y estado ya van arriba;
+                aquí solo queda lo que el bloque de color no dice. */}
             <div className="absolute top-4 left-4 flex gap-2">
-              <span className="bg-white/90 backdrop-blur-sm text-sm font-semibold px-3 py-1.5 rounded-full shadow-sm"
-                style={{ color: brandingColor }}
-              >
-                {operationLabels[property.operationType || ''] || property.operationType || 'Propiedad'}
-              </span>
-              <span className="text-white text-sm font-semibold px-3 py-1.5 rounded-full shadow-sm"
-                style={{ backgroundColor: statusInfo.color }}
-              >
-                {statusInfo.label}
-              </span>
+              {!heroMarca && (
+                <>
+                  <span className="bg-white/90 backdrop-blur-sm text-sm font-semibold px-3 py-1.5 rounded-full shadow-sm"
+                    style={{ color: acento }}
+                  >
+                    {formatOperationLabel(property.operationType)}
+                  </span>
+                  <span className="text-white text-sm font-semibold px-3 py-1.5 rounded-full shadow-sm"
+                    style={{ backgroundColor: statusInfo.color }}
+                  >
+                    {statusInfo.label}
+                  </span>
+                </>
+              )}
               {property.featured && (
                 <span className="bg-amber-400 text-white text-sm font-bold px-3 py-1.5 rounded-full shadow-sm">
                   DESTACADA
@@ -168,7 +214,7 @@ export default function PropertyDetailClient({
                       ? 'border-current opacity-100'
                       : 'border-transparent opacity-60 hover:opacity-90'
                   }`}
-                  style={{ borderColor: idx === selectedImage ? brandingColor : undefined }}
+                  style={{ borderColor: idx === selectedImage ? acento : undefined }}
                 >
                   <img src={img.url} alt={img.alt} className="w-full h-full object-cover" />
                 </button>
@@ -182,8 +228,10 @@ export default function PropertyDetailClient({
           {/* Main Info */}
           <div className="lg:col-span-2 space-y-6">
             {/* Title & Price */}
-            <div className="bg-white rounded-2xl p-6 shadow-sm">
-              <h1 className="text-3xl font-bold text-gray-900">{property.nombre}</h1>
+            <div className={`bg-white ${tokens.radio} p-6 shadow-sm`}>
+              {!heroMarca && (
+                <>
+                  <h1 className={`${tokens.tituloPrincipal} text-gray-900`}>{property.nombre}</h1>
               {property.address && (
                 <p className="text-gray-500 mt-1 flex items-center gap-1">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -197,28 +245,33 @@ export default function PropertyDetailClient({
               )}
               <div className="flex items-baseline justify-between mt-4">
                 <div>
-                  <span className="text-4xl font-bold" style={{ color: brandingColor }}>
+                  <span className="text-4xl font-bold" style={{ color: acento }}>
                     {formattedPrice}
                   </span>
                   {property.operationType === 'alquiler' && (
-                    <span className="text-white/50 text-base">/mes</span>
+                    <span className="text-gray-500 text-base">/mes</span>
                   )}
                   {property.operationType === 'alquiler_temporada' && (
-                    <span className="text-white/50 text-base">/noche</span>
+                    <span className="text-gray-500 text-base">/noche</span>
                   )}
                 </div>
                 {property.propertyType && (
                   <span className="text-sm text-gray-400 capitalize">{property.propertyType}</span>
                 )}
               </div>
+                </>
+              )}
+              {heroMarca && property.propertyType && (
+                <p className="text-sm capitalize text-gray-400">{property.propertyType}</p>
+              )}
               {property.descripcion && (
                 <p className="mt-4 text-gray-600 leading-relaxed">{property.descripcion}</p>
               )}
             </div>
 
             {/* Key Features */}
-            <div className="bg-white rounded-2xl p-6 shadow-sm">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Características</h2>
+            <div className={`bg-white ${tokens.radio} p-6 shadow-sm`}>
+              <h2 className={`text-xl ${tokens.titulo} text-gray-900 mb-4`}>Características</h2>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {property.areaM2 && (
                   <FeatureCard icon="📐" label="Superficie" value={`${property.areaM2} m²`} />
@@ -256,8 +309,8 @@ export default function PropertyDetailClient({
 
             {/* Servicios y equipamiento marcados en el editor */}
             {servicioLabels.length > 0 && (
-              <div className="bg-white rounded-2xl p-6 shadow-sm">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">Servicios y equipamiento</h2>
+              <div className={`bg-white ${tokens.radio} p-6 shadow-sm`}>
+                <h2 className={`text-xl ${tokens.titulo} text-gray-900 mb-4`}>Servicios y equipamiento</h2>
                 <div className="flex flex-wrap gap-2">
                   {servicioLabels.map((label) => (
                     <span
@@ -275,8 +328,8 @@ export default function PropertyDetailClient({
             {(property.energyCert ||
               property.energyCertConsumption != null ||
               property.energyCertEmission != null) && (
-              <div className="bg-white rounded-2xl p-6 shadow-sm">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">Clasificación energética</h2>
+              <div className={`bg-white ${tokens.radio} p-6 shadow-sm`}>
+                <h2 className={`text-xl ${tokens.titulo} text-gray-900 mb-4`}>Clasificación energética</h2>
                 <div className="divide-y divide-gray-100 border-t border-gray-100">
                   {property.energyCert && (
                     <div className="flex items-center justify-between py-3">
@@ -328,7 +381,7 @@ export default function PropertyDetailClient({
                     target="_blank"
                     rel="noopener noreferrer"
                     className="mt-4 inline-flex items-center gap-2 text-sm font-medium hover:underline"
-                    style={{ color: brandingColor }}
+                    style={{ color: acento }}
                   >
                     Ver certificado energético
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -341,16 +394,16 @@ export default function PropertyDetailClient({
 
             {/* Long Description */}
             {property.longDescription && (
-              <div className="bg-white rounded-2xl p-6 shadow-sm">
-                <h2 className="text-xl font-semibold text-gray-900 mb-3">Descripción Detallada</h2>
+              <div className={`bg-white ${tokens.radio} p-6 shadow-sm`}>
+                <h2 className={`text-xl ${tokens.titulo} text-gray-900 mb-3`}>Descripción Detallada</h2>
                 <p className="text-gray-600 leading-relaxed whitespace-pre-line">{property.longDescription}</p>
               </div>
             )}
 
             {/* Map */}
             {property.lat && property.lng && (
-              <div className="bg-white rounded-2xl p-6 shadow-sm">
-                <h2 className="text-xl font-semibold text-gray-900 mb-3">Ubicación</h2>
+              <div className={`bg-white ${tokens.radio} p-6 shadow-sm`}>
+                <h2 className={`text-xl ${tokens.titulo} text-gray-900 mb-3`}>Ubicación</h2>
                 <div className="rounded-xl overflow-hidden h-[300px] bg-gray-100">
                   <iframe
                     title="Ubicación de la propiedad"
@@ -372,7 +425,7 @@ export default function PropertyDetailClient({
           {/* Sidebar */}
           <div className="space-y-4">
             {/* Contact Card */}
-            <div className="bg-white rounded-2xl p-6 shadow-sm sticky top-24">
+            <div className={`bg-white ${tokens.radio} p-6 shadow-sm sticky top-24`}>
               {!showContactForm ? (
                 <div className="text-center">
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">¿Te interesa?</h3>
@@ -389,8 +442,8 @@ export default function PropertyDetailClient({
                         message: `Hola, me interesa la propiedad: ${property.nombre}`,
                       });
                     }}
-                    className="w-full py-3 px-4 text-white font-medium rounded-xl hover:opacity-90 transition-all transform hover:scale-[1.02] active:scale-[0.98]"
-                    style={{ backgroundColor: brandingColor }}
+                    className={`w-full py-3 px-4 text-white font-medium ${tokens.radioControl} hover:opacity-90 transition-all transform hover:scale-[1.02] active:scale-[0.98]`}
+                    style={{ backgroundColor: accion }}
                   >
                     Solicitar Información
                   </button>
@@ -410,7 +463,7 @@ export default function PropertyDetailClient({
                       setContactSuccess(false);
                     }}
                     className="text-sm font-medium hover:underline"
-                    style={{ color: brandingColor }}
+                    style={{ color: acento }}
                   >
                     Volver
                   </button>
@@ -437,7 +490,7 @@ export default function PropertyDetailClient({
                       required
                       value={contactForm.name}
                       onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+                      className={`w-full border border-gray-300 ${tokens.radioControl} px-3 py-2 text-sm focus:ring-2 focus:outline-none`}
                       placeholder="Tu nombre"
                     />
                   </div>
@@ -448,7 +501,7 @@ export default function PropertyDetailClient({
                       required
                       value={contactForm.email}
                       onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+                      className={`w-full border border-gray-300 ${tokens.radioControl} px-3 py-2 text-sm focus:ring-2 focus:outline-none`}
                       placeholder="tu@email.com"
                     />
                   </div>
@@ -458,7 +511,7 @@ export default function PropertyDetailClient({
                       type="tel"
                       value={contactForm.phone}
                       onChange={(e) => setContactForm({ ...contactForm, phone: e.target.value })}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+                      className={`w-full border border-gray-300 ${tokens.radioControl} px-3 py-2 text-sm focus:ring-2 focus:outline-none`}
                       placeholder="+34 612 345 678"
                     />
                   </div>
@@ -468,7 +521,7 @@ export default function PropertyDetailClient({
                       rows={3}
                       value={contactForm.message}
                       onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+                      className={`w-full border border-gray-300 ${tokens.radioControl} px-3 py-2 text-sm focus:ring-2 focus:outline-none`}
                     />
                   </div>
 
@@ -479,8 +532,8 @@ export default function PropertyDetailClient({
                   <button
                     type="submit"
                     disabled={contactLoading}
-                    className="w-full py-3 px-4 text-white font-medium rounded-xl hover:opacity-90 transition-all disabled:opacity-50 transform hover:scale-[1.02] active:scale-[0.98]"
-                    style={{ backgroundColor: brandingColor }}
+                    className={`w-full py-3 px-4 text-white font-medium ${tokens.radioControl} hover:opacity-90 transition-all disabled:opacity-50 transform hover:scale-[1.02] active:scale-[0.98]`}
+                    style={{ backgroundColor: accion }}
                   >
                     {contactLoading ? (
                       <span className="flex items-center justify-center gap-2">
@@ -499,12 +552,12 @@ export default function PropertyDetailClient({
             </div>
 
             {/* Property Summary Card */}
-            <div className="bg-white rounded-2xl p-6 shadow-sm">
+            <div className={`bg-white ${tokens.radio} p-6 shadow-sm`}>
               <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Resumen</h3>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-500">Operación</span>
-                  <span className="font-medium capitalize">{operationLabels[property.operationType || ''] || property.operationType || '—'}</span>
+                  <span className="font-medium capitalize">{formatOperationLabel(property.operationType)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">Tipo</span>
@@ -559,7 +612,7 @@ export default function PropertyDetailClient({
             <CalculadoraHipotecaria
               precioInicial={property.precioBase}
               moneda={property.moneda || tenant.moneda}
-              color={brandingColor}
+              color={accion}
             />
           </div>
         )}
@@ -577,7 +630,7 @@ export default function PropertyDetailClient({
                   <a
                     key={rp.id}
                     href={`/p/${tenantSlug}/propiedades/${rp.id}`}
-                    className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow overflow-hidden group"
+                    className={`bg-white ${tokens.radio} shadow-sm hover:shadow-md transition-shadow overflow-hidden group`}
                   >
                     <div className="relative h-44 bg-gray-200">
                       {rpImages[0] ? (
@@ -597,7 +650,7 @@ export default function PropertyDetailClient({
                     </div>
                     <div className="p-4">
                       <h3 className="font-semibold text-gray-900 truncate">{rp.nombre}</h3>
-                      <p className="text-lg font-bold mt-1" style={{ color: brandingColor }}>
+                      <p className="text-lg font-bold mt-1" style={{ color: acento }}>
                         {formatearPrecioInmueble(rp.precioBase, rp.moneda)}
                         {rp.operationType === 'alquiler' && <span className="text-sm font-normal text-gray-500">/mes</span>}
                       </p>
