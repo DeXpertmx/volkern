@@ -12,6 +12,8 @@
     "db:setup": "tsx --require ./scripts/cargar-entorno.cjs scripts/db-setup.ts",
     "db:verify": "tsx --require ./scripts/cargar-entorno.cjs scripts/db-setup.ts --check",
     "db:reset": "tsx --require ./scripts/cargar-entorno.cjs scripts/db-setup.ts --reset",
+    "seed:oficina-norte": "tsx --require ./scripts/cargar-entorno.cjs scripts/seed-oficina-vre-norte.ts",
+    "seed:oficina-norte:borrar": "tsx --require ./scripts/cargar-entorno.cjs scripts/seed-oficina-vre-norte.ts --borrar",
     "db:prisma": "node --require ./scripts/cargar-entorno.cjs node_modules/prisma/build/index.js",
     "setup": "tsx --require ./scripts/cargar-entorno.cjs scripts/setup.ts",
     "prebuild": "npm run openapi:generate",
