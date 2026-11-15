@@ -68,7 +68,7 @@ export default function HeroCarousel({
   if (properties.length === 0) return null;
 
   return (
-    <section className="relative w-full overflow-hidden bg-slate-900 group">
+    <section className="relative w-full overflow-hidden bg-slate-900 group pb-12 md:pb-16">
       {/* Carousel */}
       <div ref={emblaRef} className="overflow-hidden">
         <div className="flex">              {properties.map((property, index) => {

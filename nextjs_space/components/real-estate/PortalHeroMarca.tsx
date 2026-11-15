@@ -36,7 +36,7 @@ export default function PortalHeroMarca({
       className="w-full"
       style={{ backgroundImage: `linear-gradient(135deg, ${base} 0%, ${fin} 100%)`, color: texto }}
     >
-      <div className="mx-auto max-w-7xl px-4 py-14 md:py-20">
+      <div className="mx-auto max-w-7xl px-4 py-14 md:py-20 pb-12 md:pb-16">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-80">
           Inmobiliaria
         </p>
