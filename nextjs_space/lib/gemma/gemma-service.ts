@@ -116,55 +116,19 @@ export class GemmaService {
   }
 
   /**
-    * Lee documentación del sistema desde archivos locales
+    * Lee documentación del sistema desde archivos locales.
+    *
+    * En el despliegue a Workers (Cloudflare) no hay acceso al filesystem, y los
+    * directorios de documentación (`documentacion_comercial/`, `documentacion_tecnica/`,
+    * `manuales_operativos/`) no existen en la raíz del proyecto, así que este método
+    * devuelve siempre []. El contexto se obtiene de los artículos de la BD
+    * (`knowledgeArticle`) y, de no haberlos, de las respuestas predefinidas.
+    *
+    * Se evita usar `fs` de forma dinámica para que Turbopack no tracee todo el
+    * proyecto al bundlear el Worker (superaría el límite de 32 MB de OpenNext).
     */
-  private static async getDocumentationContext(query: string, hub: string): Promise<string[]> {
-    const fs = require('fs');
-    const path = require('path');
-    
-    const docsDirs = [
-      path.join(process.cwd(), 'documentacion_comercial'),
-      path.join(process.cwd(), 'documentacion_tecnica'),
-      path.join(process.cwd(), 'manuales_operativos'),
-    ];
-
-    const relevantDocs: string[] = [];
-    const searchTerms = query.toLowerCase().split(' ').filter((t: string) => t.length > 3);
-    const hubKeywords = hub.toLowerCase().split(' ');
-
-    for (const dir of docsDirs) {
-      if (!fs.existsSync(dir)) continue;
-      
-      const files = fs.readdirSync(dir).filter((f: string) => f.endsWith('.md'));
-      
-      for (const file of files) {
-        const filePath = path.join(dir, file);
-        const content = fs.readFileSync(filePath, 'utf-8');
-        const lowerContent = content.toLowerCase();
-        
-        // Buscar coincidencias
-        const queryMatch = searchTerms.some((term: string) => lowerContent.includes(term));
-        const hubMatch = hubKeywords.some((keyword: string) => 
-          lowerContent.includes(keyword) || 
-          file.toLowerCase().includes(keyword)
-        );
-        
-        if (queryMatch || hubMatch) {
-          // Extraer primeras líneas relevantes
-          const lines = content.split('\n').filter((l: string) => l.trim() && !l.startsWith('#'));
-          const snippet = lines.slice(0, 5).join(' ').substring(0, 300);
-          relevantDocs.push(`📄 ${file.replace('.md', '')}: ${snippet}...`);
-        }
-      }
-    }
-
-    // Si no hay resultados específicos, devolver overview del hub
-    if (relevantDocs.length === 0) {
-      const hubOverviews = this.getHubOverview(hub);
-      return hubOverviews;
-    }
-
-    return relevantDocs.slice(0, 5);
+  private static async getDocumentationContext(_query: string, _hub: string): Promise<string[]> {
+    return [];
   }
 
   /**
