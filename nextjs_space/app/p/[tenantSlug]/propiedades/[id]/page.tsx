@@ -1,4 +1,5 @@
 import { Metadata } from 'next';
+import { cache } from 'react';
 import { globalPrisma } from '@/lib/db';
 import { notFound } from 'next/navigation';
 import { parseInmueble } from '@/lib/real-estate/property-helpers';
@@ -6,6 +7,13 @@ import { resolveTenantBySlug } from '@/lib/real-estate/portal-utils';
 import { getEffectiveBranding } from '@/lib/branding';
 import { formatearPrecioInmueble } from '@/lib/real-estate/operation-labels';
 import { getPlantillaPortal } from '@/lib/real-estate/portal-plantilla';
+import {
+  baseUrlDePeticion,
+  construirDatosEstructuradosFicha,
+  urlFicha,
+} from '@/lib/real-estate/portal-seo';
+import { headers } from 'next/headers';
+import { whereCatalogoVigente } from '@/lib/real-estate/portal-vigencia';
 import PropertyDetailClient from './PropertyDetailClient';
 
 export const revalidate = 60;
@@ -15,38 +23,56 @@ interface Props {
 }
 
 /**
+ * Resuelve tenant y ficha una sola vez por petición.
+ *
+ * `generateMetadata` y la página pedían exactamente lo mismo por separado; con
+ * `cache` de React la consulta se hace una vez y las dos partes trabajan sobre
+ * el mismo inmueble ya parseado.
+ */
+const cargarFicha = cache(async (tenantSlug: string, id: string) => {
+  const tenant = await resolveTenantBySlug(tenantSlug);
+  if (!tenant) return null;
+
+  const property = await getProperty(tenant.id, id);
+  if (!property) return null;
+
+  return { tenant, property };
+});
+
+/**
  * Metadatos SEO dinámicos
  */
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { tenantSlug, id } = await params;
-  const tenant = await resolveTenantBySlug(tenantSlug);
+  const base = baseUrlDePeticion(await headers());
+  const ficha = await cargarFicha(tenantSlug, id);
 
   let title = 'Propiedad | Volkern';
   let description = 'Detalle de propiedad inmobiliaria';
 
-  if (tenant) {
-    const property = await globalPrisma.catalogoItem.findFirst({
-      where: {
-        id,
-        tipo: 'inmueble',
-        activo: true,
-      },
-    });
-
-    if (property) {
-      const parsed = parseInmueble(property);
-      title = `${parsed.nombre} | ${tenant.nombre}`;
-      description = `${parsed.operationType === 'venta' ? 'En venta' : parsed.operationType === 'alquiler' ? 'En alquiler' : 'Propiedad'} - ${parsed.areaM2 ? `${parsed.areaM2} m²` : ''} ${parsed.bedrooms ? `${parsed.bedrooms} hab` : ''} ${parsed.city ? `en ${parsed.city}` : ''}`.trim();
-    }
+  if (ficha) {
+    const { tenant, property } = ficha;
+    title = `${property.nombre} | ${tenant.nombre}`;
+    description = `${property.operationType === 'venta' ? 'En venta' : property.operationType === 'alquiler' ? 'En alquiler' : 'Propiedad'} - ${property.areaM2 ? `${property.areaM2} m²` : ''} ${property.bedrooms ? `${property.bedrooms} hab` : ''} ${property.city ? `en ${property.city}` : ''}`.trim();
   }
+
+  const canonical = urlFicha(base, tenantSlug, id);
 
   return {
     title,
     description,
+    alternates: { canonical },
     openGraph: {
       title,
       description,
       type: 'website',
+      url: canonical,
+      siteName: ficha?.tenant.nombre,
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
     },
   };
 }
@@ -75,10 +101,7 @@ async function getRelatedProperties(tenantId: string, property: any, limit = 3) 
 
   const items = await globalPrisma.catalogoItem.findMany({
     where: {
-      tenantId,
-      tipo: 'inmueble',
-      activo: true,
-      id: { not: property.id },
+      ...(await whereCatalogoVigente(tenantId, { id: { not: property.id } })),
       OR: [
         property.propertyType ? { customFieldValues: { path: ['tipo_inmueble'], equals: property.propertyType } } : {},
         property.city ? { customFieldValues: { path: ['zona'], equals: property.city } } : {},
@@ -93,17 +116,13 @@ async function getRelatedProperties(tenantId: string, property: any, limit = 3) 
 
 export default async function PropertyDetailPage({ params }: Props) {
   const { tenantSlug, id } = await params;
-  const tenant = await resolveTenantBySlug(tenantSlug);
+  const ficha = await cargarFicha(tenantSlug, id);
 
-  if (!tenant) {
+  if (!ficha) {
     notFound();
   }
 
-  const property = await getProperty(tenant.id, id);
-
-  if (!property) {
-    notFound();
-  }
+  const { tenant, property } = ficha;
 
   const relatedProperties = await getRelatedProperties(tenant.id, property);
 
@@ -123,16 +142,42 @@ export default async function PropertyDetailPage({ params }: Props) {
   // precio se anuncian como «Precio a consultar».
   const formattedPrice = formatearPrecioInmueble(property.precioBase, property.moneda || tenant.moneda);
 
+  // Datos estructurados de la ficha: es lo que permite que el inmueble salga
+  // con precio y disponibilidad en los resultados de búsqueda.
+  const base = baseUrlDePeticion(await headers());
+  const urlPublica = urlFicha(base, tenantSlug, id);
+  const datosEstructurados = construirDatosEstructuradosFicha({
+    property,
+    tenant,
+    url: urlPublica,
+    imagenes: images.map((imagen) => imagen.url).filter(Boolean),
+    base,
+    tenantSlug,
+  });
+
   return (
-    <PropertyDetailClient
-      property={property}
-      tenant={tenant}
-      tenantSlug={tenantSlug}
-      brandingColor={brandingColor}
-      plantilla={plantilla}
-      images={images}
-      formattedPrice={formattedPrice}
-      relatedProperties={relatedProperties}
-    />
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          // `<` escapado: un nombre de inmueble no debe poder cerrar el script.
+          __html: JSON.stringify(datosEstructurados).replace(/</g, '\\u003c'),
+        }}
+      />
+      <PropertyDetailClient
+        property={property}
+        tenant={tenant}
+        tenantSlug={tenantSlug}
+        brandingColor={brandingColor}
+        brandingNombre={branding.companyName || tenant.nombre}
+        brandingLogo={branding.logoUrl || ''}
+        brandingClaim={branding.claim || ''}
+        brandingTelefono={branding.telefono || ''}
+        plantilla={plantilla}
+        images={images}
+        formattedPrice={formattedPrice}
+        relatedProperties={relatedProperties}
+      />
+    </>
   );
 }

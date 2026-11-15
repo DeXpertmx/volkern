@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { parseInmueble, buildCustomFieldValues, updatePropertyCustomFields, syncPropertyOwnerToContact, type InmuebleParsed } from '@/lib/real-estate/property-helpers';
+import { revalidarPortalDeInmueble } from '@/lib/real-estate/portal-revalidate';
 
 /**
  * Valida un mapa de contadores para `habitaciones_detalle`/`camas_detalle`.
@@ -180,6 +181,10 @@ export const PATCH = withTenantAuth(async (req, auth, { params }: { params: { id
       data: updateData,
     });
 
+    // Un precio o un estado cambiado debe verse al instante en el portal: nada
+    // de seguir enseñando la ficha vieja durante el minuto del ISR.
+    await revalidarPortalDeInmueble(tenantId, id);
+
     // Sincronizar propietario → Contact en CRM
     // Solo usar valor actual si el campo NO fue enviado en el body
     const wasSent = (key: string) => body[key] !== undefined;
@@ -240,6 +245,9 @@ export const DELETE = withTenantAuth(async (req, auth, { params }: { params: { i
       where: { id },
       data: { activo: false },
     });
+
+    // Retirada inmediata del catálogo: sin esto seguiría listado hasta el minuto.
+    await revalidarPortalDeInmueble(tenantId, id);
 
     return NextResponse.json({ success: true, message: 'Propiedad desactivada exitosamente' });
   } catch (error) {

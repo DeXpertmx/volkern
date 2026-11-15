@@ -97,6 +97,23 @@ function stubFetch() {
     if (ruta.includes('/api/configuracion') && init?.method === 'POST') {
       return { ok: true, json: async () => ({ success: true }) } as unknown as Response
     }
+    if (ruta.includes('/api/real-estate/portal/analytics')) {
+      return { ok: true, json: async () => ({ filas: [], red: null }) } as unknown as Response
+    }
+    if (ruta.includes('/api/real-estate/portal/branding')) {
+      return {
+        ok: true,
+        json: async () => ({
+          logoUrl: '',
+          primaryColor: '#b45309',
+          companyName: 'VRE Norte',
+          claim: '',
+          telefono: '',
+          nombreCuenta: 'VRE Norte',
+          plantilla: 'foto',
+        }),
+      } as unknown as Response
+    }
     return { ok: true, json: async () => configGuardada } as unknown as Response
   })
   vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch)
@@ -122,7 +139,8 @@ describe('selector de plantilla del portal', () => {
     await userEvent.click(marca)
     expect(marca.getAttribute('aria-pressed')).toBe('true')
 
-    const guardar = screen.getByRole('button', { name: /Guardar|Guardar configuración/i })
+    // `Guardar Cambios` es el de la configuración; el editor de marca tiene el suyo.
+    const guardar = screen.getByRole('button', { name: 'Guardar Cambios' })
     await userEvent.click(guardar)
 
     await waitFor(() => {
@@ -142,6 +160,9 @@ describe('selector de plantilla del portal', () => {
         const ruta = String(url)
         if (ruta.includes('/api/real-estate/dashboard-stats')) {
           return { ok: true, json: async () => ({ stats: { total: 4 } }) } as unknown as Response
+        }
+        if (ruta.includes('/api/real-estate/portal/analytics')) {
+          return { ok: true, json: async () => ({ filas: [], red: null }) } as unknown as Response
         }
         return {
           ok: true,

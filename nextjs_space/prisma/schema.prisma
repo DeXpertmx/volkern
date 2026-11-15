@@ -9534,3 +9534,25 @@ model McpApprovalRequest {
   @@map("mcp_approval_requests")
 }
 
+// ─── Portal público: analítica ──────────────────────────────────────────────
+//
+// Eventos del portal inmobiliario público por cuenta. Se guardan sin datos
+// personales (ni IP ni identificadores de visitante): solo qué pasó, en qué
+// cuenta y con qué plantilla, que es lo que permite comparar oficinas y
+// decidir qué diseño funciona.
+//
+// Vive en la base global (control plane) para que una matriz con `dbUrl` propia
+// pueda consolidar los eventos de sus oficinas sin abrir cada conexión.
+model PortalEvento {
+  id          String   @id @default(cuid())
+  tenantId    String
+  /// visita_portada | visita_ficha | clic_contacto
+  tipo        String
+  /// Plantilla con la que se sirvió la página (foto | marca).
+  plantilla   String   @default("foto")
+  propiedadId String?
+  fecha       DateTime @default(now())
+
+  @@index([tenantId, tipo, fecha])
+  @@index([tenantId, fecha])
+}

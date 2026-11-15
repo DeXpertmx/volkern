@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
+import { revalidarPortalDeInmueble } from '@/lib/real-estate/portal-revalidate';
 
 /**
  * POST /api/real-estate/properties/[id]/media
@@ -54,6 +55,9 @@ export const POST = withTenantAuth(async (req, auth, { params }: { params: { id:
       where: { id },
       data: { media: updatedMedia },
     });
+
+    // La foto de portada alimenta el listado, la ficha y la imagen OG.
+    await revalidarPortalDeInmueble(tenantId, id);
 
     return NextResponse.json({
       success: true,
@@ -111,6 +115,9 @@ export const DELETE = withTenantAuth(async (req, auth, { params }: { params: { i
       where: { id },
       data: { media: updatedMedia },
     });
+
+    // La foto de portada alimenta el listado, la ficha y la imagen OG.
+    await revalidarPortalDeInmueble(tenantId, id);
 
     return NextResponse.json({
       success: true,
@@ -182,6 +189,8 @@ export const PATCH = withTenantAuth(async (req, auth, { params }: { params: { id
       where: { id },
       data: { media: reordered },
     });
+
+    await revalidarPortalDeInmueble(tenantId, id);
 
     return NextResponse.json({
       success: true,

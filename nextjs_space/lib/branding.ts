@@ -5,6 +5,10 @@ export interface BrandingConfig {
   primaryColor?: string;
   showPoweredBy?: boolean;
   companyName?: string;
+  /** Claim corto de la oficina, el que se lee bajo el nombre en el portal. */
+  claim?: string;
+  /** WhatsApp de contacto (dígitos), para el botón directo de la ficha. */
+  telefono?: string;
 }
 
 // Cache simple en memoria para evitar consultas excesivas a la DB
@@ -13,8 +17,14 @@ const BRANDING_CACHE = new Map<string, { config: BrandingConfig, expiry: number 
 /**
  * Limpia la caché de branding para forzar una recarga desde la DB.
  */
-export function clearBrandingCache(): void {
-  BRANDING_CACHE.clear();
+export function clearBrandingCache(tenantId?: string): void {
+  // Sin argumento se vacía entera (cambios globales); con `tenantId` se invalida
+  // sólo esa cuenta, que es lo que necesita el editor de marca.
+  if (!tenantId) {
+    BRANDING_CACHE.clear();
+    return;
+  }
+  BRANDING_CACHE.delete(tenantId);
 }
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
 
@@ -28,30 +38,46 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
  * Los fallos se ignoran a propósito: la marca cae a brandingConfig / defaults.
  */
 function parseStoredValue(valor: string): any {
+  // Sólo se intenta JSON con formas de objeto/array/cadena entrecomillada. Un
+  // teléfono («34612345678») es JSON válido como número y se perdía al exigir
+  // después un string; el nombre comercial, igual si empieza por dígito.
+  const limpio = valor.trim();
+  if (!limpio || !/^[[{"']/.test(limpio)) return valor;
   try {
-    return JSON.parse(valor);
+    return JSON.parse(limpio);
   } catch {
     return valor;
   }
 }
 
-async function getTenantCorporateBranding(tenantId: string): Promise<{ logoUrl?: string; companyName?: string }> {
+async function getTenantCorporateBranding(tenantId: string): Promise<{
+  logoUrl?: string;
+  companyName?: string;
+  claim?: string;
+  telefono?: string;
+}> {
   try {
     const rows = await prisma.configuracion.findMany({
-      where: { tenantId, clave: { in: ['logo_corporativo', 'business_name'] } },
+      where: {
+        tenantId,
+        clave: { in: ['logo_corporativo', 'business_name', 'portal_claim', 'portal_whatsapp'] },
+      },
       select: { clave: true, valor: true },
     });
     let logoUrl: string | undefined
     let companyName: string | undefined
+    let claim: string | undefined
+    let telefono: string | undefined
     for (const row of rows) {
       const value = parseStoredValue(row.valor)
-      if (row.clave === 'logo_corporativo' && typeof value === 'string' && value.trim()) {
-        logoUrl = value.trim()
-      } else if (row.clave === 'business_name' && typeof value === 'string' && value.trim()) {
-        companyName = value.trim()
-      }
+      if (typeof value !== 'string' || !value.trim()) continue
+      if (row.clave === 'logo_corporativo') logoUrl = value.trim()
+      else if (row.clave === 'business_name') companyName = value.trim()
+      else if (row.clave === 'portal_claim') claim = value.trim()
+      // El WhatsApp se guarda en dígitos; se tolera el formato antiguo con signos.
+      else if (row.clave === 'portal_whatsapp') telefono = value.replace(/[^0-9]/g, '')
     }
-    return { logoUrl, companyName }
+    return { logoUrl, companyName, claim, telefono }
   } catch {
     return {}
   }
@@ -98,7 +124,9 @@ export async function getEffectiveBranding(tenantId: string): Promise<BrandingCo
         logoUrl: corporate.logoUrl || clientConfig?.logoUrl || '/volkern-logo.png',
         primaryColor: clientConfig?.primaryColor || '#3b82f6',
         showPoweredBy: clientConfig?.showPoweredBy ?? true,
-        companyName: corporate.companyName || clientConfig?.companyName || tenant.nombre
+        companyName: corporate.companyName || clientConfig?.companyName || tenant.nombre,
+        claim: corporate.claim || clientConfig?.claim || undefined,
+        telefono: corporate.telefono || clientConfig?.telefono || undefined
       };
     } else {
       // 4. Es una subcuenta. Buscar config del padre (Agencia)
@@ -116,7 +144,9 @@ export async function getEffectiveBranding(tenantId: string): Promise<BrandingCo
         logoUrl: corporate.logoUrl || clientConfig?.logoUrl || agencyConfig?.logoUrl || '/volkern-logo.png',
         primaryColor: clientConfig?.primaryColor || agencyConfig?.primaryColor || '#3b82f6',
         showPoweredBy: clientConfig?.showPoweredBy ?? agencyConfig?.showPoweredBy ?? true,
-        companyName: corporate.companyName || clientConfig?.companyName || agencyConfig?.companyName || tenant.nombre
+        companyName: corporate.companyName || clientConfig?.companyName || agencyConfig?.companyName || tenant.nombre,
+        claim: corporate.claim || clientConfig?.claim || agencyConfig?.claim || undefined,
+        telefono: corporate.telefono || clientConfig?.telefono || agencyConfig?.telefono || undefined
       };
     }
 

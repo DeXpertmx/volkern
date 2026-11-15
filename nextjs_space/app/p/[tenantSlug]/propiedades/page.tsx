@@ -6,6 +6,7 @@ import { resolveTenantBySlug } from '@/lib/real-estate/portal-utils';
 import { getEffectiveBranding } from '@/lib/branding';
 import { monedaPredominante } from '@/lib/moneda';
 import HeroCarousel from './HeroCarousel';
+import { whereCatalogoVigente } from '@/lib/real-estate/portal-vigencia';
 import CalculadoraHipotecaria from '@/components/real-estate/CalculadoraHipotecaria';
 import PortalPropertyCard from '@/components/real-estate/PortalPropertyCard';
 import { fondoConTextoBlanco } from '@/lib/real-estate/contraste';
@@ -69,11 +70,9 @@ async function getProperties(
     maxPrecio?: number;
   }
 ) {
-  const where: any = {
-    tenantId,
-    tipo: 'inmueble',
-    activo: true,
-  };
+  // Sólo cartera viva: un inmueble sin actualizar en `portal_dias_vigencia` días
+  // deja de listarse (y vuelve en cuanto alguien lo guarda).
+  const where: any = await whereCatalogoVigente(tenantId);
 
   // OR combinado: búsqueda por texto + ciudad/zona
   const orConditions: any[] = [];
@@ -139,12 +138,7 @@ async function getProperties(
  */
 async function getHeroProperties(tenantId: string) {
   const items = await globalPrisma.catalogoItem.findMany({
-    where: {
-      tenantId,
-      tipo: 'inmueble',
-      activo: true,
-      destacado: true,
-    },
+    where: await whereCatalogoVigente(tenantId, { destacado: true }),
     orderBy: { fechaCreacion: 'desc' },
     take: 6,
   });
@@ -154,7 +148,7 @@ async function getHeroProperties(tenantId: string) {
   // Si no hay destacadas, tomar las 5 más recientes
   if (parsed.length === 0) {
     const recent = await globalPrisma.catalogoItem.findMany({
-      where: { tenantId, tipo: 'inmueble', activo: true },
+      where: await whereCatalogoVigente(tenantId),
       orderBy: { fechaCreacion: 'desc' },
       take: 5,
     });
@@ -311,7 +305,7 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
             </button>
 
             {/* Active filters count */}
-            {Object.values(searchParams).some(v => v) && (
+            {Object.values(filters).some(v => v) && (
               <a
                 href={`/p/${tenantSlug}/propiedades`}
                 className="text-xs text-gray-500 hover:text-gray-700 underline ml-1"

@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { monedaEscritura } from '@/lib/moneda';
 import { parseInmueble, buildCustomFieldValues, getProperties, syncPropertyOwnerToContact, type InmuebleParsed } from '@/lib/real-estate/property-helpers';
+import { revalidarPortalDeInmueble } from '@/lib/real-estate/portal-revalidate';
 
 /**
  * GET /api/real-estate/properties
@@ -263,6 +264,10 @@ export const POST = withTenantAuth(async (req, auth) => {
         etiquetas: seoTags ? seoTags.split(',').map((t: string) => t.trim()) : [],
       },
     });
+
+    // El portal es ISR: al crear la ficha se invalida la portada, el catálogo y
+    // la propia ficha de esta cuenta, sin esperar al ciclo de revalidación.
+    await revalidarPortalDeInmueble(tenantId, item.id);
 
     // Sincronizar propietario → Contact en CRM (best-effort)
     if (ownerContactId) {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { InmuebleParsed } from '@/lib/real-estate/property-helpers';
 import {
   formatOperationLabel,
@@ -16,6 +16,19 @@ import { tokensPortal, type PlantillaPortal } from '@/lib/real-estate/portal-tem
 import { ESCALA_ENERGETICA, esClaseEnTramite } from '@/lib/real-estate/energia';
 import { SERVICIOS_TODOS } from '@/lib/real-estate/property-editor-config';
 import CalculadoraHipotecaria from '@/components/real-estate/CalculadoraHipotecaria';
+import PortalAnalyticsBeacon, {
+  enviarEventoPortal,
+} from '@/components/real-estate/PortalAnalyticsBeacon';
+import {
+  normalizarOrigen,
+  urlCompartirWhatsapp,
+  urlConOrigen,
+  type OrigenPortal,
+} from '@/lib/real-estate/portal-seo';
+import {
+  mensajeWhatsappPropiedad,
+  urlWhatsapp,
+} from '@/lib/real-estate/portal-branding';
 
 const ESTADOS_FICHA: Record<string, { label: string; color: string }> = {
   disponible: { label: 'Disponible', color: '#10b981' },
@@ -29,6 +42,12 @@ interface Props {
   tenant: { id: string; nombre: string; moneda: string };
   tenantSlug: string;
   brandingColor: string;
+  /** Nombre comercial de la marca (fallback: el de la cuenta). */
+  brandingNombre?: string;
+  brandingLogo?: string;
+  brandingClaim?: string;
+  /** WhatsApp de la oficina, en dígitos; activa el botón directo. */
+  brandingTelefono?: string;
   /** Plantilla del portal: mismo hero, radios y tipografía que el resto. */
   plantilla: PlantillaPortal;
   images: Array<{ url: string; alt: string }>;
@@ -41,6 +60,10 @@ export default function PropertyDetailClient({
   tenant,
   tenantSlug,
   brandingColor,
+  brandingNombre,
+  brandingLogo,
+  brandingClaim,
+  brandingTelefono,
   plantilla,
   images,
   formattedPrice,
@@ -52,6 +75,41 @@ export default function PropertyDetailClient({
   const [contactLoading, setContactLoading] = useState(false);
   const [contactSuccess, setContactSuccess] = useState(false);
   const [contactError, setContactError] = useState('');
+  /**
+   * Origen del visitante (`?origen=whatsapp`). Se lee en el cliente para no
+   * forzar la ficha a render dinámico: llega del enlace compartido y viaja con
+   * el formulario, de modo que el lead diga de dónde vino.
+   */
+  const [origen, setOrigen] = useState<OrigenPortal | null>(null);
+  const [enlaceWhatsapp, setEnlaceWhatsapp] = useState('');
+  const [whatsappOficina, setWhatsappOficina] = useState<string | null>(null);
+
+  useEffect(() => {
+    const parametro = new URLSearchParams(window.location.search).get('origen');
+    const normalizado = normalizarOrigen(parametro);
+    setOrigen(normalizado);
+
+    const enlaceFicha = `${window.location.origin}/p/${tenantSlug}/propiedades/${property.id}`;
+
+    setEnlaceWhatsapp(
+      urlCompartirWhatsapp({
+        url: enlaceFicha,
+        nombre: property.nombre,
+        precio: formattedPrice,
+      })
+    );
+
+    // Contacto directo con la oficina: el mensaje lleva la ficha con origen para
+    // que, si el visitante acaba enviando el formulario, el lead diga de dónde vino.
+    setWhatsappOficina(
+      brandingTelefono
+        ? urlWhatsapp(
+            brandingTelefono,
+            mensajeWhatsappPropiedad(property.nombre, urlConOrigen(enlaceFicha, 'whatsapp'))
+          )
+        : null
+    );
+  }, [tenantSlug, property.id, property.nombre, formattedPrice, brandingTelefono]);
 
   const tokens = tokensPortal(plantilla);
   const accion = fondoConTextoBlanco(brandingColor);
@@ -74,6 +132,9 @@ export default function PropertyDetailClient({
           email: contactForm.email,
           phone: contactForm.phone,
           message: contactForm.message,
+          // Sin origen el lead se guarda igual; con origen, el asesor sabe si
+          // llegó por WhatsApp, un QR o un email.
+          ...(origen ? { origen } : {}),
         }),
       });
 
@@ -93,6 +154,11 @@ export default function PropertyDetailClient({
 
   const statusInfo = ESTADOS_FICHA[property.status] || ESTADOS_FICHA.disponible;
 
+  // Formulario, WhatsApp de la oficina y compartir cuentan igual: el interés se
+  // registra en un solo sitio, sin repetir el payload tres veces.
+  const registrarInteres = () =>
+    enviarEventoPortal({ slug: tenantSlug, tipo: 'clic_contacto', propiedadId: property.id });
+
   // El editor por secciones cuenta los dormitorios en `habitaciones_detalle`
   // y deja `habitaciones` como respaldo: manda el detalle si existe.
   const dormitorios = property.bedrooms ?? property.roomsDetail?.dormitorio ?? null;
@@ -107,6 +173,8 @@ export default function PropertyDetailClient({
     // Bajo `.dark` el `foreground` es casi blanco y todo texto sin clase de color
     // (los valores del resumen) desaparecía sobre las tarjetas blancas.
     <div className="min-h-screen bg-gray-50 text-gray-900">
+      <PortalAnalyticsBeacon slug={tenantSlug} tipo="visita_ficha" propiedadId={property.id} />
+
       {/* Navigation Bar */}
       <header className="bg-white shadow-sm border-b sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -118,7 +186,17 @@ export default function PropertyDetailClient({
             </svg>
             <span className="text-sm font-medium">Volver a propiedades</span>
           </a>
-          <span className="text-sm text-gray-400">{tenant.nombre}</span>
+          <div className="flex items-center gap-2">
+            {brandingLogo && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={brandingLogo}
+                alt={brandingNombre || tenant.nombre}
+                className="h-6 max-w-[90px] object-contain"
+              />
+            )}
+            <span className="text-sm text-gray-400">{brandingNombre || tenant.nombre}</span>
+          </div>
         </div>
       </header>
 
@@ -148,6 +226,9 @@ export default function PropertyDetailClient({
                 <p className="mt-2 text-sm opacity-85">
                   {[property.address, property.city].filter(Boolean).join(', ')}
                 </p>
+              )}
+              {brandingClaim && (
+                <p className="mt-2 max-w-xl text-sm opacity-85">{brandingClaim}</p>
               )}
               <p className="mt-4 text-3xl font-bold">
                 {formattedPrice}
@@ -434,6 +515,7 @@ export default function PropertyDetailClient({
                   </p>
                   <button
                     onClick={() => {
+                      registrarInteres();
                       setShowContactForm(true);
                       setContactForm({
                         name: '',
@@ -447,6 +529,33 @@ export default function PropertyDetailClient({
                   >
                     Solicitar Información
                   </button>
+
+                  {whatsappOficina && (
+                    <a
+                      href={whatsappOficina}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={registrarInteres}
+                      className={`mt-3 flex w-full items-center justify-center gap-2 border border-emerald-200 bg-emerald-50 py-2.5 px-4 text-sm font-medium text-emerald-800 hover:bg-emerald-100 ${tokens.radioControl} transition-colors`}
+                    >
+                      Escribir por WhatsApp
+                    </a>
+                  )}
+
+                  {enlaceWhatsapp && (
+                    <a
+                      href={enlaceWhatsapp}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={registrarInteres}
+                      className={`mt-3 flex w-full items-center justify-center gap-2 border border-gray-200 py-2.5 px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 ${tokens.radioControl} transition-colors`}
+                    >
+                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M17.47 14.38c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.95 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.49-1.76-1.66-2.06-.17-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.67-1.61-.92-2.2-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.79.37-.27.3-1.03 1-1.03 2.45 0 1.44 1.05 2.84 1.2 3.04.15.2 2.07 3.16 5.02 4.43.7.3 1.25.48 1.68.62.71.22 1.35.19 1.86.12.57-.09 1.76-.72 2-1.42.25-.7.25-1.29.17-1.42-.07-.13-.27-.2-.57-.35zM12.05 2C6.5 2 2 6.5 2 12.05c0 1.77.46 3.5 1.34 5.02L2 22l5.05-1.32a10 10 0 0 0 5 1.27h.01c5.54 0 10.04-4.5 10.04-10.05C22.1 6.5 17.6 2 12.05 2zm0 18.17h-.01a8.2 8.2 0 0 1-4.18-1.15l-.3-.18-3.1.81.83-3.02-.2-.31a8.16 8.16 0 0 1-1.25-4.36c0-4.52 3.68-8.2 8.21-8.2 2.19 0 4.25.86 5.8 2.4a8.15 8.15 0 0 1 2.4 5.8c0 4.53-3.68 8.21-8.2 8.21z" />
+                      </svg>
+                      Compartir por WhatsApp
+                    </a>
+                  )}
                 </div>
               ) : contactSuccess ? (
                 <div className="text-center py-6">

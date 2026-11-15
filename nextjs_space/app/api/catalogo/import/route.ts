@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-key-auth';
 import { ItemIntegrityService } from '@/lib/security/item-integrity';
 import { checkFeatureLimit } from '@/lib/subscription';
+import { revalidarPortalDeInmueble } from '@/lib/real-estate/portal-revalidate';
 
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 
@@ -108,6 +109,9 @@ export async function POST(req: NextRequest) {
     }
 
     const imported: Array<{ row: number; id: string; action: 'created' | 'updated' }> = [];
+    // Una importación puede tocar la cartera entera: se revalida el portal una
+    // sola vez al final, no una vez por fila.
+    let tocoInmuebles = false;
     const errors: Array<{ row: number; field: string; message: string }> = [];
 
     for (let index = 0; index < rows.length; index++) {
@@ -186,10 +190,15 @@ export async function POST(req: NextRequest) {
         const item = existing
           ? await prisma.catalogoItem.update({ where: { id: existing.id }, data })
           : await prisma.catalogoItem.create({ data: { tenantId, ...data } });
+        if (item.tipo === 'inmueble') tocoInmuebles = true;
         imported.push({ row: rowNumber, id: item.id, action: existing ? 'updated' : 'created' });
       } catch (error) {
         errors.push({ row: rowNumber, field: 'general', message: error instanceof Error ? error.message : 'Error al procesar la fila' });
       }
+    }
+
+    if (tocoInmuebles) {
+      await revalidarPortalDeInmueble(tenantId);
     }
 
     const status = errors.length === 0 ? 'completed' : imported.length > 0 ? 'partial' : 'failed';

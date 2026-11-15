@@ -62,6 +62,8 @@ import {
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { fondoHeroMarca } from '@/lib/real-estate/contraste'
+import PortalAnalyticsPanel from '@/components/real-estate/PortalAnalyticsPanel'
+import PortalBrandEditor from '@/components/real-estate/PortalBrandEditor'
 import {
   PLANTILLAS_PORTAL,
   PLANTILLAS_PORTAL_INFO,
@@ -750,6 +752,10 @@ export default function RealEstateConfigDashboard() {
                   La vista previa se publica al guardar.
                 </p>
               </div>
+
+              <PortalBrandEditor plantilla={config.plantillaPortal} />
+
+              <PortalAnalyticsPanel />
 
               <div className="space-y-2">
                 <Label htmlFor="portal-slug">Alias del portal (opcional)</Label>

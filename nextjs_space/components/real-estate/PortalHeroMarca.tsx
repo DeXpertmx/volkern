@@ -15,10 +15,13 @@ import { fondoHeroMarca } from '@/lib/real-estate/contraste';
 export default function PortalHeroMarca({
   companyName,
   brandingColor,
+  claim,
   ctaHref,
 }: {
   companyName: string;
   brandingColor: string;
+  /** Claim de la oficina; si no hay, se usa la descripción por defecto. */
+  claim?: string;
   ctaHref?: string;
 }) {
   const { base, fin, texto } = fondoHeroMarca(brandingColor);
@@ -34,7 +37,7 @@ export default function PortalHeroMarca({
         </p>
         <h1 className="mt-3 text-3xl font-bold leading-tight md:text-5xl">{companyName}</h1>
         <p className="mt-3 max-w-xl text-sm leading-relaxed opacity-90 md:text-base">
-          Compra, venta y alquiler de inmuebles con atención directa de la oficina.
+          {claim || 'Compra, venta y alquiler de inmuebles con atención directa de la oficina.'}
         </p>
         {ctaHref && (
           <a

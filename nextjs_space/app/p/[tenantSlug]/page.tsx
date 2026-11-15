@@ -9,6 +9,8 @@ import PortalPropertyCard from '@/components/real-estate/PortalPropertyCard';
 import HeroCarousel from './propiedades/HeroCarousel';
 import PortalHeroMarca from '@/components/real-estate/PortalHeroMarca';
 import PortalContactForm from './PortalContactForm';
+import PortalAnalyticsBeacon from '@/components/real-estate/PortalAnalyticsBeacon';
+import { whereCatalogoVigente } from '@/lib/real-estate/portal-vigencia';
 import { colorTextoEnClaro, fondoConTextoBlanco } from '@/lib/real-estate/contraste';
 import { tokensPortal } from '@/lib/real-estate/portal-templates';
 import { getPlantillaPortal } from '@/lib/real-estate/portal-plantilla';
@@ -38,7 +40,9 @@ interface ResumenCatalogo {
  * enseña su cartera, no la de la matriz.
  */
 async function getResumenCatalogo(tenantId: string): Promise<ResumenCatalogo> {
-  const base = { tenantId, tipo: 'inmueble', activo: true };
+  // Cartera viva: un inmueble que nadie guarda en meses no se anuncia, y los
+  // contadores de la portada tienen que decir lo mismo que el catálogo.
+  const base = await whereCatalogoVigente(tenantId);
 
   const [items, total, enVenta, enAlquiler] = await Promise.all([
     globalPrisma.catalogoItem.findMany({
@@ -79,6 +83,7 @@ const cargarPortada = cache(async (tenantSlug: string) => {
     companyName: branding.companyName || tenant.nombre,
     brandingColor: branding.primaryColor || '#3b82f6',
     logoUrl: branding.logoUrl || '',
+    claim: branding.claim || '',
     catalogo,
     plantilla,
   };
@@ -115,7 +120,7 @@ export default async function PortalHomePage({ params }: Props) {
   const portada = await cargarPortada(tenantSlug);
   if (!portada) notFound();
 
-  const { companyName, brandingColor, logoUrl, catalogo, plantilla } = portada;
+  const { companyName, brandingColor, logoUrl, claim, catalogo, plantilla } = portada;
   const catalogoUrl = `/p/${tenantSlug}/propiedades`;
   // El color de marca se usa derivado: `accion` para fondos con etiqueta
   // blanca y `acento` para textos sobre blanco. Con un color claro el panel
@@ -140,6 +145,8 @@ export default async function PortalHomePage({ params }: Props) {
     // Mismo criterio que el catálogo: el portal es claro y cuelga del tema
     // global, donde `foreground` se vuelve casi blanco bajo `.dark`.
     <div className="min-h-screen bg-gray-50 text-gray-900">
+      <PortalAnalyticsBeacon slug={tenantSlug} tipo="visita_portada" />
+
       {/* Cabecera */}
       <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
@@ -180,6 +187,7 @@ export default async function PortalHomePage({ params }: Props) {
         <PortalHeroMarca
           companyName={companyName}
           brandingColor={brandingColor}
+          claim={claim}
           ctaHref="#contacto"
         />
       ) : (
@@ -199,6 +207,9 @@ export default async function PortalHomePage({ params }: Props) {
           {/* Con el hero de marca el h1 ya va dentro del bloque de color. */}
           {plantilla !== 'marca' && (
             <h1 className="sr-only">{companyName} — inmuebles en venta y alquiler</h1>
+          )}
+          {plantilla !== 'marca' && claim && (
+            <p className="mb-3 max-w-2xl text-sm text-gray-600">{claim}</p>
           )}
 
           <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500">

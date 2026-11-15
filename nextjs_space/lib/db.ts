@@ -78,6 +78,7 @@ const GLOBAL_MODELS = [
   'apiKey',
   'whitelabelConfig',
   'verificationToken',
+  'portalEvento',
   'pageTemplate',
   'pageComponent',
   'auditVault',

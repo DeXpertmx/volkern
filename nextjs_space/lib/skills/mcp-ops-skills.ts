@@ -12,6 +12,7 @@
  */
 
 import { prisma } from '@/lib/db'
+import { revalidarPortalDeInmueble } from '@/lib/real-estate/portal-revalidate'
 import { checkAvailability, createCitaConEfectos, CitaError } from '@/lib/services/appointments'
 import { crearCotizacionDesdeCatalogo } from '@/lib/cotizaciones/from-catalog'
 import { crearOrdenVentaDesdeCotizacion } from '@/lib/ordenes-venta/from-cotizacion'
@@ -321,6 +322,11 @@ export async function crearCatalogoItemMcp(input: any) {
     include: { tasaImpuesto: true },
   })
 
+  // Un inmueble creado por el asistente también tiene que aparecer ya.
+  if (item.tipo === 'inmueble') {
+    await revalidarPortalDeInmueble(tenantId, item.id)
+  }
+
   await prisma.auditLog.create({
     data: {
       tenantId,
@@ -377,6 +383,10 @@ export async function actualizarCatalogoItemMcp(input: any) {
         }),
       },
     })
+  }
+
+  if ((data.tipo ?? existente.tipo) === 'inmueble') {
+    await revalidarPortalDeInmueble(tenantId, itemId)
   }
 
   await prisma.auditLog.create({

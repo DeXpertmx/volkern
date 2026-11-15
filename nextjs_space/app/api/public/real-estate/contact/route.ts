@@ -6,6 +6,7 @@ import { applyRateLimit, RATE_LIMIT_ACTIONS } from "@/lib/rate-limit-middleware"
 import { eventBus, EVENTS } from "@/lib/skills/event-bus";
 import { referenciaPropiedad } from "@/lib/real-estate/referencia";
 import { resolveTenantBySlug } from "@/lib/real-estate/portal-utils";
+import { normalizarOrigen } from "@/lib/real-estate/portal-seo";
 
 /**
  * POST /api/public/real-estate/contact
@@ -37,6 +38,18 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Origen declarado por el portal (el botón de compartir deja `?origen=whatsapp`
+    // en el enlace). Sólo valores conocidos: el resto se ignora en vez de
+    // ensuciar el CRM con texto libre.
+    const origenPortal = normalizarOrigen(origen);
+    const ETIQUETA_ORIGEN: Record<string, string> = {
+      whatsapp: "WhatsApp",
+      qr: "QR",
+      email: "Email",
+      redes: "Redes sociales",
+      cartel: "Cartel / escaparate",
+    };
 
     if (!name || !email) {
       return NextResponse.json(
@@ -108,7 +121,7 @@ export async function POST(req: NextRequest) {
         nombre: name,
         email,
         telefono: phone || "",
-        notas: `[Portal Inmobiliario] ${message || "Sin mensaje adicional"}${propertyName ? `\nPropiedad: ${propertyName}${propertyReferencia ? ` (Ref: ${propertyReferencia})` : ""}` : ""}${preferredDate ? `\nFecha preferida de visita: ${preferredDate}` : ""}${consent === true ? `\nConsentimiento de contacto aceptado (${new Date().toISOString()})` : ""}`,
+        notas: `[Portal Inmobiliario] ${message || "Sin mensaje adicional"}${propertyName ? `\nPropiedad: ${propertyName}${propertyReferencia ? ` (Ref: ${propertyReferencia})` : ""}` : ""}${preferredDate ? `\nFecha preferida de visita: ${preferredDate}` : ""}${consent === true ? `\nConsentimiento de contacto aceptado (${new Date().toISOString()})` : ""}${origenPortal ? `\nOrigen del contacto: ${ETIQUETA_ORIGEN[origenPortal]}` : ""}`,
         fuente: "portal_inmobiliario" as any,
         metadataExterna: {
           propertyId: propertyId || null,
@@ -120,6 +133,20 @@ export async function POST(req: NextRequest) {
           ip: req.headers.get("x-forwarded-for") || "unknown",
         } as any,
       } as any);
+
+      // 4b. Dejar el origen en el propio lead: `fuente` sigue marcando que vino
+      // del portal (lo usa la analítica), y `canal` dice por dónde llegó.
+      if (lead && origenPortal) {
+        try {
+          await prisma.lead.updateMany({
+            where: { id: lead.id, tenantId: tenant.id },
+            data: { canal: origenPortal },
+          });
+        } catch (canalError) {
+          // El lead ya existe: perder la etiqueta de canal no debe romper el alta.
+          console.error("[Real Estate Contact] No se pudo guardar el origen del lead:", canalError);
+        }
+      }
 
       // 5. Si la propiedad es de este tenant, registrar el interés en su metadata
       if (property && lead) {
