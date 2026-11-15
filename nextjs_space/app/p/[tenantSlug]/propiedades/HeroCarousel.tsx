@@ -6,6 +6,7 @@ import Autoplay from 'embla-carousel-autoplay';
 import type { InmuebleParsed } from '@/lib/real-estate/property-helpers';
 import { formatOperationLabel, formatearPrecioInmueble } from '@/lib/real-estate/operation-labels';
 import { fondoConTextoBlanco } from '@/lib/real-estate/contraste';
+import { type TokensPortal } from '@/lib/real-estate/portal-templates';
 import {
   ANCHOS_HERO,
   SIZES_HERO,
@@ -17,7 +18,10 @@ import {
 interface Props {
   properties: InmuebleParsed[];
   tenantSlug: string;
+  /** Color primario de la marca (del branding de la cuenta). */
   brandingColor: string;
+  /** Tokens de la plantilla: aportan el color base y los rasgos visuales. */
+  tokens: TokensPortal;
   logoUrl?: string;
   companyName: string;
   /** La portada ya lleva el logo en su cabecera; ahí no hace falta repetirlo. */
@@ -28,6 +32,7 @@ export default function HeroCarousel({
   properties,
   tenantSlug,
   brandingColor,
+  tokens,
   logoUrl,
   companyName,
   showLogo = true,
@@ -72,7 +77,7 @@ export default function HeroCarousel({
 
             // El badge y el CTA llevan etiqueta blanca: con una marca clara se
             // usa su versión oscurecida para que el texto no desaparezca.
-            const gradientFrom = fondoConTextoBlanco(brandingColor || '#3b82f6');
+            const gradientFrom = fondoConTextoBlanco(brandingColor || tokens.primaryColor);
 
             return (
               <div

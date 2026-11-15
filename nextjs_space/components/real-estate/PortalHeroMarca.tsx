@@ -1,4 +1,5 @@
 import { fondoHeroMarca } from '@/lib/real-estate/contraste';
+import { type TokensPortal } from '@/lib/real-estate/portal-templates';
 
 /**
  * Portada de la plantilla «hero de marca»: el bloque de color de la cuenta.
@@ -15,16 +16,20 @@ import { fondoHeroMarca } from '@/lib/real-estate/contraste';
 export default function PortalHeroMarca({
   companyName,
   brandingColor,
+  tokens,
   claim,
   ctaHref,
 }: {
   companyName: string;
+  /** Color primario de la marca (del branding de la cuenta). */
   brandingColor: string;
+  /** Tokens de la plantilla: aportan el color base y los rasgos visuales. */
+  tokens: TokensPortal;
   /** Claim de la oficina; si no hay, se usa la descripción por defecto. */
   claim?: string;
   ctaHref?: string;
 }) {
-  const { base, fin, texto } = fondoHeroMarca(brandingColor);
+  const { base, fin, texto } = fondoHeroMarca(brandingColor || tokens.primaryColor);
 
   return (
     <section

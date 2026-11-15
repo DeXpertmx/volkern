@@ -133,7 +133,9 @@ export default async function PortalHomePage({ params }: Props) {
   // sigue mostrando la marca, pero el texto deja de perderse.
   const accion = fondoConTextoBlanco(brandingColor);
   const acento = colorTextoEnClaro(brandingColor);
-  const tokens = tokensPortal(plantilla);
+  // El color de marca de la cuenta viaja como token de plantilla para que
+  // Hero y hero de marca lo usen sin depender de un valor suelto.
+  const tokens = { ...tokensPortal(plantilla), primaryColor: brandingColor };
   // El anillo de foco de los campos hereda el color de marca desde el formulario.
   const anilloMarca = { '--tw-ring-color': brandingColor } as CSSProperties;
   const claseCampo = `${tokens.radioControl} border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2`;
@@ -203,6 +205,7 @@ export default async function PortalHomePage({ params }: Props) {
         <PortalHeroMarca
           companyName={companyName}
           brandingColor={brandingColor}
+          tokens={tokens}
           claim={claim}
           ctaHref="#contacto"
         />
@@ -211,6 +214,7 @@ export default async function PortalHomePage({ params }: Props) {
           properties={catalogo.propiedades}
           tenantSlug={tenantSlug}
           brandingColor={brandingColor}
+          tokens={tokens}
           logoUrl={logoUrl}
           companyName={companyName}
           showLogo={false}

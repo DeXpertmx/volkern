@@ -43,6 +43,10 @@ export interface TokensPortal {
   titulo: string;
   /** Escala del titular principal (h1 de la ficha). */
   tituloPrincipal: string;
+  /** Color primario de la marca de la oficina (por ejemplo su color corporativo).
+   * Cada plantilla trae uno por defecto, pero la cuenta lo sobreescribe con su
+   * branding en la página de configuración de marca. */
+  primaryColor: string;
 }
 
 const TOKENS: Record<PlantillaPortal, TokensPortal> = {
@@ -52,6 +56,7 @@ const TOKENS: Record<PlantillaPortal, TokensPortal> = {
     radioControl: 'rounded-lg',
     titulo: 'font-bold',
     tituloPrincipal: 'text-3xl font-bold md:text-4xl',
+    primaryColor: '#3b82f6',
   },
   marca: {
     hero: 'marca',
@@ -59,6 +64,7 @@ const TOKENS: Record<PlantillaPortal, TokensPortal> = {
     radioControl: 'rounded-xl',
     titulo: 'font-black tracking-tight',
     tituloPrincipal: 'text-3xl font-black tracking-tight md:text-5xl',
+    primaryColor: '#b45309',
   },
 };
 
