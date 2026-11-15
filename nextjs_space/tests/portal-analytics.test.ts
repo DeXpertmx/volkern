@@ -5,8 +5,11 @@
 // reparto por plantilla.
 import { describe, it, expect } from 'vitest'
 import {
+  agregarCierres,
   agregarEventos,
+  divisaPredominante,
   metricasVacias,
+  origenDeCierre,
   sumarMetricas,
   type MetricasPortal,
 } from '@/lib/real-estate/portal-analytics'
@@ -75,5 +78,173 @@ describe('eventos del portal', () => {
     expect(red.operaciones).toBe(1)
     expect(red.porPlantilla.foto.visitasPortada).toBe(10)
     expect(red.porPlantilla.marca.visitasFichas).toBe(5)
+  })
+})
+
+describe('cierres atribuidos al portal', () => {
+  it('atribuye cada cierre a su canal y suma su valor', () => {
+    const metricas = mapaInicial(['oficina'])
+
+    agregarCierres(metricas, [
+      { tenantId: 'oficina', canal: 'whatsapp', valor: 250000, moneda: 'MXN' },
+      { tenantId: 'oficina', canal: 'whatsapp', valor: 180000, moneda: 'MXN' },
+      { tenantId: 'oficina', canal: 'qr', valor: 90000, moneda: 'MXN' },
+    ])
+
+    const fila = metricas.get('oficina')!
+    expect(fila.operaciones).toBe(3)
+    expect(fila.valorCerrado).toBe(520000)
+    expect(fila.porOrigen.whatsapp).toEqual({
+      operaciones: 2,
+      valorCerrado: 430000,
+      operacionesOtrasDivisas: 0,
+    })
+    expect(fila.porOrigen.qr).toEqual({
+      operaciones: 1,
+      valorCerrado: 90000,
+      operacionesOtrasDivisas: 0,
+    })
+    expect(fila.porOrigen.email.operaciones).toBe(0)
+    expect(fila.monedaPrincipal).toBe('MXN')
+    expect(fila.porMoneda).toEqual({
+      MXN: { operaciones: 3, valorCerrado: 520000 },
+    })
+  })
+
+  it('no suma importes de divisas distintas: la fila tiene una sola divisa', () => {
+    const metricas = mapaInicial(['oficina'])
+
+    agregarCierres(metricas, [
+      { tenantId: 'oficina', canal: 'whatsapp', valor: 100000, moneda: 'MXN' },
+      { tenantId: 'oficina', canal: 'whatsapp', valor: 50000, moneda: 'mxn' },
+      { tenantId: 'oficina', canal: 'qr', valor: 30000, moneda: 'EUR' },
+    ])
+
+    const fila = metricas.get('oficina')!
+    expect(fila.operaciones).toBe(3)
+    expect(fila.monedaPrincipal).toBe('MXN')
+    // El cierre en euros cuenta, pero no se suma a los pesos.
+    expect(fila.valorCerrado).toBe(150000)
+    expect(fila.operacionesOtrasDivisas).toBe(1)
+    expect(fila.porOrigen.whatsapp).toEqual({
+      operaciones: 2,
+      valorCerrado: 150000,
+      operacionesOtrasDivisas: 0,
+    })
+    expect(fila.porOrigen.qr).toEqual({
+      operaciones: 1,
+      valorCerrado: 0,
+      operacionesOtrasDivisas: 1,
+    })
+    expect(fila.porMoneda).toEqual({
+      MXN: { operaciones: 2, valorCerrado: 150000 },
+      EUR: { operaciones: 1, valorCerrado: 30000 },
+    })
+    // Con los mismos cierres gana la divisa que movió más dinero.
+    expect(
+      divisaPredominante({
+        MXN: { operaciones: 1, valorCerrado: 100 },
+        EUR: { operaciones: 1, valorCerrado: 200 },
+      })
+    ).toBe('EUR')
+    expect(divisaPredominante({})).toBeNull()
+  })
+
+  it('un lead sin canal o con canal desconocido cuenta como portal', () => {
+    expect(origenDeCierre(null)).toBe('portal')
+    expect(origenDeCierre('feria')).toBe('portal')
+    expect(origenDeCierre('WhatsApp')).toBe('whatsapp')
+
+    const metricas = mapaInicial(['oficina'])
+    agregarCierres(metricas, [
+      { tenantId: 'oficina', canal: null, valor: 100000, moneda: 'MXN' },
+      { tenantId: 'oficina', canal: 'cartel', valor: 50000, moneda: 'MXN' },
+    ])
+
+    const fila = metricas.get('oficina')!
+    expect(fila.porOrigen.portal).toEqual({
+      operaciones: 1,
+      valorCerrado: 100000,
+      operacionesOtrasDivisas: 0,
+    })
+    expect(fila.porOrigen.cartel).toEqual({
+      operaciones: 1,
+      valorCerrado: 50000,
+      operacionesOtrasDivisas: 0,
+    })
+    expect(fila.monedaPrincipal).toBe('MXN')
+
+    // Un cierre sin divisa no se puede sumar a ninguna: se cuenta aparte.
+    const sinDivisa = mapaInicial(['otra'])
+    agregarCierres(sinDivisa, [{ tenantId: 'otra', canal: null, valor: 70000 }])
+    const otra = sinDivisa.get('otra')!
+    expect(otra.monedaPrincipal).toBeNull()
+    expect(otra.valorCerrado).toBe(0)
+    expect(otra.operacionesOtrasDivisas).toBe(1)
+  })
+
+  it('el total de la red conserva cierres y valor por origen', () => {
+    const a = metricasVacias()
+    const b = metricasVacias()
+    agregarCierres(
+      new Map([
+        ['a', a],
+        ['b', b],
+      ]),
+      [
+        { tenantId: 'a', canal: 'whatsapp', valor: 100, moneda: 'EUR' },
+        { tenantId: 'b', canal: 'whatsapp', valor: 300, moneda: 'EUR' },
+        { tenantId: 'b', canal: null, valor: 50, moneda: 'EUR' },
+      ]
+    )
+
+    const red = sumarMetricas([a, b])
+    expect(red.operaciones).toBe(3)
+    expect(red.valorCerrado).toBe(450)
+    expect(red.porOrigen.whatsapp).toEqual({
+      operaciones: 2,
+      valorCerrado: 400,
+      operacionesOtrasDivisas: 0,
+    })
+    expect(red.porOrigen.portal).toEqual({
+      operaciones: 1,
+      valorCerrado: 50,
+      operacionesOtrasDivisas: 0,
+    })
+    expect(red.monedaPrincipal).toBe('EUR')
+    expect(red.porMoneda.EUR).toEqual({ operaciones: 3, valorCerrado: 450 })
+  })
+
+  it('la red no mezcla divisas: suma sólo la principal y cuenta el resto', () => {
+    const pesos = metricasVacias()
+    const euros = metricasVacias()
+    agregarCierres(
+      new Map([
+        ['pesos', pesos],
+        ['euros', euros],
+      ]),
+      [
+        { tenantId: 'pesos', canal: 'whatsapp', valor: 100000, moneda: 'MXN' },
+        { tenantId: 'euros', canal: 'whatsapp', valor: 200000, moneda: 'EUR' },
+        { tenantId: 'euros', canal: 'qr', valor: 50000, moneda: 'TOTAL_MENTIRA' },
+      ]
+    )
+
+    const red = sumarMetricas([pesos, euros])
+    expect(red.operaciones).toBe(3)
+    expect(red.monedaPrincipal).toBe('EUR')
+    expect(red.valorCerrado).toBe(200000)
+    expect(red.operacionesOtrasDivisas).toBe(2)
+    expect(red.porMoneda.MXN).toEqual({ operaciones: 1, valorCerrado: 100000 })
+    expect(red.porOrigen.whatsapp).toEqual({
+      operaciones: 2,
+      valorCerrado: 200000,
+      operacionesOtrasDivisas: 1,
+    })
+    expect(red.porOrigen.qr).toEqual({
+      operaciones: 1,
+      valorCerrado: 0,
+      operacionesOtrasDivisas: 1,
+    })
   })
 })

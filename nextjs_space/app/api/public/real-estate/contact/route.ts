@@ -6,7 +6,7 @@ import { applyRateLimit, RATE_LIMIT_ACTIONS } from "@/lib/rate-limit-middleware"
 import { eventBus, EVENTS } from "@/lib/skills/event-bus";
 import { referenciaPropiedad } from "@/lib/real-estate/referencia";
 import { resolveTenantBySlug } from "@/lib/real-estate/portal-utils";
-import { normalizarOrigen } from "@/lib/real-estate/portal-seo";
+import { ETIQUETAS_ORIGEN_PORTAL, normalizarOrigen } from "@/lib/real-estate/portal-seo";
 
 /**
  * POST /api/public/real-estate/contact
@@ -43,13 +43,6 @@ export async function POST(req: NextRequest) {
     // en el enlace). Sólo valores conocidos: el resto se ignora en vez de
     // ensuciar el CRM con texto libre.
     const origenPortal = normalizarOrigen(origen);
-    const ETIQUETA_ORIGEN: Record<string, string> = {
-      whatsapp: "WhatsApp",
-      qr: "QR",
-      email: "Email",
-      redes: "Redes sociales",
-      cartel: "Cartel / escaparate",
-    };
 
     if (!name || !email) {
       return NextResponse.json(
@@ -121,7 +114,7 @@ export async function POST(req: NextRequest) {
         nombre: name,
         email,
         telefono: phone || "",
-        notas: `[Portal Inmobiliario] ${message || "Sin mensaje adicional"}${propertyName ? `\nPropiedad: ${propertyName}${propertyReferencia ? ` (Ref: ${propertyReferencia})` : ""}` : ""}${preferredDate ? `\nFecha preferida de visita: ${preferredDate}` : ""}${consent === true ? `\nConsentimiento de contacto aceptado (${new Date().toISOString()})` : ""}${origenPortal ? `\nOrigen del contacto: ${ETIQUETA_ORIGEN[origenPortal]}` : ""}`,
+        notas: `[Portal Inmobiliario] ${message || "Sin mensaje adicional"}${propertyName ? `\nPropiedad: ${propertyName}${propertyReferencia ? ` (Ref: ${propertyReferencia})` : ""}` : ""}${preferredDate ? `\nFecha preferida de visita: ${preferredDate}` : ""}${consent === true ? `\nConsentimiento de contacto aceptado (${new Date().toISOString()})` : ""}${origenPortal ? `\nOrigen del contacto: ${ETIQUETAS_ORIGEN_PORTAL[origenPortal]}` : ""}`,
         fuente: "portal_inmobiliario" as any,
         metadataExterna: {
           propertyId: propertyId || null,

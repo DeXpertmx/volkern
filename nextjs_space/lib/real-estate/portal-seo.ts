@@ -7,8 +7,28 @@
  */
 import type { InmuebleParsed } from './property-helpers';
 
-const ORIGENES_PORTAL = ['whatsapp', 'qr', 'email', 'redes', 'cartel'] as const;
+export const ORIGENES_PORTAL = ['whatsapp', 'qr', 'email', 'redes', 'cartel'] as const;
 export type OrigenPortal = (typeof ORIGENES_PORTAL)[number];
+
+/** Nombre con el que se enseña cada canal en el portal, el CRM y la analítica. */
+export const ETIQUETAS_ORIGEN_PORTAL: Record<OrigenPortal, string> = {
+  whatsapp: 'WhatsApp',
+  qr: 'QR',
+  email: 'Email',
+  redes: 'Redes sociales',
+  cartel: 'Cartel / escaparate',
+};
+
+/** Origen de un cierre: un canal declarado o el portal sin canal. */
+export type OrigenCierre = OrigenPortal | 'portal';
+
+/** Órdenes en los que se presentan los orígenes (canales y luego sin canal). */
+export const ORIGENES_CIERRE: readonly OrigenCierre[] = [...ORIGENES_PORTAL, 'portal'];
+
+export const ETIQUETAS_ORIGEN_CIERRE: Record<OrigenCierre, string> = {
+  ...ETIQUETAS_ORIGEN_PORTAL,
+  portal: 'Portal (sin canal)',
+};
 
 /** Origen de un lead: sólo valores conocidos, para no ensuciar el CRM. */
 export function normalizarOrigen(valor: unknown): OrigenPortal | null {

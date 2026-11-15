@@ -15,7 +15,8 @@ import {
  *
  * Métricas del portal público de esta cuenta y, si es una matriz, de sus
  * oficinas: visitas a portada y fichas, clics en «Solicitar información», leads
- * del portal y operaciones cerradas, con el desglose por plantilla.
+ * del portal y cierres ganados cuyo lead vino del portal (con su valor y el canal
+ * de captación), desglosados por plantilla.
  *
  * Las filas salen siempre completas (matriz primero) para que la tabla compare
  * cuentas sin huecos cuando una oficina no tiene eventos todavía.
