@@ -10,6 +10,53 @@ import { sendTelegramMessage, loadTelegramCredentials } from '@/lib/telegram'
 import { sendFacebookMessage, sendInstagramMessage } from '@/lib/meta-messenger'
 import { getDownloadUrl } from '@/lib/s3'
 import { checkFeatureLimit, incrementUsage } from '@/lib/subscription'
+import { enviarWhatsAppPorChatwoot } from '@/lib/chatwoot-tenant'
+
+/**
+ * Envío de WhatsApp con el Hub como camino preferente: el inbox de Chatwoot
+ * es el que tiene la instancia de Evolution conectada, mientras que la
+ * instancia directa del tenant puede estar desconectada. Si el hub no está
+ * disponible (o falla), se cae a la instancia Evolution directa.
+ */
+async function enviarWhatsAppConFallback(opts: {
+  tenantId: string
+  conversacion: any
+  contenido: string
+  mediaUrl?: string
+  mediaType?: string
+}): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  const porHub = await enviarWhatsAppPorChatwoot({
+    tenantId: opts.tenantId,
+    conversacion: opts.conversacion,
+    contenido: opts.contenido,
+  })
+  if (porHub.success) {
+    return { success: true, messageId: porHub.messageId != null ? String(porHub.messageId) : undefined }
+  }
+
+  let finalMediaUrl = opts.mediaUrl
+  if (finalMediaUrl && finalMediaUrl.includes('mensajes/') && !finalMediaUrl.startsWith('http')) {
+    finalMediaUrl = await getDownloadUrl(finalMediaUrl)
+  }
+
+  const directo = finalMediaUrl
+    ? await sendWhatsAppMessageWithMedia(
+        opts.conversacion.contactoTelefono,
+        opts.contenido,
+        finalMediaUrl,
+        (opts.mediaType as 'image' | 'video' | 'document') || 'image',
+        opts.tenantId
+      )
+    : await sendWhatsAppMessage(opts.conversacion.contactoTelefono, opts.contenido, opts.tenantId)
+
+  if (directo.success) {
+    return { success: true, messageId: directo.messageId }
+  }
+  return {
+    success: false,
+    error: `${porHub.error ? `Hub: ${porHub.error} · ` : ''}Evolution: ${directo.error}`,
+  }
+}
 
 // POST /api/mensajes/enviar - Enviar un mensaje multicanal
 export const POST = withTenantAuth(async (request, auth) => {
@@ -94,42 +141,17 @@ export const POST = withTenantAuth(async (request, auth) => {
         if (!conversacion.contactoTelefono) {
           return NextResponse.json({ error: 'No hay número de teléfono para WhatsApp' }, { status: 400 })
         }
-        let whatsappResult: any
-        if (mediaUrl) {
-          let finalMediaUrl = mediaUrl
-          if (mediaUrl.includes('mensajes/') && !mediaUrl.startsWith('http')) {
-            finalMediaUrl = await getDownloadUrl(mediaUrl)
-          }
-          whatsappResult = await sendWhatsAppMessageWithMedia(
-            conversacion.contactoTelefono,
-            contenidoFinal,
-            finalMediaUrl,
-            (mediaType as 'image' | 'video' | 'document') || 'image',
-            tenantId
-          )
-        } else {
-          whatsappResult = await sendWhatsAppMessage(conversacion.contactoTelefono, contenidoFinal, tenantId)
-        }
-
-        if (!whatsappResult.success) {
+        const envio = await enviarWhatsAppConFallback({
+          tenantId,
+          conversacion,
+          contenido: contenidoFinal,
+          mediaUrl,
+          mediaType,
+        })
+        resultado = { success: envio.success, messageId: envio.messageId, error: envio.error }
+        if (!envio.success) {
           estado = 'error'
-          errorMensaje = whatsappResult.error
-          resultado = { success: false, error: whatsappResult.error }
-        } else {
-          resultado = { success: true, messageId: whatsappResult.messageId }
-          // Reflejar en Chatwoot (no es crítico: si falla, el envío al cliente
-          // ya se hizo y Chatwoot lo verá por su propio webhook de salida).
-          try {
-            const { syncOutgoingChatwootMessage } = await import('@/lib/skills/chatwoot-sync-skill');
-            await syncOutgoingChatwootMessage({
-              tenantId,
-              conversationId: conversacion.id,
-              content: contenidoFinal,
-              messageId: 'PENDING_SYNC',
-            });
-          } catch (syncErr) {
-            console.warn('[mensajes/enviar] No se pudo reflejar en Chatwoot:', syncErr);
-          }
+          errorMensaje = envio.error
         }
       } else {
         try {
@@ -159,26 +181,18 @@ export const POST = withTenantAuth(async (request, auth) => {
         return NextResponse.json({ error: 'No hay número de teléfono para WhatsApp' }, { status: 400 })
       }
 
-      if (mediaUrl) {
-        let finalMediaUrl = mediaUrl
-        if (mediaUrl.includes('mensajes/') && !mediaUrl.startsWith('http')) {
-          finalMediaUrl = await getDownloadUrl(mediaUrl)
-        }
-        
-        resultado = await sendWhatsAppMessageWithMedia(
-          conversacion.contactoTelefono,
-          contenidoFinal,
-          finalMediaUrl,
-          (mediaType as 'image' | 'video' | 'document') || 'image',
-          tenantId
-        )
-      } else {
-        resultado = await sendWhatsAppMessage(conversacion.contactoTelefono, contenidoFinal, tenantId)
-      }
-      
-      if (!resultado.success) {
+      const envio = await enviarWhatsAppConFallback({
+        tenantId,
+        conversacion,
+        contenido: contenidoFinal,
+        mediaUrl,
+        mediaType,
+      })
+      resultado = { success: envio.success, messageId: envio.messageId, error: envio.error }
+
+      if (!envio.success) {
         estado = 'error'
-        errorMensaje = resultado.error
+        errorMensaje = envio.error
       }
     } else if (canal === 'email') {
       if (!conversacion.contactoEmail) {
@@ -267,6 +281,23 @@ export const POST = withTenantAuth(async (request, auth) => {
         fechaUltimoMensaje: new Date(),
       },
     })
+
+    // Si el proveedor rechazó el envío, NO devolver 200: el mensaje queda
+    // registrado en el hilo con estado "error" (evidencia en el Hub), pero la
+    // UI debe enterarse de que no salió (antes se reportaba éxito y el agente
+    // creía haber enviado cuando el WhatsApp estaba desconectado).
+    if (estado === 'error') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: errorMensaje || 'No se pudo enviar el mensaje',
+          mensaje,
+          conversacion,
+          resultado,
+        },
+        { status: 502 }
+      )
+    }
 
     // Track usage after successful message send
     if (estado === 'enviado') {

@@ -162,7 +162,8 @@ export default function MensajesPage() {
       })
 
       if (!response.ok) {
-        toast.error('Error al enviar mensaje')
+        const data = await response.json().catch(() => ({}))
+        toast.error(data.error || 'Error al enviar mensaje', { duration: 8000 })
         // Rollback optimistic update if needed or refetch
         fetchMessages(selectedConversation.id)
       }

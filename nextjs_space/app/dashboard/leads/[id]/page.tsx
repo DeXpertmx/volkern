@@ -137,6 +137,8 @@ export default function LeadDetailPage() {
   const [calling, setCalling] = useState(false);
   const [isRoleplayOpen, setIsRoleplayOpen] = useState(false);
   const [isFiscalModalOpen, setIsFiscalModalOpen] = useState(false);
+  // Se incrementa tras enviar un WhatsApp para que el timeline recargue.
+  const [timelineKey, setTimelineKey] = useState(0);
 
   useEffect(() => {
     if (!leadId) {
@@ -697,6 +699,7 @@ export default function LeadDetailPage() {
                         entityType="lead"
                         entityId={lead.id}
                         nombre={lead.nombre}
+                        onSent={() => setTimelineKey((k) => k + 1)}
                       />
                     </div>
                   </div>
@@ -848,7 +851,7 @@ export default function LeadDetailPage() {
       <LeadTasks leadId={lead.id} />
 
       {/* Línea de Tiempo de Comunicaciones */}
-      <UnifiedTimeline leadId={lead.id} />
+      <UnifiedTimeline key={timelineKey} leadId={lead.id} />
 
       {/* Notas Mejoradas */}
       <EnhancedNotes leadId={lead.id} />

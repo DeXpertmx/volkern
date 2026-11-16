@@ -202,6 +202,8 @@ export default function ContactoDetallePage() {
   })
 
   const [stages, setStages] = useState<any[]>([])
+  // Se incrementa tras enviar un WhatsApp para que el timeline recargue.
+  const [timelineKey, setTimelineKey] = useState(0)
   
   // Fiscal Modal State
   const [isFiscalModalOpen, setIsFiscalModalOpen] = useState(false)
@@ -862,6 +864,7 @@ export default function ContactoDetallePage() {
                         nombre={contact.nombre}
                         size="sm"
                         iconOnly={true}
+                        onSent={() => setTimelineKey((k) => k + 1)}
                       />
                     </div>
                   </div>
@@ -1291,6 +1294,7 @@ export default function ContactoDetallePage() {
                     entityId={contact.id}
                     nombre={contact.nombre}
                     size="sm"
+                    onSent={() => setTimelineKey((k) => k + 1)}
                   />
                 </>
               )}
@@ -1470,7 +1474,7 @@ export default function ContactoDetallePage() {
         </TabsContent>
 
         <TabsContent value="timeline" className="mt-6 space-y-6">
-          <UnifiedTimeline contactId={contact.id} />
+          <UnifiedTimeline key={timelineKey} contactId={contact.id} />
         </TabsContent>
 
         <TabsContent value="tasks" className="mt-6 space-y-6">
