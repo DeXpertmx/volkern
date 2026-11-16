@@ -104,11 +104,11 @@ export const POST = withTenantAuth(async (request, auth) => {
 
     let contenidoFinal = contenido
 
-    // 1. Manejo de Templates (Intelligent Proxy redirige a la DB del Tenant si es necesario)
-    // Nota: MessageTemplate debe ser un modelo de Tenant.
+    // 1. Manejo de Templates. Las plantillas son por tenant: se busca también
+    // por tenantId para no poder enviar el contenido de otro cliente.
     if (templateId) {
       const template = await prisma.messageTemplate.findFirst({
-        where: { id: templateId } as any,
+        where: { id: templateId, tenantId },
       })
 
       if (!template) {

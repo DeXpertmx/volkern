@@ -589,9 +589,11 @@ async function main() {
     // Templates de WhatsApp
     prisma.messageTemplate.upsert({
       where: { id: 'template-wa-bienvenida' },
-      update: {},
+      // Las plantillas son por tenant: sin tenantId quedarían invisibles.
+      update: { tenantId: defaultTenant.id },
       create: {
         id: 'template-wa-bienvenida',
+        tenantId: defaultTenant.id,
         nombre: 'Bienvenida Lead - WhatsApp',
         canal: 'whatsapp',
         contenido: '¡Hola {nombre}! 👋\n\nGracias por contactarnos. Soy del equipo de Volkern CRM y estoy aquí para ayudarte.\n\n¿En qué podemos asistirte hoy?',
@@ -602,9 +604,10 @@ async function main() {
     }),
     prisma.messageTemplate.upsert({
       where: { id: 'template-wa-recordatorio-cita' },
-      update: {},
+      update: { tenantId: defaultTenant.id },
       create: {
         id: 'template-wa-recordatorio-cita',
+        tenantId: defaultTenant.id,
         nombre: 'Recordatorio de Cita - WhatsApp',
         canal: 'whatsapp',
         contenido: '¡Hola {nombre}! 📅\n\nTe recordamos que tienes una cita programada:\n\n📌 Servicio: {servicio}\n🕐 Fecha: {fecha}\n⏰ Hora: {hora}\n\n¿Necesitas reagendar? Házmelo saber.',
@@ -615,9 +618,10 @@ async function main() {
     }),
     prisma.messageTemplate.upsert({
       where: { id: 'template-wa-seguimiento' },
-      update: {},
+      update: { tenantId: defaultTenant.id },
       create: {
         id: 'template-wa-seguimiento',
+        tenantId: defaultTenant.id,
         nombre: 'Seguimiento Lead - WhatsApp',
         canal: 'whatsapp',
         contenido: 'Hola {nombre},\n\nSolo quería hacer un seguimiento sobre tu interés en nuestros servicios.\n\n¿Tienes alguna pregunta? ¿Hay algo en lo que pueda ayudarte?',
@@ -628,9 +632,10 @@ async function main() {
     }),
     prisma.messageTemplate.upsert({
       where: { id: 'template-wa-confirmacion-pago' },
-      update: {},
+      update: { tenantId: defaultTenant.id },
       create: {
         id: 'template-wa-confirmacion-pago',
+        tenantId: defaultTenant.id,
         nombre: 'Confirmación de Pago - WhatsApp',
         canal: 'whatsapp',
         contenido: '¡Hola {nombre}! ✅\n\n¡Tu pago ha sido confirmado exitosamente!\n\n💰 Monto: {monto}\n📄 Servicio: {servicio}\n\nGracias por tu confianza. ¡Nos vemos pronto!',
@@ -642,9 +647,10 @@ async function main() {
     // Templates de Email
     prisma.messageTemplate.upsert({
       where: { id: 'template-email-bienvenida' },
-      update: {},
+      update: { tenantId: defaultTenant.id },
       create: {
         id: 'template-email-bienvenida',
+        tenantId: defaultTenant.id,
         nombre: 'Bienvenida Lead - Email',
         canal: 'email',
         asunto: 'Bienvenido a Volkern CRM - ¡Estamos aquí para ayudarte!',
@@ -665,9 +671,10 @@ El equipo de Volkern CRM`,
     }),
     prisma.messageTemplate.upsert({
       where: { id: 'template-email-recordatorio-cita' },
-      update: {},
+      update: { tenantId: defaultTenant.id },
       create: {
         id: 'template-email-recordatorio-cita',
+        tenantId: defaultTenant.id,
         nombre: 'Recordatorio de Cita - Email',
         canal: 'email',
         asunto: 'Recordatorio: Tu cita con Volkern CRM - {fecha}',
@@ -692,9 +699,10 @@ El equipo de Volkern CRM`,
     }),
     prisma.messageTemplate.upsert({
       where: { id: 'template-email-curso-bienvenida' },
-      update: {},
+      update: { tenantId: defaultTenant.id },
       create: {
         id: 'template-email-curso-bienvenida',
+        tenantId: defaultTenant.id,
         nombre: 'Bienvenida Curso - Email',
         canal: 'email',
         asunto: '¡Bienvenido al curso {curso}!',
@@ -721,9 +729,10 @@ El equipo de Volkern CRM`,
     // Template ambos canales
     prisma.messageTemplate.upsert({
       where: { id: 'template-ambos-felicitaciones-curso' },
-      update: {},
+      update: { tenantId: defaultTenant.id },
       create: {
         id: 'template-ambos-felicitaciones-curso',
+        tenantId: defaultTenant.id,
         nombre: 'Felicitaciones Curso Completado',
         canal: 'ambos',
         asunto: '🎉 ¡Felicidades! Has completado el curso {curso}',
