@@ -25,31 +25,11 @@ import { prisma } from '@/lib/db'
 import { withTenantAuth } from '@/lib/api-key-auth'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { chatwootApi } from '@/lib/nexus/chatwoot-api'
+import { obtenerTokenChatwootTenant } from '@/lib/chatwoot-tenant'
 import { logAuditAction } from '@/lib/permissions'
 
 const soloDigitos = (valor?: string | null) => (valor || '').replace(/[^0-9]/g, '')
 
-/** Token de agente de la cuenta de Chatwoot (hub → canal → descifrado). */
-async function obtenerTokenChatwoot(tenantId: string, accountId: number): Promise<string> {
-  const hub = await prisma.messagingHubConfig.findFirst({
-    where: { tenantId, chatwootAccountId: accountId },
-    select: { hubApiToken: true },
-  })
-  if (hub?.hubApiToken) {
-    try {
-      const { decrypt } = await import('@/lib/core/crypto')
-      return decrypt(hub.hubApiToken)
-    } catch {
-      return hub.hubApiToken
-    }
-  }
-  const canal = await prisma.channel.findFirst({
-    where: { tenantId, type: 'whatsapp', isActive: true },
-    select: { config: true },
-  })
-  const cfg: any = canal?.config || {}
-  return cfg.apiToken || ''
-}
 
 export const POST = withTenantAuth(async (request, auth) => {
   try {
@@ -195,11 +175,17 @@ export const POST = withTenantAuth(async (request, auth) => {
       if (hub?.chatwootAccountId) accountId = hub.chatwootAccountId
     }
 
-    if (accountId) {
-      try {
-        const token = await obtenerTokenChatwoot(tenantId, accountId)
-        if (!token) throw new Error('El hub no tiene token de API configurado')
+    // Solo se intenta el hub si hay token de AGENTE: el token del hub es del
+    // usuario bot y Chatwoot responde 401 al crear conversaciones o enviar.
+    // Sin token de agente se omite el intento (sin error) y se pasa directo a
+    // Evolution, evitando latencia y mensajes de error confusos.
+    const tokenChatwoot = accountId
+      ? await obtenerTokenChatwootTenant(tenantId, accountId)
+      : ''
 
+    if (accountId && tokenChatwoot) {
+      const token = tokenChatwoot
+      try {
         if (!chatwootConvId) {
           const canal = await prisma.channel.findFirst({
             where: { tenantId, type: 'whatsapp', isActive: true },

@@ -10,23 +10,19 @@
 import { prisma } from '@/lib/db'
 import { chatwootApi } from '@/lib/nexus/chatwoot-api'
 
-/** Token de agente de la cuenta de Chatwoot (hub → canal → descifrado). */
+/**
+ * Token de AGENTE de la cuenta de Chatwoot.
+ *
+ * Solo sirve el token de agente del canal (`config.apiToken`): el token del
+ * hub (`messagingHubConfig.hubApiToken`) pertenece al usuario bot y Chatwoot
+ * rechaza con 401 "Access to this endpoint is not authorized for bots" al
+ * crear conversaciones o enviar mensajes. Si no hay token de agente se
+ * devuelve cadena vacía y el llamador cae a Evolution sin intentar el hub.
+ */
 export async function obtenerTokenChatwootTenant(
   tenantId: string,
-  accountId: number
+  _accountId: number
 ): Promise<string> {
-  const hub = await prisma.messagingHubConfig.findFirst({
-    where: { tenantId, chatwootAccountId: accountId },
-    select: { hubApiToken: true },
-  })
-  if (hub?.hubApiToken) {
-    try {
-      const { decrypt } = await import('@/lib/core/crypto')
-      return decrypt(hub.hubApiToken)
-    } catch {
-      return hub.hubApiToken
-    }
-  }
   const canal = await prisma.channel.findFirst({
     where: { tenantId, type: 'whatsapp', isActive: true },
     select: { config: true },
