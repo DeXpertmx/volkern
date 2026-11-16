@@ -276,34 +276,53 @@ export function SendWhatsAppButton({
           )}
 
           <div className="space-y-3 mt-4">
-            {plantillas && plantillas.length > 0 && (
+            {plantillas !== null && (
               <div className="space-y-2">
-                <Label>Plantilla</Label>
-                <Select
-                  value={plantillaId || 'ninguna'}
-                  onValueChange={(valor) =>
-                    valor === 'ninguna' ? setPlantillaId('') : elegirPlantilla(valor)
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Escribe a mano o elige una plantilla" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ninguna">Sin plantilla</SelectItem>
-                    {plantillas.map((plantilla) => (
-                      <SelectItem key={plantilla.id} value={plantilla.id}>
-                        {plantilla.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {plantillaId && mensaje.trim() && (
-                  <div className="rounded-md border bg-muted/40 p-2">
-                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
-                      Vista previa
-                    </p>
-                    <p className="text-xs whitespace-pre-wrap line-clamp-4">{mensaje}</p>
-                  </div>
+                <div className="flex items-center justify-between">
+                  <Label>Plantilla</Label>
+                  {plantillas.length === 0 && (
+                    <Link
+                      href="/dashboard/mensajes/templates"
+                      className="text-xs text-muted-foreground underline"
+                    >
+                      Crear plantilla en el Hub
+                    </Link>
+                  )}
+                </div>
+                {plantillas.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    No hay plantillas de WhatsApp guardadas: escribe el mensaje a mano o créalas
+                    en el Hub.
+                  </p>
+                ) : (
+                  <>
+                    <Select
+                      value={plantillaId || 'ninguna'}
+                      onValueChange={(valor) =>
+                        valor === 'ninguna' ? setPlantillaId('') : elegirPlantilla(valor)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Escribe a mano o elige una plantilla" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ninguna">Sin plantilla</SelectItem>
+                        {plantillas.map((plantilla) => (
+                          <SelectItem key={plantilla.id} value={plantilla.id}>
+                            {plantilla.nombre}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {plantillaId && mensaje.trim() && (
+                      <div className="rounded-md border bg-muted/40 p-2">
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+                          Vista previa
+                        </p>
+                        <p className="text-xs whitespace-pre-wrap line-clamp-4">{mensaje}</p>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
