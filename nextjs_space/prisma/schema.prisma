@@ -1700,9 +1700,8 @@ model Message {
 model MessageTemplate {
   id                 String   @id @default(cuid())
   // Plantillas por tenant: antes eran globales y las veía cualquier cliente.
-  // Nullable para no romper filas antiguas; la API solo devuelve las del
-  // tenant de la sesión.
-  tenantId           String?
+  // Obligatorio para que no se pueda crear una plantilla que nadie ve.
+  tenantId           String
   nombre             String
   canal              String
   asunto             String?
