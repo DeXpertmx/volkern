@@ -8,11 +8,13 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
+  Activity,
   CheckCircle2,
   KeyRound,
   Loader2,
   MessageCircle,
   Save,
+  Send,
   ShieldCheck,
   XCircle,
 } from 'lucide-react';
@@ -26,11 +28,38 @@ interface HubConfig {
   chatwootConfigurado?: boolean;
 }
 
+interface Paso {
+  id: string;
+  titulo: string;
+  ok: boolean;
+  detalle: string;
+}
+
+interface Envio {
+  proveedor: 'hub' | 'evolution' | null;
+  ok: boolean;
+  detalle: string;
+  motivoHub?: string;
+  conversationId?: number | null;
+  messageId?: number | string | null;
+}
+
+interface Diagnostico {
+  ok: boolean;
+  pasos: Paso[];
+  envio?: Envio;
+}
+
 export default function HubConfigPage() {
   const [config, setConfig] = useState<HubConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [token, setToken] = useState('');
+
+  const [numero, setNumero] = useState('');
+  const [mensaje, setMensaje] = useState('Prueba de Volkern: mensajería saliente funcionando.');
+  const [diagLoading, setDiagLoading] = useState<'validar' | 'enviar' | null>(null);
+  const [diag, setDiag] = useState<Diagnostico | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -69,6 +98,40 @@ export default function HubConfigPage() {
       toast.error(error?.message || 'Error de conexión');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const diagnosticar = async (enviar: boolean) => {
+    if (enviar && !numero.trim()) {
+      toast.error('Escribe el número al que quieres mandar la prueba');
+      return;
+    }
+    setDiagLoading(enviar ? 'enviar' : 'validar');
+    try {
+      const res = await fetch('/api/integrations/messaging-hub/diagnostico', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enviar, numero: numero.trim(), mensaje: mensaje.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || 'No se pudo completar el diagnóstico');
+        return;
+      }
+      setDiag(data as Diagnostico);
+      if (enviar && data?.envio?.ok) {
+        toast.success(
+          data.envio.proveedor === 'hub'
+            ? 'Prueba enviada por el hub (Chatwoot)'
+            : 'Prueba enviada por Evolution (hub no disponible)'
+        );
+      } else if (enviar && data?.envio && !data.envio.ok) {
+        toast.error('La prueba no salió por ningún canal');
+      }
+    } catch (error: any) {
+      toast.error(error?.message || 'Error de conexión');
+    } finally {
+      setDiagLoading(null);
     }
   };
 
@@ -150,7 +213,7 @@ export default function HubConfigPage() {
               <p className="text-xs text-muted-foreground">Inbox de WhatsApp</p>
               <p className="font-medium">{config?.whatsappInboxId ?? 'No asignado'}</p>
             </div>
-            <div className="bg-gray-50 border rounded-lg p-3">
+            <div className="bg-gray-50 rounded-lg border p-3">
               <p className="text-xs text-muted-foreground">Servidor del hub</p>
               <p className="font-medium">
                 {config?.chatwootConfigurado ? 'Configurado' : 'No configurado'}
@@ -171,6 +234,132 @@ export default function HubConfigPage() {
               Guardar token
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-xl">
+            <Activity className="h-5 w-5 text-primary" />
+            Diagnóstico
+          </CardTitle>
+          <CardDescription>
+            Comprueba el servidor, el token de agente, la cuenta y el inbox, y manda un mensaje
+            de prueba indicando si salió por el hub o por Evolution.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="diagnostico-numero">Número de prueba</Label>
+              <Input
+                id="diagnostico-numero"
+                inputMode="tel"
+                placeholder="+34600123456"
+                value={numero}
+                onChange={(e) => setNumero(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="diagnostico-mensaje">Mensaje</Label>
+              <Input
+                id="diagnostico-mensaje"
+                value={mensaje}
+                onChange={(e) => setMensaje(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={() => diagnosticar(false)}
+              disabled={diagLoading !== null}
+            >
+              {diagLoading === 'validar' ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ShieldCheck className="h-4 w-4" />
+              )}
+              Validar conexión
+            </Button>
+            <Button
+              className="gap-2"
+              onClick={() => diagnosticar(true)}
+              disabled={diagLoading !== null || !numero.trim()}
+            >
+              {diagLoading === 'enviar' ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+              Enviar prueba
+            </Button>
+          </div>
+
+          {diag && (
+            <div className="space-y-3">
+              <ul className="divide-y rounded-lg border bg-gray-50/60">
+                {diag.pasos.map((paso) => (
+                  <li key={paso.id} className="flex items-start gap-3 p-3">
+                    {paso.ok ? (
+                      <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
+                    ) : (
+                      <XCircle className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
+                    )}
+                    <div className="text-sm">
+                      <p className="font-medium">{paso.titulo}</p>
+                      <p className="text-muted-foreground text-xs">{paso.detalle}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+
+              {diag.envio && (
+                <Alert
+                  className={
+                    diag.envio.ok && diag.envio.proveedor === 'hub'
+                      ? 'bg-green-50 border-green-200'
+                      : diag.envio.ok
+                        ? 'bg-amber-50 border-amber-200'
+                        : 'bg-red-50 border-red-200'
+                  }
+                >
+                  {diag.envio.ok && diag.envio.proveedor === 'hub' ? (
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  ) : diag.envio.ok ? (
+                    <Activity className="h-4 w-4 text-amber-600" />
+                  ) : (
+                    <XCircle className="h-4 w-4 text-red-600" />
+                  )}
+                  <AlertDescription
+                    className={
+                      diag.envio.ok && diag.envio.proveedor === 'hub'
+                        ? 'text-green-800 text-sm'
+                        : diag.envio.ok
+                          ? 'text-amber-800 text-sm'
+                          : 'text-red-800 text-sm'
+                    }
+                  >
+                    <p className="font-medium">
+                      {diag.envio.proveedor === 'hub'
+                        ? 'Salió por el hub (Chatwoot)'
+                        : diag.envio.proveedor === 'evolution'
+                          ? 'Salió por Evolution (WhatsApp del negocio)'
+                          : 'No salió por ningún canal'}
+                    </p>
+                    <p>{diag.envio.detalle}</p>
+                    {diag.envio.motivoHub && diag.envio.proveedor !== 'hub' && (
+                      <p className="mt-1 text-xs">
+                        Motivo por el que el hub no envió: {diag.envio.motivoHub}
+                      </p>
+                    )}
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

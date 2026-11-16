@@ -398,6 +398,20 @@ class ChatwootApiClient {
     }
 
     /**
+     * Perfil del dueño de un token de agente (GET /api/v1/profile).
+     * Sirve para validar el token de Configuración → Hub y saber qué usuario
+     * es: el token del bot devuelve 401 en los endpoints de envío.
+     */
+    async getProfile(accountToken: string): Promise<{
+        id: number;
+        name?: string;
+        email?: string;
+        accounts?: Array<{ id: number; name?: string; role?: string }>;
+    }> {
+        return this.request('/api/v1/profile', { method: 'GET' }, accountToken);
+    }
+
+    /**
      * Añadir agentes como miembros de un inbox. Sin membresía, los agentes no
      * ven las conversaciones del inbox en las vistas "Sin asignar"/"Todas"
      * del hub.
