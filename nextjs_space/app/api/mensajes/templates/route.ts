@@ -1,15 +1,14 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
+import { tenantIdDeSesion } from '@/lib/message-templates'
 
 // Obtener todos los templates
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session) {
+    const tenantId = await tenantIdDeSesion()
+    if (!tenantId) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
@@ -18,7 +17,9 @@ export async function GET(request: NextRequest) {
     const categoria = searchParams.get('categoria')
     const activo = searchParams.get('activo')
 
-    const where: any = {}
+    // Solo las plantillas del tenant de la sesión: antes eran globales y se
+    // filtraban las de cualquier cliente.
+    const where: any = { tenantId }
     
     if (canal && canal !== 'todos') {
       where.canal = canal
@@ -50,8 +51,8 @@ export async function GET(request: NextRequest) {
 // Crear nuevo template
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session) {
+    const tenantId = await tenantIdDeSesion()
+    if (!tenantId) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
@@ -75,6 +76,7 @@ export async function POST(request: NextRequest) {
 
     const template = await prisma.messageTemplate.create({
       data: {
+        tenantId,
         nombre,
         canal,
         asunto,

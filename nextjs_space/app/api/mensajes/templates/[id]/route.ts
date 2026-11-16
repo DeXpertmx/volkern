@@ -1,9 +1,8 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
+import { tenantIdDeSesion } from '@/lib/message-templates'
 
 // Obtener un template específico
 export async function GET(
@@ -12,13 +11,15 @@ export async function GET(
 ) {
   const params = await paramsPromise;
   try {
-    const session = await getServerSession(authOptions)
-    if (!session) {
+    const tenantId = await tenantIdDeSesion()
+    if (!tenantId) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    const template = await prisma.messageTemplate.findUnique({
-      where: { id: params.id },
+    // findFirst con tenant: una plantilla de otro tenant responde 404, no 403,
+    // para no revelar que existe.
+    const template = await prisma.messageTemplate.findFirst({
+      where: { id: params.id, tenantId },
     })
 
     if (!template) {
@@ -45,8 +46,8 @@ export async function PATCH(
 ) {
   const params = await paramsPromise;
   try {
-    const session = await getServerSession(authOptions)
-    if (!session) {
+    const tenantId = await tenantIdDeSesion()
+    if (!tenantId) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
@@ -60,6 +61,14 @@ export async function PATCH(
       categoria,
       activo,
     } = body
+
+    const existente = await prisma.messageTemplate.findFirst({
+      where: { id: params.id, tenantId },
+      select: { id: true },
+    })
+    if (!existente) {
+      return NextResponse.json({ error: 'Template no encontrado' }, { status: 404 })
+    }
 
     const template = await prisma.messageTemplate.update({
       where: { id: params.id },
@@ -91,14 +100,17 @@ export async function DELETE(
 ) {
   const params = await paramsPromise;
   try {
-    const session = await getServerSession(authOptions)
-    if (!session) {
+    const tenantId = await tenantIdDeSesion()
+    if (!tenantId) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    await prisma.messageTemplate.delete({
-      where: { id: params.id },
+    const borrado = await prisma.messageTemplate.deleteMany({
+      where: { id: params.id, tenantId },
     })
+    if (borrado.count === 0) {
+      return NextResponse.json({ error: 'Template no encontrado' }, { status: 404 })
+    }
 
     return NextResponse.json({ success: true })
   } catch (error: any) {
