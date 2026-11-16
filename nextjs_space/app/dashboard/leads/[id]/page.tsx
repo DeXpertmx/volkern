@@ -45,6 +45,7 @@ import { UnifiedTimeline } from '@/components/unified-timeline';
 import { EnhancedNotes } from '@/components/enhanced-notes';
 import { LeadAssignment } from '@/components/lead-assignment';
 import { LeadAttachments } from '@/components/dashboard/LeadAttachments';
+import { SendWhatsAppButton } from '@/components/messaging/SendWhatsAppButton';
 import { AISuggestionCard } from '@/components/ai/AISuggestionCard';
 import { RoleplaySimulator } from '@/components/training/RoleplaySimulator';
 import { FiscalOnboardingModal } from '@/components/modals/FiscalOnboardingModal';
@@ -691,6 +692,12 @@ export default function LeadDetailPage() {
                         )}
                         {calling ? 'Llamando...' : 'Llamar (VoIP)'}
                       </Button>
+                      <SendWhatsAppButton
+                        phone={lead.telefono}
+                        entityType="lead"
+                        entityId={lead.id}
+                        nombre={lead.nombre}
+                      />
                     </div>
                   </div>
                 )}

@@ -83,7 +83,8 @@ import { toast } from 'sonner'
 import { UnifiedTimeline } from '@/components/unified-timeline'
 import { LeadTasks } from '@/components/lead-tasks'
 import { EnhancedNotes } from '@/components/enhanced-notes'
-import { LeadAttachments } from '@/components/dashboard/LeadAttachments'
+import { LeadAttachments } from '@/components/dashboard/LeadAttachments';
+import { SendWhatsAppButton } from '@/components/messaging/SendWhatsAppButton'
 import { ContactConversations } from '@/components/contact-conversations'
 
 interface Contact {
@@ -854,6 +855,14 @@ export default function ContactoDetallePage() {
                       >
                         {contact.telefono}
                       </a>
+                      <SendWhatsAppButton
+                        phone={contact.telefono}
+                        entityType="contact"
+                        entityId={contact.id}
+                        nombre={contact.nombre}
+                        size="sm"
+                        iconOnly={true}
+                      />
                     </div>
                   </div>
                 )}
@@ -1265,16 +1274,25 @@ export default function ContactoDetallePage() {
                 </a>
               </Button>
               {contact.telefono && (
-                <Button
-                  variant="outline"
-                  className="w-full justify-start"
-                  asChild
-                >
-                  <a href={`tel:${contact.telefono}`}>
-                    <Phone className="h-4 w-4 mr-2" />
-                    Llamar
-                  </a>
-                </Button>
+                <>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start"
+                    asChild
+                  >
+                    <a href={`tel:${contact.telefono}`}>
+                      <Phone className="h-4 w-4 mr-2" />
+                      Llamar
+                    </a>
+                  </Button>
+                  <SendWhatsAppButton
+                    phone={contact.telefono}
+                    entityType="contact"
+                    entityId={contact.id}
+                    nombre={contact.nombre}
+                    size="sm"
+                  />
+                </>
               )}
             </CardContent>
           </Card>
