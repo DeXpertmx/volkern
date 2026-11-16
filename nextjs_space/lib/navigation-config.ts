@@ -635,6 +635,7 @@ export const HUBS: HubConfig[] = [
       { name: 'Config. Fiscal', href: '/dashboard/configuracion?section=fiscal', icon: Calculator, description: 'Facturación e impuestos' },
       { name: 'Telefonía', href: '/dashboard/configuracion?section=telefonia', icon: PhoneCall, planModule: 'telefonia', description: 'Líneas y desvíos' },
       { name: 'WhatsApp del Negocio', href: '/dashboard/configuracion/whatsapp-negocio', icon: Building2, planModule: 'chatbot_whatsapp', description: 'Número dedicado del negocio para el chatbot' },
+      { name: 'Hub', href: '/dashboard/configuracion/hub', icon: MessageCircle, description: 'Token de agente para enviar por el inbox de Chatwoot' },
       { name: 'Reparto Leads', href: '/dashboard/configuracion?section=reparto', icon: RotateCw, planModule: 'leads', description: 'Asignación de ejecutivos' },
       { name: 'Campos de Leads', href: '/dashboard/configuracion?section=leads', icon: ListTodo, planModule: 'leads', description: 'Personalización de campos' },
       { name: 'Documentos', href: '/dashboard/configuracion?section=documentos', icon: FileText, planModule: 'contratos', description: 'Ajustes de contratos' },

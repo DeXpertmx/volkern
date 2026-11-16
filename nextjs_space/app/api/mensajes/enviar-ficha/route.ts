@@ -167,12 +167,17 @@ export const POST = withTenantAuth(async (request, auth) => {
         ? parseInt(conversacion.externalRef.replace('chatwoot_', ''), 10)
         : null)
 
-    if (!accountId) {
+    // La cuenta y el inbox de WhatsApp viven en la config del hub; el inbox es
+    // el que asegura que la conversación se cree en el canal correcto de
+    // Chatwoot y no en el primero que aparezca.
+    let hubInboxId: number | null = null
+    {
       const hub = await prisma.messagingHubConfig.findFirst({
         where: { tenantId },
-        select: { chatwootAccountId: true },
+        select: { chatwootAccountId: true, whatsappInboxId: true },
       })
-      if (hub?.chatwootAccountId) accountId = hub.chatwootAccountId
+      if (!accountId && hub?.chatwootAccountId) accountId = hub.chatwootAccountId
+      hubInboxId = hub?.whatsappInboxId ?? null
     }
 
     // Solo se intenta el hub si hay token de AGENTE: el token del hub es del
@@ -195,6 +200,7 @@ export const POST = withTenantAuth(async (request, auth) => {
           const inboxId =
             cfg.inboxId ||
             conversacion.chatwootInboxId ||
+            hubInboxId ||
             conversaciones.find((c) => c.chatwootInboxId)?.chatwootInboxId ||
             null
 

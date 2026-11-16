@@ -38,6 +38,13 @@ export async function GET(req: NextRequest) {
             hubApiToken: '••••••••••••••••',
             hubAccountId: config.hubAccountId || '',
             defaultEndpointId: config.defaultEndpointId || '',
+            // Token de agente (nunca se devuelve en claro): la UI solo necesita
+            // saber si está guardado para explicar por dónde saldrán los envíos.
+            chatwootAgentToken: config.chatwootAgentToken ? '••••••••••••••••' : '',
+            hasChatwootAgentToken: Boolean(config.chatwootAgentToken),
+            chatwootAccountId: config.chatwootAccountId ?? null,
+            whatsappInboxId: config.whatsappInboxId ?? null,
+            chatwootConfigurado: Boolean(process.env.CHATWOOT_BASE_URL),
             webhookSecret: config.webhookSecret,
             lastHealthCheck: config.lastHealthCheck
         });
@@ -64,7 +71,7 @@ export async function POST(req: NextRequest) {
         }
 
         const body = await req.json();
-        const { isActive, hubBaseUrl, hubApiToken, hubAccountId, defaultEndpointId } = body;
+        const { isActive, hubBaseUrl, hubApiToken, hubAccountId, defaultEndpointId, chatwootAgentToken } = body;
 
         const existing = await prisma.messagingHubConfig.findUnique({
             where: { tenantId: user.tenantId }
@@ -76,12 +83,19 @@ export async function POST(req: NextRequest) {
             ? encrypt(hubApiToken) 
             : existing?.hubApiToken || '';
 
+        // Guardar el token del hub desde otra pantalla (p. ej. Configuración →
+        // Hub) no debe borrar el resto: solo se pisa lo que llega de verdad.
+        const agentTokenToStore = chatwootAgentToken && !chatwootAgentToken.includes('•')
+            ? encrypt(chatwootAgentToken)
+            : existing?.chatwootAgentToken || null;
+
         const data = {
-            isActive: isActive ?? false,
-            hubBaseUrl: hubBaseUrl || '',
+            isActive: isActive ?? existing?.isActive ?? false,
+            hubBaseUrl: hubBaseUrl || existing?.hubBaseUrl || '',
             hubApiToken: tokenToStore,
-            hubAccountId: hubAccountId || null,
-            defaultEndpointId: defaultEndpointId || null,
+            hubAccountId: hubAccountId ?? existing?.hubAccountId ?? null,
+            defaultEndpointId: defaultEndpointId ?? existing?.defaultEndpointId ?? null,
+            chatwootAgentToken: agentTokenToStore,
             webhookSecret,
         };
 
@@ -103,6 +117,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ 
             success: true, 
             id: config.id,
+            hasChatwootAgentToken: Boolean(config.chatwootAgentToken),
             webhookSecret: config.webhookSecret 
         });
     } catch (error: any) {

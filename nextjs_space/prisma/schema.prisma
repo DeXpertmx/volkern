@@ -3886,6 +3886,10 @@ model MessagingHubConfig {
   updatedAt         DateTime  @updatedAt
   autoProvisioned   Boolean   @default(false)
   chatwootAccountId Int?
+  // Token de AGENTE (usuario) de Chatwoot. El token del hub (hubApiToken) es
+  // del usuario bot y Chatwoot responde 401 al enviar o crear conversaciones
+  // con él; este es el que usan los envíos salientes.
+  chatwootAgentToken String?
   lastSyncAt        DateTime?
   provisionedAt     DateTime?
   telegramInboxId   Int?

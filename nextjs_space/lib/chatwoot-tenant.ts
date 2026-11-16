@@ -13,11 +13,13 @@ import { chatwootApi } from '@/lib/nexus/chatwoot-api'
 /**
  * Token de AGENTE de la cuenta de Chatwoot.
  *
- * Solo sirve el token de agente del canal (`config.apiToken`): el token del
- * hub (`messagingHubConfig.hubApiToken`) pertenece al usuario bot y Chatwoot
- * rechaza con 401 "Access to this endpoint is not authorized for bots" al
- * crear conversaciones o enviar mensajes. Si no hay token de agente se
- * devuelve cadena vacía y el llamador cae a Evolution sin intentar el hub.
+ * Nunca se usa `messagingHubConfig.hubApiToken`: pertenece al usuario bot y
+ * Chatwoot responde 401 ("not authorized for bots") al crear conversaciones o
+ * enviar mensajes. Se resuelve, por orden:
+ *   1. `channel.config.apiToken` (token de agente guardado con el canal).
+ *   2. `messagingHubConfig.chatwootAgentToken` (Configuración → Hub).
+ * Si no hay ninguno se devuelve cadena vacía y el llamador cae a Evolution sin
+ * intentar el hub.
  */
 export async function obtenerTokenChatwootTenant(
   tenantId: string,
@@ -28,7 +30,21 @@ export async function obtenerTokenChatwootTenant(
     select: { config: true },
   })
   const cfg: any = canal?.config || {}
-  return cfg.apiToken || ''
+  if (cfg.apiToken) return cfg.apiToken
+
+  const hub = await prisma.messagingHubConfig.findUnique({
+    where: { tenantId },
+    select: { chatwootAgentToken: true },
+  })
+  const guardado = hub?.chatwootAgentToken
+  if (!guardado) return ''
+
+  try {
+    const { decrypt } = await import('@/lib/core/crypto')
+    return decrypt(guardado)
+  } catch {
+    return guardado
+  }
 }
 
 /**
