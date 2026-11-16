@@ -699,6 +699,7 @@ export default function LeadDetailPage() {
                         entityType="lead"
                         entityId={lead.id}
                         nombre={lead.nombre}
+                        empresa={lead.empresa || undefined}
                         onSent={() => setTimelineKey((k) => k + 1)}
                       />
                     </div>

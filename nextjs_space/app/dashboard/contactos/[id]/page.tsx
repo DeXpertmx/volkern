@@ -862,6 +862,7 @@ export default function ContactoDetallePage() {
                         entityType="contact"
                         entityId={contact.id}
                         nombre={contact.nombre}
+                        empresa={contact.company?.nombre || undefined}
                         size="sm"
                         iconOnly={true}
                         onSent={() => setTimelineKey((k) => k + 1)}
@@ -1293,6 +1294,7 @@ export default function ContactoDetallePage() {
                     entityType="contact"
                     entityId={contact.id}
                     nombre={contact.nombre}
+                    empresa={contact.company?.nombre || undefined}
                     size="sm"
                     onSent={() => setTimelineKey((k) => k + 1)}
                   />

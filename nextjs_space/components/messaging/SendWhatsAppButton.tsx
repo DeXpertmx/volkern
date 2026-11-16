@@ -16,6 +16,13 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Send, Phone, AlertTriangle, WifiOff } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -28,6 +35,8 @@ interface SendWhatsAppButtonProps {
   entityId: string;
   /** Nombre para mostrar en el diálogo (opcional) */
   nombre?: string;
+  /** Empresa del lead/contacto, para las variables de las plantillas */
+  empresa?: string;
   /** Tamaño del botón */
   size?: 'sm' | 'default';
   /** Si el botón debe ir sin etiqueta (solo icono) */
@@ -42,6 +51,14 @@ interface EstadoWhatsApp {
   estado: EstadoInstancia;
   detalle?: string;
   estadoEvolution?: string | null;
+}
+
+interface PlantillaWhatsApp {
+  id: string;
+  nombre: string;
+  contenido: string;
+  canal: string;
+  categoria?: string | null;
 }
 
 /**
@@ -60,6 +77,7 @@ export function SendWhatsAppButton({
   entityType,
   entityId,
   nombre,
+  empresa,
   size = 'sm',
   iconOnly = false,
   onSent,
@@ -68,6 +86,8 @@ export function SendWhatsAppButton({
   const [sending, setSending] = useState(false);
   const [mensaje, setMensaje] = useState('');
   const [estado, setEstado] = useState<EstadoWhatsApp | null>(null);
+  const [plantillas, setPlantillas] = useState<PlantillaWhatsApp[] | null>(null);
+  const [plantillaId, setPlantillaId] = useState('');
 
   const nombreVisible = nombre ?? (entityType === 'lead' ? 'este lead' : 'este contacto');
 
@@ -87,6 +107,45 @@ export function SendWhatsAppButton({
       cancelado = true;
     };
   }, []);
+
+  // Las plantillas se cargan al abrir el diálogo (no en cada ficha): son las
+  // mismas del Hub, filtradas a WhatsApp.
+  useEffect(() => {
+    if (!isOpen || plantillas !== null) return;
+    fetch('/api/mensajes/templates', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : { templates: [] }))
+      .then((data) => {
+        const lista: PlantillaWhatsApp[] = Array.isArray(data?.templates) ? data.templates : [];
+        setPlantillas(lista.filter((t) => t.canal === 'whatsapp' || t.canal === 'todos'));
+      })
+      .catch(() => setPlantillas([]));
+  }, [isOpen, plantillas]);
+
+  const variables = {
+    nombre: nombre || '',
+    empresa: empresa || '',
+    telefono: phone || '',
+    fecha: new Date().toLocaleDateString('es-ES'),
+  };
+
+  // Reemplaza solo las variables que conocemos; un placeholder sin dato se deja
+  // visible para que el agente lo complete antes de enviar. Acepta {nombre} y
+  // {{nombre}}, que es como se escriben en el editor del Hub.
+  const aplicarVariables = (texto: string) => {
+    const sustituir = (match: string, clave: string) => {
+      const valor = (variables as Record<string, string>)[clave.toLowerCase()];
+      return valor || match;
+    };
+    return texto
+      .replace(/\{\{\s*(nombre|empresa|telefono|fecha)\s*\}\}/gi, sustituir)
+      .replace(/\{\s*(nombre|empresa|telefono|fecha)\s*\}/gi, sustituir);
+  };
+
+  const elegirPlantilla = (id: string) => {
+    setPlantillaId(id);
+    const plantilla = plantillas?.find((p) => p.id === id);
+    if (plantilla) setMensaje(aplicarVariables(plantilla.contenido));
+  };
 
   const handleEnviar = async () => {
     if (!mensaje.trim()) {
@@ -217,6 +276,37 @@ export function SendWhatsAppButton({
           )}
 
           <div className="space-y-3 mt-4">
+            {plantillas && plantillas.length > 0 && (
+              <div className="space-y-2">
+                <Label>Plantilla</Label>
+                <Select
+                  value={plantillaId || 'ninguna'}
+                  onValueChange={(valor) =>
+                    valor === 'ninguna' ? setPlantillaId('') : elegirPlantilla(valor)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Escribe a mano o elige una plantilla" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ninguna">Sin plantilla</SelectItem>
+                    {plantillas.map((plantilla) => (
+                      <SelectItem key={plantilla.id} value={plantilla.id}>
+                        {plantilla.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {plantillaId && mensaje.trim() && (
+                  <div className="rounded-md border bg-muted/40 p-2">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+                      Vista previa
+                    </p>
+                    <p className="text-xs whitespace-pre-wrap line-clamp-4">{mensaje}</p>
+                  </div>
+                )}
+              </div>
+            )}
             <Label htmlFor="whatsapp-mensaje">Mensaje</Label>
             <Textarea
               id="whatsapp-mensaje"
