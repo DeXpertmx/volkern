@@ -597,10 +597,98 @@ export async function POST(
         }
         break;
 
-      case 'MESSAGES_UPDATE':
+      case 'MESSAGES_UPDATE': {
+        // Evolution/Baileys avisa aquí de los ACK del mensaje: el agente ve en
+        // la ficha si el WhatsApp llegó (entregado) y si lo leyó, en vez de
+        // quedarse siempre en "enviado".
         console.log('🔍 Procesando MESSAGES_UPDATE...');
-        console.log('📝 Actualización de mensaje:', body.data);
+        const upd = body.data || {};
+        const keyId: string = String(
+          upd.keyId || upd.key?.id || upd.messageId || upd.id || ''
+        );
+        const rawStatus = String(
+          upd.status || upd.messageStatus || upd.update?.status || upd.state || ''
+        ).toUpperCase();
+
+        const mapaEstados: Record<string, string> = {
+          PENDING: 'pendiente',
+          '0': 'pendiente',
+          SERVER_ACK: 'enviado',
+          '1': 'enviado',
+          DELIVERY_ACK: 'entregado',
+          '2': 'entregado',
+          READ: 'leido',
+          '3': 'leido',
+          PLAYED: 'leido',
+          '4': 'leido',
+          ERROR: 'error',
+          'ERROR_ACK': 'error',
+          FAILED: 'error',
+        };
+        const nuevoEstado = mapaEstados[rawStatus];
+
+        if (!keyId || !nuevoEstado) {
+          console.log('⚠️ MESSAGES_UPDATE sin id o con estado no mapeado:', { keyId, rawStatus });
+          break;
+        }
+
+        // El mensaje pudo guardarse con externalRef (puente Evolution) o solo
+        // con el id del proveedor en metadatos (envíos desde la app).
+        let mensajeAck = await prisma.message
+          .findUnique({ where: { externalRef: `evolution_msg_${keyId}` } })
+          .catch(() => null);
+        if (!mensajeAck) {
+          mensajeAck = await prisma.message.findFirst({
+            where: { metadatos: { path: ['messageId'], equals: keyId } },
+            orderBy: { fechaCreacion: 'desc' },
+          });
+        }
+        if (!mensajeAck) {
+          mensajeAck = await prisma.message.findFirst({
+            where: { metadatos: { path: ['evolutionMessageId'], equals: keyId } },
+            orderBy: { fechaCreacion: 'desc' },
+          });
+        }
+
+        if (!mensajeAck) {
+          console.log('⚠️ Mensaje no encontrado localmente para ACK:', keyId);
+          break;
+        }
+
+        // Nunca retroceder: un ACK viejo no debe borrar "leído".
+        const ordenEstados: Record<string, number> = {
+          pendiente: 0,
+          enviado: 1,
+          entregado: 2,
+          leido: 3,
+          error: 4,
+        };
+        if (
+          nuevoEstado !== 'error' &&
+          (ordenEstados[mensajeAck.estado] ?? 0) > (ordenEstados[nuevoEstado] ?? 0)
+        ) {
+          console.log(`↩️ ACK ignorado (retroceso ${mensajeAck.estado} → ${nuevoEstado})`);
+          break;
+        }
+
+        await prisma.message.update({
+          where: { id: mensajeAck.id },
+          data: {
+            estado: nuevoEstado,
+            errorMensaje:
+              nuevoEstado === 'error'
+                ? `Evolution: ${rawStatus}`
+                : mensajeAck.errorMensaje,
+            metadatos: {
+              ...((mensajeAck.metadatos as any) || {}),
+              estadoProveedor: rawStatus,
+              estadoActualizadoEn: new Date().toISOString(),
+            },
+          },
+        });
+        console.log(`✅ Mensaje ${mensajeAck.id} → ${nuevoEstado} (${rawStatus})`);
         break;
+      }
 
       case 'MESSAGES_DELETE':
         console.log('🔍 Procesando MESSAGES_DELETE...');

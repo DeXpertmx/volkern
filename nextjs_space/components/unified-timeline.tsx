@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Phone, Mail, MessageSquare, FileText, ThumbsUp, ThumbsDown, Minus, Users } from 'lucide-react';
+import { Plus, Phone, Mail, MessageSquare, FileText, ThumbsUp, ThumbsDown, Minus, Users, Check, CheckCheck, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -55,12 +55,35 @@ interface AuditLog {
   };
 }
 
+interface WhatsAppMensaje {
+  id: string;
+  contenido: string;
+  direccion: string;
+  estado: string;
+  errorMensaje: string | null;
+  fechaCreacion: string;
+  metadatos: Record<string, unknown> | null;
+}
+
 interface TimelineEvent {
   id: string;
-  type: 'interaction' | 'audit' | 'quote';
+  type: 'interaction' | 'audit' | 'quote' | 'message';
   date: Date;
-  data: Interaction | AuditLog | CotizacionTimelineEvent;
+  data: Interaction | AuditLog | CotizacionTimelineEvent | WhatsAppMensaje;
 }
+
+// Estado real del mensaje de WhatsApp. Lo actualiza el webhook de Evolution
+// (MESSAGES_UPDATE): enviado → entregado → leído, o fallido con motivo.
+const estadosMensaje: Record<
+  string,
+  { label: string; clase: string; icono: 'check' | 'doble' | 'alerta' }
+> = {
+  pendiente: { label: 'Pendiente', clase: 'bg-gray-100 text-gray-700', icono: 'check' },
+  enviado: { label: 'Enviado', clase: 'bg-slate-100 text-slate-700', icono: 'check' },
+  entregado: { label: 'Entregado', clase: 'bg-emerald-100 text-emerald-800', icono: 'doble' },
+  leido: { label: 'Leído', clase: 'bg-blue-100 text-blue-800', icono: 'doble' },
+  error: { label: 'Fallido', clase: 'bg-red-100 text-red-800', icono: 'alerta' },
+};
 
 interface UnifiedTimelineProps {
   leadId?: string;
@@ -106,6 +129,17 @@ export function UnifiedTimeline({ leadId, contactId, companyId }: UnifiedTimelin
     if (entityId) fetchTimelineData();
   }, [leadId, contactId, companyId]);
 
+  // Los ACK de WhatsApp (entregado/leído) llegan por webhook después del
+  // envío: se refresca mientras la ficha está abierta para no dejar el
+  // mensaje congelado en "enviado".
+  useEffect(() => {
+    if (!entityId) return;
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchTimelineData();
+    }, 60_000);
+    return () => clearInterval(id);
+  }, [entityId, leadId, contactId, companyId]);
+
   const fetchTimelineData = async () => {
     try {
       // Cargar interacciones
@@ -114,23 +148,48 @@ export function UnifiedTimeline({ leadId, contactId, companyId }: UnifiedTimelin
       // Soportar tanto el formato antiguo (array) como el nuevo ({ interactions: [...] })
       const interactions: Interaction[] = Array.isArray(interactionsData) ? interactionsData : (interactionsData.interactions || []);
 
-      // Cargar audit logs y cotizaciones ligadas a la ficha.
-      const [auditLogsRes, cotizacionesRes] = await Promise.all([
+      // Cargar audit logs, cotizaciones y mensajes de WhatsApp de la ficha.
+      const mensajesTipo = leadId ? 'lead' : contactId ? 'contact' : null;
+      const [auditLogsRes, cotizacionesRes, mensajesRes] = await Promise.all([
         fetch(`/api/audit-logs?entityId=${entityId}&entity=${entityType}`),
         fetch(quotesApi),
+        mensajesTipo
+          ? fetch(`/api/mensajes/ficha?tipo=${mensajesTipo}&entityId=${entityId}`)
+          : Promise.resolve(null),
       ]);
       const auditData = auditLogsRes.ok ? await auditLogsRes.json() : { logs: [] };
       const auditLogs: AuditLog[] = auditData.logs || [];
       const cotizacionesData = cotizacionesRes.ok ? await cotizacionesRes.json() : { cotizaciones: [] };
       const cotizaciones: CotizacionTimelineEvent[] = cotizacionesData.cotizaciones || [];
 
+      const mensajesData = mensajesRes && mensajesRes.ok ? await mensajesRes.json() : { mensajes: [] };
+      const mensajes: WhatsAppMensaje[] = mensajesData.mensajes || [];
+
+      // enviar-ficha registra además una interacción con el mismo texto: si el
+      // mensaje ya se pinta con su estado real, se evita el duplicado.
+      const idsMensajes = new Set(mensajes.map((m) => m.id));
+      const interaccionesVisibles = interactions.filter(
+        (i) =>
+          !(
+            i.tipo === 'whatsapp' &&
+            i.metadatos &&
+            idsMensajes.has(String((i.metadatos as any).messageId))
+          )
+      );
+
       // Combinar y ordenar eventos
       const events: TimelineEvent[] = [
-        ...interactions.map(interaction => ({
+        ...interaccionesVisibles.map(interaction => ({
           id: interaction.id,
           type: 'interaction' as const,
           date: new Date(interaction.fechaCreacion),
           data: interaction
+        })),
+        ...mensajes.map(mensaje => ({
+          id: `mensaje-${mensaje.id}`,
+          type: 'message' as const,
+          date: new Date(mensaje.fechaCreacion),
+          data: mensaje
         })),
         ...auditLogs.map(log => ({
           id: log.id,
@@ -368,6 +427,57 @@ export function UnifiedTimeline({ leadId, contactId, companyId }: UnifiedTimelin
                         </div>
                       </div>
                     </a>
+                  );
+                }
+
+                if (event.type === 'message') {
+                  const mensaje = event.data as WhatsAppMensaje;
+                  const saliente = mensaje.direccion === 'saliente';
+                  const estado = saliente
+                    ? estadosMensaje[mensaje.estado] || estadosMensaje.enviado
+                    : null;
+
+                  return (
+                    <div key={event.id} className="relative pl-14">
+                      <div className="absolute left-4 top-1 w-5 h-5 rounded-full bg-white border-2 border-green-400 flex items-center justify-center">
+                        <MessageSquare className="h-3 w-3 text-green-600" />
+                      </div>
+                      <div className="bg-white border rounded-lg p-4 hover:shadow-sm transition-shadow">
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge variant="outline" className="text-xs">
+                              WhatsApp
+                            </Badge>
+                            {estado ? (
+                              <Badge className={`text-xs gap-1 ${estado.clase}`}>
+                                {estado.icono === 'check' ? (
+                                  <Check className="h-3 w-3" />
+                                ) : estado.icono === 'doble' ? (
+                                  <CheckCheck className="h-3 w-3" />
+                                ) : (
+                                  <AlertCircle className="h-3 w-3" />
+                                )}
+                                {estado.label}
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-xs bg-gray-50 text-gray-700">
+                                Recibido
+                              </Badge>
+                            )}
+                          </div>
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">
+                            {format(event.date, "dd MMM yyyy, HH:mm", { locale: es })}
+                          </span>
+                        </div>
+                        <p className="text-sm whitespace-pre-wrap">{mensaje.contenido}</p>
+                        {mensaje.errorMensaje && (
+                          <p className="text-xs text-red-700 mt-2">
+                            <span className="font-semibold">Motivo del fallo:</span>{' '}
+                            {mensaje.errorMensaje}
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   );
                 }
 

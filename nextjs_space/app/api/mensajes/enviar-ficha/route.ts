@@ -285,6 +285,21 @@ export const POST = withTenantAuth(async (request, auth) => {
       },
     })
 
+    // Cuando sale por Evolution se guarda también el id del proveedor como
+    // externalRef para que MESSAGES_UPDATE (entregado/leído) encuentre la fila
+    // sin depender de comparar JSON.
+    if (!chatwootMessageId && proveedorMessageId) {
+      const refEvolution = `evolution_msg_${proveedorMessageId}`
+      const yaExiste = await prisma.message
+        .findUnique({ where: { externalRef: refEvolution }, select: { id: true } })
+        .catch(() => null)
+      if (!yaExiste) {
+        await prisma.message
+          .update({ where: { id: mensajeFinal.id }, data: { externalRef: refEvolution } })
+          .catch(() => undefined)
+      }
+    }
+
     await prisma.conversation.update({
       where: { id: conversacion.id },
       data: {
