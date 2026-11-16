@@ -147,6 +147,24 @@ export function SendWhatsAppButton({
     if (plantilla) setMensaje(aplicarVariables(plantilla.contenido));
   };
 
+  // Variables que este diálogo sabe rellenar, con el dato real de la ficha.
+  const variablesDisponibles = [
+    { clave: 'nombre', valor: variables.nombre },
+    { clave: 'empresa', valor: variables.empresa },
+    { clave: 'telefono', valor: variables.telefono },
+    { clave: 'fecha', valor: variables.fecha },
+  ];
+
+  // Placeholders que siguen en el texto final: una variable sin dato o algo que
+  // la plantilla inventó ({servicio}, {importe}...).
+  const placeholdersPendientes = Array.from(
+    new Set(
+      Array.from(mensaje.matchAll(/\{\{?\s*([\p{L}\p{N}_]+)\s*\}?\}/gu)).map((m) =>
+        m[1].toLowerCase()
+      )
+    )
+  );
+
   const handleEnviar = async () => {
     if (!mensaje.trim()) {
       toast.error('Escribe un mensaje antes de enviar');
@@ -326,6 +344,25 @@ export function SendWhatsAppButton({
                 )}
               </div>
             )}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs text-muted-foreground">Variables:</span>
+              {variablesDisponibles.map((v) => (
+                <Badge
+                  key={v.clave}
+                  variant="outline"
+                  title={
+                    v.valor || 'Sin dato en esta ficha: el placeholder se queda visible'
+                  }
+                  className={`font-mono text-[10px] ${
+                    v.valor
+                      ? 'border-green-300 bg-green-50 text-green-800'
+                      : 'text-muted-foreground opacity-60'
+                  }`}
+                >
+                  {`{${v.clave}}`}
+                </Badge>
+              ))}
+            </div>
             <Label htmlFor="whatsapp-mensaje">Mensaje</Label>
             <Textarea
               id="whatsapp-mensaje"
@@ -335,6 +372,18 @@ export function SendWhatsAppButton({
               rows={4}
               className="max-h-48"
             />
+            {placeholdersPendientes.length > 0 && (
+              <Alert className="bg-amber-50 border-amber-200">
+                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                <AlertDescription className="text-xs text-amber-800">
+                  El texto conserva placeholders sin sustituir:{' '}
+                  <strong>
+                    {placeholdersPendientes.map((p) => `{${p}}`).join(', ')}
+                  </strong>
+                  . Rellénalos o bórralos antes de enviar.
+                </AlertDescription>
+              </Alert>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsOpen(false)} disabled={sending}>
