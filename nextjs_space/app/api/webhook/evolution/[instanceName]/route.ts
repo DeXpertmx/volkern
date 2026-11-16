@@ -18,6 +18,7 @@ import {
   verifyEvolutionWebhookToken
 } from '@/lib/evolution-instances';
 import { isChatRateLimited } from '@/lib/telegram/chat-rate-limit';
+import { notificarWhatsAppDesconectado } from '@/lib/telegram/instance-down-alert';
 
 // Reconfiguración automática de webhooks legacy (sin token): cooldown por
 // instancia para no llamar a Evolution API en cada evento.
@@ -205,10 +206,20 @@ export async function POST(
             data: { status: pStatus },
           });
         } else {
+          // Avisar solo en la transición (Evolution repite el evento).
+          const yaCaida = platformInstance.status === 'disconnected';
           await prisma.platformWhatsAppInstance.update({
             where: { id: platformInstance.id },
             data: { status: 'disconnected' },
           });
+          if (!yaCaida) {
+            void notificarWhatsAppDesconectado({
+              instanceName: platformInstance.instanceName,
+              tipo: 'platform',
+              telefono: platformInstance.phoneNumber ?? null,
+              motivo: pState ?? null,
+            });
+          }
         }
       } else {
         // MESSAGES_* en la instancia de plataforma: solo se contabiliza, no se
@@ -310,9 +321,21 @@ export async function POST(
           await updateInstanceRow(instance, kind, { status: newStatus });
           console.log('⏳ Instancia en proceso de conexión');
         } else if (state === 'close' || state === 'closed' || state === 'disconnected') {
+          // Solo se avisa en la transición a caída: Evolution reenvía
+          // connection.update con el mismo estado y no queremos spam.
+          const yaCaida = instance.status === 'disconnected';
           newStatus = 'disconnected';
           await updateInstanceRow(instance, kind, { status: newStatus });
           console.log('⚠️ Instancia desconectada');
+          if (!yaCaida) {
+            void notificarWhatsAppDesconectado({
+              instanceName: instance.instanceName,
+              tipo: kind,
+              tenantId: (instance as any).tenantId ?? null,
+              telefono: instance.phoneNumber ?? null,
+              motivo: state ?? null,
+            });
+          }
         } else {
           console.log('❓ Estado desconocido:', state);
         }

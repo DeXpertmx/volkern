@@ -14,6 +14,7 @@ import { usePathname } from 'next/navigation'
 import { VolkernGuide } from '@/components/guide/VolkernGuide'
 import ImpersonationBanner from '@/components/admin/ImpersonationBanner'
 import { RealEstateMobileApp, esRutaAppInmobiliaria } from '@/components/real-estate/RealEstateMobileApp'
+import { WhatsAppInstanceBanner } from '@/components/messaging/WhatsAppInstanceBanner'
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -84,6 +85,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       )}>
         {!isMessaging && <DashboardHeader />}
         <ImpersonationBanner />
+        <WhatsAppInstanceBanner />
         <div className="flex-1 overflow-y-auto relative scroll-smooth overflow-x-hidden">
           <MorningBriefingModal />
           <TrialBanner />
