@@ -9518,27 +9518,44 @@ model McpToolCapability {
 /// exterior. La fila es el cerrojo: la ejecución se reclama con
 /// `SELECT … FOR UPDATE` sobre `status = 'pending'`, así que un reintento del
 /// agente no ejecuta dos veces la misma acción.
+/// Solicitud de aprobación de una herramienta que muta datos o sale al
+/// exterior. La fila es el cerrojo: la ejecución se reclama con
+/// `SELECT … FOR UPDATE` sobre `status = 'pending'`, así que un reintento del
+/// agente no ejecuta dos veces la misma acción.
 model McpApprovalRequest {
-  id            String    @id @default(cuid())
-  tenantId      String
-  toolName      String
-  arguments     Json
-  argumentsHash String
-  requestedById String
-  roleName      String?
-  via           String // /mcp | /api/mcp
-  status        String    @default("pending") // pending | approved | rejected | executed | failed | expired
-  reason        String?
-  resolvedById  String?
-  resolvedAt    DateTime?
-  executedAt    DateTime?
-  result        Json?
-  expiresAt     DateTime
-  createdAt     DateTime  @default(now())
+  id                  String    @id @default(cuid())
+  tenantId            String
+  toolName            String
+  arguments           Json
+  argumentsHash       String
+  requestedById       String
+  roleName            String?
+  via                 String // /mcp | /api/mcp
+  status              String    @default("pending") // pending | approved | rejected | executed | failed | expired
+  reason              String?
+  resolvedById        String?
+  resolvedAt          DateTime?
+  executedAt          DateTime?
+  result              Json?
+  expiresAt           DateTime
+  createdAt           DateTime  @default(now())
+  // ── Autorización por código enviado al WhatsApp del negocio ─────────
+  // Cuando la herramienta es de riesgo `external` (p. ej. volkern_send_whatsapp)
+  // se genera un código de 6 dígitos que se envía por WhatsApp al número
+  // registrado del tenant. La página pública /mcp/autorizar/[token] lo valida
+  // como firma de seguridad antes de ejecutar el envío.
+  whatsappCodeHash           String?   // hash bcrypt del código de 6 dígitos
+  whatsappCodeExpiresAt      DateTime? // expiración del código (default 15 min)
+  whatsappCodeSentAt         DateTime? // cuándo se envió el código por WhatsApp
+  whatsappCodeAttempts       Int       @default(0) // intentos de verificación (anti fuerza bruta)
+  whatsappPhoneNumber        String?   // número al que se envió el código
+  whatsappVerificationToken  String?   @unique // token para la URL pública de verificación
 
   @@index([tenantId, status])
   @@index([tenantId, createdAt])
   @@index([argumentsHash])
+  @@index([whatsappVerificationToken])
+  @@index([whatsappCodeExpiresAt])
   @@map("mcp_approval_requests")
 }
 

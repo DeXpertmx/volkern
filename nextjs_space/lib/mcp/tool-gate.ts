@@ -24,6 +24,7 @@ import {
   type ToolDecision,
   type ToolRisk,
 } from '@/lib/mcp/tool-policy'
+import { generateAndSendWhatsappAuthCode } from '@/lib/mcp/whatsapp-auth'
 
 /** Horas que vive una solicitud antes de caducar sin ejecutarse. */
 const APROBACION_VALIDEZ_HORAS = 24
@@ -40,6 +41,18 @@ export type GateOutcome =
       risk: ToolRisk | null
       approvalId: string
       expiresAt: Date
+    }
+  | {
+      kind: 'ask_code'
+      decision: 'ask'
+      reason: string
+      risk: ToolRisk | null
+      approvalId: string
+      expiresAt: Date
+      verificationToken: string
+      verificationUrl: string
+      codeExpiresAt: Date
+      phoneNumberMasked: string
     }
 
 export interface GateInput {
@@ -199,6 +212,45 @@ export async function enforceToolGate(input: GateInput): Promise<GateOutcome> {
       motivo: resuelta.reason,
     },
   })
+
+  // ── Flujo de código por WhatsApp para envíos externos ─────────────────
+  // `volkern_send_whatsapp` es de riesgo `external`: se envía un código de 6
+  // dígitos al WhatsApp registrado del negocio y se abre una página pública
+  // donde se validan los riesgos y se firma con el código. Si no se puede
+  // enviar el código (no hay WhatsApp del negocio conectado), se cae al flujo
+  // de aprobación interna (`ask`) como respaldo.
+  if (toolName === 'volkern_send_whatsapp') {
+    try {
+      const phoneDestination = String(args.leadId || args.contactId || '')
+      const messagePreview = String(args.message || args.mensaje || args.contenido || '')
+
+      const auth = await generateAndSendWhatsappAuthCode({
+        approvalId,
+        tenantId,
+        phoneDestination,
+        messagePreview,
+      })
+
+      return {
+        kind: 'ask_code',
+        decision: 'ask',
+        reason: 'Se envió un código de autorización al WhatsApp del negocio. Confirma el envío en el enlace que recibiste por WhatsApp.',
+        risk: resuelta.risk,
+        approvalId,
+        expiresAt,
+        verificationToken: auth.verificationToken,
+        verificationUrl: auth.verificationUrl,
+        codeExpiresAt: auth.codeExpiresAt,
+        phoneNumberMasked: auth.phoneNumberMasked,
+      }
+    } catch (authError) {
+      console.error(
+        '[MCP gate] No se pudo iniciar la autorización por WhatsApp:',
+        authError instanceof Error ? authError.message : String(authError)
+      )
+      // Fallback: aprobación interna por bandeja.
+    }
+  }
 
   return {
     kind: 'ask',

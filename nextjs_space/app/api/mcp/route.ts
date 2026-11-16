@@ -271,7 +271,18 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      if (gate.kind === 'ask') {
+      if (gate.kind === 'ask' || gate.kind === 'ask_code') {
+        const data: any = {
+          status: 'pending',
+          approvalId: gate.approvalId,
+          expiresAt: gate.expiresAt.toISOString(),
+        }
+        if (gate.kind === 'ask_code') {
+          data.verificationToken = gate.verificationToken
+          data.verificationUrl = gate.verificationUrl
+          data.codeExpiresAt = gate.codeExpiresAt.toISOString()
+          data.phoneNumberMasked = gate.phoneNumberMasked
+        }
         return NextResponse.json(
           {
             jsonrpc: '2.0',
@@ -279,11 +290,7 @@ export async function POST(request: NextRequest) {
             error: {
               code: -32002,
               message: gate.reason,
-              data: {
-                status: 'pending',
-                approvalId: gate.approvalId,
-                expiresAt: gate.expiresAt.toISOString(),
-              },
+              data,
             },
           },
           { status: 409 }
@@ -350,16 +357,23 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      if (gate.kind === 'ask') {
+      if (gate.kind === 'ask' || gate.kind === 'ask_code') {
+        const data: any = {
+          success: false,
+          status: 'pending',
+          approvalId: gate.approvalId,
+          expiresAt: gate.expiresAt.toISOString(),
+          error: gate.reason,
+          tool: body.tool || body.name,
+        }
+        if (gate.kind === 'ask_code') {
+          data.verificationToken = gate.verificationToken
+          data.verificationUrl = gate.verificationUrl
+          data.codeExpiresAt = gate.codeExpiresAt.toISOString()
+          data.phoneNumberMasked = gate.phoneNumberMasked
+        }
         return NextResponse.json(
-          {
-            success: false,
-            status: 'pending',
-            approvalId: gate.approvalId,
-            expiresAt: gate.expiresAt.toISOString(),
-            error: gate.reason,
-            tool: body.tool || body.name,
-          },
+          data,
           { status: 409 }
         );
       }
