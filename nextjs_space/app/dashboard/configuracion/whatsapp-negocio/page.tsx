@@ -416,7 +416,8 @@ export default function WhatsAppNegocioPage() {
                   <AlertCircle className="h-4 w-4 text-red-600" />
                   <AlertDescription className="text-red-800">
                     El WhatsApp del negocio está <strong>desconectado</strong>. Pulsa{' '}
-                    <strong>Mostrar QR Code</strong> para volver a vincular el número.
+                    <strong>Reconectar (mostrar QR)</strong> y escanea el código para volver a
+                    vincular el número.
                   </AlertDescription>
                 </Alert>
               )}
@@ -430,7 +431,7 @@ export default function WhatsAppNegocioPage() {
                     className="flex items-center gap-2"
                   >
                     <QrCode className="h-4 w-4" />
-                    Mostrar QR Code
+                    Reconectar (mostrar QR)
                   </Button>
                 )}
                 <Button

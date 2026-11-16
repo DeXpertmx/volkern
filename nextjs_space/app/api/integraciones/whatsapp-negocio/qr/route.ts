@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/db';
-import { getQRCode } from '@/lib/evolution-instances';
+import { checkInstanceStatus, getQRCode } from '@/lib/evolution-instances';
 
 /**
  * GET - Obtener QR Code para conectar el WhatsApp del negocio (tenant).
@@ -36,7 +36,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    if (instance.status === 'connected') {
+    // No basta con el estado guardado: si el teléfono se desconectó desde
+    // WhatsApp, la fila puede seguir diciendo "connected" y el QR nunca se
+    // mostraría (el usuario no tendría forma de reconectar).
+    const estado = await checkInstanceStatus(instance.instanceName).catch(() => null);
+    if (estado?.success && estado.status === 'connected') {
       return NextResponse.json({
         success: true,
         connected: true,

@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/db';
 import {
+  checkInstanceStatus,
   createTenantInstance,
   deleteTenantInstance,
 } from '@/lib/evolution-instances';
@@ -62,6 +63,15 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // El estado guardado puede estar obsoleto (el teléfono se desconecta desde
+    // WhatsApp sin avisar a Volkern). Se consulta Evolution al abrir la página
+    // para que el badge conectada/desconectada sea real y el QR aparezca cuando
+    // toca; si Evolution no responde se cae al estado guardado.
+    const chequeo = await checkInstanceStatus(instance.instanceName).catch(() => null);
+    const estadoActual = chequeo?.success && chequeo.status ? chequeo.status : instance.status;
+    const estadoEvolution =
+      chequeo?.data?.instance?.state ?? chequeo?.data?.state ?? null;
+
     let qrExpired = false;
     if (instance.qrCodeExpiry) {
       qrExpired = new Date(instance.qrCodeExpiry) < new Date();
@@ -71,8 +81,11 @@ export async function GET(request: NextRequest) {
       connected: true,
       instance: {
         ...instance,
+        status: estadoActual,
         qrExpired
       },
+      estadoEvolution,
+      verificadoEn: new Date().toISOString(),
       widget,
     });
   } catch (error) {

@@ -259,13 +259,10 @@ export async function getQRCode(
       console.log('✅ QR Code obtenido exitosamente');
       
       // Actualizar QR en base de datos
-      await prisma.userWhatsAppInstance.updateMany({
-        where: { instanceName },
-        data: {
-          qrCode: qrBase64,
-          qrCodeExpiry: new Date(Date.now() + 60000), // Expira en 60 segundos
-          status: 'connecting'
-        }
+      await persistirEstadoInstancia(instanceName, {
+        qrCode: qrBase64,
+        qrCodeExpiry: new Date(Date.now() + 60000), // Expira en 60 segundos
+        status: 'connecting'
       });
 
       return {
@@ -324,6 +321,21 @@ export function extractOwnerProfileFromConnection(data: any): {
 }
 
 /**
+ * Persiste estado y QR de una instancia en las tablas locales.
+ *
+ * Antes solo se actualizaba UserWhatsAppInstance (WhatsApp personal), así que
+ * el estado del WhatsApp del Negocio (TenantWhatsAppInstance) quedaba
+ * congelado: Configuración y las fichas podían decir "conectado" aunque el
+ * teléfono llevara días desconectado, o al revés.
+ */
+async function persistirEstadoInstancia(instanceName: string, data: any) {
+  await Promise.all([
+    prisma.userWhatsAppInstance.updateMany({ where: { instanceName }, data }),
+    prisma.tenantWhatsAppInstance.updateMany({ where: { instanceName }, data }),
+  ])
+}
+
+/**
  * Verificar estado de conexión de una instancia
  */
 export async function checkInstanceStatus(
@@ -362,10 +374,7 @@ export async function checkInstanceStatus(
       updateData.qrCodeExpiry = null;
     }
 
-    await prisma.userWhatsAppInstance.updateMany({
-      where: { instanceName },
-      data: updateData
-    });
+    await persistirEstadoInstancia(instanceName, updateData);
 
     return {
       success: true,
