@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Phone, Mail, MessageSquare, FileText, ThumbsUp, ThumbsDown, Minus, Users, Check, CheckCheck, AlertCircle } from 'lucide-react';
+import { Plus, Phone, Mail, MessageSquare, FileText, ThumbsUp, ThumbsDown, Minus, Users, Check, CheckCheck, AlertCircle, RotateCw, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -108,6 +108,7 @@ const resultados = [
 export function UnifiedTimeline({ leadId, contactId, companyId }: UnifiedTimelineProps) {
   const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [reintentando, setReintentando] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
     tipo: 'llamada',
@@ -211,6 +212,37 @@ export function UnifiedTimeline({ leadId, contactId, companyId }: UnifiedTimelin
       toast.error('Error al cargar el historial');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Reintenta un mensaje fallido sin crear otra fila: reutiliza texto y
+  // conversación, y el backend evita duplicados si el primer intento llegó.
+  const handleReintentar = async (mensaje: WhatsAppMensaje) => {
+    setReintentando(mensaje.id);
+    try {
+      const res = await fetch('/api/mensajes/reintentar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageId: mensaje.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || data.success === false) {
+        toast.error(data.error || 'No se pudo reintentar el envío', { duration: 8000 });
+      } else if (data.yaEnviado) {
+        toast.success('Ya había un envío con el mismo texto: no se duplicó');
+      } else {
+        toast.success(
+          data.proveedor === 'hub'
+            ? 'Reenviado por el hub (Chatwoot)'
+            : 'Reenviado por WhatsApp'
+        );
+      }
+      fetchTimelineData();
+    } catch (error: any) {
+      toast.error(error?.message || 'Error de conexión');
+    } finally {
+      setReintentando(null);
     }
   };
 
@@ -475,6 +507,24 @@ export function UnifiedTimeline({ leadId, contactId, companyId }: UnifiedTimelin
                             <span className="font-semibold">Motivo del fallo:</span>{' '}
                             {mensaje.errorMensaje}
                           </p>
+                        )}
+                        {mensaje.estado === 'error' && saliente && (
+                          <div className="mt-3 flex justify-end">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 gap-2"
+                              onClick={() => handleReintentar(mensaje)}
+                              disabled={reintentando !== null}
+                            >
+                              {reintentando === mensaje.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <RotateCw className="h-3.5 w-3.5" />
+                              )}
+                              {reintentando === mensaje.id ? 'Reintentando…' : 'Reintentar envío'}
+                            </Button>
+                          </div>
                         )}
                       </div>
                     </div>
