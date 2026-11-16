@@ -4,7 +4,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/db';
-import { chatwootBridgeDe, enviarWhatsAppPorChatwoot } from '@/lib/chatwoot-tenant';
+import {
+  buscarMensajeEnChatwoot,
+  chatwootBridgeDe,
+  enviarWhatsAppPorChatwoot,
+} from '@/lib/chatwoot-tenant';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
 
 const soloDigitos = (valor?: string | null) => (valor || '').replace(/[^0-9]/g, '');
@@ -28,6 +32,10 @@ const VENTANA_DUPLICADOS_MS = 10 * 60 * 1000;
  *     los últimos 10 minutos y con prueba de entrega (entregado/leído o id del
  *     proveedor), el primer intento sí llegó: se marca y no se reenvía. Fuera
  *     de esa ventana el mismo texto es un reenvío legítimo y sale normalmente.
+ *  3. Si el hub falla de forma ambigua (timeout/red/5xx) NO se cae a Evolution:
+ *     primero se comprueba si el mensaje existe ya en la conversación de
+ *     Chatwoot. Solo un rechazo explícito del hub permite el envío directo,
+ *     porque un timeout puede haber enviado el mensaje igualmente.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -142,6 +150,40 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Si un intento anterior quedó "sin confirmar" (timeout del hub), se
+    // vuelve a mirar en Chatwoot antes de enviar: puede haber salido y no
+    // queremos duplicarlo al pulsar reintentar otra vez.
+    if ((mensaje.metadatos as any)?.envioIncierto && chatwootBridgeDe(conversacion)) {
+      const verificado = await buscarMensajeEnChatwoot({
+        tenantId,
+        conversacion,
+        contenido: mensaje.contenido,
+        desde: mensaje.fechaCreacion,
+      });
+      if (verificado.encontrado) {
+        await prisma.message.update({
+          where: { id: mensaje.id },
+          data: {
+            estado: 'enviado',
+            errorMensaje: null,
+            metadatos: {
+              ...((mensaje.metadatos as any) || {}),
+              confirmadoTrasTimeout: true,
+              resueltoEn: new Date().toISOString(),
+              resueltoPor: { id: user.id, email: user.email },
+            },
+          },
+        });
+        return NextResponse.json({
+          success: true,
+          yaEnviado: true,
+          estado: 'enviado',
+          detalle:
+            'El mensaje ya estaba en la conversación del hub: se marcó como enviado y no se duplicó.',
+        });
+      }
+    }
+
     // 1. Claim atómico: de error a pendiente solo pasa una petición.
     const claim = await prisma.message.updateMany({
       where: { id: mensaje.id, estado: mensaje.estado },
@@ -158,6 +200,8 @@ export async function POST(request: NextRequest) {
     let errorEnvio: string | undefined;
     let proveedorMessageId: string | undefined;
     let chatwootMessageId: number | undefined;
+    let hubSinConfirmar = false;
+    let confirmadoTrasTimeout = false;
 
     // Misma conversación primero por el hub (si está puenteada), luego Evolution.
     const bridge = chatwootBridgeDe(conversacion);
@@ -172,10 +216,32 @@ export async function POST(request: NextRequest) {
         chatwootMessageId = porHub.messageId;
       } else {
         errorEnvio = `Hub: ${porHub.error || 'error desconocido'}`;
+
+        if (porHub.ambiguo) {
+          // El timeout no prueba que fallara: puede haber salido. Se comprueba
+          // en el hub antes de decidir nada y, si no hay certeza, NO se manda
+          // también por Evolution (el cliente lo recibiría dos veces).
+          const verificacion = await buscarMensajeEnChatwoot({
+            tenantId,
+            conversacion,
+            contenido: mensaje.contenido,
+            desde: mensaje.fechaCreacion,
+          });
+
+          if (verificacion.encontrado) {
+            enviado = true;
+            chatwootMessageId = verificacion.messageId;
+            confirmadoTrasTimeout = true;
+            errorEnvio = undefined;
+          } else {
+            hubSinConfirmar = true;
+            errorEnvio = `${errorEnvio} (sin confirmación del hub; no se reenvió por Evolution para no duplicar)`;
+          }
+        }
       }
     }
 
-    if (!enviado) {
+    if (!enviado && !hubSinConfirmar) {
       const directo = await sendWhatsAppMessage(telefono as string, mensaje.contenido, tenantId);
       if (directo.success) {
         enviado = true;
@@ -206,6 +272,9 @@ export async function POST(request: NextRequest) {
           // de otra tabla.
           ultimoReintentoPor: { id: user.id, email: user.email },
           ultimoReintentoResultado: enviado ? 'enviado' : 'error',
+          // Rastro de los dos casos límite del hub.
+          ...(confirmadoTrasTimeout ? { confirmadoTrasTimeout: true } : {}),
+          ...(hubSinConfirmar ? { envioIncierto: true } : {}),
         },
       },
     });

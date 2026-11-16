@@ -655,6 +655,23 @@ class ChatwootApiClient {
     }
 
     /**
+     * Listar los mensajes de una conversación (GET .../messages).
+     * Sirve para confirmar si un envío que dio timeout llegó a salir: el
+     * mensaje aparece aquí aunque la respuesta HTTP se perdiera.
+     */
+    async getConversationMessages(
+        accountId: number,
+        conversationId: number,
+        accountToken: string
+    ): Promise<{ payload?: any[] }> {
+        return this.request(
+            `/api/v1/accounts/${accountId}/conversations/${conversationId}/messages`,
+            { method: 'GET' },
+            accountToken
+        );
+    }
+
+    /**
      * Asignar una conversación a un agente (para que aparezca en su vista
      * "Mis conversaciones"/asignadas del hub).
      */
