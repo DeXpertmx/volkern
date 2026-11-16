@@ -25,7 +25,11 @@ import { prisma } from '@/lib/db'
 import { withTenantAuth } from '@/lib/api-key-auth'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { chatwootApi } from '@/lib/nexus/chatwoot-api'
-import { obtenerTokenChatwootTenant } from '@/lib/chatwoot-tenant'
+import {
+  buscarMensajeEnChatwoot,
+  errorHubAmbiguo,
+  obtenerTokenChatwootTenant,
+} from '@/lib/chatwoot-tenant'
 import { logAuditAction } from '@/lib/permissions'
 
 const soloDigitos = (valor?: string | null) => (valor || '').replace(/[^0-9]/g, '')
@@ -157,6 +161,8 @@ export const POST = withTenantAuth(async (request, auth) => {
     let errorEnvio: string | undefined
     let chatwootMessageId: number | undefined
     let proveedorMessageId: string | undefined
+    let hubSinConfirmar = false
+    let confirmadoTrasTimeout = false
 
     // 4a. Camino preferente: Hub (Chatwoot). Así el mensaje queda en la misma
     // conversación del lead y sale por la instancia del inbox del hub.
@@ -240,11 +246,41 @@ export const POST = withTenantAuth(async (request, auth) => {
         chatwootMessageId = respuesta.id
       } catch (hubError: any) {
         errorEnvio = `Hub: ${hubError?.message || 'error desconocido'}`
+
+        // Un timeout no prueba que Chatwoot fallara: puede haber salido. Si es
+        // ambiguo se comprueba en el hub y, sin certeza, NO se manda también
+        // por Evolution (el cliente lo recibiría dos veces).
+        if (errorHubAmbiguo(hubError)) {
+          if (accountId && chatwootConvId) {
+            const verificacion = await buscarMensajeEnChatwoot({
+              tenantId,
+              conversacion: {
+                chatwootAccountId: accountId,
+                hubMetadata: { chatwootConversationId: chatwootConvId },
+              },
+              contenido: mensaje.trim(),
+              desde: mensajeRow.fechaCreacion,
+            })
+            if (verificacion.encontrado) {
+              enviado = true
+              chatwootMessageId = verificacion.messageId
+              confirmadoTrasTimeout = true
+              errorEnvio = undefined
+            } else {
+              hubSinConfirmar = true
+              errorEnvio = `${errorEnvio} (sin confirmación del hub; no se envió por Evolution para no duplicar)`
+            }
+          } else {
+            hubSinConfirmar = true
+            errorEnvio = `${errorEnvio} (sin confirmación del hub; no se envió por Evolution para no duplicar)`
+          }
+        }
       }
     }
 
-    // 4b. Fallback: instancia Evolution directa del tenant.
-    if (!enviado) {
+    // 4b. Fallback: instancia Evolution directa del tenant. Nunca si el hub
+    // dejó el envío sin confirmar.
+    if (!enviado && !hubSinConfirmar) {
       const directo = await sendWhatsAppMessage(telefono, mensaje.trim(), tenantId)
       if (directo.success) {
         enviado = true
@@ -281,6 +317,8 @@ export const POST = withTenantAuth(async (request, auth) => {
           messageId: proveedorMessageId,
           telefono: digitos,
           origen: 'ficha',
+          ...(confirmadoTrasTimeout ? { confirmadoTrasTimeout: true } : {}),
+          ...(hubSinConfirmar ? { envioIncierto: true } : {}),
         },
       },
     })

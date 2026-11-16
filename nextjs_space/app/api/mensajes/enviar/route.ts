@@ -10,13 +10,15 @@ import { sendTelegramMessage, loadTelegramCredentials } from '@/lib/telegram'
 import { sendFacebookMessage, sendInstagramMessage } from '@/lib/meta-messenger'
 import { getDownloadUrl } from '@/lib/s3'
 import { checkFeatureLimit, incrementUsage } from '@/lib/subscription'
-import { enviarWhatsAppPorChatwoot } from '@/lib/chatwoot-tenant'
+import { buscarMensajeEnChatwoot, enviarWhatsAppPorChatwoot } from '@/lib/chatwoot-tenant'
 
 /**
  * Envío de WhatsApp con el Hub como camino preferente: el inbox de Chatwoot
  * es el que tiene la instancia de Evolution conectada, mientras que la
- * instancia directa del tenant puede estar desconectada. Si el hub no está
- * disponible (o falla), se cae a la instancia Evolution directa.
+ * instancia directa del tenant puede estar desconectada. Si el hub rechaza el
+ * envío de forma explícita, se cae a Evolution; si falla de forma ambigua
+ * (timeout/red/5xx) se comprueba antes en el hub y, sin certeza, no se
+ * reenvía: el cliente podría recibirlo dos veces.
  */
 async function enviarWhatsAppConFallback(opts: {
   tenantId: string
@@ -24,7 +26,7 @@ async function enviarWhatsAppConFallback(opts: {
   contenido: string
   mediaUrl?: string
   mediaType?: string
-}): Promise<{ success: boolean; messageId?: string; error?: string }> {
+}): Promise<{ success: boolean; messageId?: string; error?: string; sinConfirmar?: boolean }> {
   const porHub = await enviarWhatsAppPorChatwoot({
     tenantId: opts.tenantId,
     conversacion: opts.conversacion,
@@ -32,6 +34,29 @@ async function enviarWhatsAppConFallback(opts: {
   })
   if (porHub.success) {
     return { success: true, messageId: porHub.messageId != null ? String(porHub.messageId) : undefined }
+  }
+
+  if (porHub.ambiguo) {
+    const verificacion = await buscarMensajeEnChatwoot({
+      tenantId: opts.tenantId,
+      conversacion: opts.conversacion,
+      contenido: opts.contenido,
+      // Ventana reciente: un mensaje idéntico de hace días no es prueba de
+      // que este intento haya salido.
+      desde: new Date(Date.now() - 10 * 60 * 1000),
+    })
+    if (verificacion.encontrado) {
+      return {
+        success: true,
+        messageId:
+          verificacion.messageId != null ? String(verificacion.messageId) : undefined,
+      }
+    }
+    return {
+      success: false,
+      sinConfirmar: true,
+      error: `Hub: ${porHub.error || 'sin respuesta'} (sin confirmación del hub; no se envió por Evolution para no duplicar)`,
+    }
   }
 
   let finalMediaUrl = opts.mediaUrl
@@ -129,6 +154,7 @@ export const POST = withTenantAuth(async (request, auth) => {
     // 3. Enviar mensaje según el canal
     let resultado: any
     let estado = 'enviado'
+    let envioIncierto = false
     let errorMensaje: string | undefined
 
     // Prioridad: Si la conversación está vinculada a Chatwoot (Hub de Comunicaciones)
@@ -149,6 +175,7 @@ export const POST = withTenantAuth(async (request, auth) => {
           mediaType,
         })
         resultado = { success: envio.success, messageId: envio.messageId, error: envio.error }
+        envioIncierto = Boolean(envio.sinConfirmar)
         if (!envio.success) {
           estado = 'error'
           errorMensaje = envio.error
@@ -189,6 +216,7 @@ export const POST = withTenantAuth(async (request, auth) => {
         mediaType,
       })
       resultado = { success: envio.success, messageId: envio.messageId, error: envio.error }
+      envioIncierto = Boolean(envio.sinConfirmar)
 
       if (!envio.success) {
         estado = 'error'
@@ -269,6 +297,7 @@ export const POST = withTenantAuth(async (request, auth) => {
           asunto: asunto,
           mediaUrl: mediaUrl || undefined,
           mediaType: mediaType || undefined,
+          ...(envioIncierto ? { envioIncierto: true } : {}),
         },
       },
     })
