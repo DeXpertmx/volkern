@@ -10,6 +10,13 @@ import { sendWhatsAppMessage } from '@/lib/whatsapp';
 const soloDigitos = (valor?: string | null) => (valor || '').replace(/[^0-9]/g, '');
 
 /**
+ * La deduplicación por texto solo aplica a intentos recientes: si alguien
+ * reenvía el mismo texto diez minutos después, es un reenvío legítimo y debe
+ * salir, no bloquearse.
+ */
+const VENTANA_DUPLICADOS_MS = 10 * 60 * 1000;
+
+/**
  * POST - Reintenta un mensaje saliente que quedó en error.
  *
  * Reutiliza el mismo texto y la misma conversación: el timeline no gana una
@@ -17,9 +24,10 @@ const soloDigitos = (valor?: string | null) => (valor || '').replace(/[^0-9]/g, 
  *
  *  1. Claim atómico: solo la petición que consigue pasar el mensaje de `error`
  *     a `pendiente` envía. Un doble clic (o dos pestañas) no manda dos veces.
- *  2. Si ya existe un mensaje saliente posterior con el mismo texto y estado
- *     correcto (enviado/entregado/leído), el primer intento sí llegó: se marca
- *     como enviado y no se vuelve a mandar nada.
+ *  2. Si ya existe un mensaje saliente posterior con el mismo texto, dentro de
+ *     los últimos 10 minutos y con prueba de entrega (entregado/leído o id del
+ *     proveedor), el primer intento sí llegó: se marca y no se reenvía. Fuera
+ *     de esa ventana el mismo texto es un reenvío legítimo y sale normalmente.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -30,7 +38,7 @@ export async function POST(request: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
-      select: { tenantId: true },
+      select: { id: true, email: true, tenantId: true },
     });
     if (!user?.tenantId) {
       return NextResponse.json({ error: 'Usuario sin tenant' }, { status: 400 });
@@ -78,40 +86,60 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. ¿Llegó ya con otro intento? Mismo texto, saliente, estado correcto y
-    // posterior a este. Se evita el reenvío y se corrige el estado local.
-    const yaLlego = await prisma.message.findFirst({
-      where: {
-        conversationId: conversacion.id,
-        direccion: 'saliente',
-        contenido: mensaje.contenido,
-        estado: { in: ['enviado', 'entregado', 'leido'] },
-        id: { not: mensaje.id },
-        fechaCreacion: { gte: mensaje.fechaCreacion },
-      },
-      orderBy: { fechaCreacion: 'desc' },
-      select: { id: true },
-    });
+    // 2. ¿Llegó ya con otro intento? Solo dentro de una ventana reciente y solo
+    // si el mensaje posterior tiene PRUEBA de haber salido (entregado/leído o
+    // id del proveedor). Sin pruebas no se marca nada: se reintenta de verdad.
+    const desdeVentana = new Date(Date.now() - VENTANA_DUPLICADOS_MS);
+    const dentroDeVentana = mensaje.fechaCreacion >= desdeVentana;
 
-    if (yaLlego) {
-      await prisma.message.update({
-        where: { id: mensaje.id },
-        data: {
-          estado: 'enviado',
-          errorMensaje: null,
-          metadatos: {
-            ...((mensaje.metadatos as any) || {}),
-            resueltoPorDuplicado: yaLlego.id,
-            resueltoEn: new Date().toISOString(),
-          },
+    if (dentroDeVentana) {
+      const candidato = await prisma.message.findFirst({
+        where: {
+          conversationId: conversacion.id,
+          direccion: 'saliente',
+          contenido: mensaje.contenido,
+          estado: { in: ['enviado', 'entregado', 'leido'] },
+          id: { not: mensaje.id },
+          fechaCreacion: { gte: desdeVentana, gt: mensaje.fechaCreacion },
         },
+        orderBy: { fechaCreacion: 'desc' },
+        select: { id: true, estado: true, externalRef: true, metadatos: true },
       });
-      return NextResponse.json({
-        success: true,
-        yaEnviado: true,
-        estado: 'enviado',
-        detalle: 'Ya había un mensaje con el mismo texto entregado: no se duplicó.',
-      });
+
+      const tienePrueba = candidato
+        ? candidato.estado === 'entregado' ||
+          candidato.estado === 'leido' ||
+          Boolean(candidato.externalRef) ||
+          Boolean((candidato.metadatos as any)?.messageId)
+        : false;
+
+      if (candidato && tienePrueba) {
+        await prisma.message.update({
+          where: { id: mensaje.id },
+          data: {
+            estado: 'enviado',
+            errorMensaje: null,
+            metadatos: {
+              ...((mensaje.metadatos as any) || {}),
+              resueltoPorDuplicado: candidato.id,
+              pruebaDuplicado: {
+                estado: candidato.estado,
+                externalRef: candidato.externalRef || null,
+                messageId: (candidato.metadatos as any)?.messageId ?? null,
+              },
+              resueltoEn: new Date().toISOString(),
+              resueltoPor: { id: user.id, email: user.email },
+            },
+          },
+        });
+        return NextResponse.json({
+          success: true,
+          yaEnviado: true,
+          estado: 'enviado',
+          detalle:
+            'Ya había un mensaje con el mismo texto con prueba de entrega: no se duplicó.',
+        });
+      }
     }
 
     // 1. Claim atómico: de error a pendiente solo pasa una petición.
@@ -174,6 +202,10 @@ export async function POST(request: NextRequest) {
           messageId: chatwootMessageId ?? proveedorMessageId ?? metadatosPrevios.messageId,
           reintentos,
           ultimoReintentoEn: new Date().toISOString(),
+          // Quién reintentó y con qué resultado: auditoría básica sin depender
+          // de otra tabla.
+          ultimoReintentoPor: { id: user.id, email: user.email },
+          ultimoReintentoResultado: enviado ? 'enviado' : 'error',
         },
       },
     });

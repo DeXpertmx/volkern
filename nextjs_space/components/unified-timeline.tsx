@@ -230,7 +230,7 @@ export function UnifiedTimeline({ leadId, contactId, companyId }: UnifiedTimelin
       if (!res.ok || data.success === false) {
         toast.error(data.error || 'No se pudo reintentar el envío', { duration: 8000 });
       } else if (data.yaEnviado) {
-        toast.success('Ya había un envío con el mismo texto: no se duplicó');
+        toast.success(data.detalle || 'Ya había un envío con el mismo texto: no se duplicó');
       } else {
         toast.success(
           data.proveedor === 'hub'
