@@ -6,7 +6,11 @@
 #   1. Build local de volkern-erp:latest (runner) + :migrator
 #   2. docker save → tarballs en /tmp
 #   3. scp de los tarballs (+ scripts de deploy) al VPS
-#   4. Ejecuta deploy-app.sh EN el VPS (load → migraciones → update → verificar)
+#     4. Ejecuta deploy-app.sh EN el VPS (load → migraciones → update → verificar)
+#        El servicio queda fijado a una referencia por digest
+#        (`volkern-erp:sha256-<digest>`) y deploy-app.sh comprueba contra el
+#        contenedor en ejecución el digest y la label
+#        org.opencontainers.image.revision (commit del build).
 #   5. Smoke test del clasificador determinista contra el entorno desplegado
 #      (scripts/smoke-clasificador.sh). Falla el despliegue si el servicio
 #      desplegado no resuelve las frases sin LLM.
@@ -275,6 +279,22 @@ fi
 # ═══════════════════════════════════════════════════════════════
 # 2. EXPORT (docker save → tarballs)
 # ═══════════════════════════════════════════════════════════════
+# ── Metadatos del build: commit y árbol, leídos de la label de la imagen ──
+# Se envían al VPS junto al tarball para que deploy-app.sh compruebe que la
+# imagen cargada corresponde a ese commit. Se leen de la imagen (no del repo)
+# porque es lo que realmente viaja en el tarball.
+META_FILE=/tmp/volkern-deploy-meta.env
+IMAGE_COMMIT=$(docker_cmd image inspect volkern-erp:latest --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' 2>/dev/null || true)
+IMAGE_TREE=$(docker_cmd image inspect volkern-erp:latest --format '{{index .Config.Labels "org.volkern.tree"}}' 2>/dev/null || true)
+# Sin label, `index` imprime el literal «<no value>».
+[ "$IMAGE_COMMIT" = "<no value>" ] && IMAGE_COMMIT=""
+[ "$IMAGE_TREE" = "<no value>" ] && IMAGE_TREE=""
+printf 'commit=%s\ntree=%s\n' "${IMAGE_COMMIT:-unknown}" "${IMAGE_TREE:-unknown}" > "$META_FILE"
+echo "   · Imagen local: commit ${IMAGE_COMMIT:-unknown} (árbol ${IMAGE_TREE:-unknown})"
+if [ -z "$IMAGE_COMMIT" ] || [ "$IMAGE_COMMIT" = "unknown" ]; then
+  echo "   ⚠️  La imagen no declara org.opencontainers.image.revision: reconstruye para que la atadura al commit sea verificable."
+fi
+
 echo ""
 echo "→ [2/5] Exportando imágenes a tarballs ..."
 docker_cmd save -o "$LATEST_TAR" volkern-erp:latest
@@ -298,7 +318,7 @@ ls -lh $TARBALLS
 echo ""
 echo "→ [3/5] Subiendo tarballs y scripts al VPS ..."
 $SSH "$VPS" "mkdir -p /root/deploy-vps" >/dev/null 2>&1 || true
-$SCP $TARBALLS "$VPS:/tmp/"
+$SCP $TARBALLS "$META_FILE" "$VPS:/tmp/"
 # Los scripts del repo son la fuente de verdad; se sincronizan en cada deploy.
 # `filtrar-destructivas.sh` acompaña a run-migrations.sh: es la puerta que
 # este usa antes de `migrate deploy` (capa de seguridad del 12-oct-2026).
@@ -341,9 +361,9 @@ $SSH "$VPS" "if [ ! -f /etc/cron.d/vigilar-mcp ]; then printf '%s\n' \
 echo ""
 echo "→ [4/5] Ejecutando deploy en el VPS ..."
 if [ "$SKIP_MIGRATOR" = "1" ]; then
-  $SSH "$VPS" "bash /root/deploy-vps/deploy-app.sh /tmp/volkern-erp-latest.tar $KEEP_REMOTE"
+  $SSH "$VPS" "bash /root/deploy-vps/deploy-app.sh /tmp/volkern-erp-latest.tar '' /tmp/volkern-deploy-meta.env $KEEP_REMOTE"
 else
-  $SSH "$VPS" "bash /root/deploy-vps/deploy-app.sh /tmp/volkern-erp-latest.tar /tmp/volkern-erp-migrator.tar $KEEP_REMOTE"
+  $SSH "$VPS" "bash /root/deploy-vps/deploy-app.sh /tmp/volkern-erp-latest.tar /tmp/volkern-erp-migrator.tar /tmp/volkern-deploy-meta.env $KEEP_REMOTE"
 fi
 
 # ═══════════════════════════════════════════════════════════════
@@ -416,7 +436,7 @@ fi
 if [ "$KEEP_LOCAL" = "0" ]; then
   echo ""
   echo "→ Limpieza local: eliminando tarballs de /tmp ..."
-  rm -f "$LATEST_TAR" "$MIGRATOR_TAR"
+  rm -f "$LATEST_TAR" "$MIGRATOR_TAR" "$META_FILE"
 fi
 
 # Los smokes se evalúan AL FINAL para que la limpieza de tarballs ocurra

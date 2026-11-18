@@ -10,16 +10,26 @@
 #   PASOS:
 #     1. docker load del tarball volkern-erp-latest.tar (OBLIGATORIO)
 #     2. Opcional: migraciones (si se pasa un tarball migrator)
-#     3. service update --force --image volkern-erp:latest
+#     3. service update --force --image volkern-erp:sha256-<digest>
+#        El servicio se fija al DIGEST de la imagen recién cargada (la
+#        etiqueta contiene el sha256 del contenido), no a `latest`: así
+#        `docker service inspect` dice exactamente qué imagen corre y un
+#        `latest` posterior no puede cambiar el servicio por sorpresa.
 #     4. Esperar convergencia de la nueva tarea
-#     5. Verificar HTTP 200 de la app
+#     4c. Verificar la correspondencia imagen↔commit: digest del contenedor
+#         contra la referencia del servicio, y label
+#         `org.opencontainers.image.revision` contra el commit del metadata
+#         que viajó con el tarball. Si algo no cuadra, el deploy falla.
 #     6. Limpieza automática de los tarballs del /tmp (incluye residuos
 #        de despliegues anteriores) para que no se acumulen
 #
 # Ejecutar EN EL VPS (root@62.171.134.195):
 #   bash deploy-vps/deploy-app.sh
 #   bash deploy-vps/deploy-app.sh /tmp/volkern-erp-latest.tar
-#   bash deploy-vps/deploy-app.sh /tmp/volkern-erp-latest.tar /tmp/volkern-erp-migrator.tar
+#   bash deploy-vps/deploy-app.sh /tmp/volkern-erp-latest.tar /tmp/volkern-erp-migrator.tar /tmp/volkern-deploy-meta.env
+#
+# `<meta.env>` (opcional) lo envía deploy-local.sh con `commit=` y `tree=` del
+# build: es contra ese commit contra el que se verifica la label de la imagen.
 #
 # Flags:
 #   --keep      NO limpia los tarballs tras el deploy (por defecto se limpian)
@@ -28,12 +38,23 @@ set -euo pipefail
 
 LATEST_TARBALL="${1:-/tmp/volkern-erp-latest.tar}"
 MIGRATOR_TARBALL="${2:-}"
+# Un flag en la posición del migrator no es un tarball.
+case "$MIGRATOR_TARBALL" in --*) MIGRATOR_TARBALL="" ;; esac
+META_FILE="${3:-}"
+case "$META_FILE" in --*) META_FILE="" ;; esac
 CLEANUP=1
 for a in "$@"; do [ "$a" = "--keep" ] && CLEANUP=0; done
 
 SERVICE="volkern-erp_app"
 IMAGE="volkern-erp:latest"
 APP_URL="https://volkern.app"
+
+# Se rellenan en el paso 1; declaradas aquí para que el trap de salida pueda
+# leerlas aunque el deploy falle antes del `docker load`.
+NEW_ID=""
+DEPLOY_IMAGE="$IMAGE"
+IMAGE_COMMIT=""
+IMAGE_TREE=""
 
 # ── Notificación Telegram (al terminar o fallar) ──────────────────
 # Credenciales en cascada:
@@ -87,7 +108,7 @@ print(json.dumps({"chat_id": os.environ["TG_CHAT"], "text": os.environ["TG_TEXT"
 on_exit() {
   local code=$?
   if [ "$DEPLOY_OK" = "1" ]; then
-    tg_notify "✅" "Deploy Volkern ERP completado" "Imagen $IMAGE ($NEW_ID) corriendo en $SERVICE · $APP_URL OK"
+    tg_notify "✅" "Deploy Volkern ERP completado" "Imagen $DEPLOY_IMAGE corriendo en $SERVICE · commit ${RUN_COMMIT:-desconocido} (árbol ${RUN_TREE:-?}) · $APP_URL OK"
   elif [ "$code" -ne 0 ]; then
     tg_notify "❌" "Deploy Volkern ERP FALLÓ" "El script abortó en el paso actual (exit $code). Revisa los logs en el VPS."
   fi
@@ -123,8 +144,49 @@ if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
   echo "✗ La imagen $IMAGE no quedó disponible tras el load." >&2
   exit 1
 fi
-NEW_ID=$(docker image inspect "$IMAGE" --format '{{.Id}}' | cut -c8-19)
+NEW_ID_FULL=$(docker image inspect "$IMAGE" --format '{{.Id}}' | sed 's/^sha256://')
+NEW_ID=$(printf '%s' "$NEW_ID_FULL" | cut -c1-12)
 echo "   ✓ Imagen cargada: $IMAGE = $NEW_ID"
+
+# ── 1b. Identidad del build: label con el commit ──
+# La imagen se hornea con `org.opencontainers.image.revision=<commit>` y
+# `org.volkern.tree=<limpio|sucio>` (ver Dockerfile / build-imagen.sh).
+IMAGE_COMMIT=$(docker image inspect "$IMAGE" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' 2>/dev/null || true)
+IMAGE_TREE=$(docker image inspect "$IMAGE" --format '{{index .Config.Labels "org.volkern.tree"}}' 2>/dev/null || true)
+if [ -n "$IMAGE_COMMIT" ] && [ "$IMAGE_COMMIT" != "<no value>" ]; then
+  echo "   ✓ Commit del build: $IMAGE_COMMIT (árbol ${IMAGE_TREE:-desconocido})"
+else
+  echo "   ⚠️  La imagen no declara org.opencontainers.image.revision (build anterior al etiquetado)."
+  IMAGE_COMMIT=""
+fi
+
+# Contraste con el commit que viajó junto al tarball: si no coinciden, el tar
+# no es el que produjo ese build y no se despliega.
+if [ -n "$META_FILE" ] && [ -f "$META_FILE" ]; then
+  META_COMMIT=$(sed -n 's/^commit=//p' "$META_FILE" | head -1)
+  META_TREE=$(sed -n 's/^tree=//p' "$META_FILE" | head -1)
+  echo "   · Metadata del pipeline: commit ${META_COMMIT:-desconocido} (árbol ${META_TREE:-desconocido})"
+  if [ -n "$META_COMMIT" ] && [ "$META_COMMIT" != "unknown" ]; then
+    if [ "$IMAGE_COMMIT" != "$META_COMMIT" ]; then
+      echo "✗ El tarball no corresponde al commit anunciado por el pipeline." >&2
+      echo "  metadata: $META_COMMIT (árbol ${META_TREE:-?})" >&2
+      echo "  imagen:   ${IMAGE_COMMIT:-sin label}" >&2
+      exit 1
+    fi
+    IMAGE_COMMIT="$META_COMMIT"
+  fi
+else
+  echo "   ⚠️  Sin metadata del pipeline: solo se verificará la label de la imagen."
+fi
+
+# ── 1c. Fijar la imagen por DIGEST ──
+# `docker service update --image` guarda una referencia; con `latest` esa
+# referencia es ambigua (y un load posterior la cambia). Se crea una etiqueta
+# que contiene el sha256 del contenido y se usa ESA referencia en el servicio:
+# `docker service inspect` pasa a mostrar el digest exacto que corre.
+DEPLOY_IMAGE="volkern-erp:sha256-$NEW_ID_FULL"
+docker tag "$IMAGE" "$DEPLOY_IMAGE"
+echo "   ✓ Referencia por digest: $DEPLOY_IMAGE"
 
 # ── 2. Migraciones (opcional) ───────────────────────────────────
 if [ -n "$MIGRATOR_TARBALL" ]; then
@@ -138,8 +200,19 @@ fi
 
 # ── 3. service update forzado con la imagen recién cargada ──────
 echo ""
-echo "→ [3/5] service update --force --image $IMAGE en $SERVICE ..."
-docker service update --force --image "$IMAGE" "$SERVICE"
+# Args del update: imagen fijada por digest + labels del servicio con el
+# commit, para que `docker service inspect` responda «qué commit corre» sin
+# bajar al contenedor. Se reutilizan en los reintentos del roll.
+UPDATE_ARGS=(--force --image "$DEPLOY_IMAGE")
+if [ -n "$IMAGE_COMMIT" ]; then
+  UPDATE_ARGS+=(--label-add "org.volkern.commit=$IMAGE_COMMIT")
+  if [ -n "$IMAGE_TREE" ]; then
+    UPDATE_ARGS+=(--label-add "org.volkern.tree=$IMAGE_TREE")
+  fi
+fi
+
+echo "→ [3/5] service update --force --image $DEPLOY_IMAGE en $SERVICE ..."
+docker service update "${UPDATE_ARGS[@]}" "$SERVICE"
 
 # ── 4. Esperar convergencia de la nueva tarea ───────────────────
 echo "→ [4/5] Esperando convergencia (máx. 180s) ..."
@@ -195,12 +268,12 @@ while :; do
     echo "✗ El contenedor quedó anclado a la imagen vieja tras el roll." >&2
     echo "  Esperado: $NEW_ID (imagen cargada en el paso 1)" >&2
     echo "  Real:     $RUNNING_ID" >&2
-    echo "  Fix manual: docker service update --force --image $IMAGE $SERVICE" >&2
+    echo "  Fix manual: docker service update --force --image $DEPLOY_IMAGE $SERVICE" >&2
     docker service ps "$SERVICE" --no-trunc | head -5 >&2
     exit 1
   fi
   echo "   ⚠️  Contenedor en imagen distinta ($RUNNING_ID ≠ $NEW_ID) — reintentando roll..."
-  docker service update --force --image "$IMAGE" "$SERVICE"
+  docker service update "${UPDATE_ARGS[@]}" "$SERVICE"
   CONVERGED=0
   for i in $(seq 1 60); do
     # `|| true` por el mismo motivo que en el paso 4: con `set -o pipefail`,
@@ -219,6 +292,66 @@ while :; do
     exit 1
   fi
 done
+
+# ── 4c. Correspondencia intrínseca imagen↔commit ──
+# Lo que hace verificable la atadura:
+#   a) el servicio declara la referencia por digest (sha256 del contenido),
+#   b) el contenedor corre exactamente ese digest,
+#   c) la label de la imagen (y del contenedor) coincide con el commit que
+#      viajó en la metadata del pipeline.
+# Con eso basta `docker service inspect` + `docker inspect <contenedor>` para
+# saber qué commit está sirviendo, sin comparar BUILD_ID ni ficheros del build.
+echo ""
+echo "→ [4c/5] Verificando digest del servicio y label del commit ..."
+CID=$(docker ps --filter name=volkern-erp_app --format '{{.ID}}' | head -1)
+if [ -z "$CID" ]; then
+  echo "✗ No se encontró el contenedor del servicio $SERVICE." >&2
+  exit 1
+fi
+SPEC_IMAGE=$(docker service inspect "$SERVICE" --format '{{.Spec.TaskTemplate.ContainerSpec.Image}}')
+case "$SPEC_IMAGE" in
+  "$DEPLOY_IMAGE"*) : ;;
+  *)
+    echo "✗ El servicio no quedó fijado a la referencia por digest." >&2
+    echo "  Esperado: $DEPLOY_IMAGE" >&2
+    echo "  Servicio: ${SPEC_IMAGE:-<vacío>}" >&2
+    exit 1
+    ;;
+esac
+
+RUN_IMAGE_ID=$(docker inspect "$CID" --format '{{.Image}}')
+if [ "$RUN_IMAGE_ID" != "sha256:$NEW_ID_FULL" ]; then
+  echo "✗ El contenedor no corre el digest fijado en el servicio." >&2
+  echo "  Esperado: sha256:$NEW_ID_FULL" >&2
+  echo "  Real:     $RUN_IMAGE_ID" >&2
+  exit 1
+fi
+
+# Label del servicio (visible en `docker service inspect`) y del contenedor:
+# ambas deben decir el mismo commit, y ese commit es el de la metadata.
+SVC_COMMIT=$(docker service inspect "$SERVICE" --format '{{index .Spec.Labels "org.volkern.commit"}}' 2>/dev/null || true)
+if [ -n "$IMAGE_COMMIT" ] && [ "$SVC_COMMIT" != "$IMAGE_COMMIT" ]; then
+  echo "✗ La label org.volkern.commit del servicio no coincide." >&2
+  echo "  Esperado: $IMAGE_COMMIT" >&2
+  echo "  Servicio: ${SVC_COMMIT:-sin label}" >&2
+  exit 1
+fi
+
+RUN_COMMIT=$(docker inspect "$CID" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' 2>/dev/null || true)
+RUN_TREE=$(docker inspect "$CID" --format '{{index .Config.Labels "org.volkern.tree"}}' 2>/dev/null || true)
+if [ -n "$IMAGE_COMMIT" ] && [ "$RUN_COMMIT" != "$IMAGE_COMMIT" ]; then
+  echo "✗ La label del commit no coincide con la imagen que corre." >&2
+  echo "  Esperado: $IMAGE_COMMIT" >&2
+  echo "  Real:     ${RUN_COMMIT:-sin label}" >&2
+  exit 1
+fi
+if [ -z "$RUN_COMMIT" ] || [ "$RUN_COMMIT" = "<no value>" ]; then
+  echo "   ⚠️  El contenedor no declara org.opencontainers.image.revision (imagen sin etiquetar)."
+else
+  echo "   ✓ $SERVICE fijado a $DEPLOY_IMAGE"
+  echo "   ✓ Contenedor $CID corre sha256:$NEW_ID_FULL · commit $RUN_COMMIT · árbol ${RUN_TREE:-desconocido}"
+  echo "   ✓ docker service inspect $SERVICE --format '{{index .Spec.Labels \"org.volkern.commit\"}}' → $SVC_COMMIT"
+fi
 
 # ── 5. Verificar que la app responde ────────────────────────────
 echo "→ [5/5] Verificando $APP_URL ..."
@@ -265,6 +398,22 @@ if [ "$CLEANUP" = "1" ]; then
     echo "$STOPPED_VOLKERN" | xargs -r docker rm | wc -l | xargs -I{} echo "   · {} contenedor(es) eliminado(s)"
   fi
 
+  # 6c-bis. Referencias por digest antiguas: cada deploy crea
+  #         volkern-erp:sha256-<digest>. Sin podar, cada imagen ocupa ~2 GB;
+  #         se conserva solo la que acaba de quedar fijada en el servicio.
+  echo "→ [6c-bis] Referencias por digest anteriores ..."
+  OLD_DIGEST_REFS=$(docker image ls --format '{{.Repository}}:{{.Tag}}' \
+    | grep -E '^volkern-erp:sha256-[0-9a-f]{64}$' \
+    | grep -vxF "$DEPLOY_IMAGE" || true)
+  if [ -z "$OLD_DIGEST_REFS" ]; then
+    echo "   ✓ No hay referencias por digest anteriores."
+  else
+    for r in $OLD_DIGEST_REFS; do
+      docker image rm "$r" >/dev/null 2>&1 || true
+      echo "   · eliminada $r"
+    done
+  fi
+
   # 6c. Imágenes dangling sin contenedor (las viejas de volkern-erp).
   #     `docker image prune -f` solo elimina imágenes sin tag Y sin contenedor;
   #     la imagen actual (running) y las de otros proyectos (con contenedores)
@@ -279,4 +428,5 @@ fi
 
 DEPLOY_OK=1
 echo ""
-echo "=== Deploy completado: $IMAGE ($NEW_ID) corriendo en $SERVICE ==="
+echo "=== Deploy completado: $DEPLOY_IMAGE corriendo en $SERVICE ==="
+echo "    commit=${RUN_COMMIT:-desconocido} árbol=${RUN_TREE:-desconocido} (docker service inspect $SERVICE)"

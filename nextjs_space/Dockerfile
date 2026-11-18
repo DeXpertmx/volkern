@@ -148,6 +148,18 @@ COPY --from=builder /app/node_modules/file-uri-to-path ./node_modules/file-uri-t
 COPY --from=builder /app/scripts/docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
+# ── Identidad de la imagen ──────────────────────────────────────
+# El pipeline pasa el commit con el que se construyó. `deploy-app.sh`
+# compara esta etiqueta con el contenedor en ejecución y con el commit que
+# viajó junto al tarball: la correspondencia imagen↔commit se comprueba con
+# `docker inspect` / `docker service inspect`, sin comparar ficheros del build.
+# Van al final del stage para que un commit nuevo no invalide apt-get ni los
+# COPY (que ya dependen del código y se reconstruyen igualmente).
+ARG GIT_COMMIT=unknown
+ARG GIT_TREE=unknown
+LABEL org.opencontainers.image.revision=$GIT_COMMIT \
+      org.volkern.tree=$GIT_TREE
+
 # Puerto
 EXPOSE 3000
 
@@ -192,6 +204,13 @@ RUN mkdir -p /app/node_modules/.bin && \
 
 # Schema + migraciones
 COPY --from=builder /app/prisma ./prisma
+
+# Identidad del build (misma que el runner): el migrator declara de qué
+# commit salió. Al final del stage para no invalidar capas caras.
+ARG GIT_COMMIT=unknown
+ARG GIT_TREE=unknown
+LABEL org.opencontainers.image.revision=$GIT_COMMIT \
+      org.volkern.tree=$GIT_TREE
 
 # Job por defecto: aplicar migraciones y salir
 ENTRYPOINT ["/app/node_modules/.bin/prisma"]

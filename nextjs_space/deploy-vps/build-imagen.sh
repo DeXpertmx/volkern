@@ -36,7 +36,18 @@ ARGS=()
 for k in "${!VARS[@]}"; do
   ARGS+=(--build-arg "$k=${VARS[$k]}")
 done
-echo "Build args NEXT_PUBLIC (${#ARGS[@]}/2 claves): $(printf '%s\n' "${!VARS[@]}" | sort | tr '\n' ' ')"
+
+# ── Identidad del build: commit y estado del árbol ──
+# Se hornean como label (org.opencontainers.image.revision / org.volkern.tree)
+# para que `docker inspect` diga de qué commit salió la imagen y
+# `deploy-app.sh` pueda verificarlo contra el contenedor que queda corriendo.
+GIT_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo unknown)
+GIT_TREE=limpio
+[ -n "$(git status --porcelain 2>/dev/null)" ] && GIT_TREE=sucio
+ARGS+=(--build-arg "GIT_COMMIT=$GIT_COMMIT" --build-arg "GIT_TREE=$GIT_TREE")
+
+echo "Commit del build: $GIT_COMMIT (árbol $GIT_TREE)"
+echo "Build args NEXT_PUBLIC (${#VARS[@]} claves): $(printf '%s\n' "${!VARS[@]}" | sort | tr '\n' ' ')"
 
 # ── Imagen principal (runner) ──
 # IMPORTANTE: taggear SIEMPRE con --target runner. El Dockerfile termina en el
