@@ -9,7 +9,9 @@
 #
 #   PASOS:
 #     1. docker load del tarball volkern-erp-latest.tar (OBLIGATORIO)
-#     2. Opcional: migraciones (si se pasa un tarball migrator)
+#     2. Opcional: migraciones (si se pasa un tarball migrator). El migrator
+#        debe declarar el mismo commit que el runner: run-migrations.sh aborta
+#        antes de tocar la base si la label no coincide o falta.
 #     3. service update --force --image volkern-erp:sha256-<digest>
 #        El servicio se fija al DIGEST de la imagen recién cargada (la
 #        etiqueta contiene el sha256 del contenido), no a `latest`: así
@@ -192,7 +194,11 @@ echo "   ✓ Referencia por digest: $DEPLOY_IMAGE"
 if [ -n "$MIGRATOR_TARBALL" ]; then
   echo ""
   echo "→ [2/5] Migraciones con $MIGRATOR_TARBALL ..."
-  bash "$(dirname "$0")/run-migrations.sh" "$MIGRATOR_TARBALL"
+  # Se pasa el commit del runner para que run-migrations.sh exija que el
+  # migrator cargado sea del mismo build antes de aplicar SQL.
+  MIG_RUN_ARGS=("$MIGRATOR_TARBALL")
+  [ -n "$IMAGE_COMMIT" ] && MIG_RUN_ARGS+=(--commit "$IMAGE_COMMIT")
+  bash "$(dirname "$0")/run-migrations.sh" "${MIG_RUN_ARGS[@]}"
 else
   echo ""
   echo "→ [2/5] Migraciones: omitidas (no se pasó tarball migrator)."

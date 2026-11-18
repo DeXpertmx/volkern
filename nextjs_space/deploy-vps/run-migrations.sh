@@ -21,8 +21,16 @@
 #      barato; migrar sin red de seguridad no lo es. Escaparlo con
 #      --sin-backup queda avisado en el log.
 #
+# ── Atadura al commit ──────────────────────────────────────
+# El migrator se hornea con `org.opencontainers.image.revision=<commit>`.
+# Antes de tocar la base se comprueba que esa label coincide con el commit
+# esperado (el del runner que se va a desplegar, enviado por deploy-app.sh):
+# un tarball de migrator de otro commit no puede aplicar su SQL. Si se pide
+# verificar y la imagen no declara la label, también se aborta: sin datos no
+# se puede afirmar que corresponda.
+#
 # Uso (en el VPS):
-#   bash deploy-vps/run-migrations.sh [ruta_tarball_migrator]
+#   bash deploy-vps/run-migrations.sh [ruta_tarball_migrator] [--commit <sha>]
 #   (si se pasa un tarball, primero hace docker load)
 #
 # Guardias: tests/filtrar-destructivas-guard.test.ts
@@ -32,11 +40,21 @@ set -euo pipefail
 MIGRATOR_TARBALL=""
 PERMITIR_DESTRUCTIVAS=0
 SIN_BACKUP=0
+COMMIT_ESPERADO=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --permitir-destructivas) PERMITIR_DESTRUCTIVAS=1 ;;
     --sin-backup)            SIN_BACKUP=1 ;;
+    --commit)
+      if [ $# -lt 2 ]; then
+        echo "✗ --commit necesita el SHA esperado." >&2
+        exit 2
+      fi
+      COMMIT_ESPERADO="$2"
+      shift
+      ;;
+    --commit=*) COMMIT_ESPERADO="${1#--commit=}" ;;
     *)
       if [ -n "$MIGRATOR_TARBALL" ]; then
         echo "✗ Argumento inesperado: $1" >&2
@@ -62,6 +80,30 @@ fi
 if ! docker image inspect volkern-erp:migrator >/dev/null 2>&1; then
   echo "✗ Imagen volkern-erp:migrator no disponible. Cárgala primero (docker load)." >&2
   exit 1
+fi
+
+# 1b. El migrator tiene que ser del mismo commit que se va a desplegar.
+#     Va ANTES de leer pendientes y, sobre todo, antes de `migrate deploy`.
+MIGRATOR_COMMIT=$(docker image inspect volkern-erp:migrator \
+  --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' 2>/dev/null || true)
+[ "$MIGRATOR_COMMIT" = "<no value>" ] && MIGRATOR_COMMIT=""
+
+if [ -n "$COMMIT_ESPERADO" ]; then
+  if [ -z "$MIGRATOR_COMMIT" ]; then
+    echo "✗ El migrator no declara org.opencontainers.image.revision." >&2
+    echo "  Esperado: $COMMIT_ESPERADO. Sin label no se puede verificar: no se migra." >&2
+    exit 1
+  fi
+  if [ "$MIGRATOR_COMMIT" != "$COMMIT_ESPERADO" ]; then
+    echo "✗ El migrator es de otro commit: se aborta antes de tocar la base." >&2
+    echo "  Esperado (runner a desplegar): $COMMIT_ESPERADO" >&2
+    echo "  Migrator del tarball:          $MIGRATOR_COMMIT" >&2
+    exit 1
+  fi
+  echo "   ✓ Migrator del commit $MIGRATOR_COMMIT (coincide con el runner)"
+else
+  echo "   ⚠️  Sin --commit: no se puede verificar de qué commit es el migrator."
+  [ -n "$MIGRATOR_COMMIT" ] && echo "      (la imagen declara $MIGRATOR_COMMIT)"
 fi
 
 # 2. Obtener el DATABASE_URL del servicio en producción
