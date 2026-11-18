@@ -49,6 +49,16 @@
 # `.env*`, baseline que no es ancestro) construye: el gate solo se equivoca
 # hacia el lado caro.
 #
+# ── Guardia de commit publicado (pasos 1 y 2) ─────────────────
+# La imagen se hornea con la label org.opencontainers.image.revision y el
+# servicio se fija a esa imagen, así que construir desde un commit que
+# origin/master aún no tiene dejaría producción sirviendo un árbol que el
+# repositorio no puede reconstruir ni revisar. `deploy-vps/
+# verificar-commit-publicado.sh` consulta el remoto de verdad (fetch, no el ref
+# cacheado) y aborta antes de construir; si el build se omite (--skip-build,
+# --force-deploy), el commit verificado es el de la label de la imagen que se
+# va a exportar.
+#
 # Uso (desde el repo, puede pedir sudo para docker):
 #   bash deploy-vps/deploy-local.sh
 #   bash deploy-vps/deploy-local.sh --skip-build     # solo re-exporta y despliega
@@ -238,6 +248,7 @@ else
     # siendo válido, así que NO se reconstruye ni se reinicia la app)
     echo ""
     echo "→ [1/5] Solo cambia prisma/: build EXCLUSIVO del migrator (sin reconstruir la app)..."
+    bash deploy-vps/verificar-commit-publicado.sh "$(git rev-parse HEAD)"
     if ! docker_cmd version >/dev/null 2>&1; then
       echo "✗ docker no accesible ni con sudo. Revisa el daemon." >&2
       exit 1
@@ -260,6 +271,9 @@ else
       MIGRATOR_SUFIJO=" (con migrator)"
     fi
     echo "→ [1/5] Build de volkern-erp:latest${MIGRATOR_SUFIJO} (puede tardar 10-20 min) ..."
+    # El commit se hornea como label y el servicio se fija a esa imagen: si no
+    # está en la mainline, la imagen nace irreproducible desde el repo.
+    bash deploy-vps/verificar-commit-publicado.sh "$(git rev-parse HEAD)"
     if ! docker_cmd version >/dev/null 2>&1; then
       echo "✗ docker no accesible ni con sudo. Revisa el daemon." >&2
       exit 1
@@ -293,6 +307,16 @@ printf 'commit=%s\ntree=%s\n' "${IMAGE_COMMIT:-unknown}" "${IMAGE_TREE:-unknown}
 echo "   · Imagen local: commit ${IMAGE_COMMIT:-unknown} (árbol ${IMAGE_TREE:-unknown})"
 if [ -z "$IMAGE_COMMIT" ] || [ "$IMAGE_COMMIT" = "unknown" ]; then
   echo "   ⚠️  La imagen no declara org.opencontainers.image.revision: reconstruye para que la atadura al commit sea verificable."
+fi
+# Con el build omitido (--skip-build / --force-deploy) lo que se despliega es
+# una imagen ya construida: el commit a verificar es el de su label, no HEAD.
+if [ "$CONSTRUIDO" = "0" ]; then
+  if [ -z "$IMAGE_COMMIT" ] || [ "$IMAGE_COMMIT" = "unknown" ]; then
+    echo "✗ La imagen a desplegar no declara su commit: no se puede verificar contra origin/master." >&2
+    echo "  Reconstruye (--force-build) para que la atadura al commit sea verificable." >&2
+    exit 1
+  fi
+  bash deploy-vps/verificar-commit-publicado.sh "$IMAGE_COMMIT"
 fi
 
 echo ""
