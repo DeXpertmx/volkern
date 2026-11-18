@@ -79,7 +79,7 @@ export const POST = withTenantAuth(async (request, auth) => {
     }
 
     const digitos = soloDigitos(telefono)
-    if (!digitos) {
+    if (!digitos || !telefono) {
       return NextResponse.json({ error: 'La ficha no tiene un teléfono válido' }, { status: 400 })
     }
 
