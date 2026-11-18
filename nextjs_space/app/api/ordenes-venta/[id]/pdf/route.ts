@@ -10,7 +10,8 @@ import { getPublicUrl } from '@/lib/s3-public-url';
 
 // GET /api/ordenes-venta/[id]/pdf — Descargar el documento oficial en PDF
 export async function GET(request: NextRequest, contextPromise: { params: Promise<{ id: string }> }) {
-  const context = await contextPromise;
+  const { params } = await contextPromise;
+  const { id } = await params;
   try {
     const auth = await authenticateRequest(request, ['deals:read', 'orders:read']);
     if (!auth.valid || !auth.tenant) {
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest, contextPromise: { params: Promis
     }
 
     const orden = await prisma.ordenVenta.findFirst({
-      where: { id: context.params.id, tenantId: auth.tenant.id },
+      where: { id, tenantId: auth.tenant.id },
       include: {
         lead: { select: { id: true, nombre: true, email: true, telefono: true, empresa: true } },
         contact: { select: { id: true, nombre: true, email: true, telefono: true } },
