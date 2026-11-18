@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     console.log('Timestamp:', new Date().toISOString());
 
     // Get headers
-    const headersList = headers();
+    const headersList = await headers();
     const signature = headersList.get('x-webhook-signature');
     const webhookId = headersList.get('x-webhook-id');
     const eventType = headersList.get('x-webhook-event');
