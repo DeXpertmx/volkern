@@ -409,8 +409,15 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Allow dashboard paths but require auth
-  if (pathname.startsWith('/dashboard') || pathname.startsWith('/app') || pathname.startsWith('/admin')) {
+  // Rutas privadas: dashboard, app, admin y el chat. El login devuelve al
+  // usuario a la ruta pedida (callbackUrl), no al dashboard.
+  if (
+    pathname.startsWith('/dashboard') ||
+    pathname.startsWith('/app') ||
+    pathname.startsWith('/admin') ||
+    pathname === '/chat' ||
+    pathname.startsWith('/chat/')
+  ) {
     const token = await getToken({ 
       req: request, 
       secret: process.env.NEXTAUTH_SECRET,

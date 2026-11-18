@@ -26,9 +26,18 @@ export default function LoginPage() {
   const { toast } = useToast()
   const [branding, setBranding] = useState<{ logoUrl: string; nombreEmpresa: string } | null>(null)
 
+  // Destino tras el login: la ruta que pidió el middleware (?callbackUrl=/chat).
+  // Sólo se aceptan rutas internas para no permitir redirecciones abiertas.
+  const destinoTrasLogin = () => {
+    if (typeof window === 'undefined') return '/dashboard'
+    const raw = new URLSearchParams(window.location.search).get('callbackUrl')
+    if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return '/dashboard'
+    return raw
+  }
+
   useEffect(() => {
     if (status === 'authenticated') {
-      router.push('/dashboard')
+      router.push(destinoTrasLogin())
     }
 
     // Detectar subdominio y cargar branding
@@ -101,7 +110,7 @@ export default function LoginPage() {
           title: '¡Bienvenido!',
           description: 'Inicio de sesión exitoso.',
         })
-        router.push('/dashboard')
+        router.push(destinoTrasLogin())
       }
     } catch (error) {
       toast({

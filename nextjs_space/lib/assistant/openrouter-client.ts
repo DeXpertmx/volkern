@@ -376,8 +376,11 @@ async function callDeepSeekV4FlashDirect(
     }
 
     const data = await response.json();
+    const mensaje = data?.choices?.[0]?.message;
 
-    if (!data?.choices?.[0]?.message?.content) {
+    // Una respuesta con tool_calls llega SIN content (el texto viene en la
+    // iteración siguiente, ya con los resultados): no es una respuesta vacía.
+    if (!mensaje?.content && !(mensaje?.tool_calls?.length > 0)) {
       throw new Error('DeepSeek V4 Flash retornó respuesta vacía o nula');
     }
 
@@ -654,19 +657,26 @@ export async function callAssistantWithFallback(
 export async function callAssistantWithToolLoop(
   messages: OpenRouterMessage[],
   tools: OpenRouterTool[],
-  executeTool: (name: string, args: Record<string, any>) => Promise<string>
+  executeTool: (name: string, args: Record<string, any>) => Promise<string>,
+  maxIterations = 2,
+  /** Presupuesto TOTAL para toda la conversación con herramientas. */
+  timeoutMs = 25000
 ): Promise<OpenRouterResponse> {
+  const deadline = Date.now() + timeoutMs;
+
   // 1. Intentar DeepSeek V4 Flash con tools (con circuit breaker)
   if (isDeepSeekEnabled()) {
     try {
       console.log('[AI ToolLoop] Intentando DeepSeek V4 Flash con tools...');
-      const response = await withBreaker('deepseek-chat', () => callDeepSeekV4FlashDirect(messages, tools));
+      const response = await withBreaker('deepseek-chat', () =>
+        callDeepSeekV4FlashDirect(messages, tools, Math.min(15000, timeoutMs))
+      );
       const choice = response.choices?.[0];
 
       // ¿El LLM decidió llamar una herramienta?
       if (choice?.message?.tool_calls && choice.message.tool_calls.length > 0) {
         console.log(`[AI ToolLoop] 🔧 LLM solicita ${choice.message.tool_calls.length} tool(s): ${choice.message.tool_calls.map(t => t.function.name).join(', ')}`);
-        const toolResult = await runToolLoop(choice.message.tool_calls, executeTool, messages, tools);
+        const toolResult = await runToolLoop(choice.message.tool_calls, executeTool, messages, tools, maxIterations, deadline);
         if (toolResult) return toolResult;
       }
 
@@ -694,12 +704,20 @@ async function runToolLoop(
   executeTool: (name: string, args: Record<string, any>) => Promise<string>,
   originalMessages: OpenRouterMessage[],
   tools: OpenRouterTool[],
-  maxIterations = 2
+  maxIterations = 2,
+  deadline = Date.now() + 25000
 ): Promise<OpenRouterResponse | null> {
   const messages = [...originalMessages];
   let currentToolCalls = toolCalls;
+  let ultimaConTexto: OpenRouterResponse | null = null;
 
   for (let i = 0; i < maxIterations; i++) {
+    // Sin tiempo para otra vuelta: se corta aquí en vez de encadenar esperas.
+    if (Date.now() >= deadline) {
+      console.warn('[AI ToolLoop] ⏱️ Presupuesto agotado antes de la siguiente vuelta');
+      break;
+    }
+
     // Añadir mensaje del assistant con tool_calls
     messages.push({
       role: 'assistant' as const,
@@ -726,14 +744,22 @@ async function runToolLoop(
       });
     }
 
-    // Re-consultar al LLM con los resultados
+    // Re-consultar al LLM con los resultados, sin pasarse del presupuesto total
     try {
-      const response = await callDeepSeekV4FlashDirect(messages, tools);
+      const restante = deadline - Date.now();
+      if (restante <= 500) {
+        console.warn('[AI ToolLoop] ⏱️ Sin tiempo para consultar al modelo otra vez');
+        break;
+      }
+      const response = await callDeepSeekV4FlashDirect(messages, tools, Math.min(15000, restante));
       const choice = response.choices?.[0];
 
       // ¿Más tool calls?
       if (choice?.message?.tool_calls && choice.message.tool_calls.length > 0) {
         console.log(`[AI ToolLoop] 🔧 Iteración ${i + 1}: LLM pide ${choice.message.tool_calls.length} tool(s) más`);
+        // Algunos modelos acompañan los tool_calls con un texto parcial: se
+        // guarda por si se agota el número de vueltas.
+        if (choice.message.content) ultimaConTexto = response;
         currentToolCalls = choice.message.tool_calls;
         continue;
       }
@@ -751,8 +777,11 @@ async function runToolLoop(
     }
   }
 
-  console.warn(`[AI ToolLoop] ⚠️ Límite de ${maxIterations} iteraciones alcanzado`);
-  return null;
+  console.warn(`[AI ToolLoop] ⚠️ Fin del loop (límite de ${maxIterations} iteraciones o presupuesto agotado)`);
+  // Si el modelo siguió pidiendo herramientas y ya no quedan vueltas, se
+  // devuelve lo último que dijo (mejor un resumen que perder las acciones ya
+  // ejecutadas).
+  return ultimaConTexto;
 }
 
 /**

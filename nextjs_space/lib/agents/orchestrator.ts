@@ -51,6 +51,15 @@ export class MinimaxOrchestratorAgent {
         activeContext = `El usuario está respondiendo a la intención previa: ${pendingCtx.intent}. Parámetros faltantes solicitados: ${pendingCtx.missingParams?.join(', ')}. Parámetros ya recolectados: ${JSON.stringify(pendingCtx.collectedParams)}`;
       }
 
+      // Los mensajes que piden un cambio en el CRM los resuelve directamente el
+      // agente con herramientas. Así el clasificador determinista no captura la
+      // frase a medias (nombres o títulos mal extraídos) y hay una sola ruta
+      // para esas peticiones. Las consultas normales no pasan por aquí.
+      if (this.esPeticionDeAccionCrm(message)) {
+        const agentico = await this.ejecutarAgenteCrm(request);
+        if (agentico) return agentico;
+      }
+
       const classification = await intentClassifier.classify({ message, userId, tenantId, context: activeContext });
       
       // Si hay contexto pendiente, determinar si el usuario está respondiendo a la pregunta anterior
@@ -140,6 +149,90 @@ export class MinimaxOrchestratorAgent {
       this.retryCount.delete(userId);
 
       return { success: false, response: `${response.emoji} ${response.text}`, metadata: { error: true, fallbackLevel: fallbackResult.level } };
+    }
+  }
+
+  /**
+   * ¿El mensaje pide una acción o un cambio en el CRM? Es el filtro que evita
+   * lanzar el agente (y su coste en latencia) en preguntas normales.
+   *
+   * Hace falta un verbo de cambio y, además, que se hable de algo del CRM o se
+   * esté contando algo ocurrido que hay que registrar. «¿Qué tareas tengo
+   * hoy?» no pasa: no hay verbo de cambio.
+   */
+  private esPeticionDeAccionCrm(message: string): boolean {
+    const texto = String(message || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+
+    const verboCambio =
+      /\b(actualiza|actualizar|actualizame|registra|registrar|registrame|agrega|agregar|agregame|da de alta|dar de alta|dale de alta|guarda|guardar|guardame|anade|anadir|anademe|coloca|colocar|colocame|colocala|pon|poner|ponme|marca|marcar|marcame|programa|programar|programame|agenda|agendar|agendame|crea|crear|creame|prepara|preparar|preparame|completa|completar|completame|deja|dejar|dejame|envia|enviar|enviame|anota|anotar|anotame|cambia|cambiar|cambiame|asigna|asignar|asigname|mueve|mover|cancela|cancelar|reprograma|reprogramar|pospon|posponer)\b/;
+
+    const objetoCrm =
+      /\b(tarea|tareas|nota|notas|interaccion|interacciones|lead|leads|contacto|contactos|llamada|llamadas|llamar|email|emails|correo|correos|cita|citas|demo|demos|seguimiento|whatsapp|oportunidad|oportunidades|negocio|negocios|pipeline|reunion|reuniones|ficha|informacion)\b/;
+
+    // Relato de algo que ya pasó y hay que dejar registrado.
+    const hechosOcurridos =
+      /\b(acaba de|acaban de|me dijo|me comento|dice que|quedo de|le enviamos|le escribimos|no ha podido|no pudo|ha llamado|llamo|respondio|me escribio|nos escribio)\b/;
+
+    // «ya está hecha la tarea»: el cambio se pide como estado, sin verbo.
+    const estadoRealizado =
+      /\b(ya\s+)?(esta|estan|quedo|quedaron|queda|quedan|dejo|deje)\s+(hech[oa]s?|realizad[oa]s?|completad[oa]s?)\b/;
+
+    return (verboCambio.test(texto) || estadoRealizado.test(texto)) &&
+      (objetoCrm.test(texto) || hechosOcurridos.test(texto));
+  }
+
+  /**
+   * Deja que el agente con herramientas resuelva el mensaje. Devuelve null si
+   * no llegó a ejecutar ninguna herramienta, para seguir con el flujo normal.
+   */
+  private async ejecutarAgenteCrm(request: OrchestratorRequest): Promise<OrchestratorResponse | null> {
+    const { message, userId, tenantId } = request;
+    const PRESUPUESTO_MS = 20000;
+
+    try {
+      const { ejecutarAgenteCrm } = await import('@/lib/agents/crm-tool-agent');
+      // El agente ya respeta el presupuesto, pero el chat nunca debe quedarse
+      // esperando: si se pasa, se responde con un aviso en vez de colgarse.
+      const resultado = await Promise.race([
+        ejecutarAgenteCrm({ message, userId, tenantId, timeoutMs: PRESUPUESTO_MS }),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), PRESUPUESTO_MS + 3000)),
+      ]);
+
+      if (!resultado) {
+        return {
+          success: true,
+          response:
+            '⏳ Estoy tardando más de lo normal guardando los cambios. Revisa el CRM en un momento; si algo no quedó, dímelo y lo completo.',
+          action: 'crm_agent_timeout',
+        };
+      }
+
+      if (!resultado.texto && resultado.herramientas.length === 0) return null;
+
+      const etiquetas: Record<string, string> = {
+        buscar_persona: 'búsqueda de la ficha',
+        registrar_interaccion: 'interacción registrada',
+        crear_nota: 'nota guardada',
+        crear_tarea: 'tarea creada',
+        completar_tarea: 'tarea completada',
+        reprogramar_tarea: 'tarea reprogramada',
+      };
+      const texto =
+        resultado.texto ||
+        `✅ Cambios guardados en el CRM: ${resultado.herramientas.map((h) => etiquetas[h] || h).join(', ')}.`;
+
+      return {
+        success: true,
+        response: texto,
+        action: 'crm_agent',
+        metadata: { tools: resultado.herramientas },
+      };
+    } catch (error: any) {
+      console.warn('[Orchestrator] Agente CRM no disponible:', error?.message || error);
+      return null;
     }
   }
 
