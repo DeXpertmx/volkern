@@ -43,7 +43,7 @@ done
 # `deploy-app.sh` pueda verificarlo contra el contenedor que queda corriendo.
 GIT_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo unknown)
 GIT_TREE=limpio
-[ -n "$(git status --porcelain 2>/dev/null)" ] && GIT_TREE=sucio
+if [ -n "$(git status --porcelain 2>/dev/null)" ]; then GIT_TREE=sucio; fi
 ARGS+=(--build-arg "GIT_COMMIT=$GIT_COMMIT" --build-arg "GIT_TREE=$GIT_TREE")
 
 echo "Commit del build: $GIT_COMMIT (árbol $GIT_TREE)"

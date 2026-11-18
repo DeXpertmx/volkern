@@ -18,12 +18,17 @@
 #        `docker service inspect` dice exactamente qué imagen corre y un
 #        `latest` posterior no puede cambiar el servicio por sorpresa.
 #     4. Esperar convergencia de la nueva tarea
-#     4c. Verificar la correspondencia imagen↔commit: digest del contenedor
-#         contra la referencia del servicio, y label
-#         `org.opencontainers.image.revision` contra el commit del metadata
-#         que viajó con el tarball. Si algo no cuadra, el deploy falla.
+#     4b. Verificar que el contenedor corre la imagen recién cargada; si Swarm
+#         lo deja anclado a la anterior, reintentar el roll una vez.
+#     4c. Verificar que el servicio quedó fijado a la referencia por digest y
+#         que su label `org.volkern.commit` declara el commit esperado (lo que
+#         se consulta con `docker service inspect`). Si algo no cuadra, el
+#         deploy falla.
+#     5. Verificar HTTP 200 de la app
 #     6. Limpieza automática de los tarballs del /tmp (incluye residuos
-#        de despliegues anteriores) para que no se acumulen
+#        de despliegues anteriores) para que no se acumulen. Se conservan la
+#        referencia por digest desplegada y la inmediatamente anterior
+#        (rollback sin reconstruir).
 #
 # Ejecutar EN EL VPS (root@62.171.134.195):
 #   bash deploy-vps/deploy-app.sh
@@ -110,7 +115,7 @@ print(json.dumps({"chat_id": os.environ["TG_CHAT"], "text": os.environ["TG_TEXT"
 on_exit() {
   local code=$?
   if [ "$DEPLOY_OK" = "1" ]; then
-    tg_notify "✅" "Deploy Volkern ERP completado" "Imagen $DEPLOY_IMAGE corriendo en $SERVICE · commit ${RUN_COMMIT:-desconocido} (árbol ${RUN_TREE:-?}) · $APP_URL OK"
+    tg_notify "✅" "Deploy Volkern ERP completado" "Imagen $DEPLOY_IMAGE corriendo en $SERVICE · commit ${SVC_COMMIT:-desconocido} (árbol ${SVC_TREE:-?}) · $APP_URL OK"
   elif [ "$code" -ne 0 ]; then
     tg_notify "❌" "Deploy Volkern ERP FALLÓ" "El script abortó en el paso actual (exit $code). Revisa los logs en el VPS."
   fi
@@ -153,32 +158,32 @@ echo "   ✓ Imagen cargada: $IMAGE = $NEW_ID"
 # ── 1b. Identidad del build: label con el commit ──
 # La imagen se hornea con `org.opencontainers.image.revision=<commit>` y
 # `org.volkern.tree=<limpio|sucio>` (ver Dockerfile / build-imagen.sh).
+# La label es la única fuente de verdad remota: contra ella se contrasta el
+# commit que anunció el pipeline en la metadata que viajó con el tarball.
 IMAGE_COMMIT=$(docker image inspect "$IMAGE" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' 2>/dev/null || true)
 IMAGE_TREE=$(docker image inspect "$IMAGE" --format '{{index .Config.Labels "org.volkern.tree"}}' 2>/dev/null || true)
-if [ -n "$IMAGE_COMMIT" ] && [ "$IMAGE_COMMIT" != "<no value>" ]; then
-  echo "   ✓ Commit del build: $IMAGE_COMMIT (árbol ${IMAGE_TREE:-desconocido})"
-else
-  echo "   ⚠️  La imagen no declara org.opencontainers.image.revision (build anterior al etiquetado)."
-  IMAGE_COMMIT=""
-fi
+[ "$IMAGE_COMMIT" = "<no value>" ] && IMAGE_COMMIT=""
+[ "$IMAGE_TREE" = "<no value>" ] && IMAGE_TREE=""
 
-# Contraste con el commit que viajó junto al tarball: si no coinciden, el tar
-# no es el que produjo ese build y no se despliega.
 if [ -n "$META_FILE" ] && [ -f "$META_FILE" ]; then
   META_COMMIT=$(sed -n 's/^commit=//p' "$META_FILE" | head -1)
   META_TREE=$(sed -n 's/^tree=//p' "$META_FILE" | head -1)
-  echo "   · Metadata del pipeline: commit ${META_COMMIT:-desconocido} (árbol ${META_TREE:-desconocido})"
-  if [ -n "$META_COMMIT" ] && [ "$META_COMMIT" != "unknown" ]; then
-    if [ "$IMAGE_COMMIT" != "$META_COMMIT" ]; then
-      echo "✗ El tarball no corresponde al commit anunciado por el pipeline." >&2
-      echo "  metadata: $META_COMMIT (árbol ${META_TREE:-?})" >&2
-      echo "  imagen:   ${IMAGE_COMMIT:-sin label}" >&2
-      exit 1
-    fi
-    IMAGE_COMMIT="$META_COMMIT"
+  if [ -n "$META_COMMIT" ] && [ "$META_COMMIT" != "unknown" ] && [ "$IMAGE_COMMIT" != "$META_COMMIT" ]; then
+    echo "✗ El tarball no corresponde al commit anunciado por el pipeline." >&2
+    echo "  metadata: $META_COMMIT (árbol ${META_TREE:-?})" >&2
+    echo "  imagen:   ${IMAGE_COMMIT:-sin label}" >&2
+    exit 1
   fi
+  # La metadata es del mismo build; su árbol cubre el caso de imagen sin label.
+  [ -n "$IMAGE_TREE" ] || IMAGE_TREE="$META_TREE"
 else
   echo "   ⚠️  Sin metadata del pipeline: solo se verificará la label de la imagen."
+fi
+
+if [ -n "$IMAGE_COMMIT" ]; then
+  echo "   ✓ Imagen del commit $IMAGE_COMMIT (árbol ${IMAGE_TREE:-desconocido})"
+else
+  echo "   ⚠️  La imagen no declara org.opencontainers.image.revision (build anterior al etiquetado)."
 fi
 
 # ── 1c. Fijar la imagen por DIGEST ──
@@ -235,31 +240,32 @@ echo "→ [3/5] service update --force --image $DEPLOY_IMAGE en $SERVICE ..."
 docker service update "${UPDATE_ARGS[@]}" "$SERVICE"
 
 # ── 4. Esperar convergencia de la nueva tarea ───────────────────
-echo "→ [4/5] Esperando convergencia (máx. 180s) ..."
-CONVERGED=0
-for i in $(seq 1 60); do
-  # `|| true`: `head -1` cierra el pipe y, con `set -o pipefail`, el SIGPIPE
-  # abortaría el bucle en lugar de esperar la convergencia.
-  STATE=$(docker service ps "$SERVICE" --format '{{.CurrentState}} {{.Image}}' 2>/dev/null | head -1 || true)
-  # La primera tarea listada es la más reciente; converge cuando está
-  # Running (o Complete para jobs; aquí es un servicio, así que Running).
-  if echo "$STATE" | grep -qE '^Running'; then
-    CONVERGED=1
-    echo "   ✓ Tarea nueva corriendo: $STATE"
-    break
-  fi
-  if echo "$STATE" | grep -qiE '(Shutdown|Failed|Rejected|Error)'; then
-    echo "   ⚠️  La tarea no converge: $STATE"
-    docker service ps "$SERVICE" --no-trunc --format '{{.CurrentState}} {{.Error}}' | head -3
-    exit 1
-  fi
-  sleep 3
-done
-if [ "$CONVERGED" -eq 0 ]; then
+# La primera tarea listada es la más reciente; converge cuando está Running
+# (es un servicio, no un job). Se reutiliza en el reintento del paso 4b.
+esperar_running() {
+  local etiqueta="$1" i estado
+  for i in $(seq 1 60); do
+    # `|| true`: `head -1` cierra el pipe y, con `set -o pipefail`, el SIGPIPE
+    # abortaría el bucle en lugar de esperar la convergencia.
+    estado=$(docker service ps "$SERVICE" --format '{{.CurrentState}} {{.Image}}' 2>/dev/null | head -1 || true)
+    if echo "$estado" | grep -qE '^Running'; then
+      echo "   ✓ $etiqueta: $estado"
+      return 0
+    fi
+    if echo "$estado" | grep -qiE '(Shutdown|Failed|Rejected|Error)'; then
+      echo "   ⚠️  La tarea no converge: $estado" >&2
+      docker service ps "$SERVICE" --no-trunc --format '{{.CurrentState}} {{.Error}}' | head -3 >&2
+      return 1
+    fi
+    sleep 3
+  done
   echo "✗ La tarea no llegó a Running en 180s. Estado:" >&2
   docker service ps "$SERVICE" --no-trunc | head -5 >&2
-  exit 1
-fi
+  return 1
+}
+
+echo "→ [4/5] Esperando convergencia (máx. 180s) ..."
+esperar_running "Tarea nueva corriendo" || exit 1
 
 # ── 4b. Verificar que el contenedor corre la imagen recién cargada ──
 # El paso 5 (HTTP 200) no basta: un contenedor anclado a la imagen vieja
@@ -278,56 +284,32 @@ while :; do
     docker service ps "$SERVICE" --no-trunc | head -5 >&2
     exit 1
   fi
-  RUNNING_ID=$(docker inspect "$CID" --format '{{.Image}}' | cut -c8-19)
-  if [ "$RUNNING_ID" = "$NEW_ID" ]; then
-    echo "   ✓ Contenedor $CID corriendo la imagen cargada: $RUNNING_ID = $NEW_ID"
+  RUNNING_IMAGE=$(docker inspect "$CID" --format '{{.Image}}')
+  if [ "$RUNNING_IMAGE" = "sha256:$NEW_ID_FULL" ]; then
+    echo "   ✓ Contenedor $CID corre la imagen cargada ($NEW_ID)"
     break
   fi
   ROLL_ATTEMPTS=$((ROLL_ATTEMPTS + 1))
   if [ "$ROLL_ATTEMPTS" -ge 2 ]; then
     echo "✗ El contenedor quedó anclado a la imagen vieja tras el roll." >&2
-    echo "  Esperado: $NEW_ID (imagen cargada en el paso 1)" >&2
-    echo "  Real:     $RUNNING_ID" >&2
+    echo "  Esperado: sha256:$NEW_ID_FULL (imagen cargada en el paso 1)" >&2
+    echo "  Real:     $RUNNING_IMAGE" >&2
     echo "  Fix manual: docker service update --force --image $DEPLOY_IMAGE $SERVICE" >&2
     docker service ps "$SERVICE" --no-trunc | head -5 >&2
     exit 1
   fi
-  echo "   ⚠️  Contenedor en imagen distinta ($RUNNING_ID ≠ $NEW_ID) — reintentando roll..."
+  echo "   ⚠️  Contenedor en otra imagen ($RUNNING_IMAGE ≠ sha256:$NEW_ID_FULL) — reintentando roll..."
   docker service update "${UPDATE_ARGS[@]}" "$SERVICE"
-  CONVERGED=0
-  for i in $(seq 1 60); do
-    # `|| true` por el mismo motivo que en el paso 4: con `set -o pipefail`,
-    # el SIGPIPE de `head -1` abortaría el bucle antes de converger.
-    STATE=$(docker service ps "$SERVICE" --format '{{.CurrentState}} {{.Image}}' 2>/dev/null | head -1 || true)
-    if echo "$STATE" | grep -qE '^Running'; then
-      CONVERGED=1
-      echo "   ✓ Tarea nueva corriendo tras reintento: $STATE"
-      break
-    fi
-    sleep 3
-  done
-  if [ "$CONVERGED" -eq 0 ]; then
-    echo "✗ La tarea no convergió tras el reintento del roll." >&2
-    docker service ps "$SERVICE" --no-trunc | head -5 >&2
-    exit 1
-  fi
+  esperar_running "Tarea nueva corriendo tras reintento" || exit 1
 done
 
-# ── 4c. Correspondencia intrínseca imagen↔commit ──
-# Lo que hace verificable la atadura:
-#   a) el servicio declara la referencia por digest (sha256 del contenido),
-#   b) el contenedor corre exactamente ese digest,
-#   c) la label de la imagen (y del contenedor) coincide con el commit que
-#      viajó en la metadata del pipeline.
-# Con eso basta `docker service inspect` + `docker inspect <contenedor>` para
-# saber qué commit está sirviendo, sin comparar BUILD_ID ni ficheros del build.
+# ── 4c. Referencia fijada y commit visible en el servicio ──────
+# El digest del contenedor ya lo garantiza el paso 4b; aquí solo se comprueba
+# lo que aporta información nueva: que el servicio quedó fijado a la
+# referencia por digest (no a `latest`) y que su label declara el commit
+# esperado, que es lo que se consulta con `docker service inspect`.
 echo ""
-echo "→ [4c/5] Verificando digest del servicio y label del commit ..."
-CID=$(docker ps --filter name=volkern-erp_app --format '{{.ID}}' | head -1)
-if [ -z "$CID" ]; then
-  echo "✗ No se encontró el contenedor del servicio $SERVICE." >&2
-  exit 1
-fi
+echo "→ [4c/5] Verificando referencia fijada y label del servicio ..."
 SPEC_IMAGE=$(docker service inspect "$SERVICE" --format '{{.Spec.TaskTemplate.ContainerSpec.Image}}')
 case "$SPEC_IMAGE" in
   "$DEPLOY_IMAGE"*) : ;;
@@ -339,39 +321,18 @@ case "$SPEC_IMAGE" in
     ;;
 esac
 
-RUN_IMAGE_ID=$(docker inspect "$CID" --format '{{.Image}}')
-if [ "$RUN_IMAGE_ID" != "sha256:$NEW_ID_FULL" ]; then
-  echo "✗ El contenedor no corre el digest fijado en el servicio." >&2
-  echo "  Esperado: sha256:$NEW_ID_FULL" >&2
-  echo "  Real:     $RUN_IMAGE_ID" >&2
-  exit 1
-fi
-
-# Label del servicio (visible en `docker service inspect`) y del contenedor:
-# ambas deben decir el mismo commit, y ese commit es el de la metadata.
 SVC_COMMIT=$(docker service inspect "$SERVICE" --format '{{index .Spec.Labels "org.volkern.commit"}}' 2>/dev/null || true)
+SVC_TREE=$(docker service inspect "$SERVICE" --format '{{index .Spec.Labels "org.volkern.tree"}}' 2>/dev/null || true)
+[ "$SVC_COMMIT" = "<no value>" ] && SVC_COMMIT=""
+[ "$SVC_TREE" = "<no value>" ] && SVC_TREE=""
 if [ -n "$IMAGE_COMMIT" ] && [ "$SVC_COMMIT" != "$IMAGE_COMMIT" ]; then
-  echo "✗ La label org.volkern.commit del servicio no coincide." >&2
+  echo "✗ La label org.volkern.commit del servicio no coincide con la imagen." >&2
   echo "  Esperado: $IMAGE_COMMIT" >&2
   echo "  Servicio: ${SVC_COMMIT:-sin label}" >&2
   exit 1
 fi
-
-RUN_COMMIT=$(docker inspect "$CID" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' 2>/dev/null || true)
-RUN_TREE=$(docker inspect "$CID" --format '{{index .Config.Labels "org.volkern.tree"}}' 2>/dev/null || true)
-if [ -n "$IMAGE_COMMIT" ] && [ "$RUN_COMMIT" != "$IMAGE_COMMIT" ]; then
-  echo "✗ La label del commit no coincide con la imagen que corre." >&2
-  echo "  Esperado: $IMAGE_COMMIT" >&2
-  echo "  Real:     ${RUN_COMMIT:-sin label}" >&2
-  exit 1
-fi
-if [ -z "$RUN_COMMIT" ] || [ "$RUN_COMMIT" = "<no value>" ]; then
-  echo "   ⚠️  El contenedor no declara org.opencontainers.image.revision (imagen sin etiquetar)."
-else
-  echo "   ✓ $SERVICE fijado a $DEPLOY_IMAGE"
-  echo "   ✓ Contenedor $CID corre sha256:$NEW_ID_FULL · commit $RUN_COMMIT · árbol ${RUN_TREE:-desconocido}"
-  echo "   ✓ docker service inspect $SERVICE --format '{{index .Spec.Labels \"org.volkern.commit\"}}' → $SVC_COMMIT"
-fi
+echo "   ✓ $SERVICE fijado a $DEPLOY_IMAGE"
+echo "   ✓ commit ${SVC_COMMIT:-sin label} · árbol ${SVC_TREE:-desconocido}"
 
 # ── 5. Verificar que la app responde ────────────────────────────
 echo "→ [5/5] Verificando $APP_URL ..."
@@ -465,4 +426,4 @@ fi
 DEPLOY_OK=1
 echo ""
 echo "=== Deploy completado: $DEPLOY_IMAGE corriendo en $SERVICE ==="
-echo "    commit=${RUN_COMMIT:-desconocido} árbol=${RUN_TREE:-desconocido} (docker service inspect $SERVICE)"
+echo "    commit=${SVC_COMMIT:-desconocido} árbol=${SVC_TREE:-desconocido} (docker service inspect $SERVICE)"
