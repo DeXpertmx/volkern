@@ -22,7 +22,15 @@
     { "mensaje": "saca 10 unidades de stock del jabón de baño", "intent": "ajustar_stock" },
     { "mensaje": "borra el horario de la campaña de Meta", "intent": "eliminar_horario" },
     { "mensaje": "mándale un whatsapp a Juan", "intent": "enviar_mensaje" },
-    { "mensaje": "cancela la cita de Alejandra Velázquez", "intent": "cancelar_cita" }
+    { "mensaje": "cancela la cita de Alejandra Velázquez", "intent": "cancelar_cita" },
+    { "mensaje": "busca casas en venta en Mérida con 3 habitaciones", "intent": "buscar_inmuebles" },
+    { "mensaje": "quiero un departamento en alquiler en Tulum", "intent": "buscar_inmuebles" },
+    { "mensaje": "estoy buscando propiedades en Playa del Carmen", "intent": "buscar_inmuebles" },
+    { "mensaje": "casas por menos de 300 mil en Cancún", "intent": "buscar_inmuebles" },
+    { "mensaje": "qué llamadas tenemos pendientes", "intent": "llamadas_pendientes" },
+    { "mensaje": "tenemos hoy llamadas pendientes", "intent": "llamadas_pendientes" },
+    { "mensaje": "qué pendientes tenemos para hoy", "intent": "tareas_hoy" },
+    { "mensaje": "qué llamadas están vencidas", "intent": "llamadas_vencidas" }
   ],
   "sinColision": [
     { "mensaje": "mueve la tarea de enviar documento para mañana", "intentoProhibido": "transferir_activo" },

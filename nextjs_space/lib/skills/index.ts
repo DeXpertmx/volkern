@@ -595,6 +595,20 @@ const getTasksDueTodayWrapper = async (input: { userId: string; tenantId: string
   return taskSkills.getTasksDueTodayByUser(realUserId, tenantId);
 };
 
+/** Llamadas pendientes (citas de tipo llamada con fecha futura). */
+const getPendingCallsWrapper = async (input: { userId: string; tenantId: string; date?: string }) => {
+  const { tenantId, userId, date } = input;
+  const realUserId = (await resolveRealUserId(tenantId, userId)) || userId;
+  return bookingSkills.getCalls(tenantId, realUserId, { vencidas: false, date });
+};
+
+/** Llamadas vencidas (citas de tipo llamada cuya fecha ya pasó). */
+const getOverdueCallsWrapper = async (input: { userId: string; tenantId: string }) => {
+  const { tenantId, userId } = input;
+  const realUserId = (await resolveRealUserId(tenantId, userId)) || userId;
+  return bookingSkills.getCalls(tenantId, realUserId, { vencidas: true });
+};
+
 /**
  * Wrapper complete_task: el skill core exige taskId, pero el orquestador pasa
  * titulo/email desde el chatbot. Resuelve la tarea pendiente por título
@@ -3243,18 +3257,21 @@ const searchPropertiesByFiltersWrapper = async (input: {
   tipo_inmueble?: string;
   zona?: string;
   habitaciones?: string | number;
+  precio_min?: string | number;
+  precio_max?: string | number;
+  presupuesto?: string | number;
   query?: string;
 }) => {
-  if (input.query) {
-    return realEstateSkills.search_properties_by_filters({ tenantId: input.tenantId, query: String(input.query) });
-  }
-  const parts: string[] = []
-  if (input.tipo_operacion) parts.push(input.tipo_operacion === 'venta' ? 'en venta' : 'en alquiler')
-  if (input.tipo_inmueble) parts.push(String(input.tipo_inmueble).toLowerCase())
-  if (input.zona) parts.push(`en ${input.zona}`)
-  if (input.habitaciones) parts.push(`${input.habitaciones} habitaciones`)
-  const query = parts.join(' ') || 'inmuebles disponibles'
-  return realEstateSkills.search_properties_by_filters({ tenantId: input.tenantId, query });
+  return realEstateSkills.searchPropertiesByNaturalFilters({
+    tenantId: input.tenantId,
+    query: input.query ? String(input.query) : undefined,
+    tipo_operacion: input.tipo_operacion,
+    tipo_inmueble: input.tipo_inmueble,
+    zona: input.zona,
+    habitaciones: input.habitaciones,
+    precio_min: input.precio_min,
+    precio_max: input.precio_max ?? input.presupuesto,
+  });
 };
 
 const recommendPropertiesWrapper = async (input: {
@@ -4381,6 +4398,8 @@ export const skills = {
   get_pending_tasks: getPendingTasksWrapper,
   get_overdue_tasks: getOverdueTasksWrapper,
   get_tasks_due_today: getTasksDueTodayWrapper,
+  get_pending_calls: getPendingCallsWrapper,
+  get_overdue_calls: getOverdueCallsWrapper,
   
   // Notas
   create_note: createNoteWrapper,
@@ -4669,6 +4688,8 @@ export function listSkills(): Array<{ name: SkillName; description: string; cate
     { name: 'get_pending_tasks', description: 'Obtener tareas pendientes de un usuario', category: 'tasks' },
     { name: 'get_overdue_tasks', description: 'Obtener solo las tareas vencidas de un usuario', category: 'tasks' },
     { name: 'get_tasks_due_today', description: 'Obtener las tareas que vencen hoy de un usuario', category: 'tasks' },
+    { name: 'get_pending_calls', description: 'Obtener las llamadas pendientes (citas de tipo llamada con fecha futura)', category: 'bookings' },
+    { name: 'get_overdue_calls', description: 'Obtener las llamadas vencidas (citas de tipo llamada cuya fecha ya pasó)', category: 'bookings' },
     // Notas
     { name: 'create_note', description: 'Crear una nota en un lead', category: 'notes' },
     { name: 'get_notes_by_lead', description: 'Obtener notas de un lead', category: 'notes' },

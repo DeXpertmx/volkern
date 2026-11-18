@@ -39,6 +39,10 @@ export class ResponseFormatterAgent {
     'rentabilidad_proyecto': '📊', 'desviaciones_proyecto': '🚨',
     'auditar_integridad': '🔍', 'analizar_rentabilidad_global': '📈',
     'calcular_costo_produccion': '🏭', 'detectar_anomalias_calidad': '🔬',
+    'buscar_inmuebles': '🏠', 'recomendar_inmuebles': '🏠', 'generar_descripcion_inmueble': '🏠',
+    'sugerir_precio_inmueble': '💰', 'calificar_inmueble': '⭐', 'calcular_comision_franquicia': '💼',
+    'tareas_vencidas': '🔴', 'tareas_hoy': '📋',
+    'llamadas_pendientes': '📞', 'llamadas_vencidas': '📵',
     'consulta_general': '🤖'
   };
 
@@ -128,6 +132,26 @@ export class ResponseFormatterAgent {
       error: () => 'No pude recuperar tus tareas.',
       empty: () => 'No tienes tareas pendientes.'
     },
+    'tareas_vencidas': {
+      execute: (data) => this.formatOverdueTasksList(data),
+      error: () => 'No pude recuperar las tareas vencidas.',
+      empty: () => 'No tienes tareas vencidas. Todo al dia!'
+    },
+    'tareas_hoy': {
+      execute: (data) => this.formatTasksList(data),
+      error: () => 'No pude recuperar las tareas de hoy.',
+      empty: () => 'No tienes tareas que vencen hoy.'
+    },
+    'llamadas_pendientes': {
+      execute: (data) => this.formatCallsList(data, false),
+      error: () => 'No pude recuperar las llamadas pendientes.',
+      empty: () => 'No tienes llamadas pendientes.'
+    },
+    'llamadas_vencidas': {
+      execute: (data) => this.formatCallsList(data, true),
+      error: () => 'No pude recuperar las llamadas vencidas.',
+      empty: () => 'No tienes llamadas vencidas. Todo al día ✅'
+    },
     'crear_nota': {
       execute: () => `📝 Nota agregada correctamente.`,
       error: (error) => `No pude agregar la nota: ${error}.`
@@ -158,6 +182,33 @@ export class ResponseFormatterAgent {
       execute: (data) => this.formatDealsList(data),
       error: () => 'No pude recuperar los deals.',
       empty: () => 'No hay deals en el pipeline.'
+    },
+    'buscar_inmuebles': {
+      execute: (data) => this.formatPropertiesList(data),
+      error: (error) => `No pude buscar propiedades: ${error}.`,
+      empty: () => 'No encontré propiedades con esos criterios. Prueba con otra zona, tipo o rango de precio.',
+      ask_clarification: () => 'Dime zona, tipo (casa, departamento, oficina…), operación (venta o alquiler), habitaciones y presupuesto, y busco las propiedades disponibles.'
+    },
+    'recomendar_inmuebles': {
+      execute: (data) => this.formatPropertiesList(data),
+      error: (error) => `No pude generar recomendaciones: ${error}.`,
+      empty: () => 'No encontré propiedades para ese perfil. Indícame presupuesto, zona y operación.'
+    },
+    'generar_descripcion_inmueble': {
+      execute: (data) => `🏠 ${data?.description || data?.descripcion || data?.message || 'Descripción generada.'}`,
+      error: (error) => `No pude generar la descripción: ${error}.`
+    },
+    'sugerir_precio_inmueble': {
+      execute: (data) => `💰 Precio sugerido: ${this.formatMoney(data?.suggestedPrice ?? data?.precioSugerido ?? data?.price ?? data?.precio)}${data?.reasoning || data?.reason ? `\n${data.reasoning || data.reason}` : ''}`,
+      error: (error) => `No pude sugerir un precio: ${error}.`
+    },
+    'calificar_inmueble': {
+      execute: (data) => `⭐ Score de calidad: ${data?.score ?? data?.qualityScore ?? data?.puntuacion ?? '—'}/100${data?.summary ? `\n${data.summary}` : ''}`,
+      error: (error) => `No pude calificar la propiedad: ${error}.`
+    },
+    'calcular_comision_franquicia': {
+      execute: (data) => `💼 Comisiones de la operación: ${this.formatMoney(data?.total ?? data?.totalComision ?? data?.commission?.total ?? data?.comisionTotal)}${data?.split || data?.desglose ? '\nDesglose disponible en el detalle del inmueble.' : ''}`,
+      error: (error) => `No pude calcular la comisión: ${error}.`
     },
     'calificar_lead': {
       execute: (data) => `🎯 Lead calificado: ${data?.message || 'proceso completado'}.`,
@@ -354,20 +405,106 @@ export class ResponseFormatterAgent {
     return response;
   }
 
+  /**
+   * Semáforo por vencimiento: 🔴 vencida, 🟡 vence hoy, 🟢 vence en el futuro.
+   * Se usa tanto en tareas como en llamadas para que el resultado se lea de un
+   * vistazo.
+   */
+  private semaforoVencimiento(valor: any): { emoji: string; etiqueta: string } {
+    if (!valor) return { emoji: '⚪', etiqueta: 'sin fecha' };
+    const fecha = new Date(valor);
+    if (Number.isNaN(fecha.getTime())) return { emoji: '⚪', etiqueta: 'sin fecha' };
+
+    const ahora = new Date();
+    const inicioHoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate()).getTime();
+    const inicioManana = inicioHoy + 24 * 60 * 60 * 1000;
+    const t = fecha.getTime();
+
+    if (t < inicioHoy) {
+      // Días de calendario transcurridos desde el vencimiento (no desde la hora
+      // exacta), para que una tarea de anteayer diga "hace 2 días".
+      const diaVencimiento = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate()).getTime();
+      const dias = Math.max(1, Math.round((inicioHoy - diaVencimiento) / (24 * 60 * 60 * 1000)));
+      return { emoji: '🔴', etiqueta: `vencida hace ${dias} día${dias === 1 ? '' : 's'}` };
+    }
+    if (t < inicioManana) return { emoji: '🟡', etiqueta: 'vence hoy' };
+    return { emoji: '🟢', etiqueta: `vence el ${fecha.toLocaleDateString('es-ES')}` };
+  }
+
   private formatTasksList(data: any): string {
-    if (!data?.tasks && !data?.length) return 'No tienes tareas pendientes.';
-    const tasks = data.tasks || data;
-    if (tasks.length === 0) return 'No tienes tareas pendientes.';
-    const slice = tasks.slice(0, 5);
-    let response = `📋 ${tasks.length} tarea${tasks.length > 1 ? 's' : ''}:\n\n`;
-    slice.forEach((t: any, i: number) => {
-      response += `${i + 1}. ${t.titulo || t.title || 'Sin título'}`;
-      if (t.fechaVencimiento || t.dueDate) response += ` (vence: ${new Date(t.fechaVencimiento || t.dueDate).toLocaleDateString()})`;
-      if (t.lead?.nombre) response += ` — ${t.lead.nombre}`;
-      response += '\n';
+    const tasks = Array.isArray(data) ? data : (data?.tasks || data?.overdue || []);
+    if (!Array.isArray(tasks) || tasks.length === 0) return 'No tienes tareas pendientes.';
+
+    const conSemaforo = tasks.map((t: any) => ({
+      t,
+      ...this.semaforoVencimiento(t.fechaVencimiento || t.dueDate),
+    }));
+
+    const vencidas = conSemaforo.filter((x) => x.emoji === '🔴').length;
+    const paraHoy = conSemaforo.filter((x) => x.emoji === '🟡').length;
+    const futuras = conSemaforo.filter((x) => x.emoji === '🟢').length;
+    const resumen = [
+      vencidas ? `🔴 ${vencidas} vencida${vencidas === 1 ? '' : 's'}` : '',
+      paraHoy ? `🟡 ${paraHoy} para hoy` : '',
+      futuras ? `🟢 ${futuras} próxima${futuras === 1 ? '' : 's'}` : '',
+    ].filter(Boolean).join(' · ');
+
+    const response = `📋 ${tasks.length} tarea${tasks.length === 1 ? '' : 's'}${resumen ? ` — ${resumen}` : ''}:\n\n`;
+    return response + this.renderTaskRows(conSemaforo);
+  }
+
+  private formatOverdueTasksList(data: any): string {
+    const tasks = Array.isArray(data) ? data : (data?.tasks || data?.overdue || []);
+    if (!Array.isArray(tasks) || tasks.length === 0) return 'No tienes tareas vencidas. Todo al día ✅';
+
+    const filas = tasks.map((t: any) => ({
+      t,
+      ...this.semaforoVencimiento(t.fechaVencimiento || t.dueDate),
+    }));
+    const cabecera = `🔴 ${tasks.length} tarea${tasks.length === 1 ? '' : 's'} vencida${tasks.length === 1 ? '' : 's'}:\n\n`;
+    return cabecera + this.renderTaskRows(filas);
+  }
+
+  /** Filas de una lista de tareas (máx. 8), compartidas por los dos listados. */
+  private renderTaskRows(filas: Array<{ t: any; emoji: string; etiqueta: string }>): string {
+    let out = '';
+    filas.slice(0, 8).forEach(({ t, emoji, etiqueta }, i: number) => {
+      out += `${i + 1}. ${emoji} ${t.titulo || t.title || 'Sin título'}\n`;
+      out += `   ${etiqueta}`;
+      if (t.prioridad) out += ` · prioridad ${t.prioridad}`;
+      if (t.lead?.nombre) out += ` · ${t.lead.nombre}`;
+      out += '\n';
     });
-    if (tasks.length > 5) response += `\nY ${tasks.length - 5} más...`;
-    return response;
+    if (filas.length > 8) out += `\nY ${filas.length - 8} más...`;
+    return out;
+  }
+
+  /** Listado de llamadas (citas de tipo llamada) con semáforo y teléfono. */
+  private formatCallsList(data: any, vencidas = false): string {
+    const calls = Array.isArray(data) ? data : (data?.calls || data?.citas || []);
+    if (!Array.isArray(calls) || calls.length === 0) {
+      return vencidas ? 'No tienes llamadas vencidas. Todo al día ✅' : 'No tienes llamadas pendientes.';
+    }
+
+    let out = `${vencidas ? '📵' : '📞'} ${calls.length} llamada${calls.length === 1 ? '' : 's'} ${vencidas ? `vencida${calls.length === 1 ? '' : 's'}` : `pendiente${calls.length === 1 ? '' : 's'}`}:\n\n`;
+    calls.slice(0, 8).forEach((c: any, i: number) => {
+      // `contacts` es una relación de varios: el contacto principal es el primero.
+      const contacto = c.lead?.nombre || c.contacts?.[0]?.nombre || c.titulo || 'Sin contacto';
+      const telefono = c.lead?.telefono || c.contacts?.[0]?.telefono || null;
+      const fecha = c.fechaHora ? new Date(c.fechaHora) : null;
+      const { emoji, etiqueta } = this.semaforoVencimiento(c.fechaHora);
+
+      out += `${i + 1}. ${emoji} **${contacto}**\n`;
+      const cuando = fecha && !Number.isNaN(fecha.getTime())
+        ? `${fecha.toLocaleDateString('es-ES')} ${fecha.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`
+        : 'sin fecha';
+      out += `   ${cuando} · ${etiqueta}\n`;
+      if (telefono) out += `   ☎️ ${telefono}\n`;
+      if (c.estado) out += `   Estado: ${c.estado}\n`;
+      out += '\n';
+    });
+    if (calls.length > 8) out += `Y ${calls.length - 8} más.`;
+    return out.trim();
   }
 
   private formatNotesList(data: any): string {
@@ -382,6 +519,38 @@ export class ResponseFormatterAgent {
       response += '\n';
     });
     return response;
+  }
+
+  private formatMoney(value: any): string {
+    const n = Number(value)
+    if (!Number.isFinite(n)) return '—'
+    return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n)
+  }
+
+  private formatPropertiesList(data: any): string {
+    const props: any[] = data?.properties || data?.items || []
+    if (!Array.isArray(props) || props.length === 0) {
+      return 'No encontré propiedades con esos criterios. Prueba con otra zona, tipo o rango de precio.'
+    }
+    const total = Number(data?.total ?? props.length)
+    let out = `🏠 ${total} propiedad${total === 1 ? '' : 'es'} encontrada${total === 1 ? '' : 's'}:\n\n`
+    props.slice(0, 6).forEach((p: any, i: number) => {
+      const op = p.operationType ? String(p.operationType) : 'disponible'
+      const precio = p.precioBase ? ` · ${this.formatMoney(p.precioBase)}${op.toLowerCase().includes('alquiler') || op.toLowerCase().includes('renta') ? '/mes' : ''}` : ''
+      out += `${i + 1}. **${p.nombre || 'Propiedad'}** — ${op}${precio}\n`
+      const detalle: string[] = []
+      if (p.propertyType) detalle.push(String(p.propertyType))
+      if (p.bedrooms) detalle.push(`${p.bedrooms} hab.`)
+      if (p.bathrooms) detalle.push(`${p.bathrooms} baños`)
+      if (p.areaM2) detalle.push(`${p.areaM2} m²`)
+      if (detalle.length) out += `   ${detalle.join(' · ')}\n`
+      const lugar = [p.address, p.city].filter(Boolean).join(', ')
+      if (lugar) out += `   📍 ${lugar}\n`
+      if (p.status) out += `   Estado: ${p.status}\n`
+      out += '\n'
+    })
+    if (props.length > 6) out += `Y ${total - 6} más. Afina la búsqueda si quieres ver menos resultados.`
+    return out.trim()
   }
 
   private formatDealsList(data: any): string {
@@ -489,6 +658,7 @@ export class ResponseFormatterAgent {
       if (intent.includes('negocio') || intent.includes('deal')) return ['💼 Ver pipeline', '➕ Nuevo deal'];
       if (intent.includes('inventario') || intent.includes('producto')) return ['📦 Salud inventario', '🔎 Buscar producto'];
       if (intent.includes('proyecto')) return ['📊 Rentabilidad', '🚨 Desviaciones'];
+      if (intent.includes('inmueble') || intent.includes('propiedad')) return ['Casas en venta', 'Departamentos en alquiler', 'Mostrar todas'];
       return ['🤖 Ayuda', '➕ Nueva acción'];
     }
     if ((action === 'execute' || action === 'success') && success) {
@@ -497,6 +667,7 @@ export class ResponseFormatterAgent {
       if (intent === 'crear_tarea') return ['➕ Otra tarea', '✅ Ver pendientes'];
       if (intent === 'mis_tareas') return ['✅ Completar tarea', '➕ Nueva tarea'];
       if (intent === 'mis_negocios') return ['➕ Nuevo deal', '📊 Ver pipeline'];
+      if (intent === 'buscar_inmuebles' || intent === 'recomendar_inmuebles') return ['Casas en venta', 'Departamentos en alquiler', 'Agendar una visita'];
       if (intent === 'salud_inventario') return ['📤 Ajustar stock', '🔎 Buscar producto'];
       if (intent === 'buscar_lead') return ['👤 Crear lead', '🔍 Buscar otro'];
       if (intent === 'registrar_gasto') return ['💰 Otro gasto', '📊 Ver análisis'];

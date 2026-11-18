@@ -301,6 +301,68 @@ export async function getBookingsByLead(leadId: string, tenantId: string) {
 }
 
 /**
+ * Llamadas (citas de tipo `llamada`), pendientes o vencidas.
+ *
+ * - `vencidas: false` → llamadas con fecha futura (o del día pedido en `date`).
+ * - `vencidas: true`  → llamadas cuya fecha ya pasó y siguen sin cerrar.
+ *
+ * No incluye citas completadas ni canceladas: "pendiente" es lo que queda por
+ * hacer. Devuelve el lead/contacto y el teléfono para poder llamar directamente.
+ */
+export async function getCalls(
+  tenantId: string,
+  userId: string,
+  opts: { vencidas?: boolean; date?: string; limit?: number } = {}
+) {
+  const { vencidas = false, date, limit = 15 } = opts
+
+  const user = await prisma.user.findFirst({
+    where: { id: userId, tenantId },
+    select: { timezone: true },
+  })
+  const timezone = user?.timezone || 'America/Mexico_City'
+
+  const now = new Date()
+  let rango: any = vencidas ? { lt: now } : { gte: now }
+
+  if (date) {
+    try {
+      rango = {
+        gte: fromZonedTime(`${date}T00:00:00`, timezone),
+        lte: fromZonedTime(`${date}T23:59:59.999`, timezone),
+      }
+    } catch {
+      /* fecha inválida: se mantiene el rango por defecto */
+    }
+  }
+
+  const citas = await prisma.cita.findMany({
+    where: {
+      tenantId,
+      tipo: { contains: 'llamada', mode: 'insensitive' },
+      // Canceladas y completadas ya no están pendientes; `mode: insensitive`
+      // cubre mayúsculas y variantes sin enumerarlas.
+      NOT: [
+        { estado: { equals: 'cancelada', mode: 'insensitive' } },
+        { estado: { equals: 'completada', mode: 'insensitive' } },
+      ],
+      fechaHora: rango,
+    },
+    orderBy: { fechaHora: vencidas ? 'desc' : 'asc' },
+    take: limit,
+    include: {
+      lead: { select: { nombre: true, email: true, telefono: true } },
+      contacts: { select: { nombre: true, email: true, telefono: true } },
+    },
+  })
+
+  return citas.map((cita) => ({
+    ...cita,
+    vencida: new Date(cita.fechaHora).getTime() < now.getTime(),
+  }))
+}
+
+/**
  * Obtener próximas citas
  * Usa la timezone configurada en el perfil del usuario
  * Incluye citas de Volkern y de Google Calendar

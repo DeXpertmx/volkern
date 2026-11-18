@@ -251,7 +251,7 @@ export class IntentClassifierAgent {
     return `Eres un clasificador de intenciones para Volkern CRM.
 
 INTENCIONES DISPONIBLES:\n${intentsList}\n
-REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un número entre 0 y 1.\n3. Si faltan parámetros requeridos, needsMoreInfo = true y lista missingParams.\n4. Si todos los parámetros requeridos están presentes, needsMoreInfo = false.\n5. Para mensajes ambiguos, confidence < 0.7 y usa consulta_general.\n6. Extrae los parámetros del mensaje en extractedParams.\n7. Para fechas relativas ("mañana", "viernes"), conviértelas a YYYY-MM-DD.\n\nFORMATO DE RESPUESTA:\n{\n  "intent": "nombre_intent",\n  "confidence": 0.95,\n  "needsMoreInfo": false,\n  "missingParams": [],\n  "extractedParams": {\n    "nombre": "Juan Pérez",\n    "email": "juan@email.com"\n  }\n}\n\n${context ? `CONTEXTO DE CONVERSACIÓN PREVIA:\n${context}\n` : ''}${turnContext}\n`;
+REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un número entre 0 y 1.\n3. Si faltan parámetros requeridos, needsMoreInfo = true y lista missingParams.\n4. Si todos los parámetros requeridos están presentes, needsMoreInfo = false.\n5. Para mensajes ambiguos, confidence < 0.7 y usa consulta_general.\n6. Extrae los parámetros del mensaje en extractedParams.\n7. Para fechas relativas ("mañana", "viernes"), conviértelas a YYYY-MM-DD.\n\nFORMATO DE RESPUESTA:\n{\n  "intent": "nombre_intent",\n  "confidence": 0.95,\n  "needsMoreInfo": false,\n  "missingParams": [],\n  "extractedParams": {\n    "nombre": "Juan Pérez",\n    "email": "juan@email.com"\n  }\n}\n\nEJEMPLOS DE LENGUAJE NATURAL (no requieres palabras exactas, entiende sinónimos y variaciones):\n- "busco una casa en venta en Madrid con 3 habitaciones" → buscar_inmuebles {tipo_operacion: venta, zona: Madrid, habitaciones: 3, tipo_inmueble: casa}\n- "qué departamentos en renta hay en Barcelona baratos" → buscar_inmuebles {tipo_operacion: renta, tipo_inmueble: departamento, zona: Barcelona}\n- "quiero ver propiedades en alquiler con 2 recámaras" → buscar_inmuebles {tipo_operacion: alquiler, habitaciones: 2}\n- "muéstrame casas en venta bajo los 200000 euros" → buscar_inmuebles {tipo_operacion: venta, precio_max: 200000, tipo_inmueble: casa}\n- "tareas que tengo vencidas" → tareas_vencidas\n- "qué tareas están atrasadas" → tareas_vencidas\n- "mis tareas de hoy" → tareas_hoy\n- "qué se vence hoy" → tareas_hoy\n\n${context ? `CONTEXTO DE CONVERSACIÓN PREVIA:\n${context}\n` : ''}${turnContext}\n`;
   }
 
   private buildUserPrompt(message: string): string {
@@ -435,14 +435,14 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     // mensajes de búsqueda/listado ("busca el lead…", "lista los contactos…")
     // nunca entrarían en la ruta determinista. También acepta frases de filtro
     // sin verbo: "leads en estado X", "contactos tipo empresa".
-    const ACTION_VERB = /\b(?:agrega|crea|registra|nuev[oa]|añade|alta|abre|busca|encuentra|consulta|localiza|lista|listame|mu[eé]strame|muestra|ver|ens[eé][ñn]ame|dame|convierte|convertir|pasa|transforma|mueve|actualiza|cambia|modifica|pon|ponle|anota|anotar|tuve|registro|agenda|agendar|programa|programar|reserva|reservar|aparta|apartar|cancela|cancelar|anula|anular|reagenda|reagendar|confirmar|analiza|analizar|revisa|revisar|completa|completar|termina|terminar|finaliza|finalizar|marca|marcar|cierra|cerrar|presenta|presentar|present[ée]|sugiere|sugerir|sugiero|sugiera|sugieran|respondo|responder[íi]a|contesto|contestar|pospone|posponer|reprograma|reprogramar|edita|editar|saca|sacar|elimina|eliminar|borra|borrar|env[ií]a(?:le|r)?|enviar|m[aá]nda(?:r|le)?|predice|predecir|simula|simular)\b/i
+    const ACTION_VERB = /\b(?:agrega|crea|registra|nuev[oa]|añade|alta|abre|busca|busco|buscando|buscar|encuentra|consulta|localiza|lista|listame|mu[eé]strame|muestra|ver|ens[eé][ñn]ame|dame|convierte|convertir|pasa|transforma|mueve|actualiza|cambia|modifica|pon|ponle|anota|anotar|tuve|registro|agenda|agendar|programa|programar|reserva|reservar|aparta|apartar|cancela|cancelar|anula|anular|reagenda|reagendar|confirmar|analiza|analizar|revisa|revisar|completa|completar|termina|terminar|finaliza|finalizar|marca|marcar|cierra|cerrar|presenta|presentar|present[ée]|sugiere|sugerir|sugiero|sugiera|sugieran|respondo|responder[íi]a|contesto|contestar|pospone|posponer|reprograma|reprogramar|edita|editar|saca|sacar|elimina|eliminar|borra|borrar|env[ií]a(?:le|r)?|enviar|m[aá]nda(?:r|le)?|predice|predecir|simula|simular)\b/i
     const FILTER_ONLY = /\b(?:contactos?|leads?)\b.*\b(?:en\s+estado|por\s+estado|tipo|que\s+contengan|tags?)\b/i
     // Entidades del pipeline sin verbo: "cómo va mi pipeline", "qué deals tengo",
     // "cómo va la venta con X" (bloque 23: detalles_negocio por email)
     const ENTITY_TRIGGER = /\b(?:pipeline|deals?|negocios?|oportunidad|venta(?:s)?)\b/i
     const PREQUALIFY_TRIGGER = /\b(?:precalifica|precalificar|prequalifica|prequalificar|califica|calificar)\b/i
     // Entidades de citas sin verbo: "qué citas tengo", "reunión con X"
-    const CITA_TRIGGER = /\b(?:citas?|reuni[oó]n|reuniones|videollamada)\b/i
+    const CITA_TRIGGER = /\b(?:citas?|reuni[oó]n|reuniones|videollamada|llamadas?)\b/i
     // Entidades de finanzas sin verbo: "gasto de 300€", "cómo vamos de gastos",
     // "proyección financiera", "impuestos", "rentabilidad" (décimo quinto
     // entrenamiento). "iva/retenciones/modelo NNN" (décimo octavo: impuestos y
@@ -486,8 +486,9 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     const MARKETING_TRIGGER = /\b(?:copy|post|publicaci[oó]n|texto\s+publicitario|sentimiento|opinan|opini[oó]n|feedback|comentarios?|rese[nñ]as?|campa[nñ]as?|marketing|bloque|secci[oó]n|landing|seo|metadatos|keywords?|palabras\s+clave|tests?|programaci[oó]n(?:es)?|horarios?\s+programados|automatizaci[oó]n|automatiza|automatizar|reglas\s+automa[á]?ticas?)\b/i
     // Entidades de real estate sin verbo: "la casa del centro", "departamento
     // en alquiler", "precio de la propiedad", "comisión de la venta"
-    // (decimocuarto entrenamiento)
-    const RE_TRIGGER = /\b(?:inmuebles?|propiedad(?:es)?|departamentos?|casas?|pisos?|oficinas?|locales?|terrenos?|solares?|chalets?|villas?|alquiler|en\s+venta|presupuesto\s+de|precio\s+(?:de|sugerido|de\s+venta)|comisi[oó]n(?:es)?\s+de|score\s+de\s+calidad|franquicia)\b/i
+    // (decimocuarto entrenamiento) — ampliado para lenguaje natural flexible
+    // (renta, venta, recámaras, precio máximo, ubicación, tipo de operación)
+    const RE_TRIGGER = /\b(?:inmuebles?|propiedad(?:es)?|departamentos?|deptos?|casas?|pisos?|oficinas?|locales?|terrenos?|solares?|chalets?|villas?|alquiler|renta|en\s+(?:alquiler|renta|venta)|presupuesto\s+de|precio\s+(?:de|sugerido|de\s+venta|m[aá]ximo|mínimo|hasta)|rec[áa]maras?|dormitorios?|habitaciones?|barat[oa]|econ[oó]mic[oa]|asequible|valor|costo|comisi[oó]n(?:es)?\s+de|score\s+de\s+calidad|franquicia)\b/i
     // Entidades de fábrica avanzada sin verbo sinverbo (vigésimo entrenamiento):
     // "readiness de la producción", "cuellos de botella", "salud de los
     // activos", "órdenes bloqueadas por faltantes", "plan de compras",
@@ -1039,9 +1040,13 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
 
     // ═══ 0w. BUSCAR INMUEBLES ("busca inmuebles en venta en Madrid",
     // "qué departamentos en alquiler hay en Barcelona") ═══
-    const BUSCAR_RE_VERB = /\b(?:busca|buscar|encuentra|encontrar|mu[eé]strame|listame|hay|qu[eé]\s+[a-záéíóúñü]+\s+en)\b/i
-    const INMUEBLE_BUSQ = /\b(?:inmuebles?|propiedad(?:es)?|departamentos?|casas?|pisos?|oficinas?|locales?|terrenos?|solares?)\b/i
-    if (BUSCAR_RE_VERB.test(message) && INMUEBLE_BUSQ.test(message)) {
+    const BUSCAR_RE_VERB = /\b(?:busca|busco|buscando|buscar|encuentra|encontrar|mu[eé]strame|muestra|listame|listar|dame|hay|necesito|quiero\s+ver|quisiera\s+ver|ver|estoy\s+buscando|andan\s+buscando|qu[eé]\s+[a-záéíóúñü]+\s+en)\b/i
+    const INMUEBLE_BUSQ = /\b(?:inmuebles?|propiedad(?:es)?|departamentos?|deptos?|casas?|pisos?|oficinas?|locales?|terrenos?|solares?)\b/i
+    // Las búsquedas también llegan sin verbo: "casas por menos de 300 mil en
+    // Cancún", "depto en alquiler en Tulum". Basta con una señal de filtro.
+    const RE_FILTRO_SIGNAL = /\b(?:en\s+[a-záéíóúñü]|venta|alquiler|renta|habitaciones?|rec[áa]maras?|dormitorios?|presupuesto|hasta|menos\s+de|barat[oa]|econ[oó]mic[oa]|\d+\s*(?:k|mil)\b)/i
+    const RE_NO_BUSCAR_VERB = /\b(?:crea|crear|a[nñ]ade|a[nñ]adir|registra|registrar|da\s+de\s+alta|actualiza|actualizar|edita|editar|elimina|eliminar|borra|borrar)\b/i
+    if (!RE_NO_BUSCAR_VERB.test(message) && (BUSCAR_RE_VERB.test(message) || RE_FILTRO_SIGNAL.test(message)) && INMUEBLE_BUSQ.test(message)) {
       const tipoOperacion = /\b(?:venta|comprar|compr[ée])\b/i.test(message)
         ? 'venta'
         : (/\b(?:alquiler|rentar|arrendar|renta)\b/i.test(message) ? 'alquiler' : undefined)
@@ -1052,6 +1057,12 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       if (zona) extracted.zona = zona
       const habitaciones = this.extractHabitacionesDe(message)
       if (habitaciones) extracted.habitaciones = habitaciones
+      // Presupuesto: "hasta 250 mil", "menos de 200000 euros", "máximo 300k"…
+      const presupuesto = this.extractPresupuestoDe(message)
+      if (presupuesto) {
+        if (/\b(?:desde|m[ií]nimo|a\s+partir\s+de|m[aá]s\s+de)\b/i.test(message)) extracted.precio_min = presupuesto
+        else extracted.precio_max = presupuesto
+      }
       return { intent: 'buscar_inmuebles', confidence: 0.85, extractedParams: extracted }
     }
 
@@ -2059,6 +2070,25 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
       const categoria = this.extractCategoriaDe(message)
       if (categoria) extracted.categoria = categoria
       return { intent: 'listar_proveedores', confidence: 0.85, extractedParams: extracted }
+    }
+
+    // ═══ 15z. LLAMADAS ("qué llamadas tenemos pendientes", "tenemos hoy
+    // llamadas pendientes", "qué llamadas están vencidas") ═══
+    // `llamada` es un tipo de cita, no una tarea: estos listados se resuelven
+    // antes de las ramas de tareas para que "llamadas pendientes" no caiga en
+    // `mis_tareas` ni en `consulta_general`.
+    const LLAMADA_ENTITY = /\b(?:llamadas?|telef[oó]nic[oa]s?)\b/i
+    const LLAMADA_VENCIDA = /\b(?:vencidas?|atrasadas?|pasadas?|perdidas?|sin\s+(?:hacer|realizar)|no\s+realizadas?|pendientes?\s+de\s+ayer)\b/i
+    const LLAMADA_ACCION = /\b(?:cancela|cancelar|agenda|agendar|programa|programar|reagenda|reagendar|mueve|mover|registra|registrar|crea|crear|completa|completar|elimina|eliminar|confirma|confirmar)\b/i
+    if (LLAMADA_ENTITY.test(message) && !LLAMADA_ACCION.test(message)) {
+      if (LLAMADA_VENCIDA.test(message)) {
+        return { intent: 'llamadas_vencidas', confidence: 0.85, extractedParams: extracted }
+      }
+      if (/\b(?:pendientes?|hoy|pr[oó]ximas?|agendadas?|programadas?|tenemos|tengo|hay|qu[eé]|cu[aá]les|mu[eé]strame|lista)\b/i.test(message)) {
+        const fecha = this.extractFechaDe(message)
+        if (fecha) extracted.date = fecha
+        return { intent: 'llamadas_pendientes', confidence: 0.85, extractedParams: extracted }
+      }
     }
 
     // ═══ 16. COMPLETAR TAREA ("marca como completada la tarea de llamar a

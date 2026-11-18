@@ -56,7 +56,9 @@ export class EntityExtractorAgent {
     crear_tarea: { required: ['titulo'], optional: ['descripcion', 'fechaVencimiento', 'prioridad', 'email'], questions: { titulo: '¿Cuál es el título?', descripcion: '¿Descripción?', fechaVencimiento: '¿Cuándo vence?', prioridad: '¿Prioridad?' } },
     registrar_gasto: { required: ['monto', 'concepto'], optional: ['fecha', 'proveedor', 'categoria'], questions: { monto: '¿Monto?', concepto: '¿Concepto?', proveedor: '¿Proveedor?' } },
     obtener_telefono: { required: ['nombre'], optional: [], questions: { nombre: '¿De quién quieres saber el teléfono? Dime su nombre completo.' } },
-    registrar_interaccion: { required: ['tipo', 'contenido'], optional: ['nombre', 'email', 'resultado'], questions: { tipo: '¿Por qué medio fue la interacción? (Ej: Llamada, WhatsApp, Email, Reunión)', contenido: '¿Me podrías dar un breve resumen de lo que se habló o se acordó?' } }
+    registrar_interaccion: { required: ['tipo', 'contenido'], optional: ['nombre', 'email', 'resultado'], questions: { tipo: '¿Por qué medio fue la interacción? (Ej: Llamada, WhatsApp, Email, Reunión)', contenido: '¿Me podrías dar un breve resumen de lo que se habló o se acordó?' } },
+    buscar_inmuebles: { required: [], optional: ['tipo_operacion', 'tipo_inmueble', 'zona', 'habitaciones', 'precio_max', 'precio_min'], questions: { zona: '¿En qué zona o ciudad buscas?', tipo_operacion: '¿Es para comprar o alquilar?', tipo_inmueble: '¿Qué tipo de inmueble? (casa, departamento, oficina…)', habitaciones: '¿Cuántas habitaciones?', precio_max: '¿Cuál es tu presupuesto máximo?' } },
+    recomendar_inmuebles: { required: [], optional: ['tipo_operacion', 'zona', 'presupuesto', 'tipo_inmueble'], questions: { zona: '¿En qué zona buscas?', presupuesto: '¿Qué presupuesto manejas?', tipo_operacion: '¿Compra o alquiler?' } }
   };
 
   async extract(params: { message: string; intent: string; context?: string; previousEntities?: Partial<ExtractedEntities> }): Promise<EntityExtractionResult> {

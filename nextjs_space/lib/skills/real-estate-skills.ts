@@ -559,3 +559,170 @@ export async function search_properties_by_filters(input: {
 
   return { properties: mapped, total: mapped.length };
 }
+
+// ─── 5. Búsqueda natural: acepta filtros estructurados o lenguaje libre ──────
+//
+// El wrapper del orquestador entrega campos ya extraídos (tipo_operacion,
+// tipo_inmueble, zona, habitaciones, precio_max/precio_min) y, a veces, la
+// frase original. Esta función combina ambos: usa los campos cuando están y
+// completa lo que falte interpretando el texto libre ("casa en venta en
+// Madrid con 3 habitaciones por menos de 250 mil"). Filtra en memoria para que
+// las variantes de escritura de los campos del catálogo (Casa/casa, Piso/
+// Departamento, renta/alquiler) no dejen resultados vacíos.
+export async function searchPropertiesByNaturalFilters(input: {
+  tenantId: string;
+  query?: string;
+  tipo_operacion?: string;
+  tipo_inmueble?: string;
+  zona?: string;
+  habitaciones?: string | number;
+  precio_min?: string | number;
+  precio_max?: string | number;
+  limit?: number;
+}): Promise<{ properties: any[]; total: number }> {
+  const { tenantId, limit = 10 } = input
+  const texto = String(input.query || '')
+  const lower = texto.toLowerCase()
+
+  const aNumero = (valor: unknown): number | undefined => {
+    if (valor === undefined || valor === null || valor === '') return undefined
+    if (typeof valor === 'number') return Number.isFinite(valor) ? valor : undefined
+    const limpio = String(valor)
+      .replace(/[^\d.,-]/g, '')
+      .replace(/\.(?=\d{3}(\D|$))/g, '')
+      .replace(',', '.')
+    const n = Number(limpio)
+    return Number.isFinite(n) ? n : undefined
+  }
+
+  const importe = (txt: string): number | undefined => {
+    const millones = txt.match(/(\d+(?:[.,]\d+)?)\s*(?:millones?|mill[oó]n)\b/i)
+    if (millones) {
+      const n = Number(millones[1].replace(',', '.'))
+      if (Number.isFinite(n)) return Math.round(n * 1_000_000)
+    }
+    const miles = txt.match(/(\d+(?:[.,]\d+)?)\s*(?:k|mil)\b/i)
+    if (miles) {
+      const n = Number(miles[1].replace(',', '.'))
+      if (Number.isFinite(n)) return Math.round(n * 1_000)
+    }
+    const plano = txt.match(/(\d[\d.\s]{2,})\s*(?:€|euros?|eur\b|mxn|usd|\$)/i)
+    if (plano) return aNumero(plano[1])
+    return undefined
+  }
+
+  // Operación: venta o alquiler/renta, con sus sinónimos habituales.
+  const operacionTexto = String(input.tipo_operacion || '')
+  const operacion = /venta|compr/i.test(operacionTexto) || /venta|comprar|compr[ée]/i.test(lower)
+    ? 'venta'
+    : /alquiler|renta|arrend|traspaso/i.test(operacionTexto) || /alquiler|renta|rentar|arrendar|traspaso/i.test(lower)
+      ? 'alquiler'
+      : undefined
+
+  // Tipo de inmueble (se compara por familia, no por igualdad exacta).
+  const tipoFuente = (String(input.tipo_inmueble || '') || lower).toLowerCase()
+  const tipo = /casa|chalet|villa|adosado/.test(tipoFuente) ? 'casa'
+    : /depart|piso|apart|depto|flat/.test(tipoFuente) ? 'departamento'
+      : /oficina/.test(tipoFuente) ? 'oficina'
+        : /local/.test(tipoFuente) ? 'local'
+          : /terreno|solar|parcela/.test(tipoFuente) ? 'terreno'
+            : undefined
+
+  // Zona / ciudad: primero el campo extraído, luego un nombre propio tras
+  // "en/zona/ciudad/colonia/barrio" y, por último, la primera palabra útil.
+  const STOP_ZONA = new Set([
+    'venta', 'alquiler', 'renta', 'arriendo', 'compra', 'traspaso', 'total', 'general',
+    'disponible', 'disponibles', 'zona', 'ciudad', 'centro', 'la', 'el', 'los', 'las',
+    'un', 'una', 'mi', 'tu', 'su', 'con', 'para', 'por', 'que', 'cual', 'cuales'
+  ])
+  let zona = String(input.zona || '').trim()
+  if (!zona) {
+    const capitalizada = texto.match(/\b(?:en|zona|ciudad|colonia|barrio|municipio|de)\s+([A-ZÁÉÍÓÚÑ][\wáéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][\wáéíóúñ]+)?)/)
+    if (capitalizada) zona = capitalizada[1]
+  }
+  if (!zona) {
+    const candidatos = [...lower.matchAll(/\b(?:en|zona|ciudad|colonia|barrio|municipio)\s+([a-záéíóúñü][a-záéíóúñü\s]{1,30})/g)]
+    for (const c of candidatos) {
+      const palabra = c[1].split(/\s+/).find((w) => w.length > 2 && !STOP_ZONA.has(w))
+      if (palabra) {
+        zona = palabra
+        break
+      }
+    }
+  }
+  // Quita artículos y palabras genéricas del inicio ("la colonia Roma" → "Roma")
+  for (let i = 0; i < 3; i++) {
+    const limpia = zona.replace(/^(?:la|el|los|las|zona|colonia|barrio|ciudad|municipio|de)\s+/i, '').trim()
+    if (limpia === zona) break
+    zona = limpia
+  }
+  if (zona && STOP_ZONA.has(zona.toLowerCase())) zona = ''
+
+  // Habitaciones mínimas.
+  const habInput = aNumero(input.habitaciones)
+  const habTexto = lower.match(/(\d+)\s*(?:habitaciones?|hab\b|rec[áa]maras?|dormitorios?|cuartos?)/i)
+  const habitaciones = habInput ?? (habTexto ? Number(habTexto[1]) : undefined)
+
+  // Precio: "hasta 250 mil", "menos de 200000 euros", "máximo 300k"…
+  let precioMax = aNumero(input.precio_max)
+  let precioMin = aNumero(input.precio_min)
+  // Se recuerda si el tope salió del texto: «más de 100 mil» no es un máximo
+  // y hay que descartarlo, pero un `precio_max` ya extraído sí se respeta.
+  let precioMaxDelTexto = false
+  if (precioMax === undefined) {
+    const idxMax = lower.search(/\b(?:hasta|m[aá]ximo|m[aá]x\.?|menos de|bajo|no m[aá]s de|presupuesto|por)\b/)
+    const bolsa = idxMax >= 0 ? lower.slice(idxMax) : lower
+    precioMax = importe(bolsa)
+    precioMaxDelTexto = precioMax !== undefined
+  }
+  if (precioMin === undefined) {
+    const idxMin = lower.search(/\b(?:desde|m[ií]nimo|a partir de|m[aá]s de)\b/)
+    if (idxMin >= 0) {
+      const resto = lower.slice(idxMin)
+      if (precioMaxDelTexto) precioMax = undefined
+      precioMin = importe(resto)
+    }
+  }
+
+  const items = await prisma.catalogoItem.findMany({
+    where: { tenantId, tipo: 'inmueble', activo: true },
+    orderBy: [{ destacado: 'desc' }, { fechaCreacion: 'desc' }],
+  })
+
+  const props = items
+    .map(parseInmueble)
+    .filter((p) => {
+      const estado = (p.status || 'disponible').toLowerCase()
+      if (!['disponible', 'reservada'].includes(estado)) return false
+
+      if (operacion) {
+        const op = String(p.operationType || '').toLowerCase()
+        if (operacion === 'venta' && !/venta|compr/.test(op)) return false
+        if (operacion === 'alquiler' && !/alquiler|renta|arrend|traspaso/.test(op)) return false
+      }
+
+      if (tipo) {
+        const tipoProp = String(p.propertyType || '').toLowerCase()
+        const coincide = tipo === 'casa' ? /casa|chalet|villa|adosado/.test(tipoProp)
+          : tipo === 'departamento' ? /depart|piso|apart|depto/.test(tipoProp)
+            : tipo === 'terreno' ? /terreno|solar|parcela/.test(tipoProp)
+              : tipoProp.includes(tipo)
+        if (!coincide) return false
+      }
+
+      if (zona) {
+        const lugar = `${p.city || ''} ${p.address || ''}`.toLowerCase()
+        const buscada = zona.toLowerCase()
+        const coincideLugar = lugar.includes(buscada)
+          || buscada.split(/\s+/).some((w) => w.length > 2 && lugar.includes(w))
+        if (!coincideLugar) return false
+      }
+
+      if (habitaciones && (p.bedrooms ?? 0) < habitaciones) return false
+      if (precioMax !== undefined && p.precioBase > precioMax) return false
+      if (precioMin !== undefined && p.precioBase < precioMin) return false
+      return true
+    })
+
+  return { properties: props.slice(0, limit), total: props.length }
+}
