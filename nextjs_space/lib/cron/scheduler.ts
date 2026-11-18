@@ -125,6 +125,33 @@ export function initCronJobs() {
   console.log('✅ [Scheduler] Límites de planes programados (10:00 AM daily)');
   console.log('✅ [Scheduler] Google Calendar webhook renewal programado (cada 12h)');
 
+  // 5b. Google Calendar: sincronización bidireccional periódica.
+  // Los webhooks de Google no son fiables al 100 % (pueden caducar o perderse),
+  // así que además empujamos las citas de Volkern y traemos los cambios de
+  // Google cada hora. Si falla, se registra en `errorUltimaSync` para que el
+  // panel de citas lo muestre.
+  cron.schedule('20 * * * *', runCronJob('calendar-sync', 'Google Calendar Sync', '20 * * * *', async () => {
+    const { syncAllFutureCitas, syncFromGoogleToVolkern } = await import('../google-calendar');
+
+    const integraciones = await prisma.googleCalendarIntegration.findMany({
+      where: { activo: true },
+      select: { userId: true },
+    });
+
+    for (const { userId } of integraciones) {
+      try {
+        await syncAllFutureCitas(userId);
+        await syncFromGoogleToVolkern(userId);
+      } catch (error: any) {
+        // El motivo queda en `errorUltimaSync` dentro de la propia
+        // sincronización; aquí solo se registra en el log para no pisarlo.
+        console.error(`[calendar-sync] usuario ${userId}:`, error.message);
+      }
+    }
+  }));
+
+  console.log('✅ [Scheduler] Google Calendar sync programado (cada hora)');
+
   // 6. Recuperación Proactiva de Facturas
   cron.schedule('0 */4 * * *', runCronJob('invoice-recovery', 'Recuperación Proactiva Facturas', '0 */4 * * *', async () => {
     const { InboundInvoiceService } = await import('../finance/inbound-invoice-service');

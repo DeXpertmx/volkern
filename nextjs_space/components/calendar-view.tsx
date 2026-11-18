@@ -184,7 +184,7 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh, g
     () => {
       const citaEvents = citas.map((cita) => {
         const start = new Date(cita.fechaHora)
-        const end = new Date(start.getTime() + cita.duracion * 60000)
+        const end = new Date(start.getTime() + (cita.duracion || 60) * 60000)
         const tipoConfig = tipoOptions.find((t) => t.value === cita.tipo)
 
         return {
@@ -198,6 +198,8 @@ export default function CalendarView({ citas, leads, contacts = [], onRefresh, g
       })
 
       // Merge with Google Calendar events (only non-overlapping IDs)
+      // Las fechas ya llegan como Date desde el panel, que es quien normaliza
+      // la respuesta JSON de Google.
       const existingIds = new Set(citaEvents.map(e => e.id))
       const filteredGoogle = googleEvents.filter(e => !existingIds.has(e.id))
 

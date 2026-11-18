@@ -37,10 +37,15 @@ export async function GET(request: NextRequest) {
     if (!integration) {
       return NextResponse.json({
         conectado: false,
+        activo: false,
       });
     }
 
     return NextResponse.json({
+      // `conectado` = hay una integración guardada; `activo` = además es
+      // utilizable (un token revocado la deja conectada pero inactiva, y el
+      // panel de integraciones necesita distinguir ambos casos para ofrecer
+      // «Reconectar» en vez de borrar la fila).
       conectado: true,
       activo: integration.activo,
       calendarId: integration.calendarId,

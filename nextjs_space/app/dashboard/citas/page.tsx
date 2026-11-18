@@ -108,6 +108,7 @@ export default function CitasPage() {
   const [showGCalSection, setShowGCalSection] = useState(false)
   const [gcalConnected, setGcalConnected] = useState(false)
   const [gcalSyncing, setGcalSyncing] = useState(false)
+  const [gcalError, setGcalError] = useState<string | null>(null)
   const [googleEvents, setGoogleEvents] = useState<GoogleCalendarEvent[]>([])
   const [connectedCalendars, setConnectedCalendars] = useState<any[]>([])
   const [currentDate, setCurrentDate] = useState<Date>(new Date())
@@ -142,7 +143,11 @@ export default function CitasPage() {
 
       if (res.ok) {
         const data = await res.json()
-        setGoogleEvents(data.events || [])
+        // La API devuelve fechas ISO en texto; react-big-calendar exige objetos Date.
+        const eventos = (data.events || [])
+          .map((e: any) => ({ ...e, start: new Date(e.start), end: new Date(e.end) }))
+          .filter((e: any) => !isNaN(e.start.getTime()) && !isNaN(e.end.getTime()))
+        setGoogleEvents(eventos)
       }
     } catch (e) {
       console.error('Error fetching Google events:', e)
@@ -179,6 +184,7 @@ export default function CitasPage() {
     const searchParams = new URLSearchParams(window.location.search)
     const success = searchParams.get('success')
     const error = searchParams.get('error')
+    const reason = searchParams.get('reason')
 
     if (success === 'google_calendar_connected') {
       toast.success('Google Calendar conectado exitosamente')
@@ -190,7 +196,9 @@ export default function CitasPage() {
       window.history.replaceState({}, '', '/dashboard/citas')
     }
     if (error === 'google_calendar_error') {
-      toast.error('Error conectando Google Calendar')
+      // El error persistente lo pinta el aviso de la tarjeta a partir de
+      // `errorUltimaSync`; aquí basta con el aviso inmediato del motivo.
+      toast.error(`Error conectando Google Calendar${reason ? `: ${reason}` : ''}`)
       window.history.replaceState({}, '', '/dashboard/citas')
     }
   }, [])
@@ -200,10 +208,37 @@ export default function CitasPage() {
       const gcalRes = await apiFetch('/api/integraciones/google-calendar/status')
       if (gcalRes.ok) {
         const data = await gcalRes.json()
-        setGcalConnected(data.connected)
+        // `activo` (no `conectado`): con un token revocado la integración sigue
+        // guardada pero no sirve, y el panel debe ofrecer reconectar.
+        setGcalConnected(Boolean(data.activo))
+        setGcalError(data.errorUltimaSync || null)
+      } else if (gcalRes.status === 401) {
+        setGcalConnected(false)
       }
     } catch (e) {
       // No conectado
+    }
+  }
+
+  // Sincronización manual con manejo de errores real (antes un 500 se mostraba
+  // como éxito o como "Error" sin detalle).
+  const syncGCal = async () => {
+    setGcalSyncing(true)
+    try {
+      const res = await apiFetch('/api/integraciones/google-calendar/sync', { method: 'POST' })
+      const data = await res.json().catch(() => ({}) as any)
+      if (!res.ok) {
+        const mensaje = data?.message || data?.error || `Error ${res.status}`
+        setGcalError(mensaje)
+        toast.error(`No se pudo sincronizar: ${mensaje}`)
+        return
+      }
+      setGcalError(null)
+      toast.success('Sincronización completada')
+    } catch {
+      toast.error('Error de conexión al sincronizar con Google Calendar')
+    } finally {
+      setGcalSyncing(false)
     }
   }
 
@@ -288,14 +323,7 @@ export default function CitasPage() {
             variant="outline"
             size="sm"
             className="h-8 text-xs"
-            onClick={async () => {
-              setGcalSyncing(true)
-              try {
-                const res = await apiFetch('/api/integraciones/google-calendar/sync', { method: 'POST' })
-                if (res.ok) toast.success('Sincronizado')
-              } catch { toast.error('Error') }
-              finally { setGcalSyncing(false) }
-            }}
+            onClick={() => void syncGCal()}
             disabled={gcalSyncing}
           >
             <RefreshCw className={`h-3 w-3 mr-1 ${gcalSyncing ? 'animate-spin' : ''}`} />
@@ -343,19 +371,7 @@ export default function CitasPage() {
                       variant="ghost"
                       size="sm"
                       className="h-8 text-xs font-bold hover:bg-green-500/20"
-                      onClick={async () => {
-                        setGcalSyncing(true)
-                        try {
-                          const res = await apiFetch('/api/integraciones/google-calendar/sync', { method: 'POST' })
-                          if (res.ok) {
-                            toast.success('Sincronización completada')
-                          }
-                        } catch (e) {
-                          toast.error('Error sincronizando')
-                        } finally {
-                          setGcalSyncing(false)
-                        }
-                      }}
+                      onClick={() => void syncGCal()}
                       disabled={gcalSyncing}
                     >
                       <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${gcalSyncing ? 'animate-spin' : ''}`} />
@@ -378,6 +394,23 @@ export default function CitasPage() {
               </div>
             </div>
           </CardHeader>
+          {gcalError && (
+            <CardContent className="pt-0">
+              <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-2.5 text-xs text-destructive">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold">La sincronización con Google Calendar está fallando</p>
+                  <p className="mt-0.5 break-words opacity-90">{gcalError}</p>
+                  {!gcalConnected && (
+                    <p className="mt-1 opacity-90">
+                      Reconecta la cuenta para renovar las credenciales: usa el botón
+                      «Conectar Google Calendar».
+                    </p>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          )}
         </Card>
       )}
 
@@ -531,7 +564,7 @@ function CitaCard({ cita, isMobile }: { cita: Cita; isMobile: boolean }) {
             <Badge variant="secondary" className="h-5 text-[10px] px-1.5">
               {tipoLabels[cita.tipo]?.replace(/[^\w\s]/g, '') || cita.tipo}
             </Badge>
-            <span className={`w-2 h-2 rounded-full ${estadoColors[cita.estado]}`} />
+            <span className={`w-2 h-2 rounded-full ${estadoColors[cita.estado] || 'bg-gray-400'}`} />
           </div>
         </div>
         {expanded && (
@@ -582,9 +615,9 @@ function CitaCard({ cita, isMobile }: { cita: Cita; isMobile: boolean }) {
             </CardDescription>
           </div>
           <div className="flex flex-col items-end space-y-2">
-            <Badge variant="secondary">{tipoLabels[cita.tipo]}</Badge>
-            <Badge className={`${estadoColors[cita.estado]} text-white`}>
-              {estadoLabels[cita.estado]}
+            <Badge variant="secondary">{tipoLabels[cita.tipo] || cita.tipo}</Badge>
+            <Badge className={`${estadoColors[cita.estado] || 'bg-gray-400'} text-white`}>
+              {estadoLabels[cita.estado] || cita.estado}
             </Badge>
           </div>
         </div>

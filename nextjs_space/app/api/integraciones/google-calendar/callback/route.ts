@@ -51,8 +51,20 @@ export async function GET(request: NextRequest) {
     // Intercambiar el código por tokens
     const tokens = await getTokensFromCode(code);
 
-    if (!tokens.access_token || !tokens.refresh_token) {
-      throw new Error('No se recibieron tokens de Google');
+    if (!tokens.access_token) {
+      throw new Error('Google no devolvió access token');
+    }
+
+    // Google solo entrega `refresh_token` la primera vez (o si se fuerza el
+    // consentimiento). Al reconectar conservamos el que ya teníamos.
+    const existente = await prisma.googleCalendarIntegration.findUnique({
+      where: { userId },
+      select: { refreshToken: true },
+    })
+    const refreshToken = tokens.refresh_token || existente?.refreshToken
+
+    if (!refreshToken) {
+      throw new Error('Google no devolvió refresh token. Vuelve a conectar la cuenta.')
     }
 
     console.log('✅ Tokens obtenidos de Google');
@@ -61,7 +73,7 @@ export async function GET(request: NextRequest) {
     const oauth2Client = createOAuth2Client();
     oauth2Client.setCredentials({
       access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token,
+      refresh_token: refreshToken,
     });
 
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
@@ -90,14 +102,14 @@ export async function GET(request: NextRequest) {
         userId,
         tenantId,
         accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
+        refreshToken,
         expiresAt,
         calendarId,
         activo: true,
       },
       update: {
         accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
+        refreshToken,
         expiresAt,
         calendarId,
         activo: true,
@@ -132,8 +144,15 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error('❌ Error en callback de Google Calendar:', error.message);
     console.error('Stack:', error.stack);
+
+    // Propaga el motivo real para que la UI no muestre un error genérico
+    // (p. ej. "The provided client secret is invalid").
+    const motivo = encodeURIComponent(String(error?.message || 'error_desconocido').slice(0, 160));
     return NextResponse.redirect(
-      new URL('/dashboard/citas?error=google_calendar_error', process.env.NEXTAUTH_URL || 'https://volkern.app')
+      new URL(
+        `/dashboard/citas?error=google_calendar_error&reason=${motivo}`,
+        process.env.NEXTAUTH_URL || 'https://volkern.app'
+      )
     );
   }
 }

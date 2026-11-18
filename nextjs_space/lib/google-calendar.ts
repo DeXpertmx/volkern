@@ -66,6 +66,12 @@ async function getUserTimezone(userId: string): Promise<string> {
 }
 
 /**
+ * Credenciales que Google rechaza de forma definitiva: no caducan por tiempo,
+ * requieren reconectar. Cualquier otro fallo (red, 5xx, timeout) es transitorio.
+ */
+const CREDENCIAL_RECHAZADA = /invalid_client|invalid_grant|unauthorized_client|deleted_client/i;
+
+/**
  * Obtiene un cliente OAuth2 autenticado para un usuario
  */
 export async function getAuthenticatedClient(userId: string) {
@@ -86,19 +92,43 @@ export async function getAuthenticatedClient(userId: string) {
 
   // Si el token está expirado, renovarlo automáticamente
   if (integration.expiresAt < new Date()) {
-    const { credentials } = await oauth2Client.refreshAccessToken();
+    try {
+      const { credentials } = await oauth2Client.refreshAccessToken();
 
-    // Actualizar tokens en la base de datos
-    await prisma.googleCalendarIntegration.update({
-      where: { userId },
-      data: {
-        accessToken: credentials.access_token!,
-        refreshToken: credentials.refresh_token || integration.refreshToken,
-        expiresAt: new Date(credentials.expiry_date!),
-      },
-    });
+      // El refresco no siempre trae todos los campos: sin access_token o sin
+      // expiry_date se conservan los anteriores en vez de guardar un token
+      // vacío o una fecha inválida.
+      const accessToken = credentials.access_token || integration.accessToken;
+      const expiresAt = credentials.expiry_date ? new Date(credentials.expiry_date) : integration.expiresAt;
 
-    oauth2Client.setCredentials(credentials);
+      // Actualizar tokens en la base de datos
+      await prisma.googleCalendarIntegration.update({
+        where: { userId },
+        data: {
+          accessToken,
+          refreshToken: credentials.refresh_token || integration.refreshToken,
+          expiresAt,
+          errorUltimaSync: null,
+        },
+      });
+
+      oauth2Client.setCredentials({ ...credentials, access_token: accessToken, expiry_date: expiresAt.getTime() });
+    } catch (refreshError: any) {
+      const mensaje = String(refreshError?.message || 'No se pudo renovar el token de Google')
+
+      // Un fallo transitorio (red, timeout) se propaga sin tocar la integración:
+      // marcarla como no válida por un corte pediría reconectar sin motivo.
+      if (!CREDENCIAL_RECHAZADA.test(mensaje)) throw new Error(mensaje)
+
+      await prisma.googleCalendarIntegration.update({
+        where: { userId },
+        data: { errorUltimaSync: mensaje.slice(0, 500), activo: false },
+      }).catch(() => {})
+
+      throw new Error(
+        'La conexión con Google Calendar ya no es válida (credenciales de Google rechazadas). Reconecta la cuenta para renovarla.'
+      )
+    }
   }
 
   return oauth2Client;
@@ -558,11 +588,8 @@ export async function setupWebhookChannel(userId: string): Promise<void> {
       throw new Error('Integración de Google Calendar no encontrada');
     }
 
-    const oauth2Client = createOAuth2Client();
-    oauth2Client.setCredentials({
-      access_token: integration.accessToken,
-      refresh_token: integration.refreshToken,
-    });
+    // Usa el cliente autenticado: renueva el access token si caducó.
+    const oauth2Client = await getAuthenticatedClient(userId)
 
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
@@ -623,11 +650,8 @@ export async function stopWebhookChannel(userId: string): Promise<void> {
       return;
     }
 
-    const oauth2Client = createOAuth2Client();
-    oauth2Client.setCredentials({
-      access_token: integration.accessToken,
-      refresh_token: integration.refreshToken,
-    });
+    // Usa el cliente autenticado: renueva el access token si caducó.
+    const oauth2Client = await getAuthenticatedClient(userId)
 
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
@@ -694,11 +718,9 @@ export async function syncFromGoogleToVolkern(userId: string, forceFullSync: boo
       throw new Error('Integración de Google Calendar no encontrada');
     }
 
-    const oauth2Client = createOAuth2Client();
-    oauth2Client.setCredentials({
-      access_token: integration.accessToken,
-      refresh_token: integration.refreshToken,
-    });
+    // Usa el cliente autenticado: renueva el access token si caducó (el token de
+    // Google dura 1 h; sin refresco, la sincronización fallaba con 401).
+    const oauth2Client = await getAuthenticatedClient(userId)
 
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
@@ -878,8 +900,8 @@ export async function syncFromGoogleToVolkern(userId: string, forceFullSync: boo
                   duracion,
                   titulo: event.summary || 'Cita desde Google Calendar',
                   descripcion: (event.description || '') + '\n[Creada desde Google Calendar]',
-                  tipo: 'Virtual',
-                  estado: 'Pendiente',
+                  tipo: 'reunion',
+                  estado: 'pendiente',
                   googleCalendarEventId: event.id!, // CRÍTICO: Guardar el ID inmediatamente
                   origenCita: 'google_calendar', // Marcar origen para evitar re-sincronización
                   emailConfirmacionEnviado: false, // No enviar email automático para citas de GCal
@@ -937,13 +959,25 @@ export async function syncFromGoogleToVolkern(userId: string, forceFullSync: boo
   } catch (error: any) {
     console.error('❌ Error al sincronizar desde Google:', error.message);
 
-    // Si el error es por syncToken inválido, reiniciar sincronización completa
-    if (error.message.includes('Sync token')) {
+    // Deja rastro del fallo para que el panel de citas pueda mostrarlo.
+    await prisma.googleCalendarIntegration.update({
+      where: { userId },
+      data: { errorUltimaSync: String(error?.message || 'Error de sincronización').slice(0, 500) },
+    }).catch(() => {})
+
+    // Si el token incremental caducó, Google exige una sincronización completa.
+    // Antes solo se borraba el token y se lanzaba el error: la sincronización
+    // quedaba "rota" hasta la siguiente ejecución. Ahora se reintenta aquí.
+    if (/sync token/i.test(error.message)) {
       await prisma.googleCalendarIntegration.update({
         where: { userId },
         data: { syncToken: null },
       });
-      console.log('🔄 Reiniciando sincronización completa...');
+
+      if (!forceFullSync) {
+        console.log('🔄 Sync token inválido: reintentando con sincronización completa...');
+        return syncFromGoogleToVolkern(userId, true);
+      }
     }
 
     throw error;
