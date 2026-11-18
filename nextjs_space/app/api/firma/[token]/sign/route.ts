@@ -28,7 +28,7 @@ export async function POST(request: Request, { params: paramsPromise }: { params
     const body = await request.json();
     const { challengeId, challengeToken, code, nombreFirma } = body;
 
-    const headersList = headers();
+    const headersList = await headers();
     const forwardedFor = headersList.get('x-forwarded-for');
     const ip = forwardedFor ? forwardedFor.split(',')[0].trim() : 'unknown';
 
