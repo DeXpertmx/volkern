@@ -190,6 +190,20 @@ DEPLOY_IMAGE="volkern-erp:sha256-$NEW_ID_FULL"
 docker tag "$IMAGE" "$DEPLOY_IMAGE"
 echo "   ✓ Referencia por digest: $DEPLOY_IMAGE"
 
+# Referencia que estaba sirviendo antes del update: se conserva en la limpieza
+# para poder volver atrás con un `service update --image` sin reconstruir.
+# Solo interesa si ya era una referencia por digest (con `latest` no hay nada
+# que retener: apuntaría a la imagen nueva).
+PREV_DEPLOY_IMAGE=""
+PREV_IMAGE=$(docker service inspect "$SERVICE" --format '{{.Spec.TaskTemplate.ContainerSpec.Image}}' 2>/dev/null || true)
+PREV_IMAGE="${PREV_IMAGE%%@*}"
+case "$PREV_IMAGE" in
+  volkern-erp:sha256-*) PREV_DEPLOY_IMAGE="$PREV_IMAGE" ;;
+esac
+if [ -n "$PREV_DEPLOY_IMAGE" ] && [ "$PREV_DEPLOY_IMAGE" != "$DEPLOY_IMAGE" ]; then
+  echo "   · Se conserva para rollback: $PREV_DEPLOY_IMAGE"
+fi
+
 # ── 2. Migraciones (opcional) ───────────────────────────────────
 if [ -n "$MIGRATOR_TARBALL" ]; then
   echo ""
@@ -405,18 +419,34 @@ if [ "$CLEANUP" = "1" ]; then
   fi
 
   # 6c-bis. Referencias por digest antiguas: cada deploy crea
-  #         volkern-erp:sha256-<digest>. Sin podar, cada imagen ocupa ~2 GB;
-  #         se conserva solo la que acaba de quedar fijada en el servicio.
+  #         volkern-erp:sha256-<digest>. Sin podar, cada imagen ocupa ~2 GB.
+  #         Se conservan la que acaba de quedar fijada y la inmediatamente
+  #         anterior (la que servía antes del update), para poder volver atrás
+  #         con `service update --image <esa referencia>` sin reconstruir.
   echo "→ [6c-bis] Referencias por digest anteriores ..."
-  OLD_DIGEST_REFS=$(docker image ls --format '{{.Repository}}:{{.Tag}}' \
-    | grep -E '^volkern-erp:sha256-[0-9a-f]{64}$' \
-    | grep -vxF "$DEPLOY_IMAGE" || true)
-  if [ -z "$OLD_DIGEST_REFS" ]; then
-    echo "   ✓ No hay referencias por digest anteriores."
+  KEEP_REFS="$DEPLOY_IMAGE"
+  if [ -n "$PREV_DEPLOY_IMAGE" ] && [ "$PREV_DEPLOY_IMAGE" != "$DEPLOY_IMAGE" ]; then
+    KEEP_REFS="$KEEP_REFS $PREV_DEPLOY_IMAGE"
+  fi
+  DIGEST_REFS=$(docker image ls --format '{{.Repository}}:{{.Tag}}' \
+    | grep -E '^volkern-erp:sha256-[0-9a-f]{64}$' || true)
+  if [ -z "$DIGEST_REFS" ]; then
+    echo "   ✓ No hay referencias por digest."
   else
-    for r in $OLD_DIGEST_REFS; do
-      docker image rm "$r" >/dev/null 2>&1 || true
-      echo "   · eliminada $r"
+    for r in $DIGEST_REFS; do
+      case " $KEEP_REFS " in
+        *" $r "*)
+          if [ "$r" = "$DEPLOY_IMAGE" ]; then
+            echo "   · conservada $r (servicio)"
+          else
+            echo "   · conservada $r (rollback)"
+          fi
+          ;;
+        *)
+          docker image rm "$r" >/dev/null 2>&1 || true
+          echo "   · eliminada $r"
+          ;;
+      esac
     done
   fi
 
