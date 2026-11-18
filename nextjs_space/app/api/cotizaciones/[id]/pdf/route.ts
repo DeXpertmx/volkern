@@ -9,7 +9,8 @@ import { getEffectiveBranding } from '@/lib/branding';
 import { getPublicUrl } from '@/lib/s3-public-url';
 
 export async function GET(request: Request, contextPromise: { params: Promise<{ id: string }> }) {
-  const context = await contextPromise;
+  const { params } = await contextPromise;
+  const { id } = await params;
   try {
     const auth = await authenticateRequest(request, ['cotizaciones:read']);
     if (!auth.valid || !auth.tenant) {
@@ -18,7 +19,7 @@ export async function GET(request: Request, contextPromise: { params: Promise<{ 
 
     const cotizacion = await prisma.cotizacion.findFirst({
       where: {
-        id: context.params.id,
+        id,
         tenantId: auth.tenant.id,
       },
       include: {

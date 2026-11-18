@@ -8,10 +8,11 @@ import { getEffectiveBranding } from '@/lib/branding';
 import { getPublicUrl } from '@/lib/s3-public-url';
 
 export async function GET(request: Request, contextPromise: { params: Promise<{ id: string }> }) {
-  const context = await contextPromise;
+  const { params } = await contextPromise;
+  const { id } = await params;
   try {
     const cotizacion = await prisma.cotizacion.findUnique({
-      where: { tokenPublico: context.params.id },
+      where: { tokenPublico: id },
       include: {
         deal: true,
         lead: true,
