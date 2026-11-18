@@ -25,10 +25,9 @@
 #         se consulta con `docker service inspect`). Si algo no cuadra, el
 #         deploy falla.
 #     5. Verificar HTTP 200 de la app
-#     6. Limpieza automática de los tarballs del /tmp (incluye residuos
-#        de despliegues anteriores) para que no se acumulen. Se conservan la
-#        referencia por digest desplegada y la inmediatamente anterior
-#        (rollback sin reconstruir).
+#     6. Limpieza automática de los tarballs de este deploy (no toca ficheros
+#        de un deploy concurrente). Se conservan la referencia por digest
+#        desplegada y la inmediatamente anterior (rollback sin reconstruir).
 #
 # Ejecutar EN EL VPS (root@62.171.134.195):
 #   bash deploy-vps/deploy-app.sh
@@ -361,13 +360,13 @@ if [ "$CLEANUP" = "1" ]; then
   echo "→ [6/6] Limpieza automática ..."
 
   # 6a. Tarballs del /tmp (incluye residuos de despliegues anteriores)
-  echo "→ [6a] Tarballs en /tmp ..."
-  STALE=$(ls /tmp/volkern-erp-*.tar 2>/dev/null || true)
-  if [ -z "$STALE" ]; then
-    echo "   ✓ No hay tarballs que limpiar."
-  else
-    for t in $STALE; do rm -v "$t"; done
-  fi
+  # Solo los tarballs de ESTE deploy: borrar por glob `/tmp/volkern-erp-*.tar`
+  # alcanzaba a un deploy concurrente (y a los ficheros de una prueba).
+  echo "→ [6a] Tarballs de este deploy ..."
+  for t in "$LATEST_TARBALL" "$MIGRATOR_TARBALL"; do
+    if [ -n "$t" ] && [ -f "$t" ]; then rm -v "$t"; fi
+  done
+  echo "   ✓ Tarballs del deploy eliminados."
 
   # 6b. Contenedores parados de volkern (tareas viejas de Swarm).
   #     Cada `docker load` + `service update --force` deja la tarea anterior
