@@ -123,18 +123,18 @@ model User {
   equalityComplaints      EqualityComplaint[]
   disponibilidad          Disponibilidad[]
   ausencias               Ausencia[]
-  polizasCreadas          Poliza[]                          @relation("PolizaCreator")
-  siniestrosReportados    Siniestro[]                       @relation("SiniestroReporter")
-  renovacionesAsignadas   Renovacion[]                      @relation("RenovacionAgente")
-  oportunidadesAsignadas  OportunidadComercial[]            @relation("OportunidadAgente")
-  importLogsInsurance     InsuranceImportLog[]              @relation("ImportLogCreator")
+  polizasCreadas          Poliza[]                   @relation("PolizaCreator")
+  siniestrosReportados    Siniestro[]                @relation("SiniestroReporter")
+  renovacionesAsignadas   Renovacion[]               @relation("RenovacionAgente")
+  oportunidadesAsignadas  OportunidadComercial[]     @relation("OportunidadAgente")
+  importLogsInsurance     InsuranceImportLog[]       @relation("ImportLogCreator")
 
+  @@unique([tenantId, bookingSlug])
   @@index([tenantId])
   @@index([roleId])
   @@index([contactId])
   @@index([email])
   @@index([estado])
-  @@unique([tenantId, bookingSlug])
 }
 
 model VerificationToken {
@@ -236,52 +236,52 @@ model WhatsAppDeliveryFailure {
 }
 
 model Tenant {
-  id                 String      @id @default(cuid())
-  nombre             String
-  slug               String      @unique
-  subdomain          String?     @unique
-  plan               String      @default("basico")
-  estado             String      @default("activo")
-  configuracion      Json?
-  limites            Json?
-  fechaCreacion      DateTime    @default(now())
-  fechaActualizacion DateTime    @updatedAt
-  fechaVencimiento   DateTime?
+  id                     String                  @id @default(cuid())
+  nombre                 String
+  slug                   String                  @unique
+  subdomain              String?                 @unique
+  plan                   String                  @default("basico")
+  estado                 String                  @default("activo")
+  configuracion          Json?
+  limites                Json?
+  fechaCreacion          DateTime                @default(now())
+  fechaActualizacion     DateTime                @updatedAt
+  fechaVencimiento       DateTime?
   /// Fecha en la que la cuenta pasó a un estado de baja (suspendida/cancelada/
   /// inactiva). Se escribe una sola vez y no se toca al editar otros campos,
   /// a diferencia de `fechaActualizacion`. `null` en cuentas vivas. La usa el
   /// cálculo de churn (ver `calcularVentanaChurn`).
-  fechaBaja          DateTime?
-  billingEmail       String?
-  dominio            String?
-  fechaTrialFin      DateTime?
-  fechaTrialInicio   DateTime?
-  moneda             String      @default("MXN")
+  fechaBaja              DateTime?
+  billingEmail           String?
+  dominio                String?
+  fechaTrialFin          DateTime?
+  fechaTrialInicio       DateTime?
+  moneda                 String                  @default("MXN")
   // Trazabilidad de cómo se eligió la moneda actual (o si es el default heredado).
   // Para distingir programáticamente tenants bien configurados de los que nunca
   // pasaron por el onboarding prompt. Véase `scripts/backfill-moneda-inference.ts`.
-  monedaInferida             String?
-  monedaInferenciaSource     MonedaInferenciaSource? @default(FALLBACK)
-  mrr                Float       @default(0)
-  stripeCustomerId   String?
-  nexusEnabled       Boolean     @default(true)
-  dbUrl              String?
-  accountType        AccountType @default(BUSINESS)
-  baseLatitude       Float?
-  baseLongitude      Float?
-  brandingConfig     Json?
-  dnaOperativo       String?     @default("CRM_CORE")
-  enabledModules     String[]    @default(["CRM"])
-  genesisHash        String?
-  masterKeyHash      String?
-  maxSlots           Int         @default(0)
-  parentId           String?
-  provisioningStatus String      @default("PENDING")
-  vaultSeed          String?     @unique
-  direccionFiscal    String?
-  nifCif             String?
-  razonSocial        String?
-  aiAutopilot        Boolean     @default(false)
+  monedaInferida         String?
+  monedaInferenciaSource MonedaInferenciaSource? @default(FALLBACK)
+  mrr                    Float                   @default(0)
+  stripeCustomerId       String?
+  nexusEnabled           Boolean                 @default(true)
+  dbUrl                  String?
+  accountType            AccountType             @default(BUSINESS)
+  baseLatitude           Float?
+  baseLongitude          Float?
+  brandingConfig         Json?
+  dnaOperativo           String?                 @default("CRM_CORE")
+  enabledModules         String[]                @default(["CRM"])
+  genesisHash            String?
+  masterKeyHash          String?
+  maxSlots               Int                     @default(0)
+  parentId               String?
+  provisioningStatus     String                  @default("PENDING")
+  vaultSeed              String?                 @unique
+  direccionFiscal        String?
+  nifCif                 String?
+  razonSocial            String?
+  aiAutopilot            Boolean                 @default(false)
 
   // ─── PGC (Plan General de Contabilidad) ──────────────────
   accountingPlanType AccountingPlanType @default(NORMAL)
@@ -294,7 +294,7 @@ model Tenant {
 
   AcademyPath              AcademyPath[]
   AiDecisionLog            AiDecisionLog[]
-  healthSnapshots              HealthSnapshot[]
+  healthSnapshots          HealthSnapshot[]
   attendanceRules          AttendanceRules?
   auditLogs                AuditLog[]
   automations              Automation[]
@@ -347,208 +347,208 @@ model Tenant {
   partnerWebhookDeliveries PartnerWebhookDelivery[]
   audiences                Audience[]
 
-  businessDomains                BusinessDomain[]
-  campaignRecipients             CampaignRecipient[]
-  catalogoFieldDefinitions       CatalogoFieldDefinition[]        @relation("TenantCatalogoFieldDefinitions")
-  catalogoItems                  CatalogoItem[]
-  compras                        Compra[]
-  channels                       Channel[]
-  signatureSettings              ClientSignatureSettings?
-  client_subscriptions           client_subscriptions[]
-  captaciones                    Captacion[]
-  comisiones                     Comision[]
-  configuracionesFiscales        ConfiguracionFiscalEmisor[]
-  contacts                       Contact[]
-  contentAssets                  ContentAsset[]
-  contratoPagos                  ContratoPago[]
-  contratos                      Contrato[]
-  contratoTemplates              ContratoTemplate[]
-  cotizaciones                   Cotizacion[]
-  dealActivities                 DealActivity[]
-  dealAttachments                DealAttachment[]
-  deals                          Deal[]
-  digitalCards                   DigitalCard[]                    @relation("TenantDigitalCards")
-  emailCampaigns                 EmailCampaign[]
-  emailTemplates                 EmailTemplate[]
-  erp_academy_audit_logs         erp_academy_audit_logs[]
-  erp_academy_users              erp_academy_users[]
-  assetAssignments               AssetAssignment[]
-  assetEvents                    AssetEvent[]
-  assetMaintenance               AssetMaintenance[]
-  assets                         Asset[]
-  billOfMaterials                BillOfMaterials[]
-  erp_capacity_forecasts         erp_capacity_forecasts[]
-  erp_capacity_snapshots         erp_capacity_snapshots[]
-  collectiveAgreements           CollectiveAgreement[]
-  competitiveInsights            CompetitiveInsight[]
-  erp_cost_components            erp_cost_components[]
-  erp_customer_claims            erp_customer_claims[]
-  customerFiscalData             CustomerFiscalData[]
-  erp_customer_org_members       erp_customer_org_members[]
-  erp_customer_portal_access     erp_customer_portal_access[]
-  erp_customer_private_documents erp_customer_private_documents[]
-  erp_customer_users             erp_customer_users[]
-  erp_delivery_confirmations     erp_delivery_confirmations[]
-  erp_delivery_promises          erp_delivery_promises[]
-  erp_digital_access             erp_digital_access[]
-  erp_digital_signatures         erp_digital_signatures[]
-  discoverySignals               DiscoverySignal[]
-  employeeAbsencesES             EmployeeAbsenceES[]
-  erp_employee_assets            erp_employee_assets[]
-  erp_employee_schedules         erp_employee_schedules[]
-  employees                      Employee[]
-  erp_expense_claims             erp_expense_claims[]
-  expenses                       Expense[]
-  expenseInboxDocuments          ExpenseInboxDocument[]
-  externalLeads                  ExternalLead[]
-  financialAudits                FinancialAudit[]
-  financialSummaries             FinancialSummary[]
-  erp_industrial_assets          erp_industrial_assets[]
-  erp_inventory_lots             erp_inventory_lots[]
-  knowledgeArticles              KnowledgeArticle[]
-  erp_maintenance_logs           erp_maintenance_logs[]
-  erp_maintenance_orders         erp_maintenance_orders[]
-  marketObservations             MarketObservation[]
-  erp_material_requirements      erp_material_requirements[]
-  erp_material_shortages         erp_material_shortages[]
-  erp_order_reservations         erp_order_reservations[]
-  payrollProfilesES              EmployeePayrollProfileES[]
-  payrollRecords                 PayrollRecord[]
-  payrollRecordsES               PayrollRecordES[]
-  payrollRunsES                  PayrollRunES[]
-  erp_portal_verification_logs   erp_portal_verification_logs[]
-  erp_procurement_suggestions    erp_procurement_suggestions[]
-  erp_product_families           erp_product_families[]
-  erp_production_capacity        erp_production_capacity[]
-  erp_production_costing         erp_production_costing[]
-  erp_production_lines           erp_production_lines[]
-  productionLogs                 ProductionLog[]
-  erp_production_readiness       erp_production_readiness[]
-  projectMilestones              ProjectMilestone[]
-  projects                       Project[]
-  proposedActions                ProposedAction[]
-  qualityChecks                  QualityCheck[]
-  nonConformities                NonConformity[]
-  qualityPoints                  QualityPoint[]
-  erp_sales_order_audits         erp_sales_order_audits[]
-  erp_sales_order_items          erp_sales_order_items[]
-  erp_sales_orders               erp_sales_orders[]
-  erp_schedule_assignments       erp_schedule_assignments[]
-  erp_schedule_constraints       erp_schedule_constraints[]
-  erp_schedule_decision_logs     erp_schedule_decision_logs[]
-  erp_scheduling_plans           erp_scheduling_plans[]
-  securityIncidents              SecurityIncident[]
-  erp_shift_plans                erp_shift_plans[]
-  erp_shipments                  erp_shipments[]
-  stockLevels                    StockLevel[]
-  stockMovements                 StockMovement[]
-  strategicThresholds            StrategicThreshold[]
-  stripeFiscalLinks              StripeFiscalLink?
-  suppliers                      Supplier[]
-  supplierOcrTemplates           SupplierOcrTemplate[]
-  userGuidanceLogs               UserGuidanceLog[]
-  erp_vacation_requests          erp_vacation_requests[]
-  warehouses                     Warehouse[]
-  workOrders                     WorkOrder[]
-  externalLeadSearches           ExternalLeadSearch[]
-  googleCalendarIntegrations     GoogleCalendarIntegration[]      @relation("TenantGoogleCalendars")
-  inAppNotifications             InAppNotification[]
-  firmaChallenges                ContratoFirmaChallenge[]
-  incomingWebhookDeliveries      IncomingWebhookDelivery[]
-  incomingWebhooks               IncomingWebhook[]
-  integrations                   Integration[]
-  invoices                       Invoice[]
-  leadAttachments                LeadAttachment[]                 @relation("TenantLeadAttachments")
-  leadFieldDefinitions           LeadFieldDefinition[]            @relation("TenantLeadFieldDefinitions")
-  marketingAuditLogs             MarketingAuditLog[]
-  automationLogs                 AutomationLog[]
-  automationRuleVersions         AutomationRuleVersion[]
-  automationRules                AutomationRule[]
-  marketingSuppressions          MarketingSuppression[]
-  messagingHubConfig             MessagingHubConfig?
-  metasVenta                     MetaVenta[]
-  n8nWorkflows                   N8nWorkflow[]                    @relation("TenantN8nWorkflows")
-  notificationLogs               NotificationLog[]
-  notificationChannels           NotificationChannel[]
-  ordenesVenta                   OrdenVenta[]
-  outgoingWebhookDeliveries      OutgoingWebhookDelivery[]
-  outgoingWebhooks               OutgoingWebhook[]
-  pages                          Page[]
-  perfilesFiscalesClientes       PerfilFiscalCliente[]
-  pipelines                      Pipeline[]
-  pipelineStages                 PipelineStage[]
-  plaudernIntegration            PlaudernIntegration?             @relation("TenantPlaudernIntegration")
-  salesPlaybookEntries           SalesPlaybookEntry[]
-  savedSearches                  SavedSearch[]
-  scannedCards                   ScannedCard[]                    @relation("TenantScannedCards")
-  signatureRequests              SignatureRequest[]
-  subscriptions                  Subscription[]
-  supportTickets                 SupportTicket[]
-  tasasImpuesto                  TasaImpuesto[]
-  tenantFeatures                 TenantFeature[]
-  tenantWorkflows                TenantWorkflow[]                 @relation("TenantWorkflows")
-  trainingSessions               TrainingSession[]
-  contestSalesEditions           SalesContestEdition[]
-  unsubscribeList                UnsubscribeList[]
-  webFormSubmissions             WebFormSubmission[]
-  webForms                       WebForm[]
-  equalityComplaints             EqualityComplaint[]
-  equalityConfig                 EqualityConfig?
-  idempotencyKeys                IdempotencyKey[]
-  adPlatformConnections          AdPlatformConnection[]
-  adCampaigns                    AdCampaign[]
-  adInsights                     AdInsight[]
-  adBudgetRules                  AdBudgetRule[]
-  adRecommendations              AdRecommendation[]
-  adSchedules                    AdSchedule[]
-  adABTests                      AdABTest[]
+  businessDomains                        BusinessDomain[]
+  campaignRecipients                     CampaignRecipient[]
+  catalogoFieldDefinitions               CatalogoFieldDefinition[]               @relation("TenantCatalogoFieldDefinitions")
+  catalogoItems                          CatalogoItem[]
+  compras                                Compra[]
+  channels                               Channel[]
+  signatureSettings                      ClientSignatureSettings?
+  client_subscriptions                   client_subscriptions[]
+  captaciones                            Captacion[]
+  comisiones                             Comision[]
+  configuracionesFiscales                ConfiguracionFiscalEmisor[]
+  contacts                               Contact[]
+  contentAssets                          ContentAsset[]
+  contratoPagos                          ContratoPago[]
+  contratos                              Contrato[]
+  contratoTemplates                      ContratoTemplate[]
+  cotizaciones                           Cotizacion[]
+  dealActivities                         DealActivity[]
+  dealAttachments                        DealAttachment[]
+  deals                                  Deal[]
+  digitalCards                           DigitalCard[]                           @relation("TenantDigitalCards")
+  emailCampaigns                         EmailCampaign[]
+  emailTemplates                         EmailTemplate[]
+  erp_academy_audit_logs                 erp_academy_audit_logs[]
+  erp_academy_users                      erp_academy_users[]
+  assetAssignments                       AssetAssignment[]
+  assetEvents                            AssetEvent[]
+  assetMaintenance                       AssetMaintenance[]
+  assets                                 Asset[]
+  billOfMaterials                        BillOfMaterials[]
+  erp_capacity_forecasts                 erp_capacity_forecasts[]
+  erp_capacity_snapshots                 erp_capacity_snapshots[]
+  collectiveAgreements                   CollectiveAgreement[]
+  competitiveInsights                    CompetitiveInsight[]
+  erp_cost_components                    erp_cost_components[]
+  erp_customer_claims                    erp_customer_claims[]
+  customerFiscalData                     CustomerFiscalData[]
+  erp_customer_org_members               erp_customer_org_members[]
+  erp_customer_portal_access             erp_customer_portal_access[]
+  erp_customer_private_documents         erp_customer_private_documents[]
+  erp_customer_users                     erp_customer_users[]
+  erp_delivery_confirmations             erp_delivery_confirmations[]
+  erp_delivery_promises                  erp_delivery_promises[]
+  erp_digital_access                     erp_digital_access[]
+  erp_digital_signatures                 erp_digital_signatures[]
+  discoverySignals                       DiscoverySignal[]
+  employeeAbsencesES                     EmployeeAbsenceES[]
+  erp_employee_assets                    erp_employee_assets[]
+  erp_employee_schedules                 erp_employee_schedules[]
+  employees                              Employee[]
+  erp_expense_claims                     erp_expense_claims[]
+  expenses                               Expense[]
+  expenseInboxDocuments                  ExpenseInboxDocument[]
+  externalLeads                          ExternalLead[]
+  financialAudits                        FinancialAudit[]
+  financialSummaries                     FinancialSummary[]
+  erp_industrial_assets                  erp_industrial_assets[]
+  erp_inventory_lots                     erp_inventory_lots[]
+  knowledgeArticles                      KnowledgeArticle[]
+  erp_maintenance_logs                   erp_maintenance_logs[]
+  erp_maintenance_orders                 erp_maintenance_orders[]
+  marketObservations                     MarketObservation[]
+  erp_material_requirements              erp_material_requirements[]
+  erp_material_shortages                 erp_material_shortages[]
+  erp_order_reservations                 erp_order_reservations[]
+  payrollProfilesES                      EmployeePayrollProfileES[]
+  payrollRecords                         PayrollRecord[]
+  payrollRecordsES                       PayrollRecordES[]
+  payrollRunsES                          PayrollRunES[]
+  erp_portal_verification_logs           erp_portal_verification_logs[]
+  erp_procurement_suggestions            erp_procurement_suggestions[]
+  erp_product_families                   erp_product_families[]
+  erp_production_capacity                erp_production_capacity[]
+  erp_production_costing                 erp_production_costing[]
+  erp_production_lines                   erp_production_lines[]
+  productionLogs                         ProductionLog[]
+  erp_production_readiness               erp_production_readiness[]
+  projectMilestones                      ProjectMilestone[]
+  projects                               Project[]
+  proposedActions                        ProposedAction[]
+  qualityChecks                          QualityCheck[]
+  nonConformities                        NonConformity[]
+  qualityPoints                          QualityPoint[]
+  erp_sales_order_audits                 erp_sales_order_audits[]
+  erp_sales_order_items                  erp_sales_order_items[]
+  erp_sales_orders                       erp_sales_orders[]
+  erp_schedule_assignments               erp_schedule_assignments[]
+  erp_schedule_constraints               erp_schedule_constraints[]
+  erp_schedule_decision_logs             erp_schedule_decision_logs[]
+  erp_scheduling_plans                   erp_scheduling_plans[]
+  securityIncidents                      SecurityIncident[]
+  erp_shift_plans                        erp_shift_plans[]
+  erp_shipments                          erp_shipments[]
+  stockLevels                            StockLevel[]
+  stockMovements                         StockMovement[]
+  strategicThresholds                    StrategicThreshold[]
+  stripeFiscalLinks                      StripeFiscalLink?
+  suppliers                              Supplier[]
+  supplierOcrTemplates                   SupplierOcrTemplate[]
+  userGuidanceLogs                       UserGuidanceLog[]
+  erp_vacation_requests                  erp_vacation_requests[]
+  warehouses                             Warehouse[]
+  workOrders                             WorkOrder[]
+  externalLeadSearches                   ExternalLeadSearch[]
+  googleCalendarIntegrations             GoogleCalendarIntegration[]             @relation("TenantGoogleCalendars")
+  inAppNotifications                     InAppNotification[]
+  firmaChallenges                        ContratoFirmaChallenge[]
+  incomingWebhookDeliveries              IncomingWebhookDelivery[]
+  incomingWebhooks                       IncomingWebhook[]
+  integrations                           Integration[]
+  invoices                               Invoice[]
+  leadAttachments                        LeadAttachment[]                        @relation("TenantLeadAttachments")
+  leadFieldDefinitions                   LeadFieldDefinition[]                   @relation("TenantLeadFieldDefinitions")
+  marketingAuditLogs                     MarketingAuditLog[]
+  automationLogs                         AutomationLog[]
+  automationRuleVersions                 AutomationRuleVersion[]
+  automationRules                        AutomationRule[]
+  marketingSuppressions                  MarketingSuppression[]
+  messagingHubConfig                     MessagingHubConfig?
+  metasVenta                             MetaVenta[]
+  n8nWorkflows                           N8nWorkflow[]                           @relation("TenantN8nWorkflows")
+  notificationLogs                       NotificationLog[]
+  notificationChannels                   NotificationChannel[]
+  ordenesVenta                           OrdenVenta[]
+  outgoingWebhookDeliveries              OutgoingWebhookDelivery[]
+  outgoingWebhooks                       OutgoingWebhook[]
+  pages                                  Page[]
+  perfilesFiscalesClientes               PerfilFiscalCliente[]
+  pipelines                              Pipeline[]
+  pipelineStages                         PipelineStage[]
+  plaudernIntegration                    PlaudernIntegration?                    @relation("TenantPlaudernIntegration")
+  salesPlaybookEntries                   SalesPlaybookEntry[]
+  savedSearches                          SavedSearch[]
+  scannedCards                           ScannedCard[]                           @relation("TenantScannedCards")
+  signatureRequests                      SignatureRequest[]
+  subscriptions                          Subscription[]
+  supportTickets                         SupportTicket[]
+  tasasImpuesto                          TasaImpuesto[]
+  tenantFeatures                         TenantFeature[]
+  tenantWorkflows                        TenantWorkflow[]                        @relation("TenantWorkflows")
+  trainingSessions                       TrainingSession[]
+  contestSalesEditions                   SalesContestEdition[]
+  unsubscribeList                        UnsubscribeList[]
+  webFormSubmissions                     WebFormSubmission[]
+  webForms                               WebForm[]
+  equalityComplaints                     EqualityComplaint[]
+  equalityConfig                         EqualityConfig?
+  idempotencyKeys                        IdempotencyKey[]
+  adPlatformConnections                  AdPlatformConnection[]
+  adCampaigns                            AdCampaign[]
+  adInsights                             AdInsight[]
+  adBudgetRules                          AdBudgetRule[]
+  adRecommendations                      AdRecommendation[]
+  adSchedules                            AdSchedule[]
+  adABTests                              AdABTest[]
   // ─── Insurance Vertical ────────────────────────────────
-  aseguradoras                   Aseguradora[]
-  productosSeguro                ProductoSeguro[]
-  polizasSeguro                  Poliza[]
-  renovacionesSeguro             Renovacion[]
-  oportunidadesComerciales       OportunidadComercial[]
-  siniestrosSeguro               Siniestro[]
-  insuranceImportLogs            InsuranceImportLog[]  
-  portfolioForecastLogs          PortfolioForecastLog[]            @relation("TenantForecastLogs")
-  portfolioSeasonalMultipliers   PortfolioSeasonalMultiplier[]     @relation("TenantSeasonalMultipliers")
+  aseguradoras                           Aseguradora[]
+  productosSeguro                        ProductoSeguro[]
+  polizasSeguro                          Poliza[]
+  renovacionesSeguro                     Renovacion[]
+  oportunidadesComerciales               OportunidadComercial[]
+  siniestrosSeguro                       Siniestro[]
+  insuranceImportLogs                    InsuranceImportLog[]
+  portfolioForecastLogs                  PortfolioForecastLog[]                  @relation("TenantForecastLogs")
+  portfolioSeasonalMultipliers           PortfolioSeasonalMultiplier[]           @relation("TenantSeasonalMultipliers")
   // ─── Hospitality ─────────────────────────────────────────────────
-  hospitalityProperties         HospitalityProperty[]             @relation("HospitalityProperties")
-  hospitalityUnits              HospitalityUnit[]                 @relation("HospitalityUnits")
-  hospitalityRatePlans          HospitalityRatePlan[]             @relation("HospitalityRatePlans")
-  hospitalityMappings           ConnectivityMapping[]             @relation("HospitalityMappings")
-  hospitalityReservations       HospitalityReservation[]          @relation("HospitalityReservations")
-  hospitalityWebhookEvents      HospitalityWebhookEvent[]         @relation("HospitalityWebhookEvents")
-  hospitalityCleaningTasks      HospitalityCleaningTask[]         @relation("HospitalityCleaningTasks")
-  hospitalityMaintenanceTasks   HospitalityMaintenanceTask[]      @relation("HospitalityMaintenanceTasks")
-  hospitalityUnitBlocks          HospitalityUnitBlock[]            @relation("HospitalityUnitBlocks")
-  hospitalityReservationItems   HospitalityReservationItem[]     @relation("HospitalityReservationItems")
-  hospitalityExtras             HospitalityExtra[]               @relation("HospitalityExtras")
-  hospitalityFees               HospitalityFee[]                 @relation("HospitalityFees")
-  hospitalityPromoCodes         HospitalityPromoCode[]           @relation("HospitalityPromoCodes")
-  hospitalityPromoConsultas     HospitalityPromoConsulta[]       @relation("HospitalityPromoConsultas")
-  hospitalityPayments           HospitalityPayment[]             @relation("HospitalityPayments")
-  hospitalityPaymentAccounts    HospitalityPaymentAccount[]      @relation("HospitalityPaymentAccounts")
-  hospitalitySyncLogs           HospitalitySyncLog[]              @relation("HospitalitySyncLogs")
-  hospitalityCommunicationTemplates HospitalityCommunicationTemplate[] @relation("HospitalityCommunicationTemplates")
+  hospitalityProperties                  HospitalityProperty[]                   @relation("HospitalityProperties")
+  hospitalityUnits                       HospitalityUnit[]                       @relation("HospitalityUnits")
+  hospitalityRatePlans                   HospitalityRatePlan[]                   @relation("HospitalityRatePlans")
+  hospitalityMappings                    ConnectivityMapping[]                   @relation("HospitalityMappings")
+  hospitalityReservations                HospitalityReservation[]                @relation("HospitalityReservations")
+  hospitalityWebhookEvents               HospitalityWebhookEvent[]               @relation("HospitalityWebhookEvents")
+  hospitalityCleaningTasks               HospitalityCleaningTask[]               @relation("HospitalityCleaningTasks")
+  hospitalityMaintenanceTasks            HospitalityMaintenanceTask[]            @relation("HospitalityMaintenanceTasks")
+  hospitalityUnitBlocks                  HospitalityUnitBlock[]                  @relation("HospitalityUnitBlocks")
+  hospitalityReservationItems            HospitalityReservationItem[]            @relation("HospitalityReservationItems")
+  hospitalityExtras                      HospitalityExtra[]                      @relation("HospitalityExtras")
+  hospitalityFees                        HospitalityFee[]                        @relation("HospitalityFees")
+  hospitalityPromoCodes                  HospitalityPromoCode[]                  @relation("HospitalityPromoCodes")
+  hospitalityPromoConsultas              HospitalityPromoConsulta[]              @relation("HospitalityPromoConsultas")
+  hospitalityPayments                    HospitalityPayment[]                    @relation("HospitalityPayments")
+  hospitalityPaymentAccounts             HospitalityPaymentAccount[]             @relation("HospitalityPaymentAccounts")
+  hospitalitySyncLogs                    HospitalitySyncLog[]                    @relation("HospitalitySyncLogs")
+  hospitalityCommunicationTemplates      HospitalityCommunicationTemplate[]      @relation("HospitalityCommunicationTemplates")
   // Registro de viajeros (MIR / SES Hospedajes, RD 933/2021, art. 6).
-  hospitalityMirConfigs         HospitalityMirConfig[]            @relation("HospitalityMirConfigs")
+  hospitalityMirConfigs                  HospitalityMirConfig[]                  @relation("HospitalityMirConfigs")
   // ID de socio del proveedor de conectividad, por cliente (ver el modelo).
-  hospitalityConnectivityConfig HospitalityConnectivityConfig?    @relation("HospitalityConnectivityConfigs")
+  hospitalityConnectivityConfig          HospitalityConnectivityConfig?          @relation("HospitalityConnectivityConfigs")
   // Credencial de conectividad POR PROPIEDAD (token por hotel; ver el modelo).
   hospitalityConnectivityPropertyConfigs HospitalityConnectivityPropertyConfig[] @relation("HospitalityConnectivityPropertyConfigs")
-  hospitalityComplianceConfigs  HospitalityComplianceConfig[]     @relation("HospitalityComplianceConfigs")
-  hospitalityTravelers          HospitalityTraveler[]             @relation("HospitalityTravelers")
-  hospitalityCompliances        HospitalityCompliance[]           @relation("HospitalityCompliances")
-  hospitalityComplianceEvents   HospitalityComplianceEvent[]      @relation("HospitalityComplianceEvents")
-  hospitalityBookingConfig      HospitalityBookingConfig?         @relation("HospitalityBookingConfig")
-  hospitalityGuestRegistry      HospitalityGuestRegistryCommunication[] @relation("HospitalityGuestRegistry")
-  hospitalityCheckinPreguntas   HospitalityCheckinPregunta[]      @relation("HospitalityCheckinPreguntas")
-  hospitalityReviews            HospitalityReview[]               @relation("HospitalityReviews")
+  hospitalityComplianceConfigs           HospitalityComplianceConfig[]           @relation("HospitalityComplianceConfigs")
+  hospitalityTravelers                   HospitalityTraveler[]                   @relation("HospitalityTravelers")
+  hospitalityCompliances                 HospitalityCompliance[]                 @relation("HospitalityCompliances")
+  hospitalityComplianceEvents            HospitalityComplianceEvent[]            @relation("HospitalityComplianceEvents")
+  hospitalityBookingConfig               HospitalityBookingConfig?               @relation("HospitalityBookingConfig")
+  hospitalityGuestRegistry               HospitalityGuestRegistryCommunication[] @relation("HospitalityGuestRegistry")
+  hospitalityCheckinPreguntas            HospitalityCheckinPregunta[]            @relation("HospitalityCheckinPreguntas")
+  hospitalityReviews                     HospitalityReview[]                     @relation("HospitalityReviews")
   // Mensajería del canal (OTAs): hilos con el huésped y sus mensajes.
-  hospitalityCanalConversaciones HospitalityCanalConversacion[]   @relation("HospitalityCanalConversaciones")
-  hospitalityCanalMensajes       HospitalityCanalMensaje[]       @relation("HospitalityCanalMensajes")
-  automationActionExecutions    AutomationActionExecution[]        @relation("AutomationActionExecutions")
+  hospitalityCanalConversaciones         HospitalityCanalConversacion[]          @relation("HospitalityCanalConversaciones")
+  hospitalityCanalMensajes               HospitalityCanalMensaje[]               @relation("HospitalityCanalMensajes")
+  automationActionExecutions             AutomationActionExecution[]             @relation("AutomationActionExecutions")
 }
 
 model AttendanceRules {
@@ -614,27 +614,27 @@ model GlobalAuditCloud {
 /// `recomendacion` se recalcula con el plan vigente en cada GET: si el cliente
 /// sube de plan, sus tarjetas no pueden quedarse con el estado anterior.
 model ImplantacionTenant {
-  id             String    @id @default(cuid())
-  tenantId       String    @unique
-  estado         String    @default("descubrimiento")
-  descubrimiento Json?
-  recomendacion  Json?
-  aceptados      String[]  @default([])
-  descartados    String[]  @default([])
+  id                     String    @id @default(cuid())
+  tenantId               String    @unique
+  estado                 String    @default("descubrimiento")
+  descubrimiento         Json?
+  recomendacion          Json?
+  aceptados              String[]  @default([])
+  descartados            String[]  @default([])
   // Informes y plantillas que el cliente se lleva: elegidos sobre la
   // propuesta del motor, no impuestos por ella.
-  informes             String[]  @default([])
-  plantillas           String[]  @default([])
+  informes               String[]  @default([])
+  plantillas             String[]  @default([])
   entregablesAplicadosEn DateTime?
   // Personalización aprobada pieza a pieza: el embudo con sus etapas, el
   // `pipelineId` que se creó al aplicarlo y cuándo se aplicó (o deshizo).
-  plan           Json?
+  plan                   Json?
   // Firma del go-live: criterio de éxito, confirmación de que las plantillas se
   // revisaron y quién firmó. Sin ella el alta no se da por cerrada.
-  firmaGoLive    Json?
-  completadoEn   DateTime?
-  fechaCreacion  DateTime  @default(now())
-  actualizadoEn  DateTime  @updatedAt
+  firmaGoLive            Json?
+  completadoEn           DateTime?
+  fechaCreacion          DateTime  @default(now())
+  actualizadoEn          DateTime  @updatedAt
 
   @@map("implantacion_tenant")
 }
@@ -893,11 +893,11 @@ model Contact {
   ownerProperties                CatalogoItem[]                   @relation("OwnerProperties")
   captaciones                    Captacion[]                      @relation("CaptacionPropietario")
   perfilFiscal                   PerfilFiscalCliente?             @relation("ContactPerfilFiscal")
-  polizasSeguro                  Poliza[]                          @relation("PolizaCliente")
-  oportunidadesSeguro            OportunidadComercial[]            @relation("OportunidadCliente")
-  siniestrosCliente              Siniestro[]                       @relation("SiniestroCliente")
-  hospitalityReservations        HospitalityReservation[]          @relation("HospitalityReservationContact")
-  usuarios                       User[]                            @relation("UserContacto")
+  polizasSeguro                  Poliza[]                         @relation("PolizaCliente")
+  oportunidadesSeguro            OportunidadComercial[]           @relation("OportunidadCliente")
+  siniestrosCliente              Siniestro[]                      @relation("SiniestroCliente")
+  hospitalityReservations        HospitalityReservation[]         @relation("HospitalityReservationContact")
+  usuarios                       User[]                           @relation("UserContacto")
 
   @@index([tenantId])
   @@index([email])
@@ -1224,7 +1224,7 @@ model Estudiante {
   fechaActualizacion       DateTime           @updatedAt
   tenantId                 String?
   academyUserId            String?            @unique
-  hotmartUserId            String?           @unique
+  hotmartUserId            String?            @unique
   certificados             Certificado[]
   comentarios              Comentario[]
   conversaciones           Conversation[]
@@ -1275,11 +1275,11 @@ model Curso {
   testimonios               Json?
   tipoAcceso                String        @default("immediate")
   tipoMonetizacion          String        @default("one_time")
-  urlSlug                  String?       @unique
-  catalogoItemId           String?
-  hotmartProductId         String?
-  hotmartSubdomain         String?
-  proveedorContenido       String         @default("propio")
+  urlSlug                   String?       @unique
+  catalogoItemId            String?
+  hotmartProductId          String?
+  hotmartSubdomain          String?
+  proveedorContenido        String        @default("propio")
   comunidadActiva           Boolean       @default(false)
   gamificacionActiva        Boolean       @default(false)
   puntosPorLeccion          Int           @default(10)
@@ -1910,26 +1910,26 @@ model CampaignMetrics {
 }
 
 model Task {
-  id               String    @id @default(cuid())
-  leadId           String?
-  tipo             String
-  titulo           String
-  descripcion      String?
-  fechaVencimiento DateTime
-  completada              Boolean   @default(false)
-  avisoVencimientoEnviado Boolean   @default(false)
+  id                         String    @id @default(cuid())
+  leadId                     String?
+  tipo                       String
+  titulo                     String
+  descripcion                String?
+  fechaVencimiento           DateTime
+  completada                 Boolean   @default(false)
+  avisoVencimientoEnviado    Boolean   @default(false)
   recordatorioPospuestoHasta DateTime?
-  asignadoA               String?
-  fechaCreacion           DateTime  @default(now())
-  fechaCompletado         DateTime?
-  tenantId                String?
-  googleTaskId     String?
-  googleTaskListId String?
-  contactId        String?
-  asignadoUsuario  User?     @relation("TaskAssignee", fields: [asignadoA], references: [id])
-  contacts         Contact?  @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  lead             Lead?     @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  tenant           Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  asignadoA                  String?
+  fechaCreacion              DateTime  @default(now())
+  fechaCompletado            DateTime?
+  tenantId                   String?
+  googleTaskId               String?
+  googleTaskListId           String?
+  contactId                  String?
+  asignadoUsuario            User?     @relation("TaskAssignee", fields: [asignadoA], references: [id])
+  contacts                   Contact?  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  lead                       Lead?     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  tenant                     Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([leadId])
@@ -2638,53 +2638,53 @@ model DealAttachment {
 }
 
 model Cotizacion {
-  id                  String                     @id @default(cuid())
-  tenantId            String
-  dealId              String?
-  leadId              String?
-  numero              String
-  titulo              String
-  descripcion         String?
-  estado              String                     @default("borrador")
-  subtotal            Float
-  descuentoPorcentaje Float                      @default(0)
-  descuentoMonto      Float                      @default(0)
-  impuestos           Float                      @default(0)
-  total               Float
-  moneda              String                     @default("MXN")
-  validezDias         Int                        @default(30)
-  terminosPago        String?
-  clausulas           String?
-  notasInternas       String?
-  notasCliente        String?
-  fechaCreacion       DateTime                   @default(now())
-  fechaEnvio          DateTime?
-  fechaAceptacion     DateTime?
-  fechaVencimiento    DateTime?
-  fechaActualizacion  DateTime                   @updatedAt
-  firmadoPorCliente   Boolean                    @default(false)
-  fechaFirma          DateTime?
-  ipFirma             String?
-  clienteEmail        String?
-  clienteEmpresa      String?
-  clienteNombre       String?
-  clienteTelefono     String?
-  creadoPorId         String?
-  fechaPrimeraVista   DateTime?
-  tokenPublico        String?                    @unique
-  ultimaVista         DateTime?
-  vecesVista          Int                        @default(0)
-  emisorId            String?
-  contactId           String?
-  contratos           Contrato[]
-  items               CotizacionItem[]
-  contacts            Contact?                   @relation(fields: [contactId], references: [id])
-  creadoPor           User?                      @relation("CotizacionesCreadaPor", fields: [creadoPorId], references: [id])
-  deal                Deal?                      @relation(fields: [dealId], references: [id])
-  emisor              ConfiguracionFiscalEmisor? @relation("EmisorCotizacion", fields: [emisorId], references: [id])
-  lead                Lead?                      @relation(fields: [leadId], references: [id])
-  tenant              Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  ordenesVenta        OrdenVenta[]               @relation("CotizacionOrdenesVenta")
+  id                   String                          @id @default(cuid())
+  tenantId             String
+  dealId               String?
+  leadId               String?
+  numero               String
+  titulo               String
+  descripcion          String?
+  estado               String                          @default("borrador")
+  subtotal             Float
+  descuentoPorcentaje  Float                           @default(0)
+  descuentoMonto       Float                           @default(0)
+  impuestos            Float                           @default(0)
+  total                Float
+  moneda               String                          @default("MXN")
+  validezDias          Int                             @default(30)
+  terminosPago         String?
+  clausulas            String?
+  notasInternas        String?
+  notasCliente         String?
+  fechaCreacion        DateTime                        @default(now())
+  fechaEnvio           DateTime?
+  fechaAceptacion      DateTime?
+  fechaVencimiento     DateTime?
+  fechaActualizacion   DateTime                        @updatedAt
+  firmadoPorCliente    Boolean                         @default(false)
+  fechaFirma           DateTime?
+  ipFirma              String?
+  clienteEmail         String?
+  clienteEmpresa       String?
+  clienteNombre        String?
+  clienteTelefono      String?
+  creadoPorId          String?
+  fechaPrimeraVista    DateTime?
+  tokenPublico         String?                         @unique
+  ultimaVista          DateTime?
+  vecesVista           Int                             @default(0)
+  emisorId             String?
+  contactId            String?
+  contratos            Contrato[]
+  items                CotizacionItem[]
+  contacts             Contact?                        @relation(fields: [contactId], references: [id])
+  creadoPor            User?                           @relation("CotizacionesCreadaPor", fields: [creadoPorId], references: [id])
+  deal                 Deal?                           @relation(fields: [dealId], references: [id])
+  emisor               ConfiguracionFiscalEmisor?      @relation("EmisorCotizacion", fields: [emisorId], references: [id])
+  lead                 Lead?                           @relation(fields: [leadId], references: [id])
+  tenant               Tenant                          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ordenesVenta         OrdenVenta[]                    @relation("CotizacionOrdenesVenta")
   acceptanceChallenges CotizacionAcceptanceChallenge[]
 
   @@unique([tenantId, numero])
@@ -2697,20 +2697,20 @@ model Cotizacion {
 }
 
 model CotizacionAcceptanceChallenge {
-  id               String      @id @default(cuid())
-  cotizacionId     String
-  tenantId         String
-  channel          String
-  destinationMasked String
-  codeHash         String
+  id                 String     @id @default(cuid())
+  cotizacionId       String
+  tenantId           String
+  channel            String
+  destinationMasked  String
+  codeHash           String
   challengeTokenHash String
-  attempts         Int         @default(0)
-  maxAttempts      Int         @default(5)
-  expiresAt        DateTime
-  lastSentAt       DateTime    @default(now())
-  verifiedAt       DateTime?
-  createdAt        DateTime    @default(now())
-  cotizacion       Cotizacion  @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
+  attempts           Int        @default(0)
+  maxAttempts        Int        @default(5)
+  expiresAt          DateTime
+  lastSentAt         DateTime   @default(now())
+  verifiedAt         DateTime?
+  createdAt          DateTime   @default(now())
+  cotizacion         Cotizacion @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
 
   @@index([cotizacionId, createdAt])
   @@index([tenantId])
@@ -2856,15 +2856,15 @@ model ContratoTemplate {
 }
 
 model ContratoTimeline {
-  id          String   @id @default(cuid())
-  contratoId  String
-  actorId     String?
-  actorType   String   @default("SYSTEM")
-  action      String
-  note        String?
-  metadata    Json?    @default("{}")
-  createdAt   DateTime @default(now())
-  contrato    Contrato @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  contratoId String
+  actorId    String?
+  actorType  String   @default("SYSTEM")
+  action     String
+  note       String?
+  metadata   Json?    @default("{}")
+  createdAt  DateTime @default(now())
+  contrato   Contrato @relation(fields: [contratoId], references: [id], onDelete: Cascade)
 
   @@index([contratoId, createdAt])
   @@map("contrato_timeline")
@@ -3380,11 +3380,11 @@ model DigitalCard {
   user              User          @relation("UserDigitalCard", fields: [userId], references: [id], onDelete: Cascade)
   leadsEscaneados   ScannedCard[] @relation("CardScannedLeads")
 
+  @@unique([tenantId, urlUnica])
   @@index([userId])
   @@index([tenantId])
   @@index([urlUnica])
   @@index([activo])
-  @@unique([tenantId, urlUnica])
   @@map("digital_cards")
 }
 
@@ -3875,30 +3875,30 @@ model ChatbotConfig {
 }
 
 model MessagingHubConfig {
-  id                String    @id @default(cuid())
-  tenantId          String    @unique
-  isActive          Boolean   @default(false)
-  lastHealthCheck   DateTime?
-  hubBaseUrl        String    @default("https://volkern.dimension.expert")
-  hubApiToken       String
-  hubAccountId      String?
-  defaultEndpointId String?
-  webhookSecret     String    @unique
-  webhookUrl        String?
-  configVersion     String    @default("2.0")
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  autoProvisioned   Boolean   @default(false)
-  chatwootAccountId Int?
+  id                 String    @id @default(cuid())
+  tenantId           String    @unique
+  isActive           Boolean   @default(false)
+  lastHealthCheck    DateTime?
+  hubBaseUrl         String    @default("https://volkern.dimension.expert")
+  hubApiToken        String
+  hubAccountId       String?
+  defaultEndpointId  String?
+  webhookSecret      String    @unique
+  webhookUrl         String?
+  configVersion      String    @default("2.0")
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  autoProvisioned    Boolean   @default(false)
+  chatwootAccountId  Int?
   // Token de AGENTE (usuario) de Chatwoot. El token del hub (hubApiToken) es
   // del usuario bot y Chatwoot responde 401 al enviar o crear conversaciones
   // con él; este es el que usan los envíos salientes.
   chatwootAgentToken String?
-  lastSyncAt        DateTime?
-  provisionedAt     DateTime?
-  telegramInboxId   Int?
-  whatsappInboxId   Int?
-  tenant            Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lastSyncAt         DateTime?
+  provisionedAt      DateTime?
+  telegramInboxId    Int?
+  whatsappInboxId    Int?
+  tenant             Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([tenantId, isActive])
@@ -4133,27 +4133,27 @@ model ClientSignatureSettings {
 }
 
 model SignatureRequest {
-  id            String                @id @default(cuid())
-  tenantId      String
-  libreSignUuid String                @unique
-  contratoId    String?
-  leadId        String?
-  title         String
-  status        String                @default("draft")
-  signers       Json
-  documentHash     String?
-  documentUrl      String?
-  signedPdfBase64  String?
-  auditTrailUrl    String?
-  sentAt           DateTime?
-  expiresAt        DateTime?
-  completedAt      DateTime?
-  createdAt        DateTime              @default(now())
-  updatedAt        DateTime              @updatedAt
-  auditEvents   SignatureAuditEvent[]
-  contrato      Contrato?             @relation(fields: [contratoId], references: [id])
-  lead          Lead?                 @relation(fields: [leadId], references: [id])
-  tenant        Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id              String                @id @default(cuid())
+  tenantId        String
+  libreSignUuid   String                @unique
+  contratoId      String?
+  leadId          String?
+  title           String
+  status          String                @default("draft")
+  signers         Json
+  documentHash    String?
+  documentUrl     String?
+  signedPdfBase64 String?
+  auditTrailUrl   String?
+  sentAt          DateTime?
+  expiresAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  auditEvents     SignatureAuditEvent[]
+  contrato        Contrato?             @relation(fields: [contratoId], references: [id])
+  lead            Lead?                 @relation(fields: [leadId], references: [id])
+  tenant          Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([status])
@@ -4366,16 +4366,16 @@ model TrainingSession {
 // por tenant+periodo, guardada una vez). El ranking de pantalla sigue siendo
 // también el del periodo EN CURSO — practicar este mes mueve el ranking.
 model SalesContestEdition {
-  id            String   @id @default(cuid())
-  tenantId      String
-  periodo       String
-  ganadorId     String
-  ganadorNombre String
-  mediaGanador  Int
+  id              String   @id @default(cuid())
+  tenantId        String
+  periodo         String
+  ganadorId       String
+  ganadorNombre   String
+  mediaGanador    Int
   sesionesGanador Int
-  cerradoEn     DateTime @default(now())
-  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  ganador       User     @relation(fields: [ganadorId], references: [id], onDelete: Cascade)
+  cerradoEn       DateTime @default(now())
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ganador         User     @relation(fields: [ganadorId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, periodo])
   @@index([tenantId, cerradoEn])
@@ -4413,45 +4413,45 @@ model SalesPlaybookEntry {
 }
 
 model Supplier {
-  id           String    @id @default(cuid())
-  tenantId     String
-  name         String
-  taxId        String?
-  email        String?
-  phone        String?
-  streetType   String?
-  streetName   String?
-  streetNumber String?
-  staircase    String?
-  floor        String?
-  door         String?
-  postalCode   String?
-  city         String?
-  province     String?
-  country      String?
-  category     String
-  balance      Float     @default(0)
-  active       Boolean   @default(true)
+  id            String    @id @default(cuid())
+  tenantId      String
+  name          String
+  taxId         String?
+  email         String?
+  phone         String?
+  streetType    String?
+  streetName    String?
+  streetNumber  String?
+  staircase     String?
+  floor         String?
+  door          String?
+  postalCode    String?
+  city          String?
+  province      String?
+  country       String?
+  category      String
+  balance       Float     @default(0)
+  active        Boolean   @default(true)
   // Tipos de IVA que aplica este proveedor (p. ej. [21, 10, 4]). Un
   // proveedor puede facturar a varios tipos; al registrar un gasto se
   // ofrecen como opciones para el IVA del documento.
-  vatRates     Float[]   @default([])
+  vatRates      Float[]   @default([])
   // ── Trato fiscal (retenciones por ley) ───────────────────────────────
   // fiscalRegime: régimen legal del proveedor que determina las retenciones
   //   aplicables al pagarle (IRPF/IVA). Presets: EMPRESA (sin retención),
   //   PROFESIONAL (IRPF 15%), PRIMER_ANO (IRPF 7%), ARRENDADOR (IRPF 19%)
   //   y CUSTOM (porcentajes manuales).
-  fiscalRegime String  @default("EMPRESA")
+  fiscalRegime  String    @default("EMPRESA")
   // Porcentaje de retención IRPF aplicable (p. ej. 15 → 15%).
-  irpfRetention Float  @default(0)
+  irpfRetention Float     @default(0)
   // Porcentaje de retención de IVA aplicable (casos legales específicos,
   // p. ej. 1 → 1%).
-  ivaRetention  Float  @default(0)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  ivaRetention  Float     @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
   expenses      Expense[]
-  compras       Compra[] @relation("CompraProveedor")
-  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  compras       Compra[]  @relation("CompraProveedor")
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([category])
@@ -4490,30 +4490,30 @@ model SupplierOcrTemplate {
 }
 
 model Expense {
-  id                 String   @id @default(cuid())
-  tenantId           String
-  createdById        String
-  supplierId         String
-  leadId             String?
-  description        String
-  amount             Float
-  currency           String   @default("EUR")
-  date               DateTime @default(now())
-  dueDate            DateTime?
-  paymentMethod      String?
-  status             String   @default("PAID")
-  category           String
-  receiptUrl         String?
-  metadata           Json?    @default("{}")
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  projectId          String?
-  exifLat            Float?
-  exifLng            Float?
-  fingerprint        String?  @unique
-  isAnomaly          Boolean  @default(false)
-  parentFingerprint  String?
-  verificationStatus String   @default("PENDING")
+  id                       String    @id @default(cuid())
+  tenantId                 String
+  createdById              String
+  supplierId               String
+  leadId                   String?
+  description              String
+  amount                   Float
+  currency                 String    @default("EUR")
+  date                     DateTime  @default(now())
+  dueDate                  DateTime?
+  paymentMethod            String?
+  status                   String    @default("PAID")
+  category                 String
+  receiptUrl               String?
+  metadata                 Json?     @default("{}")
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+  projectId                String?
+  exifLat                  Float?
+  exifLng                  Float?
+  fingerprint              String?   @unique
+  isAnomaly                Boolean   @default(false)
+  parentFingerprint        String?
+  verificationStatus       String    @default("PENDING")
   // Atribución opcional a hospitality (FASE 3.B, "sin duplicar entidades"):
   // un gasto del ERP (limpieza externa, incidencia, consumibles…) puede
   // imputarse a una reserva concreta para calcular su rentabilidad real.
@@ -4523,25 +4523,25 @@ model Expense {
   /// del proveedor que lo justifica. `null` = sigue provisional (por ejemplo el
   /// coste que genera un pedido de compra al recibirse). Evita contabilizar dos
   /// veces el mismo suministro: la factura completa este gasto en vez de crear otro.
-  reconciledAt       DateTime?
+  reconciledAt DateTime?
 
   // ── Verifactu ─────────────────────────────────────────────
-  invoiceNumber      String?  // Número y serie de la factura
-  taxableBase        Float?   // Base imponible
-  vatRate            Float?   // Tipo de IVA aplicado (%)
-  vatAmount          Float?   // Cuota total de IVA
-  operationDate      DateTime? // Fecha de la operación (si distinta a emisión)
-  issuerName         String?  // Razón social del emisor
-  issuerAddress      String?  // Domicilio fiscal del emisor
-  issuerTaxId        String?  // NIF del emisor
+  invoiceNumber String? // Número y serie de la factura
+  taxableBase   Float? // Base imponible
+  vatRate       Float? // Tipo de IVA aplicado (%)
+  vatAmount     Float? // Cuota total de IVA
+  operationDate DateTime? // Fecha de la operación (si distinta a emisión)
+  issuerName    String? // Razón social del emisor
+  issuerAddress String? // Domicilio fiscal del emisor
+  issuerTaxId   String? // NIF del emisor
 
-  createdBy          User     @relation("ExpenseCreator", fields: [createdById], references: [id])
-  compra             Compra?  @relation("CompraGasto")
-  lead               Lead?    @relation(fields: [leadId], references: [id])
-  project            Project? @relation(fields: [projectId], references: [id])
-  supplier           Supplier @relation(fields: [supplierId], references: [id])
+  createdBy              User                    @relation("ExpenseCreator", fields: [createdById], references: [id])
+  compra                 Compra?                 @relation("CompraGasto")
+  lead                   Lead?                   @relation(fields: [leadId], references: [id])
+  project                Project?                @relation(fields: [projectId], references: [id])
+  supplier               Supplier                @relation(fields: [supplierId], references: [id])
   hospitalityReservation HospitalityReservation? @relation("ExpenseHospitalityReservation", fields: [hospitalityReservationId], references: [id], onDelete: SetNull)
-  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant                 Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([supplierId])
@@ -4588,7 +4588,7 @@ model Warehouse {
   updatedAt   DateTime        @updatedAt
   stockLevels StockLevel[]
   movements   StockMovement[]
-  compras     Compra[]     @relation("CompraAlmacen")
+  compras     Compra[]        @relation("CompraAlmacen")
   tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
@@ -4693,12 +4693,12 @@ model Compra {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  items      CompraItem[]
-  almacen    Warehouse?    @relation("CompraAlmacen", fields: [almacenId], references: [id], onDelete: SetNull)
-  creadoPor  User?         @relation("CompraCreadaPor", fields: [creadoPorId], references: [id], onDelete: SetNull)
-  gasto      Expense?      @relation("CompraGasto", fields: [gastoId], references: [id], onDelete: SetNull)
-  proveedor  Supplier?     @relation("CompraProveedor", fields: [proveedorId], references: [id], onDelete: SetNull)
-  tenant     Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  items     CompraItem[]
+  almacen   Warehouse?   @relation("CompraAlmacen", fields: [almacenId], references: [id], onDelete: SetNull)
+  creadoPor User?        @relation("CompraCreadaPor", fields: [creadoPorId], references: [id], onDelete: SetNull)
+  gasto     Expense?     @relation("CompraGasto", fields: [gastoId], references: [id], onDelete: SetNull)
+  proveedor Supplier?    @relation("CompraProveedor", fields: [proveedorId], references: [id], onDelete: SetNull)
+  tenant    Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, numero])
   @@index([tenantId, estado])
@@ -7445,26 +7445,26 @@ model erp_fleet_vehicles {
 }
 
 model ImportLog {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   tenantId        String
   type            String
   source          String
   fileName        String
-  fileSize        Int      @default(0)
-  recordsTotal    Int      @default(0)
-  recordsImported Int      @default(0)
-  recordsFailed   Int      @default(0)
+  fileSize        Int       @default(0)
+  recordsTotal    Int       @default(0)
+  recordsImported Int       @default(0)
+  recordsFailed   Int       @default(0)
   errors          Json?
   columnMapping   Json?
-  status          String   @default("completed")
+  status          String    @default("completed")
   /// 'commit' escribe datos; 'preview' solo analiza y no debe ofrecerse para deshacer.
-  mode            String   @default("commit")
+  mode            String    @default("commit")
   /// Identificador del lote, común a la previsualización y a su confirmación.
   batchId         String?
   /// Trazas del lote (`creados`, `actualizados` y el resumen) para deshacerlo.
   report          Json?
   revertedAt      DateTime?
-  createdAt       DateTime @default(now())
+  createdAt       DateTime  @default(now())
   createdBy       String?
 
   @@index([tenantId])
@@ -7475,22 +7475,22 @@ model ImportLog {
 // ─── ADS INTELLIGENCE MODULE ──────────────────────────────────────────
 // Conexión OAuth a cada plataforma de anuncios (Meta Ads, Google Ads, LinkedIn Ads, TikTok Ads)
 model AdPlatformConnection {
-  id              String   @id @default(cuid())
-  tenantId        String
-  platform        String   // META, GOOGLE, LINKEDIN, TIKTOK
-  accountId       String   // ID de la cuenta de anuncios en la plataforma
-  accountName     String?
-  accessToken     String   // Cifrado en Vault
-  refreshToken    String?
-  tokenExpiresAt  DateTime?
-  status          String   @default("CONNECTED") // CONNECTED, EXPIRED, DISCONNECTED, ERROR
-  metadata        Json?    @default("{}")
-  lastSyncedAt    DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  adCampaigns     AdCampaign[]
-  adInsights      AdInsight[]
+  id             String       @id @default(cuid())
+  tenantId       String
+  platform       String // META, GOOGLE, LINKEDIN, TIKTOK
+  accountId      String // ID de la cuenta de anuncios en la plataforma
+  accountName    String?
+  accessToken    String // Cifrado en Vault
+  refreshToken   String?
+  tokenExpiresAt DateTime?
+  status         String       @default("CONNECTED") // CONNECTED, EXPIRED, DISCONNECTED, ERROR
+  metadata       Json?        @default("{}")
+  lastSyncedAt   DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  adCampaigns    AdCampaign[]
+  adInsights     AdInsight[]
 
   @@unique([tenantId, platform, accountId])
   @@index([tenantId])
@@ -7501,33 +7501,33 @@ model AdPlatformConnection {
 
 // Campaña de anuncios en una plataforma (1:1 con campaña en Meta/Google/LinkedIn/TikTok)
 model AdCampaign {
-  id                String              @id @default(cuid())
-  tenantId          String
-  platformId        String
-  externalId        String?             // ID en la plataforma (campaign_id de Meta, etc.)
-  name              String
-  status            String              @default("ACTIVE") // ACTIVE, PAUSED, ARCHIVED, DELETED
-  buyType           String?             // AUCTION, FIXED_CPM, etc.
-  objective         String?             // CONVERSIONS, TRAFFIC, AWARENESS, LEAD_GENERATION, etc.
-  dailyBudget       Float?
-  lifetimeBudget    Float?
-  startDate         DateTime?
-  endDate           DateTime?
-  bidStrategy       String?             // LOWEST_COST, COST_CAP, BID_CAP, etc.
-  bidAmount         Float?
-  optimizationGoal  String?             // CONVERSIONS, IMPRESSIONS, CLICKS, etc.
-  trackingTemplate  String?
-  isVolkernManaged  Boolean             @default(true) // Si Volkern puede auto-gestionarla
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  syncedAt          DateTime?           // Última sincronización con la plataforma
-  platform          AdPlatformConnection @relation(fields: [platformId], references: [id], onDelete: Cascade)
-  tenant            Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  adSets            AdSet[]
-  adInsights        AdInsight[]
-  budgetAlerts      AdBudgetExecution[]
-  schedules         AdSchedule[]
-  abTests           AdABTest[]
+  id               String               @id @default(cuid())
+  tenantId         String
+  platformId       String
+  externalId       String? // ID en la plataforma (campaign_id de Meta, etc.)
+  name             String
+  status           String               @default("ACTIVE") // ACTIVE, PAUSED, ARCHIVED, DELETED
+  buyType          String? // AUCTION, FIXED_CPM, etc.
+  objective        String? // CONVERSIONS, TRAFFIC, AWARENESS, LEAD_GENERATION, etc.
+  dailyBudget      Float?
+  lifetimeBudget   Float?
+  startDate        DateTime?
+  endDate          DateTime?
+  bidStrategy      String? // LOWEST_COST, COST_CAP, BID_CAP, etc.
+  bidAmount        Float?
+  optimizationGoal String? // CONVERSIONS, IMPRESSIONS, CLICKS, etc.
+  trackingTemplate String?
+  isVolkernManaged Boolean              @default(true) // Si Volkern puede auto-gestionarla
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  syncedAt         DateTime? // Última sincronización con la plataforma
+  platform         AdPlatformConnection @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  tenant           Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  adSets           AdSet[]
+  adInsights       AdInsight[]
+  budgetAlerts     AdBudgetExecution[]
+  schedules        AdSchedule[]
+  abTests          AdABTest[]
 
   @@index([tenantId])
   @@index([platformId])
@@ -7538,24 +7538,24 @@ model AdCampaign {
 
 // Ad set en Meta / Ad group en Google
 model AdSet {
-  id                String   @id @default(cuid())
-  campaignId        String
-  externalId        String?  // ID en la plataforma
-  name              String
-  status            String   @default("ACTIVE") // ACTIVE, PAUSED, ARCHIVED
-  dailyBudget       Float?
-  lifetimeBudget    Float?
-  bidAmount         Float?
-  bidStrategy       String?
-  targeting         Json?    // Segmentación: edad, género, intereses, ubicaciones, etc.
-  placements        Json?    // Placement: feed, stories, reels, search, display, etc.
-  startDate         DateTime?
-  endDate           DateTime?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  campaign          AdCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  ads               Ad[]
-  adInsights        AdInsight[]
+  id             String      @id @default(cuid())
+  campaignId     String
+  externalId     String? // ID en la plataforma
+  name           String
+  status         String      @default("ACTIVE") // ACTIVE, PAUSED, ARCHIVED
+  dailyBudget    Float?
+  lifetimeBudget Float?
+  bidAmount      Float?
+  bidStrategy    String?
+  targeting      Json? // Segmentación: edad, género, intereses, ubicaciones, etc.
+  placements     Json? // Placement: feed, stories, reels, search, display, etc.
+  startDate      DateTime?
+  endDate        DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  campaign       AdCampaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  ads            Ad[]
+  adInsights     AdInsight[]
 
   @@index([campaignId])
   @@index([status])
@@ -7564,25 +7564,25 @@ model AdSet {
 
 // Anuncio individual (creative + copy)
 model Ad {
-  id                String   @id @default(cuid())
-  adSetId           String
-  externalId        String?  // ID en la plataforma
-  name              String
-  status            String   @default("ACTIVE") // ACTIVE, PAUSED, ARCHIVED, REJECTED
-  creativeType      String?  // IMAGE, VIDEO, CAROUSEL, COLLECTION, TEXT
-  creativeUrl       String?
-  headline          String?
-  primaryText       String?
-  callToAction      String?  // LEARN_MORE, SIGN_UP, CONTACT_US, etc.
-  destinationUrl    String?
-  displayUrl        String?
-  imageHash         String?
-  videoId           String?
-  thumbnailUrl      String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  adSet             AdSet    @relation(fields: [adSetId], references: [id], onDelete: Cascade)
-  adInsights        AdInsight[]
+  id             String      @id @default(cuid())
+  adSetId        String
+  externalId     String? // ID en la plataforma
+  name           String
+  status         String      @default("ACTIVE") // ACTIVE, PAUSED, ARCHIVED, REJECTED
+  creativeType   String? // IMAGE, VIDEO, CAROUSEL, COLLECTION, TEXT
+  creativeUrl    String?
+  headline       String?
+  primaryText    String?
+  callToAction   String? // LEARN_MORE, SIGN_UP, CONTACT_US, etc.
+  destinationUrl String?
+  displayUrl     String?
+  imageHash      String?
+  videoId        String?
+  thumbnailUrl   String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  adSet          AdSet       @relation(fields: [adSetId], references: [id], onDelete: Cascade)
+  adInsights     AdInsight[]
 
   @@index([adSetId])
   @@index([status])
@@ -7591,35 +7591,35 @@ model Ad {
 
 // Métricas históricas por intervalo diario
 model AdInsight {
-  id                String              @id @default(cuid())
+  id                String               @id @default(cuid())
   tenantId          String
   platformId        String
   campaignId        String?
   adSetId           String?
   adId              String?
-  dateStart         DateTime            // Inicio del período
-  dateEnd           DateTime            // Fin del período
-  impressions       Int                 @default(0)
-  clicks            Int                 @default(0)
-  spend             Float               @default(0)       // Gasto en moneda local
-  reach             Int                 @default(0)
-  frequency         Float               @default(0)
-  cpc               Float               @default(0)       // Costo por click
-  cpm               Float               @default(0)       // Costo por 1000 impresiones
-  ctr               Float               @default(0)       // Click-through rate
-  conversions       Int                 @default(0)
-  conversionRate    Float               @default(0)
-  cpa               Float               @default(0)       // Costo por adquisición
-  roas              Float               @default(0)       // Return on Ad Spend
-  revenue           Float               @default(0)       // Ingresos atribuidos
-  leads             Int                 @default(0)
-  costPerLead       Float               @default(0)
+  dateStart         DateTime // Inicio del período
+  dateEnd           DateTime // Fin del período
+  impressions       Int                  @default(0)
+  clicks            Int                  @default(0)
+  spend             Float                @default(0) // Gasto en moneda local
+  reach             Int                  @default(0)
+  frequency         Float                @default(0)
+  cpc               Float                @default(0) // Costo por click
+  cpm               Float                @default(0) // Costo por 1000 impresiones
+  ctr               Float                @default(0) // Click-through rate
+  conversions       Int                  @default(0)
+  conversionRate    Float                @default(0)
+  cpa               Float                @default(0) // Costo por adquisición
+  roas              Float                @default(0) // Return on Ad Spend
+  revenue           Float                @default(0) // Ingresos atribuidos
+  leads             Int                  @default(0)
+  costPerLead       Float                @default(0)
   qualityRank       Float?
   engagementRate    Float?
   videoPlays        Int?
   videoAvgWatchTime Float?
-  canvas            Json?               // Desnormalizado para eficiencia
-  createdAt         DateTime            @default(now())
+  canvas            Json? // Desnormalizado para eficiencia
+  createdAt         DateTime             @default(now())
   platform          AdPlatformConnection @relation(fields: [platformId], references: [id], onDelete: Cascade)
   campaign          AdCampaign?          @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   adSet             AdSet?               @relation(fields: [adSetId], references: [id], onDelete: SetNull)
@@ -7636,23 +7636,23 @@ model AdInsight {
 
 // Regla de auto-apagado basada en condiciones de rendimiento
 model AdBudgetRule {
-  id                String                @id @default(cuid())
-  tenantId          String
-  name              String
-  description       String?
-  isActive          Boolean               @default(true)
-  scope             String                // CAMPAIGN, AD_SET, AD, ACCOUNT
-  scopeId           String?               // campaignId, adSetId, adId, null = toda la cuenta
-  condition         Json                  // { metric: "cpa", operator: ">", value: 500, window: "7d" }
-  action            String                // PAUSE, REDUCE_BUDGET_PERCENTAGE, NOTIFY_ONLY
-  actionValue       Float?
-  cooldownHours     Int                   @default(24)
-  lastTriggeredAt   DateTime?
-  executionCount    Int                   @default(0)
-  createdAt         DateTime              @default(now())
-  updatedAt         DateTime              @updatedAt
-  tenant            Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  executions        AdBudgetExecution[]
+  id              String              @id @default(cuid())
+  tenantId        String
+  name            String
+  description     String?
+  isActive        Boolean             @default(true)
+  scope           String // CAMPAIGN, AD_SET, AD, ACCOUNT
+  scopeId         String? // campaignId, adSetId, adId, null = toda la cuenta
+  condition       Json // { metric: "cpa", operator: ">", value: 500, window: "7d" }
+  action          String // PAUSE, REDUCE_BUDGET_PERCENTAGE, NOTIFY_ONLY
+  actionValue     Float?
+  cooldownHours   Int                 @default(24)
+  lastTriggeredAt DateTime?
+  executionCount  Int                 @default(0)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  tenant          Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  executions      AdBudgetExecution[]
 
   @@index([tenantId])
   @@index([isActive])
@@ -7662,24 +7662,24 @@ model AdBudgetRule {
 
 // Log de cada ejecución de una regla de watchdog
 model AdBudgetExecution {
-  id                String      @id @default(cuid())
-  ruleId            String
-  campaignId        String?
-  adSetId           String?
-  adId              String?
-  condition         Json
-  metricCurrent     Float
-  metricThreshold   Float
-  action            String
-  actionResult      String      // SUCCESS, FAILED, SKIPPED
-  actionDetail      String?
-  previousBudget    Float?
-  newBudget         Float?
-  previousStatus    String?
-  newStatus         String?
-  executedAt        DateTime    @default(now())
-  rule              AdBudgetRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
-  campaign          AdCampaign?  @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  id              String       @id @default(cuid())
+  ruleId          String
+  campaignId      String?
+  adSetId         String?
+  adId            String?
+  condition       Json
+  metricCurrent   Float
+  metricThreshold Float
+  action          String
+  actionResult    String // SUCCESS, FAILED, SKIPPED
+  actionDetail    String?
+  previousBudget  Float?
+  newBudget       Float?
+  previousStatus  String?
+  newStatus       String?
+  executedAt      DateTime     @default(now())
+  rule            AdBudgetRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  campaign        AdCampaign?  @relation(fields: [campaignId], references: [id], onDelete: SetNull)
 
   @@index([ruleId])
   @@index([campaignId])
@@ -7689,25 +7689,25 @@ model AdBudgetExecution {
 
 // Recomendaciones generadas por IA para optimización de campañas
 model AdRecommendation {
-  id                String      @id @default(cuid())
-  tenantId          String
-  campaignId        String?
-  adSetId           String?
-  adId              String?
-  type              String      // BUDGET, TARGETING, CREATIVE, BID, SCHEDULE, PLATFORM
-  title             String
-  description       String
-  impact            String      // HIGH, MEDIUM, LOW
-  confidence        Float
-  metric            String      // projectedCpa, projectedRoas, projectedCtr, etc.
-  projectedValue    Float
-  currentValue      Float
-  implementation    Json?
-  isApplied         Boolean     @default(false)
-  isDismissed       Boolean     @default(false)
-  appliedAt         DateTime?
-  createdAt         DateTime    @default(now())
-  tenant            Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id             String    @id @default(cuid())
+  tenantId       String
+  campaignId     String?
+  adSetId        String?
+  adId           String?
+  type           String // BUDGET, TARGETING, CREATIVE, BID, SCHEDULE, PLATFORM
+  title          String
+  description    String
+  impact         String // HIGH, MEDIUM, LOW
+  confidence     Float
+  metric         String // projectedCpa, projectedRoas, projectedCtr, etc.
+  projectedValue Float
+  currentValue   Float
+  implementation Json?
+  isApplied      Boolean   @default(false)
+  isDismissed    Boolean   @default(false)
+  appliedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([type])
@@ -7718,23 +7718,23 @@ model AdRecommendation {
 
 // Programación horaria para campañas (encender/apagar en bloques)
 model AdSchedule {
-  id                String       @id @default(cuid())
-  tenantId          String
-  campaignId        String
-  adSetId           String?
-  name              String
-  daysOfWeek        Json         // ["MON","TUE","WED","THU","FRI","SAT","SUN"]
-  startTime         String       // "09:00" en 24h
-  endTime           String       // "18:00"
-  timezone          String       @default("America/Mexico_City")
-  action            String       // ACTIVATE | PAUSE
-  enabled           Boolean      @default(true)
-  triggerCount      Int          @default(0)
-  lastTriggeredAt   DateTime?
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
-  tenant            Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  campaign          AdCampaign   @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  id              String     @id @default(cuid())
+  tenantId        String
+  campaignId      String
+  adSetId         String?
+  name            String
+  daysOfWeek      Json // ["MON","TUE","WED","THU","FRI","SAT","SUN"]
+  startTime       String // "09:00" en 24h
+  endTime         String // "18:00"
+  timezone        String     @default("America/Mexico_City")
+  action          String // ACTIVATE | PAUSE
+  enabled         Boolean    @default(true)
+  triggerCount    Int        @default(0)
+  lastTriggeredAt DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  tenant          Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaign        AdCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([campaignId])
@@ -7744,24 +7744,24 @@ model AdSchedule {
 
 // Test A/B para campañas de anuncios
 model AdABTest {
-  id                    String          @id @default(cuid())
+  id                    String            @id @default(cuid())
   tenantId              String
   campaignId            String
   name                  String
   description           String?
-  status                String          @default("DRAFT") // DRAFT | RUNNING | COMPLETED | CANCELLED
-  metric                String          // CTR | CPC | CPA | ROAS | CONVERSIONS
-  significanceThreshold Float           @default(0.95)
-  trafficSplit          String          // FIFTY_FIFTY | CUSTOM
-  winnerId              String?         // variantId ganadora
+  status                String            @default("DRAFT") // DRAFT | RUNNING | COMPLETED | CANCELLED
+  metric                String // CTR | CPC | CPA | ROAS | CONVERSIONS
+  significanceThreshold Float             @default(0.95)
+  trafficSplit          String // FIFTY_FIFTY | CUSTOM
+  winnerId              String? // variantId ganadora
   declaredAt            DateTime?
-  autoDeclare           Boolean         @default(false)
+  autoDeclare           Boolean           @default(false)
   startDate             DateTime?
   endDate               DateTime?
-  createdAt             DateTime        @default(now())
-  updatedAt             DateTime        @updatedAt
-  tenant                Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  campaign              AdCampaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  tenant                Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaign              AdCampaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   variants              AdABTestVariant[]
 
   @@index([tenantId])
@@ -7772,20 +7772,20 @@ model AdABTest {
 
 // Variante individual dentro de un A/B test
 model AdABTestVariant {
-  id                String     @id @default(cuid())
-  abTestId          String
-  adSetId           String?    // Ad set asociado (cada variante = ad set separado)
-  adId              String?    // O un anuncio específico
-  label             String     // "A", "B", "C", etc.
-  trafficAllocation Float?     // Porcentaje de tráfico (null = equitativo)
-  currentImpressions Int       @default(0)
-  currentClicks     Int        @default(0)
-  currentConversions Int       @default(0)
-  currentSpend      Float      @default(0)
-  currentMetric     Float?     // Valor actual de la métrica objetivo
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @updatedAt
-  abTest            AdABTest   @relation(fields: [abTestId], references: [id], onDelete: Cascade)
+  id                 String   @id @default(cuid())
+  abTestId           String
+  adSetId            String? // Ad set asociado (cada variante = ad set separado)
+  adId               String? // O un anuncio específico
+  label              String // "A", "B", "C", etc.
+  trafficAllocation  Float? // Porcentaje de tráfico (null = equitativo)
+  currentImpressions Int      @default(0)
+  currentClicks      Int      @default(0)
+  currentConversions Int      @default(0)
+  currentSpend       Float    @default(0)
+  currentMetric      Float? // Valor actual de la métrica objetivo
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  abTest             AdABTest @relation(fields: [abTestId], references: [id], onDelete: Cascade)
 
   @@index([abTestId])
   @@map("ad_ab_test_variants")
@@ -7874,16 +7874,16 @@ enum MonedaInferenciaSource {
 // ─── Aseguradora ──────────────────────────────────────────────────────────────
 
 model Aseguradora {
-  id              String            @id @default(cuid())
-  tenantId        String
-  tenant          Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  nombre          String
-  nif             String?
-  direccion       String?
-  telefono        String?
-  email           String?
-  web             String?
+  nombre    String
+  nif       String?
+  direccion String?
+  telefono  String?
+  email     String?
+  web       String?
 
   // ─── Identificación Legal y Fiscal (Bloque 1) ─────────────
   razonSocial     String?
@@ -7895,39 +7895,39 @@ model Aseguradora {
 
   // ─── Regulación y Licencias (Bloque 2) ────────────────────
   numeroRegistro              String?
-  ramosAutorizados           Json?   // string[] — ramos de negocio autorizados (Vida, Salud, Autos...)
+  ramosAutorizados            Json? // string[] — ramos de negocio autorizados (Vida, Salud, Autos...)
   fechaVigenciaLicenciaInicio DateTime?
   fechaVigenciaLicenciaFin    DateTime?
 
   // ─── Contacto y Representación Legal (Bloque 3) ───────────
-  representanteLegal   Json?   // { nombre, documento, cargo }
-  mesaEntradas         String? // email institucional para notificaciones/regulatorio
-  contactosOperativos  Json?   // [{ cargo, nombre, email, telefono }]
+  representanteLegal  Json? // { nombre, documento, cargo }
+  mesaEntradas        String? // email institucional para notificaciones/regulatorio
+  contactosOperativos Json? // [{ cargo, nombre, email, telefono }]
 
   // ─── Parámetros Operativos y Comerciales (Bloque 4) ────────
-  modelosComision      Json?   // [{ nombre, tipo, pct, aplicaA }]
-  condicionesPago      Json?   // { diasGracia, politicaCancelacion, requiereAnticipo }
-  limitesSuscripcion   Json?   // { montoMaximoAutomatico, moneda, requiereAprobacionManual }
-  gestionSiniestros    Json?   // { slaRespuestaHoras, limiteIndemnizacion, tipoLimite, deducible }
+  modelosComision    Json? // [{ nombre, tipo, pct, aplicaA }]
+  condicionesPago    Json? // { diasGracia, politicaCancelacion, requiereAnticipo }
+  limitesSuscripcion Json? // { montoMaximoAutomatico, moneda, requiereAprobacionManual }
+  gestionSiniestros  Json? // { slaRespuestaHoras, limiteIndemnizacion, tipoLimite, deducible }
 
   // ─── Configuración Financiera y Bancaria (Bloque 5) ────────
-  cuentasBancarias     Json?   // [{ banco, tipoCuenta, numeroCuenta, clabe, iban, swift, moneda }]
-  monedaBase           String?
-  monedaLiquidacion    String?
+  cuentasBancarias  Json? // [{ banco, tipoCuenta, numeroCuenta, clabe, iban, swift, moneda }]
+  monedaBase        String?
+  monedaLiquidacion String?
 
   // ─── Integración Técnica y Seguridad (Bloque 6) ────────────
-  integracionApi       Json?   // { apiKey, oauth, endpoints, formatos, certificados }
+  integracionApi Json? // { apiKey, oauth, endpoints, formatos, certificados }
 
-  notas           String?
-  codigoExterno   String?
-  activa          Boolean           @default(true)
+  notas         String?
+  codigoExterno String?
+  activa        Boolean @default(true)
 
-  productos       ProductoSeguro[]
-  polizas         Poliza[]
-  siniestros      Siniestro[]
+  productos  ProductoSeguro[]
+  polizas    Poliza[]
+  siniestros Siniestro[]
 
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([tenantId, nombre])
   @@index([tenantId])
@@ -7937,12 +7937,12 @@ model Aseguradora {
 // ─── ProductoSeguro ───────────────────────────────────────────────────────────
 
 model ProductoSeguro {
-  id              String                  @id @default(cuid())
-  tenantId        String
-  tenant          Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  aseguradoraId   String
-  aseguradora     Aseguradora             @relation(fields: [aseguradoraId], references: [id], onDelete: Cascade)
+  aseguradoraId String
+  aseguradora   Aseguradora @relation(fields: [aseguradoraId], references: [id], onDelete: Cascade)
 
   nombre          String
   ramo            Ramo
@@ -7950,13 +7950,13 @@ model ProductoSeguro {
   descripcion     String?
   primaReferencia Decimal?
   comisionPct     Decimal?
-  activo          Boolean                 @default(true)
+  activo          Boolean  @default(true)
 
-  polizas         Poliza[]
-  oportunidades   OportunidadComercial[]
+  polizas       Poliza[]
+  oportunidades OportunidadComercial[]
 
-  createdAt       DateTime                @default(now())
-  updatedAt       DateTime                @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([tenantId, aseguradoraId, nombre])
   @@index([tenantId, ramo])
@@ -7967,48 +7967,48 @@ model ProductoSeguro {
 // ─── Poliza ───────────────────────────────────────────────────────────────────
 
 model Poliza {
-  id                  String              @id @default(cuid())
-  tenantId            String
-  tenant              Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   // Relaciones
-  clienteId           String
-  cliente             Contact             @relation("PolizaCliente", fields: [clienteId], references: [id], onDelete: Cascade)
-  aseguradoraId       String
-  aseguradora         Aseguradora         @relation(fields: [aseguradoraId], references: [id], onDelete: Cascade)
-  productoSeguroId    String
-  productoSeguro      ProductoSeguro      @relation(fields: [productoSeguroId], references: [id], onDelete: Cascade)
+  clienteId        String
+  cliente          Contact        @relation("PolizaCliente", fields: [clienteId], references: [id], onDelete: Cascade)
+  aseguradoraId    String
+  aseguradora      Aseguradora    @relation(fields: [aseguradoraId], references: [id], onDelete: Cascade)
+  productoSeguroId String
+  productoSeguro   ProductoSeguro @relation(fields: [productoSeguroId], references: [id], onDelete: Cascade)
 
   // Datos de la póliza
-  numeroPoliza        String
-  descripcion         String?
-  sumaAsegurada       Decimal?
-  primaAnual          Decimal?
-  formaPago           FormaPago?
-  moneda              String              @default("EUR")
+  numeroPoliza  String
+  descripcion   String?
+  sumaAsegurada Decimal?
+  primaAnual    Decimal?
+  formaPago     FormaPago?
+  moneda        String     @default("EUR")
 
   // Fechas clave
-  fechaInicio         DateTime
-  fechaVencimiento    DateTime
-  fechaEmision        DateTime            @default(now())
+  fechaInicio      DateTime
+  fechaVencimiento DateTime
+  fechaEmision     DateTime @default(now())
 
   // Estado
-  estado              EstadoPoliza        @default(ACTIVA)
+  estado EstadoPoliza @default(ACTIVA)
 
   // Metadata
-  comisionPct         Decimal?
-  notas               String?
+  comisionPct Decimal?
+  notas       String?
 
   // Tracking
-  renovaciones        Renovacion[]
-  oportunidades       OportunidadComercial[]  @relation("OportunidadPolizaOrigen")
-  siniestros          Siniestro[]
+  renovaciones  Renovacion[]
+  oportunidades OportunidadComercial[] @relation("OportunidadPolizaOrigen")
+  siniestros    Siniestro[]
 
   // Auditoría
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
-  createdById         String
-  createdBy           User                @relation("PolizaCreator", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String
+  createdBy   User     @relation("PolizaCreator", fields: [createdById], references: [id])
 
   @@unique([tenantId, numeroPoliza])
   @@index([tenantId, estado])
@@ -8022,32 +8022,32 @@ model Poliza {
 // ─── Renovacion ───────────────────────────────────────────────────────────────
 
 model Renovacion {
-  id                String            @id @default(cuid())
-  tenantId          String
-  tenant            Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  polizaId          String
-  poliza            Poliza            @relation(fields: [polizaId], references: [id], onDelete: Cascade)
+  polizaId String
+  poliza   Poliza @relation(fields: [polizaId], references: [id], onDelete: Cascade)
 
-  periodoInicio     DateTime
-  periodoFin        DateTime
-  estado            EstadoRenovacion  @default(PENDIENTE)
+  periodoInicio DateTime
+  periodoFin    DateTime
+  estado        EstadoRenovacion @default(PENDIENTE)
 
-  nuevaPrima        Decimal?
-  nuevaSumaAsegurada Decimal?
+  nuevaPrima            Decimal?
+  nuevaSumaAsegurada    Decimal?
   condicionesDiferentes String?
 
   fechaContactoInicial DateTime?
-  fechaCierre         DateTime?
-  resultado           String?
-  riesgoPerdida       Boolean           @default(false)
-  motivoRiesgo        String?
+  fechaCierre          DateTime?
+  resultado            String?
+  riesgoPerdida        Boolean   @default(false)
+  motivoRiesgo         String?
 
-  agenteAsignadoId    String?
-  agenteAsignado      User?             @relation("RenovacionAgente", fields: [agenteAsignadoId], references: [id])
+  agenteAsignadoId String?
+  agenteAsignado   User?   @relation("RenovacionAgente", fields: [agenteAsignadoId], references: [id])
 
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId, estado])
   @@index([tenantId, periodoInicio])
@@ -8058,33 +8058,33 @@ model Renovacion {
 // ─── OportunidadComercial ─────────────────────────────────────────────────────
 
 model OportunidadComercial {
-  id                String                @id @default(cuid())
-  tenantId          String
-  tenant            Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   // Relaciones
-  clienteId         String
-  cliente           Contact               @relation("OportunidadCliente", fields: [clienteId], references: [id], onDelete: Cascade)
-  polizaOrigenId    String?
-  polizaOrigen      Poliza?               @relation("OportunidadPolizaOrigen", fields: [polizaOrigenId], references: [id], onDelete: SetNull)
+  clienteId          String
+  cliente            Contact        @relation("OportunidadCliente", fields: [clienteId], references: [id], onDelete: Cascade)
+  polizaOrigenId     String?
+  polizaOrigen       Poliza?        @relation("OportunidadPolizaOrigen", fields: [polizaOrigenId], references: [id], onDelete: SetNull)
   productoSugeridoId String
-  productoSugerido  ProductoSeguro        @relation(fields: [productoSugeridoId], references: [id], onDelete: Cascade)
+  productoSugerido   ProductoSeguro @relation(fields: [productoSugeridoId], references: [id], onDelete: Cascade)
 
   // Datos de la oportunidad
-  titulo            String
-  origen            OrigenOportunidad     @default(IA)
-  probabilidad      Int
-  primaEstimada     Decimal?
-  estado            EstadoOportunidad     @default(NUEVA)
+  titulo        String
+  origen        OrigenOportunidad @default(IA)
+  probabilidad  Int
+  primaEstimada Decimal?
+  estado        EstadoOportunidad @default(NUEVA)
 
   // Seguimiento
-  agenteAsignadoId  String?
-  agenteAsignado    User?                 @relation("OportunidadAgente", fields: [agenteAsignadoId], references: [id])
-  fechaCierre       DateTime?
-  notas             String?
+  agenteAsignadoId String?
+  agenteAsignado   User?     @relation("OportunidadAgente", fields: [agenteAsignadoId], references: [id])
+  fechaCierre      DateTime?
+  notas            String?
 
-  createdAt         DateTime              @default(now())
-  updatedAt         DateTime              @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId, estado])
   @@index([tenantId, clienteId])
@@ -8096,22 +8096,22 @@ model OportunidadComercial {
 // ─── InsuranceImportLog (para auditoría del importador) ───────────────────────
 
 model InsuranceImportLog {
-  id              String    @id @default(cuid())
-  tenantId        String
-  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  fileName        String
-  fileType        String    // xlsx, csv
-  totalRows       Int
-  rowsImported    Int
-  rowsFailed      Int
-  errors          Json?     // Array de errores por fila
-  summary         Json?     // Resumen: polizas creadas, aseguradoras nuevas, etc.
+  fileName     String
+  fileType     String // xlsx, csv
+  totalRows    Int
+  rowsImported Int
+  rowsFailed   Int
+  errors       Json? // Array de errores por fila
+  summary      Json? // Resumen: polizas creadas, aseguradoras nuevas, etc.
 
-  createdById     String
-  createdBy       User      @relation("ImportLogCreator", fields: [createdById], references: [id])
+  createdById String
+  createdBy   User   @relation("ImportLogCreator", fields: [createdById], references: [id])
 
-  createdAt       DateTime  @default(now())
+  createdAt DateTime @default(now())
 
   @@index([tenantId])
   @@index([createdAt])
@@ -8125,40 +8125,40 @@ model InsuranceImportLog {
 //   - el mismo (tenant, mes) genera siempre la misma fila aunque se llame N veces
 //   - distintas versiones del modelo conviven en la misma tabla para comparar
 model PortfolioForecastLog {
-  id                String    @id @default(cuid())
-  tenantId          String
-  tenant            Tenant    @relation("TenantForecastLogs", fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation("TenantForecastLogs", fields: [tenantId], references: [id], onDelete: Cascade)
 
   // Bucket (YYYY-MM-01 UTC) al que apunta la proyección ("el próximo mes").
-  mesProyectado     DateTime
+  mesProyectado DateTime
   // Valor numérico proyectado por el modelo en el instante de generación.
-  proyectado        Decimal   @db.Decimal(18, 2)
+  proyectado    Decimal  @db.Decimal(18, 2)
   // Valor real backfilleado cuando el mes proyectado ya terminó. NULL hasta entonces.
-  real              Decimal?  @db.Decimal(18, 2)
+  real          Decimal? @db.Decimal(18, 2)
   // |proyectado - real| / max(real, 1) * 100 — error porcentual absoluto.
   // Se computa al backfillear `real` para no tener que hacerlo en cada lectura.
-  errorPct          Decimal?  @db.Decimal(7, 2)
+  errorPct      Decimal? @db.Decimal(7, 2)
 
   // Metadatos del modelo: pendiente, intercepto, R² y ventana en meses.
-  slope             Decimal?  @db.Decimal(18, 4)
-  intercepto        Decimal?  @db.Decimal(18, 4)
-  r2                Decimal?  @db.Decimal(7, 4)
-  ventanaMeses      Int       @default(6)
+  slope        Decimal? @db.Decimal(18, 4)
+  intercepto   Decimal? @db.Decimal(18, 4)
+  r2           Decimal? @db.Decimal(7, 4)
+  ventanaMeses Int      @default(6)
 
   // Versión del modelo: si cambian los hiperparámetros del forecast, permite
   // mantener separadas las filas antiguas para auditoría/A/B.
-  sourceVersion     String    @default("v1-linear-6m")
+  sourceVersion String @default("v1-linear-6m")
 
-  generadoEn        DateTime  @default(now())
-  backfilledEn      DateTime?
+  generadoEn   DateTime  @default(now())
+  backfilledEn DateTime?
 
   // ─── Proactive alert side-effects (forecast → chatbot) ───
   // Cuando el forecast detecta slope<0 y R²>0.4, abre una conversación
   // proactiva con el chatbot. Estos campos guardan el "ya lo hicimos"
   // para idempotencia: si la alerta ya se disparó en los últimos 7 días,
   // no repetimos.
-  alertaEnviadaAt        DateTime?
-  alertaConversacionId   String?
+  alertaEnviadaAt      DateTime?
+  alertaConversacionId String?
 
   @@unique([tenantId, mesProyectado, sourceVersion])
   @@index([tenantId])
@@ -8174,33 +8174,33 @@ model PortfolioForecastLog {
 // recalcular cada vez que alguien refresca el dashboard. Constraint única
 // (tenantId, eventoKey, ramo) garantiza idempotencia del upsert.
 model PortfolioSeasonalMultiplier {
-  id                String   @id @default(cuid())
-  tenantId          String
-  tenant            Tenant   @relation("TenantSeasonalMultipliers", fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation("TenantSeasonalMultipliers", fields: [tenantId], references: [id], onDelete: Cascade)
 
   // Identificador semántico del evento. Catálogo cerrado (seasonal-calendar.ts):
   //   SEMANA_SANTA, VUELTA_COLE, FIN_ANO, BUEN_FIN, VERANO, RAMO_RENOVACION
-  eventoKey         String
+  eventoKey String
   // Multiplier específico por ramo; NULL = global del tenant.
-  ramo              String?
+  ramo      String?
 
   // Ventana del evento en MMDD (mes*100+día) para emparejar el bucket
   // del forecast contra el rango histórico (rango recurrente, ejemplo: 1201..1231).
-  ventanaMdInicio   Int
-  ventanaMdFin      Int
+  ventanaMdInicio Int
+  ventanaMdFin    Int
 
   // Multiplier aprendido (1.30 = +30% sobre el baseline). DECIMAL(4,2) admite
   // desde 0.01 (estacionalidad muy deпреsiva) hasta 9.99 (pico extremo).
-  multiplier        Decimal  @db.Decimal(4, 2)
+  multiplier    Decimal  @db.Decimal(4, 2)
   // Baseline promedio del mes base usado para normalizar (para debugging).
-  baselinePrima     Decimal? @db.Decimal(18, 2)
+  baselinePrima Decimal? @db.Decimal(18, 2)
   // Años donde se observó el evento (mínimo 2 para ser válido).
-  muestras          Int
+  muestras      Int
   // Confianza 0..1: nº de años ÷ cobertura esperada ×(1 - varianza relativa).
-  confianza         Decimal? @db.Decimal(4, 2)
+  confianza     Decimal? @db.Decimal(4, 2)
 
-  fuente            String   @default("learned") // "learned" | "static" | "google_calendar"
-  computedAt        DateTime @default(now())
+  fuente     String   @default("learned") // "learned" | "static" | "google_calendar"
+  computedAt DateTime @default(now())
 
   @@unique([tenantId, eventoKey, ramo])
   @@index([tenantId])
@@ -8215,51 +8215,51 @@ model PortfolioSeasonalMultiplier {
 // cada uno tiene su propio estado, monto reclamado y resolución.
 
 enum EstadoSiniestro {
-  REPORTADO        // Cliente acaba de avisar; todavía sin abrir officially
-  EN_TRAMITE       // Documentación entregada, esperando respuesta aseguradora
-  ABIERTO          // Aseguradora aceptó y está procesando
-  PAGADO           // Aseguradora pagó la indemnización
-  RECHAZADO        // Aseguradora rechazó el siniestro
-  CERRADO          // Ciclo completo cerrado sin pago
+  REPORTADO // Cliente acaba de avisar; todavía sin abrir officially
+  EN_TRAMITE // Documentación entregada, esperando respuesta aseguradora
+  ABIERTO // Aseguradora aceptó y está procesando
+  PAGADO // Aseguradora pagó la indemnización
+  RECHAZADO // Aseguradora rechazó el siniestro
+  CERRADO // Ciclo completo cerrado sin pago
 }
 
 model Siniestro {
-  id                  String              @id @default(cuid())
-  tenantId            String
-  tenant              Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   // Relaciones
-  polizaId            String
-  poliza              Poliza              @relation(fields: [polizaId], references: [id], onDelete: Cascade)
-  clienteId           String
-  cliente             Contact             @relation("SiniestroCliente", fields: [clienteId], references: [id], onDelete: Cascade)
-  aseguradoraId       String
-  aseguradora         Aseguradora         @relation(fields: [aseguradoraId], references: [id], onDelete: Cascade)
+  polizaId      String
+  poliza        Poliza      @relation(fields: [polizaId], references: [id], onDelete: Cascade)
+  clienteId     String
+  cliente       Contact     @relation("SiniestroCliente", fields: [clienteId], references: [id], onDelete: Cascade)
+  aseguradoraId String
+  aseguradora   Aseguradora @relation(fields: [aseguradoraId], references: [id], onDelete: Cascade)
 
   // Datos del siniestro
-  numeroSiniestro     String?             // Número que devuelve la aseguradora (si aplica)
-  descripcion         String
-  fechaSuceso         DateTime            // Cuándo ocurrió el evento
-  fechaReporte        DateTime            // Cuándo el cliente avisó (default: ahora)
-  fechaCierre         DateTime?
+  numeroSiniestro String? // Número que devuelve la aseguradora (si aplica)
+  descripcion     String
+  fechaSuceso     DateTime // Cuándo ocurrió el evento
+  fechaReporte    DateTime // Cuándo el cliente avisó (default: ahora)
+  fechaCierre     DateTime?
 
   // Económico
-  montoReclamado      Decimal?
-  montoIndemnizado    Decimal?
-  deducible           Decimal?
-  moneda              String              @default("EUR")
+  montoReclamado   Decimal?
+  montoIndemnizado Decimal?
+  deducible        Decimal?
+  moneda           String   @default("EUR")
 
   // Estado y trazabilidad
-  estado              EstadoSiniestro     @default(REPORTADO)
-  motivoRechazo       String?
-  notas               String?
-  documentos          Json?               // Array de URLs a PDFs/fotos del siniestro
+  estado        EstadoSiniestro @default(REPORTADO)
+  motivoRechazo String?
+  notas         String?
+  documentos    Json? // Array de URLs a PDFs/fotos del siniestro
 
   // Auditoría
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
-  createdById         String
-  createdBy           User                @relation("SiniestroReporter", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String
+  createdBy   User     @relation("SiniestroReporter", fields: [createdById], references: [id])
 
   @@unique([tenantId, numeroSiniestro])
   @@index([tenantId, estado])
@@ -8271,24 +8271,24 @@ model Siniestro {
 }
 
 model ConnectivityProvider {
-  id                    String    @id @default(cuid())
-  providerKey           String    @unique
-  nombreVisible         String
-  baseUrl               String
-  partnerIdEnc          String?
-  usernameEnc           String?
-  passwordEnc           String?
-  estado                String    @default("sin_configurar")
-  ultimaSincronizacion  DateTime?
-  ultimoEvento          DateTime?
+  id                   String    @id @default(cuid())
+  providerKey          String    @unique
+  nombreVisible        String
+  baseUrl              String
+  partnerIdEnc         String?
+  usernameEnc          String?
+  passwordEnc          String?
+  estado               String    @default("sin_configurar")
+  ultimaSincronizacion DateTime?
+  ultimoEvento         DateTime?
   /// Health-check diario: última verificación activa (sonda property_details).
   /// Persistido (no solo memoria del proceso): la marca sobrevive reinicios y
   /// la puede leer también la API sin pasar por el store del cron.
-  ultimaVerificacion    DateTime?
-  contadorErrores       Int       @default(0)
-  configuracion         Json?
-  fechaCreacion         DateTime  @default(now())
-  fechaEdicion          DateTime  @updatedAt
+  ultimaVerificacion   DateTime?
+  contadorErrores      Int       @default(0)
+  configuracion        Json?
+  fechaCreacion        DateTime  @default(now())
+  fechaEdicion         DateTime  @updatedAt
 
   @@index([estado])
   @@map("connectivity_providers")
@@ -8300,26 +8300,26 @@ model ConnectivityProvider {
 // proveedores NUNCA son la identidad principal (ver ConnectivityMapping).
 
 model HospitalityProperty {
-  id             String    @id @default(cuid())
-  tenantId       String
-  nombre         String
-  descripcion    String?
-  codigo         String?
-  zona           String?
-  direccion      String?
-  ciudad         String?
-  estadoProvincia String?
-  pais           String?
-  cp             String?
-  latitud        Float?
-  longitud       Float?
-  fotos          Json?
+  id                       String                       @id @default(cuid())
+  tenantId                 String
+  nombre                   String
+  descripcion              String?
+  codigo                   String?
+  zona                     String?
+  direccion                String?
+  ciudad                   String?
+  estadoProvincia          String?
+  pais                     String?
+  cp                       String?
+  latitud                  Float?
+  longitud                 Float?
+  fotos                    Json?
   /**
    * Datos del establecimiento ante SES.HOSPEDAJES: el código oficial que el
    * Ministerio asigna al darlo de alta (y, opcionalmente, su municipio INE).
    * Es referencia externa, nunca identidad interna de Volkern.
    */
-  sesHospedajes  Json?
+  sesHospedajes            Json?
   /**
    * Detalle declarado del COMPLEJO para el editor estilo Airbnb:
    * `{ habitaciones: Record<id, n>, camas: Record<id, n>, servicios: string[] }`.
@@ -8332,48 +8332,48 @@ model HospitalityProperty {
    * comparten todos los huéspedes. La distribución de cada unidad vive en
    * `HospitalityUnit.detalleAlojamiento`.
    */
-  detalleAlojamiento Json?
+  detalleAlojamiento       Json?
   /**
    * Ubicación enriquecida para el huésped (editor estilo Airbnb):
    * - `distancias`: { aeropuertoKm, autobusKm, metroKm, trenKm, autopistaKm,
-   *   puertoKm, unidad } — distancias a transporte (unidad: 'km'|'millas').
+   * puertoKm, unidad } — distancias a transporte (unidad: 'km'|'millas').
    * - `indicaciones`: Record<idioma, texto> — cómo llegar, multi-idioma
-   *   ('es', 'en'…). Texto plano: se renderiza con saltos de línea.
+   * ('es', 'en'…). Texto plano: se renderiza con saltos de línea.
    * - `mapaPersonalizadoUrl`: imagen o mapa propio subido por el operador.
    * Los tres son opcionales (null = sin configurar) y se publican en las
    * comunicaciones de llegada y la ficha del booking engine.
    */
-  distancias           Json?
-  indicaciones         Json?
-  mapaPersonalizadoUrl String?
-  timezone       String    @default("America/Mexico_City")
-  estado         String    @default("activa")
+  distancias               Json?
+  indicaciones             Json?
+  mapaPersonalizadoUrl     String?
+  timezone                 String                       @default("America/Mexico_City")
+  estado                   String                       @default("activa")
   // Penalización por no-show de esta propiedad: ninguna|primera_noche|estancia_completa.
   // El no-show NO ocupa la unidad (regla 7 del plan); esto solo decide qué se cobra.
-  politicaNoShow String    @default("primera_noche")
+  politicaNoShow           String                       @default("primera_noche")
   // Salida anticipada (decisión del Anfitrión, docs/hospitality-estados-auditoria.md):
   // cerrar_estancia = A (el check-out pone el checkOut al día en curso y libera las
   // noches no usadas pisando las fechas previstas) | salida_real = B (se guarda
   // checkOutReal y la disponibilidad/ocupación usa min(checkOut, checkOutReal),
   // dejando checkOut para las noches vendidas y la facturación).
-  politicaSalidaAnticipada String @default("salida_real")
+  politicaSalidaAnticipada String                       @default("salida_real")
   // Horas que un hold `pending` retiene la unidad antes de caducar solo
   // (docs/hospitality-estados-auditoria.md §holds). 0 = sin caducidad
   // automática: el hold solo lo cierra una persona. Con pagos registrados
   // nunca caduca (es una decisión humana, no un barrido). Ver lib/hospitality/holds.ts.
-  holdHoras      Int       @default(24)
-  fechaCreacion  DateTime  @default(now())
-  fechaEdicion   DateTime  @updatedAt
-  tenant         Tenant    @relation("HospitalityProperties", fields: [tenantId], references: [id], onDelete: Cascade)
-  units          HospitalityUnit[]
-  ratePlans      HospitalityRatePlan[]
-  mappings       ConnectivityMapping[]
-  reservations   HospitalityReservation[]
-  syncLogs       HospitalitySyncLog[]
-  reservationItems HospitalityReservationItem[]
-  payments       HospitalityPayment[]
-  extras         HospitalityExtra[]
-  fees           HospitalityFee[]
+  holdHoras                Int                          @default(24)
+  fechaCreacion            DateTime                     @default(now())
+  fechaEdicion             DateTime                     @updatedAt
+  tenant                   Tenant                       @relation("HospitalityProperties", fields: [tenantId], references: [id], onDelete: Cascade)
+  units                    HospitalityUnit[]
+  ratePlans                HospitalityRatePlan[]
+  mappings                 ConnectivityMapping[]
+  reservations             HospitalityReservation[]
+  syncLogs                 HospitalitySyncLog[]
+  reservationItems         HospitalityReservationItem[]
+  payments                 HospitalityPayment[]
+  extras                   HospitalityExtra[]
+  fees                     HospitalityFee[]
 
   // Código de establecimiento asignado por el Sistema de Hospedajes del
   // Ministerio del Interior en el momento del registro de la entidad. Es el
@@ -8381,29 +8381,29 @@ model HospitalityProperty {
   // (arts. 3.1.1.1 de la interfaz v3.1.2). Null = todavía sin registrar.
   codigoEstablecimientoMIR String?
 
-  reviews HospitalityReview[] @relation("HospitalityReviews")
+  reviews             HospitalityReview[]                     @relation("HospitalityReviews")
   // Credenciales de conectividad de esta propiedad, una por proveedor.
   connectivityConfigs HospitalityConnectivityPropertyConfig[] @relation("HospitalityConnectivityPropertyConfigs")
   // Hilos de mensajería del canal de esta propiedad.
-  canalConversaciones HospitalityCanalConversacion[] @relation("HospitalityCanalConversacionesProperty")
+  canalConversaciones HospitalityCanalConversacion[]          @relation("HospitalityCanalConversacionesProperty")
 
   @@index([tenantId])
   @@map("hospitality_properties")
 }
 
 model HospitalityUnit {
-  id            String                   @id @default(cuid())
-  tenantId      String
-  propertyId    String
-  nombre        String
-  codigo        String?
-  tipo          String    @default("apartamento")
-  capacidad     Int       @default(2)
-  tarifaBase    Float?
-  moneda        String    @default("MXN")
-  descripcion   String?
-  fotos         Json?
-  amenidades    Json?
+  id                 String                       @id @default(cuid())
+  tenantId           String
+  propertyId         String
+  nombre             String
+  codigo             String?
+  tipo               String                       @default("apartamento")
+  capacidad          Int                          @default(2)
+  tarifaBase         Float?
+  moneda             String                       @default("MXN")
+  descripcion        String?
+  fotos              Json?
+  amenidades         Json?
   /**
    * Detalle declarado de ESTA unidad (editor estilo Airbnb):
    * `{ habitaciones: Record<id, n>, camas: Record<id, n> }` — misma forma que
@@ -8414,24 +8414,24 @@ model HospitalityUnit {
    * los suyos). Se normaliza con los helpers de `lib/hospitality/unit-detalle.ts`.
    */
   detalleAlojamiento Json?
-  estado        String    @default("available") // available|occupied|cleaning|dirty|maintenance|out_of_service
-  fechaCreacion DateTime  @default(now())
-  fechaEdicion  DateTime  @updatedAt
-  tenant        Tenant    @relation("HospitalityUnits", fields: [tenantId], references: [id], onDelete: Cascade)
-  property      HospitalityProperty @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  mappings      ConnectivityMapping[]
-  ratePlans     HospitalityRatePlan[]
-  reservations  HospitalityReservation[]
-  cleaningTasks HospitalityCleaningTask[]
-  maintenanceTasks HospitalityMaintenanceTask[]
-  manualBlocks HospitalityUnitBlock[]
-  reservationItems HospitalityReservationItem[]
-  payments       HospitalityPayment[]
-  reviews        HospitalityReview[] @relation("HospitalityReviews")
+  estado             String                       @default("available") // available|occupied|cleaning|dirty|maintenance|out_of_service
+  fechaCreacion      DateTime                     @default(now())
+  fechaEdicion       DateTime                     @updatedAt
+  tenant             Tenant                       @relation("HospitalityUnits", fields: [tenantId], references: [id], onDelete: Cascade)
+  property           HospitalityProperty          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  mappings           ConnectivityMapping[]
+  ratePlans          HospitalityRatePlan[]
+  reservations       HospitalityReservation[]
+  cleaningTasks      HospitalityCleaningTask[]
+  maintenanceTasks   HospitalityMaintenanceTask[]
+  manualBlocks       HospitalityUnitBlock[]
+  reservationItems   HospitalityReservationItem[]
+  payments           HospitalityPayment[]
+  reviews            HospitalityReview[]          @relation("HospitalityReviews")
 
+  @@unique([tenantId, codigo])
   @@index([tenantId])
   @@index([propertyId])
-  @@unique([tenantId, codigo])
   @@map("hospitality_units")
 }
 
@@ -8440,15 +8440,15 @@ model HospitalityUnit {
 // capa de conectividad (rateplanCode) cuando existe mapping; nunca es la PK
 // interna de Volkern.
 model HospitalityRatePlan {
-  id            String    @id @default(cuid())
+  id            String              @id @default(cuid())
   tenantId      String
   propertyId    String
   unitId        String
   nombre        String
   codigo        String? // rateplanCode externo si aplica (solo mapping)
   tarifa        Float // precio por noche
-  moneda        String    @default("MXN")
-  minNoches     Int       @default(1)
+  moneda        String              @default("MXN")
+  minNoches     Int                 @default(1)
   maxNoches     Int? // null = sin máximo
   // Días de la semana permitidos para check-in / check-out (0=domingo ... 6=sábado).
   // null o [] = sin restricción de día.
@@ -8475,10 +8475,10 @@ model HospitalityRatePlan {
   // "si se reserva con 30 días de antelación", así que el push a canales sigue
   // empujando la tarifa publicada de la capa 1.
   ajustes       Json?
-  activo        Boolean   @default(true)
-  fechaCreacion DateTime  @default(now())
-  fechaEdicion  DateTime  @updatedAt
-  tenant        Tenant    @relation("HospitalityRatePlans", fields: [tenantId], references: [id], onDelete: Cascade)
+  activo        Boolean             @default(true)
+  fechaCreacion DateTime            @default(now())
+  fechaEdicion  DateTime            @updatedAt
+  tenant        Tenant              @relation("HospitalityRatePlans", fields: [tenantId], references: [id], onDelete: Cascade)
   property      HospitalityProperty @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   unit          HospitalityUnit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
 
@@ -8492,21 +8492,21 @@ model HospitalityRatePlan {
 // de conectividad (propiedad, habitación, plan de tarifa). El código externo
 // es un ID de integración, nunca la PK interna de Volkern.
 model ConnectivityMapping {
-  id                  String    @id @default(cuid())
-  tenantId            String
-  propertyId          String?
-  unitId              String?
-  provider            String    @default("channel_connectivity")
-  externalPropertyId  String
-  externalUnitCode    String?
+  id                   String               @id @default(cuid())
+  tenantId             String
+  propertyId           String?
+  unitId               String?
+  provider             String               @default("channel_connectivity")
+  externalPropertyId   String
+  externalUnitCode     String?
   externalRatePlanCode String?
-  estado              String    @default("activo")
-  metadata            Json?
-  fechaCreacion       DateTime  @default(now())
-  fechaEdicion        DateTime  @updatedAt
-  tenant              Tenant    @relation("HospitalityMappings", fields: [tenantId], references: [id], onDelete: Cascade)
-  property            HospitalityProperty? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
-  unit                HospitalityUnit?     @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  estado               String               @default("activo")
+  metadata             Json?
+  fechaCreacion        DateTime             @default(now())
+  fechaEdicion         DateTime             @updatedAt
+  tenant               Tenant               @relation("HospitalityMappings", fields: [tenantId], references: [id], onDelete: Cascade)
+  property             HospitalityProperty? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  unit                 HospitalityUnit?     @relation(fields: [unitId], references: [id], onDelete: SetNull)
 
   @@unique([provider, externalPropertyId, externalUnitCode])
   @@index([tenantId])
@@ -8527,13 +8527,13 @@ model ConnectivityMapping {
 // pantalla de plataforma (`/admin/conectividad`) sigue siendo la única que
 // administra el usuario y la contraseña, que son compartidos.
 model HospitalityConnectivityConfig {
-  id             String   @id @default(cuid())
-  tenantId       String   @unique
-  partnerIdEnc   String?
-  activo         Boolean  @default(true)
-  fechaCreacion  DateTime @default(now())
-  fechaEdicion   DateTime @updatedAt
-  tenant         Tenant   @relation("HospitalityConnectivityConfigs", fields: [tenantId], references: [id], onDelete: Cascade)
+  id            String   @id @default(cuid())
+  tenantId      String   @unique
+  partnerIdEnc  String?
+  activo        Boolean  @default(true)
+  fechaCreacion DateTime @default(now())
+  fechaEdicion  DateTime @updatedAt
+  tenant        Tenant   @relation("HospitalityConnectivityConfigs", fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@map("hospitality_connectivity_config")
 }
@@ -8551,7 +8551,7 @@ model HospitalityConnectivityConfig {
 // aquí se guarda la credencial, allí se prohíbe que haya dos escritores sobre la
 // misma propiedad.
 model HospitalityConnectivityPropertyConfig {
-  id                 String    @id @default(cuid())
+  id                 String              @id @default(cuid())
   tenantId           String
   propertyId         String
   /// `nobeds` | `channel_connectivity`. Ver `ProveedorConectividad`.
@@ -8563,19 +8563,19 @@ model HospitalityConnectivityPropertyConfig {
   tokenEnc           String?
   /// `true` = esta credencial puede usarse. La política de escritura lo respeta
   /// y, además, exige que no haya otro proveedor activo con escritura.
-  activo             Boolean   @default(false)
+  activo             Boolean             @default(false)
   /// `escritura` | `lectura`. Un proveedor activo escribe salvo que se marque
   /// `lectura`: es el modo en que el proveedor anterior se queda en paralelo
   /// durante la migración (lee y reconcilia, no empuja).
-  modo               String    @default("escritura")
-  estado             String    @default("sin_configurar")
+  modo               String              @default("escritura")
+  estado             String              @default("sin_configurar")
   ultimoChequeo      DateTime?
   /// Último error de la sonda, saneado (sin token ni URL con credenciales).
   ultimoError        String?
   configuracion      Json?
-  fechaCreacion      DateTime  @default(now())
-  fechaEdicion       DateTime  @updatedAt
-  tenant             Tenant    @relation("HospitalityConnectivityPropertyConfigs", fields: [tenantId], references: [id], onDelete: Cascade)
+  fechaCreacion      DateTime            @default(now())
+  fechaEdicion       DateTime            @updatedAt
+  tenant             Tenant              @relation("HospitalityConnectivityPropertyConfigs", fields: [tenantId], references: [id], onDelete: Cascade)
   property           HospitalityProperty @relation("HospitalityConnectivityPropertyConfigs", fields: [propertyId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, propertyId, provider])
@@ -8585,75 +8585,75 @@ model HospitalityConnectivityPropertyConfig {
 }
 
 model HospitalityReservation {
-  id                    String    @id @default(cuid())
-  tenantId              String
-  propertyId            String
-  unitId                String?
-  contactId             String?
+  id                          String                                  @id @default(cuid())
+  tenantId                    String
+  propertyId                  String
+  unitId                      String?
+  contactId                   String?
   // Referencias externas: bookingId = OTA, cmBookingId = channel manager.
   // Nunca son la identidad principal; la única clave es id + tenantId.
-  channel               String
-  externalBookingId     String
-  cmBookingId           String?
-  action                String    @default("book")
-  estado                String    @default("confirmed") // pending|confirmed|cancelled|checked_in|checked_out|no_show
-  checkIn               DateTime
-  checkOut              DateTime
+  channel                     String
+  externalBookingId           String
+  cmBookingId                 String?
+  action                      String                                  @default("book")
+  estado                      String                                  @default("confirmed") // pending|confirmed|cancelled|checked_in|checked_out|no_show
+  checkIn                     DateTime
+  checkOut                    DateTime
   // Salida REAL del huésped (check-out anticipado, opción B): null = no ha
   // salido o salió el día previsto. La ocupación usa min(checkOut, checkOutReal)
   // vía finEstanciaReal(); checkOut queda intacto para noches vendidas y facturación.
-  checkOutReal          DateTime?
-  bookedOn              DateTime?
-  segment               String?
-  specialRequests       String?
-  pah                   Boolean   @default(false)
-  amountAfterTax        Float?
-  amountBeforeTax       Float?
-  tax                   Float?
-  currency              String    @default("MXN")
-  commission            Float?
-  tcs                   Float?
-  tds                   Float?
-  occupancyAdults       Int       @default(1)
-  occupancyChildren     Int       @default(0)
-  guestData             Json?
+  checkOutReal                DateTime?
+  bookedOn                    DateTime?
+  segment                     String?
+  specialRequests             String?
+  pah                         Boolean                                 @default(false)
+  amountAfterTax              Float?
+  amountBeforeTax             Float?
+  tax                         Float?
+  currency                    String                                  @default("MXN")
+  commission                  Float?
+  tcs                         Float?
+  tds                         Float?
+  occupancyAdults             Int                                     @default(1)
+  occupancyChildren           Int                                     @default(0)
+  guestData                   Json?
   // Respuestas del huésped a las preguntas personalizadas del check-in
   // ({preguntaId: valor}), para el hotel. Viven fuera de `guestData.viajeros`
   // a propósito: nada de lo que el huésped conteste aquí entra en el XML del
   // parte que se comunica al Ministerio (el XSD es cerrado).
-  respuestasCheckin     Json?
-  payload               Json?
+  respuestasCheckin           Json?
+  payload                     Json?
   // Token público del check-in online (registro de viajeros): es el enlace que
   // se le manda al huésped para que suba los documentos de su grupo. Opaco y
   // único — quien lo tiene edita esa reserva y solo esa, así que no se puede
   // adivinar (cuidado: no exponerlo en respuestas de listado).
-  tokenCheckin          String?   @unique
+  tokenCheckin                String?                                 @unique
   // Token público de la reseña (solicitud §21): el enlace del email que le
   // llega al huésped tras el check-out. Mismo patrón que tokenCheckin: opaco,
   // único y por reserva — quien lo tiene escribe (o corrige) la reseña de esa
   // estancia y solo esa. Vive aquí y no en la reseña porque el cron lo genera
   // ANTES de que exista reseña (la reseña nace cuando el huésped envía).
-  tokenResena           String?   @unique
-  travelers             HospitalityTraveler[]     @relation("HospitalityReservationTravelers")
-  compliance            HospitalityCompliance?    @relation("HospitalityReservationCompliance")
-  fechaCreacion         DateTime  @default(now())
-  fechaEdicion          DateTime  @updatedAt
-  tenant                Tenant    @relation("HospitalityReservations", fields: [tenantId], references: [id], onDelete: Cascade)
-  property              HospitalityProperty @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  unit                  HospitalityUnit?     @relation(fields: [unitId], references: [id], onDelete: SetNull)
-  contact               Contact?             @relation("HospitalityReservationContact", fields: [contactId], references: [id], onDelete: SetNull)
-  webhookEvents         HospitalityWebhookEvent[]
-  cleaningTasks         HospitalityCleaningTask[]
-  items                 HospitalityReservationItem[]
-  payments              HospitalityPayment[]
+  tokenResena                 String?                                 @unique
+  travelers                   HospitalityTraveler[]                   @relation("HospitalityReservationTravelers")
+  compliance                  HospitalityCompliance?                  @relation("HospitalityReservationCompliance")
+  fechaCreacion               DateTime                                @default(now())
+  fechaEdicion                DateTime                                @updatedAt
+  tenant                      Tenant                                  @relation("HospitalityReservations", fields: [tenantId], references: [id], onDelete: Cascade)
+  property                    HospitalityProperty                     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  unit                        HospitalityUnit?                        @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  contact                     Contact?                                @relation("HospitalityReservationContact", fields: [contactId], references: [id], onDelete: SetNull)
+  webhookEvents               HospitalityWebhookEvent[]
+  cleaningTasks               HospitalityCleaningTask[]
+  items                       HospitalityReservationItem[]
+  payments                    HospitalityPayment[]
   // Gastos del ERP imputados a esta reserva (limpieza externa, incidencias…).
-  expenses              Expense[] @relation("ExpenseHospitalityReservation")
+  expenses                    Expense[]                               @relation("ExpenseHospitalityReservation")
   // Comunicaciones al Ministerio del Interior generadas desde esta reserva.
   guestRegistryCommunications HospitalityGuestRegistryCommunication[]
   // La reseña de esta estancia (una sola por reserva, la moderación decide).
-  review                HospitalityReview? @relation("HospitalityReviews")
+  review                      HospitalityReview?                      @relation("HospitalityReviews")
   // Hilos de mensajería del canal colgados de esta reserva.
-  canalConversaciones   HospitalityCanalConversacion[] @relation("HospitalityCanalConversacionesReservation")
+  canalConversaciones         HospitalityCanalConversacion[]          @relation("HospitalityCanalConversacionesReservation")
 
   @@unique([tenantId, channel, externalBookingId])
   @@index([tenantId])
@@ -8668,14 +8668,14 @@ model HospitalityReservation {
 // Eventos brutos del proveedor de conectividad (auditoría/diagnóstico).
 // Se registra SIEMPRE el payload recibido, incluso si falla la resolución.
 model HospitalityWebhookEvent {
-  id              String    @id @default(cuid())
+  id              String                  @id @default(cuid())
   tenantId        String?
   reservationId   String?
   action          String
   channel         String?
   hotelCode       String?
   bookingId       String?
-  estado          String    @default("recibido") // recibido|procesado|duplicado|error|sin_mapping
+  estado          String                  @default("recibido") // recibido|procesado|duplicado|error|sin_mapping
   errorMensaje    String?
   payload         Json?
   // Entregas acumuladas de ESTA fila. En las reservas vale 1 (una fila por
@@ -8683,11 +8683,11 @@ model HospitalityWebhookEvent {
   // aquí se cuenta cada reintento del proveedor: «este código lleva 40 intentos
   // desde el 9-oct» es la información que hace falta para actuar, y 40 filas
   // idénticas no la dan mejor.
-  intentos        Int       @default(1)
+  intentos        Int                     @default(1)
   // Momento del último reintento (null en las filas históricas de reservas).
   ultimoIntentoEn DateTime?
-  fechaCreacion   DateTime  @default(now())
-  tenant          Tenant?   @relation("HospitalityWebhookEvents", fields: [tenantId], references: [id], onDelete: Cascade)
+  fechaCreacion   DateTime                @default(now())
+  tenant          Tenant?                 @relation("HospitalityWebhookEvents", fields: [tenantId], references: [id], onDelete: Cascade)
   reservation     HospitalityReservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
@@ -8702,20 +8702,20 @@ model HospitalityWebhookEvent {
 // qué operación, respuesta externa y estado de procesamiento. Sin retries
 // ciegos: un push fallido queda registrado con su causa para revisión manual.
 model HospitalitySyncLog {
-  id               String   @id @default(cuid())
-  tenantId         String
-  propertyId       String?
-  tipo             String   // inventory|rates|inventory_restrictions|rates_restrictions|reconciliacion
-  operacion        String   // reserva_creada|reserva_modificada|reserva_cancelada|unidad_cambiada|manual
-  estado           String   @default("pendiente") // pendiente|exito|error
-  httpStatus       Int?
-  requestPayload   Json?
-  responseBody     Json?
-  errorMensaje     String?
-  duracionMs       Int?
-  fechaCreacion    DateTime @default(now())
-  tenant           Tenant                    @relation("HospitalitySyncLogs", fields: [tenantId], references: [id], onDelete: Cascade)
-  property         HospitalityProperty?      @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  id             String               @id @default(cuid())
+  tenantId       String
+  propertyId     String?
+  tipo           String // inventory|rates|inventory_restrictions|rates_restrictions|reconciliacion
+  operacion      String // reserva_creada|reserva_modificada|reserva_cancelada|unidad_cambiada|manual
+  estado         String               @default("pendiente") // pendiente|exito|error
+  httpStatus     Int?
+  requestPayload Json?
+  responseBody   Json?
+  errorMensaje   String?
+  duracionMs     Int?
+  fechaCreacion  DateTime             @default(now())
+  tenant         Tenant               @relation("HospitalitySyncLogs", fields: [tenantId], references: [id], onDelete: Cascade)
+  property       HospitalityProperty? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([propertyId])
@@ -8724,22 +8724,23 @@ model HospitalitySyncLog {
   @@index([fechaCreacion])
   @@map("hospitality_sync_logs")
 }
+
 // Estados: pending|in_progress|completed|blocked.
 model HospitalityCleaningTask {
-  id             String   @id @default(cuid())
-  tenantId       String
-  unitId         String
-  reservationId  String?
-  fecha          DateTime @default(now())
-  prioridad      String   @default("normal") // baja|normal|alta
-  responsable    String?
-  estado         String   @default("pending") // pending|in_progress|completed|blocked
-  notas          String?
-  fechaCreacion  DateTime @default(now())
-  fechaEdicion   DateTime @updatedAt
-  tenant         Tenant                    @relation("HospitalityCleaningTasks", fields: [tenantId], references: [id], onDelete: Cascade)
-  unit           HospitalityUnit           @relation(fields: [unitId], references: [id], onDelete: Cascade)
-  reservation    HospitalityReservation?   @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+  id            String                  @id @default(cuid())
+  tenantId      String
+  unitId        String
+  reservationId String?
+  fecha         DateTime                @default(now())
+  prioridad     String                  @default("normal") // baja|normal|alta
+  responsable   String?
+  estado        String                  @default("pending") // pending|in_progress|completed|blocked
+  notas         String?
+  fechaCreacion DateTime                @default(now())
+  fechaEdicion  DateTime                @updatedAt
+  tenant        Tenant                  @relation("HospitalityCleaningTasks", fields: [tenantId], references: [id], onDelete: Cascade)
+  unit          HospitalityUnit         @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  reservation   HospitalityReservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([unitId])
@@ -8750,20 +8751,20 @@ model HospitalityCleaningTask {
 // Incidencia de mantenimiento de una unidad alojativa (plan maestro §18.4).
 // Estados: abierta|en_proceso|resuelta|cerrada.
 model HospitalityMaintenanceTask {
-  id             String   @id @default(cuid())
-  tenantId       String
-  unitId         String
-  incidencia     String
-  descripcion    String?
-  prioridad      String   @default("media") // baja|media|alta|critica
-  responsable    String?
-  estado         String   @default("abierta") // abierta|en_proceso|resuelta|cerrada
-  fecha          DateTime @default(now())
-  notas          String?
-  fechaCreacion  DateTime @default(now())
-  fechaEdicion   DateTime @updatedAt
-  tenant         Tenant                   @relation("HospitalityMaintenanceTasks", fields: [tenantId], references: [id], onDelete: Cascade)
-  unit           HospitalityUnit          @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  id            String          @id @default(cuid())
+  tenantId      String
+  unitId        String
+  incidencia    String
+  descripcion   String?
+  prioridad     String          @default("media") // baja|media|alta|critica
+  responsable   String?
+  estado        String          @default("abierta") // abierta|en_proceso|resuelta|cerrada
+  fecha         DateTime        @default(now())
+  notas         String?
+  fechaCreacion DateTime        @default(now())
+  fechaEdicion  DateTime        @updatedAt
+  tenant        Tenant          @relation("HospitalityMaintenanceTasks", fields: [tenantId], references: [id], onDelete: Cascade)
+  unit          HospitalityUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([unitId])
@@ -8778,17 +8779,17 @@ model HospitalityMaintenanceTask {
 // propietario, mantenimiento y cierre administrativo. Las reservas (OTA, manual
 // o Booking Engine) NO son bloqueos: son del Reservation Engine.
 model HospitalityUnitBlock {
-  id            String   @id @default(cuid())
+  id            String          @id @default(cuid())
   tenantId      String
   unitId        String
   fechaInicio   DateTime
   fechaFin      DateTime
-  tipo          String   @default("propietario") // propietario|mantenimiento|administrativo
+  tipo          String          @default("propietario") // propietario|mantenimiento|administrativo
   motivo        String?
-  estado        String   @default("activo") // activo|cancelado
-  fechaCreacion DateTime @default(now())
-  fechaEdicion  DateTime @updatedAt
-  tenant        Tenant         @relation("HospitalityUnitBlocks", fields: [tenantId], references: [id], onDelete: Cascade)
+  estado        String          @default("activo") // activo|cancelado
+  fechaCreacion DateTime        @default(now())
+  fechaEdicion  DateTime        @updatedAt
+  tenant        Tenant          @relation("HospitalityUnitBlocks", fields: [tenantId], references: [id], onDelete: Cascade)
   unit          HospitalityUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
@@ -8807,7 +8808,7 @@ model HospitalityUnitBlock {
 // pública valida contra este catálogo y nunca usa el precio del cliente.
 // precioPorNoche=true: el importe se multiplica por las noches de la estancia.
 model HospitalityExtra {
-  id             String   @id @default(cuid())
+  id             String              @id @default(cuid())
   tenantId       String
   propertyId     String
   nombre         String
@@ -8815,14 +8816,14 @@ model HospitalityExtra {
   descripcionEs  String?
   descripcionEn  String?
   precio         Float
-  moneda         String   @default("MXN")
-  precioPorNoche Boolean  @default(false)
-  activo         Boolean  @default(true)
-  orden          Int      @default(0)
-  fechaCreacion  DateTime @default(now())
-  fechaEdicion   DateTime @updatedAt
-  tenant         Tenant                @relation("HospitalityExtras", fields: [tenantId], references: [id], onDelete: Cascade)
-  property       HospitalityProperty   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  moneda         String              @default("MXN")
+  precioPorNoche Boolean             @default(false)
+  activo         Boolean             @default(true)
+  orden          Int                 @default(0)
+  fechaCreacion  DateTime            @default(now())
+  fechaEdicion   DateTime            @updatedAt
+  tenant         Tenant              @relation("HospitalityExtras", fields: [tenantId], references: [id], onDelete: Cascade)
+  property       HospitalityProperty @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   // (la inversa `extras` vive en HospitalityProperty)
 
   @@index([tenantId])
@@ -8837,19 +8838,19 @@ model HospitalityExtra {
 // no puede quitarla) y `false` se ofrece para que la elija (mascota, cama
 // extra). Se cobra UNA vez por estancia.
 model HospitalityFee {
-  id            String   @id @default(cuid())
+  id            String              @id @default(cuid())
   tenantId      String
   propertyId    String
   nombre        String
   descripcionEs String?
   descripcionEn String?
   importe       Float
-  moneda        String   @default("MXN")
-  obligatoria   Boolean  @default(true)
-  activo        Boolean  @default(true)
-  orden         Int      @default(0)
-  fechaCreacion DateTime @default(now())
-  fechaEdicion  DateTime @updatedAt
+  moneda        String              @default("MXN")
+  obligatoria   Boolean             @default(true)
+  activo        Boolean             @default(true)
+  orden         Int                 @default(0)
+  fechaCreacion DateTime            @default(now())
+  fechaEdicion  DateTime            @updatedAt
   tenant        Tenant              @relation("HospitalityFees", fields: [tenantId], references: [id], onDelete: Cascade)
   property      HospitalityProperty @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
@@ -8903,19 +8904,19 @@ model HospitalityPromoCode {
 // permite que aplicar el código tres veces en la misma sesión cuente una sola
 // consulta y que la reserva marque exactamente esa fila como convertida.
 model HospitalityPromoConsulta {
-  id            String    @id @default(cuid())
+  id            String   @id @default(cuid())
   tenantId      String
   codigo        String
   propertyId    String?
   unitId        String?
   checkIn       DateTime
   checkOut      DateTime
-  resultado     String    @default("aplicada")
+  resultado     String   @default("aplicada")
   motivo        String?
   sesionId      String?
   reservationId String?
-  fecha         DateTime  @default(now())
-  tenant        Tenant    @relation("HospitalityPromoConsultas", fields: [tenantId], references: [id], onDelete: Cascade)
+  fecha         DateTime @default(now())
+  tenant        Tenant   @relation("HospitalityPromoConsultas", fields: [tenantId], references: [id], onDelete: Cascade)
 
   // Una consulta por sesión y código: reintentar no infla el denominador de la
   // conversión. `sesionId` nulo (integraciones sin sesión) no choca consigo mismo.
@@ -8932,23 +8933,23 @@ model HospitalityPromoConsulta {
 // (en negativo) u otro. El ingreso bruto es la suma de las líneas activas.
 // El ingreso bruto es la suma de las líneas activas de la reserva.
 model HospitalityReservationItem {
-  id              String   @id @default(cuid())
+  id              String                 @id @default(cuid())
   tenantId        String
   reservationId   String
   propertyId      String
   unitId          String?
-  tipo            String   @default("alojamiento") // alojamiento|limpieza|extra|otro|penalizacion
+  tipo            String                 @default("alojamiento") // alojamiento|limpieza|extra|otro|penalizacion
   concepto        String
-  cantidad        Float    @default(1)
+  cantidad        Float                  @default(1)
   importeUnitario Float
   importeTotal    Float
-  moneda          String   @default("MXN")
+  moneda          String                 @default("MXN")
   // Factura del ERP emitida por esta línea. Solo la usa la penalización por
   // no-show: es la traza del cargo (regla 5) y la garantía de no facturar dos
   // veces la misma línea. Ver lib/hospitality/penalizaciones.ts.
   invoiceId       String?
-  fechaCreacion   DateTime @default(now())
-  fechaEdicion    DateTime @updatedAt
+  fechaCreacion   DateTime               @default(now())
+  fechaEdicion    DateTime               @updatedAt
   tenant          Tenant                 @relation("HospitalityReservationItems", fields: [tenantId], references: [id], onDelete: Cascade)
   reservation     HospitalityReservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
   property        HospitalityProperty    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
@@ -8965,21 +8966,21 @@ model HospitalityReservationItem {
 // Pago (o intento de pago) de una reserva. Los pagos parciales son filas
 // independientes: el estado de cobro se deriva de la suma, nunca se adivina.
 model HospitalityPayment {
-  id                    String    @id @default(cuid())
+  id                    String                 @id @default(cuid())
   tenantId              String
   reservationId         String
   propertyId            String
   unitId                String?
   importe               Float
-  moneda                String    @default("MXN")
-  metodo                String    @default("manual") // stripe|transferencia|efectivo|manual|otro
-  estado                String    @default("pagado") // pendiente|pagado|parcial|reembolsado|fallido
+  moneda                String                 @default("MXN")
+  metodo                String                 @default("manual") // stripe|transferencia|efectivo|manual|otro
+  estado                String                 @default("pagado") // pendiente|pagado|parcial|reembolsado|fallido
   referenciaExterna     String?
   stripePaymentIntentId String?
   fechaPago             DateTime?
   notas                 String?
-  fechaCreacion         DateTime  @default(now())
-  fechaEdicion          DateTime  @updatedAt
+  fechaCreacion         DateTime               @default(now())
+  fechaEdicion          DateTime               @updatedAt
   tenant                Tenant                 @relation("HospitalityPayments", fields: [tenantId], references: [id], onDelete: Cascade)
   reservation           HospitalityReservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
   property              HospitalityProperty    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
@@ -9020,10 +9021,10 @@ model HospitalityPaymentAccount {
 model HospitalityCommunicationTemplate {
   id            String   @id @default(cuid())
   tenantId      String
-  evento        String   // confirmacion|pre_llegada|check_in|post_salida|resena
+  evento        String // confirmacion|pre_llegada|check_in|post_salida|resena
   canal         String   @default("whatsapp") // whatsapp|email
-  asunto        String?  // Solo para email
-  contenido     String   // Texto con variables {{nombre}}, {{checkIn}}, ...
+  asunto        String? // Solo para email
+  contenido     String // Texto con variables {{nombre}}, {{checkIn}}, ...
   activo        Boolean  @default(true)
   // Idioma de la plantilla: "es" (defecto) o "en". La comunicación al huésped
   // sale en el idioma en que reservó (guestData.idioma); "es" siempre responde
@@ -9094,13 +9095,13 @@ model HospitalityMirConfig {
 // `publicada` (ya pasaron el filtro real: el canal las mostró) y llevan huella
 // sha256 (canal+fecha+nombre+puntuación) para no importarlas dos veces.
 model HospitalityReview {
-  id             String    @id @default(cuid())
+  id             String                  @id @default(cuid())
   tenantId       String
   propertyId     String
-  reservationId  String?   @unique
+  reservationId  String?                 @unique
   unitId         String?
   // nativa (ciclo §21) | importada (histórico de una OTA)
-  origen         String    @default("nativa")
+  origen         String                  @default("nativa")
   // Fecha de la ESTANCIA (check-in) para el «mes de septiembre 2026» público:
   // en las nativas vive en la reserva; en las importadas no hay reserva y se
   // guarda aquí (la columna del CSV del canal).
@@ -9111,21 +9112,23 @@ model HospitalityReview {
   canal          String?
   // Huella de una reseña importada (null en las nativas): importar el mismo
   // CSV dos veces no duplica reseñas.
-  huellaImport   String?   @unique
+  huellaImport   String?                 @unique
   // pendiente (recién escrita, aún no visible) | publicada | rechazada
-  estado         String    @default("pendiente")
+  estado         String                  @default("pendiente")
   puntuacion     Int
   comentario     String?
   // Nombre que se enseña en la web (no el email ni el teléfono).
   nombreHuesped  String
-  /** Respuesta pública del hotel a la reseña publicada. */
+  /**
+   * Respuesta pública del hotel a la reseña publicada.
+   */
   respuestaHotel String?
-  fechaCreacion  DateTime  @default(now())
-  fechaEdicion   DateTime  @updatedAt
-  tenant         Tenant                     @relation("HospitalityReviews", fields: [tenantId], references: [id], onDelete: Cascade)
-  property       HospitalityProperty        @relation("HospitalityReviews", fields: [propertyId], references: [id], onDelete: Cascade)
-  reservation    HospitalityReservation?    @relation("HospitalityReviews", fields: [reservationId], references: [id], onDelete: Cascade)
-  unit           HospitalityUnit?           @relation("HospitalityReviews", fields: [unitId], references: [id], onDelete: SetNull)
+  fechaCreacion  DateTime                @default(now())
+  fechaEdicion   DateTime                @updatedAt
+  tenant         Tenant                  @relation("HospitalityReviews", fields: [tenantId], references: [id], onDelete: Cascade)
+  property       HospitalityProperty     @relation("HospitalityReviews", fields: [propertyId], references: [id], onDelete: Cascade)
+  reservation    HospitalityReservation? @relation("HospitalityReviews", fields: [reservationId], references: [id], onDelete: Cascade)
+  unit           HospitalityUnit?        @relation("HospitalityReviews", fields: [unitId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, estado])
   @@index([propertyId, estado])
@@ -9145,33 +9148,33 @@ model HospitalityReview {
 // webhook responde 404 y el proveedor reintenta—, igual que una reserva sin
 // mapping. Un mensaje sin propiedad no tiene a quién entregarse.
 model HospitalityCanalConversacion {
-  id             String    @id @default(cuid())
-  tenantId       String
-  propertyId     String?
+  id              String                    @id @default(cuid())
+  tenantId        String
+  propertyId      String?
   // Reserva interna del mismo hilo, si el proveedor manda `booking_id` y hay
   // reserva con ese `externalBookingId`. Null = la conversación es anterior a
   // que la reserva exista aquí (una consulta que aún no es reserva).
-  reservationId  String?
+  reservationId   String?
   // Canal de la OTA en minúsculas (`booking.com`, `expedia`…).
-  canal          String
+  canal           String
   // `hotel_id`: cómo identifica el proveedor esta propiedad en el canal.
-  hotelCode      String
+  hotelCode       String
   // `conversation_id` del proveedor: la clave del hilo en sus APIs.
-  conversacionId String
-  bookingExterno String?
-  huespedNombre  String?
-  huespedEmail   String?
+  conversacionId  String
+  bookingExterno  String?
+  huespedNombre   String?
+  huespedEmail    String?
   huespedTelefono String?
   ultimoMensajeEn DateTime
   // Entrantes sin leer. El panel los cuenta; abrir un hilo no los marca leídos
   // (eso es una acción explícita del operador, como el resto del módulo).
-  sinLeer        Int       @default(0)
-  fechaCreacion  DateTime  @default(now())
-  fechaEdicion   DateTime  @updatedAt
-  tenant         Tenant                  @relation("HospitalityCanalConversaciones", fields: [tenantId], references: [id], onDelete: Cascade)
-  property       HospitalityProperty?    @relation("HospitalityCanalConversacionesProperty", fields: [propertyId], references: [id], onDelete: SetNull)
-  reservation    HospitalityReservation? @relation("HospitalityCanalConversacionesReservation", fields: [reservationId], references: [id], onDelete: SetNull)
-  mensajes       HospitalityCanalMensaje[] @relation("HospitalityCanalMensajesConversacion")
+  sinLeer         Int                       @default(0)
+  fechaCreacion   DateTime                  @default(now())
+  fechaEdicion    DateTime                  @updatedAt
+  tenant          Tenant                    @relation("HospitalityCanalConversaciones", fields: [tenantId], references: [id], onDelete: Cascade)
+  property        HospitalityProperty?      @relation("HospitalityCanalConversacionesProperty", fields: [propertyId], references: [id], onDelete: SetNull)
+  reservation     HospitalityReservation?   @relation("HospitalityCanalConversacionesReservation", fields: [reservationId], references: [id], onDelete: SetNull)
+  mensajes        HospitalityCanalMensaje[] @relation("HospitalityCanalMensajesConversacion")
 
   // Un hilo por canal y conversación dentro del tenant: la entrega repetida del
   // mismo mensaje no abre una segunda conversación.
@@ -9188,7 +9191,7 @@ model HospitalityCanalConversacion {
 // canal se queda aquí como `error` con el texto del proveedor: el hotel tiene
 // que ver que NO salió, no un hilo que parece contestado.
 model HospitalityCanalMensaje {
-  id               String    @id @default(cuid())
+  id               String                       @id @default(cuid())
   tenantId         String
   conversacionId   String
   // `message_id` del proveedor: dedupe de entregas repetidas. Null en los
@@ -9199,18 +9202,18 @@ model HospitalityCanalMensaje {
   // `sender_type` del proveedor, o `hotel` en los que escribimos nosotros.
   emisor           String
   contenido        String
-  tipo             String    @default("text")
+  tipo             String                       @default("text")
   // `time_sent` del proveedor. Null si vino ilegible: el hilo se ordena por
   // `fechaCreacion` y nunca inventa la hora del huésped.
   enviadoEn        DateTime?
   adjuntos         Json?
   // recibido | enviado | error
-  estado           String    @default("recibido")
+  estado           String                       @default("recibido")
   error            String?
-  fechaCreacion    DateTime  @default(now())
-  fechaEdicion     DateTime  @updatedAt
+  fechaCreacion    DateTime                     @default(now())
+  fechaEdicion     DateTime                     @updatedAt
   tenant           Tenant                       @relation("HospitalityCanalMensajes", fields: [tenantId], references: [id], onDelete: Cascade)
-  conversacion     HospitalityCanalConversacion  @relation("HospitalityCanalMensajesConversacion", fields: [conversacionId], references: [id], onDelete: Cascade)
+  conversacion     HospitalityCanalConversacion @relation("HospitalityCanalMensajesConversacion", fields: [conversacionId], references: [id], onDelete: Cascade)
 
   // Dedupe por mensaje del proveedor dentro del hilo.
   @@unique([conversacionId, mensajeExternoId])
@@ -9220,21 +9223,21 @@ model HospitalityCanalMensaje {
 }
 
 model HospitalityCheckinPregunta {
-  id        String   @id @default(cuid())
-  tenantId  String
+  id            String   @id @default(cuid())
+  tenantId      String
   // Pregunta y opciones (si tipo = opcion) en ES y EN — el formulario es
   // bilingüe y una pregunta solo en un idioma rompería la pantalla.
-  es        Json
-  en        Json
+  es            Json
+  en            Json
   // texto | opcion | numero | fecha
-  tipo      String   @default("texto")
-  opciones  Json?
-  requerida Boolean  @default(false)
-  activa    Boolean  @default(true)
-  orden     Int      @default(0)
+  tipo          String   @default("texto")
+  opciones      Json?
+  requerida     Boolean  @default(false)
+  activa        Boolean  @default(true)
+  orden         Int      @default(0)
   fechaCreacion DateTime @default(now())
   fechaEdicion  DateTime @updatedAt
-  tenant    Tenant   @relation("HospitalityCheckinPreguntas", fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant        Tenant   @relation("HospitalityCheckinPreguntas", fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, activa])
   @@map("hospitality_checkin_pregunta")
@@ -9247,29 +9250,29 @@ model HospitalityCheckinPregunta {
 // guarda ambos momentos para poder auditar qué se envió, cuándo y con qué
 // resultado — obligación documental del propio RD 933/2021.
 model HospitalityGuestRegistryCommunication {
-  id                    String    @id @default(cuid())
+  id                    String                  @id @default(cuid())
   tenantId              String
   reservationId         String?
-  tipoComunicacion      String    @default("PV")
+  tipoComunicacion      String                  @default("PV")
   // A = alta, B = anulación (RD: anular la comunicación si se cancela).
-  tipoOperacion         String    @default("A")
+  tipoOperacion         String                  @default("A")
   // pendiente | enviada | aceptada | rechazada | anulada | error | datos_incompletos
-  estado                String    @default("pendiente")
+  estado                String                  @default("pendiente")
   referencia            String?
   codigoEstablecimiento String?
   lote                  String?
   codigoComunicacion    String?
   codigoRetorno         String?
   descripcion           String?
-  intentos              Int       @default(0)
+  intentos              Int                     @default(0)
   errores               Json?
   xmlSolicitud          String?
   respuesta             String?
   fechaEnvio            DateTime?
   fechaRespuesta        DateTime?
-  fechaCreacion         DateTime  @default(now())
-  fechaEdicion          DateTime  @updatedAt
-  tenant                Tenant    @relation("HospitalityGuestRegistry", fields: [tenantId], references: [id], onDelete: Cascade)
+  fechaCreacion         DateTime                @default(now())
+  fechaEdicion          DateTime                @updatedAt
+  tenant                Tenant                  @relation("HospitalityGuestRegistry", fields: [tenantId], references: [id], onDelete: Cascade)
   reservation           HospitalityReservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
 
   // Una comunicación de cada tipo por reserva y operación: el barrido es
@@ -9339,21 +9342,21 @@ model HospitalityBookingConfig {
 }
 
 model HospitalityCompliance {
-  id                 String    @id @default(cuid())
+  id                 String                       @id @default(cuid())
   tenantId           String
-  reservationId      String    @unique
-  estadoReserva      String    @default("pendiente") // Comunicación RH
-  estadoViajeros     String    @default("pendiente") // Comunicación PV
+  reservationId      String                       @unique
+  estadoReserva      String                       @default("pendiente") // Comunicación RH
+  estadoViajeros     String                       @default("pendiente") // Comunicación PV
   codigoComunicacion String?
   loteId             String?
   enviadoEn          DateTime?
-  procesadoEn          DateTime?
+  procesadoEn        DateTime?
   codigoError        String?
   mensajeError       String?
-  fechaCreacion      DateTime  @default(now())
-  fechaEdicion       DateTime  @updatedAt
-  tenant             Tenant    @relation("HospitalityCompliances", fields: [tenantId], references: [id], onDelete: Cascade)
-  reservation        HospitalityReservation @relation("HospitalityReservationCompliance", fields: [reservationId], references: [id], onDelete: Cascade)
+  fechaCreacion      DateTime                     @default(now())
+  fechaEdicion       DateTime                     @updatedAt
+  tenant             Tenant                       @relation("HospitalityCompliances", fields: [tenantId], references: [id], onDelete: Cascade)
+  reservation        HospitalityReservation       @relation("HospitalityReservationCompliance", fields: [reservationId], references: [id], onDelete: Cascade)
   eventos            HospitalityComplianceEvent[]
 
   @@index([tenantId])
@@ -9363,49 +9366,49 @@ model HospitalityCompliance {
 }
 
 model HospitalityComplianceConfig {
-  id             String    @id @default(cuid())
-  tenantId       String    @unique
-  activo         Boolean   @default(false)
-  entorno        String    @default("pruebas") // pruebas|produccion
-  entidadNombre  String?
-  entidadNif     String?
-  usuarioEnc     String?
-  passwordEnc    String?
+  id                     String    @id @default(cuid())
+  tenantId               String    @unique
+  activo                 Boolean   @default(false)
+  entorno                String    @default("pruebas") // pruebas|produccion
+  entidadNombre          String?
+  entidadNif             String?
+  usuarioEnc             String?
+  passwordEnc            String?
   /**
    * Certificado digital de la entidad (el .p12/.pfx de la FNMT) en Base64 y su
    * contraseña, ambos cifrados en reposo. El certificado viaja presentado en el TLS
    * de cada comunicación: es lo que le dice al Ministerio quién comunica.
    */
-  certificadoEnc         String? @db.Text
+  certificadoEnc         String?   @db.Text
   certificadoPasswordEnc String?
   /**
    * Lo que el certificado dice de sí mismo, para que el administrador vea qué
    * instaló sin volver a subirlo. Son datos públicos del certificado (no secretos).
    */
-  certificadoTitular String?
-  certificadoNif     String?
-  certificadoEmisor  String?
-  certificadoHuella  String?
-  certificadoVence   DateTime?
+  certificadoTitular     String?
+  certificadoNif         String?
+  certificadoEmisor      String?
+  certificadoHuella      String?
+  certificadoVence       DateTime?
   /**
    * Código de arrendador de la entidad: lo asigna el Ministerio en el registro
    * (cabecera del lote SOAP, obligatoria para comunicar).
    */
-  codigoArrendador String?
-  estadoConexion   String    @default("sin_configurar")
-  ultimoEnvio      DateTime?
-  ultimoCodigo     String?
-  ultimoError      String?
-  fechaCreacion    DateTime  @default(now())
-  fechaEdicion     DateTime  @updatedAt
-  tenant           Tenant    @relation("HospitalityComplianceConfigs", fields: [tenantId], references: [id], onDelete: Cascade)
+  codigoArrendador       String?
+  estadoConexion         String    @default("sin_configurar")
+  ultimoEnvio            DateTime?
+  ultimoCodigo           String?
+  ultimoError            String?
+  fechaCreacion          DateTime  @default(now())
+  fechaEdicion           DateTime  @updatedAt
+  tenant                 Tenant    @relation("HospitalityComplianceConfigs", fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([estadoConexion])
   @@map("hospitality_compliance_config")
 }
 
 model HospitalityComplianceEvent {
-  id                 String   @id @default(cuid())
+  id                 String                 @id @default(cuid())
   tenantId           String
   reservationId      String
   complianceId       String?
@@ -9416,8 +9419,8 @@ model HospitalityComplianceEvent {
   mensajeError       String?
   detalle            String?
   usuarioId          String?
-  fechaCreacion      DateTime @default(now())
-  tenant             Tenant   @relation("HospitalityComplianceEvents", fields: [tenantId], references: [id], onDelete: Cascade)
+  fechaCreacion      DateTime               @default(now())
+  tenant             Tenant                 @relation("HospitalityComplianceEvents", fields: [tenantId], references: [id], onDelete: Cascade)
   compliance         HospitalityCompliance? @relation(fields: [complianceId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
@@ -9428,11 +9431,11 @@ model HospitalityComplianceEvent {
 }
 
 model HospitalityTraveler {
-  id               String    @id @default(cuid())
+  id               String                 @id @default(cuid())
   tenantId         String
   reservationId    String
-  esTitular        Boolean   @default(false)
-  orden            Int       @default(0)
+  esTitular        Boolean                @default(false)
+  orden            Int                    @default(0)
   nombre           String
   apellido1        String
   apellido2        String?
@@ -9450,14 +9453,14 @@ model HospitalityTraveler {
   codigoMunicipio  String?
   codigoPostal     String?
   paisDireccion    String?
-  estado           String    @default("pendiente")
+  estado           String                 @default("pendiente")
   // Seguimiento del enlace de WhatsApp (pedir/reenviar datos al viajero).
   enlaceEnviadoEn  DateTime?
-  enlaceEnviados   Int       @default(0)
+  enlaceEnviados   Int                    @default(0)
   datosRecibidosEn DateTime?
-  fechaCreacion    DateTime  @default(now())
-  fechaEdicion     DateTime @updatedAt
-  tenant           Tenant    @relation("HospitalityTravelers", fields: [tenantId], references: [id], onDelete: Cascade)
+  fechaCreacion    DateTime               @default(now())
+  fechaEdicion     DateTime               @updatedAt
+  tenant           Tenant                 @relation("HospitalityTravelers", fields: [tenantId], references: [id], onDelete: Cascade)
   reservation      HospitalityReservation @relation("HospitalityReservationTravelers", fields: [reservationId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
@@ -9467,19 +9470,19 @@ model HospitalityTraveler {
 }
 
 model HealthSnapshot {
-  id           String    @id @default(cuid())
-  tenantId     String
-  dealId       String
-  healthScore  Int
-  healthStatus String
+  id                String    @id @default(cuid())
+  tenantId          String
+  dealId            String
+  healthScore       Int
+  healthStatus      String
   diasSinMovimiento Int
   diasSinActividad  Int
-  slaVencido   Boolean
-  desenlace    String? // null = abierto · 'ganado' | 'perdido'
-  fechaCierre  DateTime?
-  createdAt    DateTime  @default(now())
-  deal         Deal      @relation(fields: [dealId], references: [id], onDelete: Cascade)
-  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  slaVencido        Boolean
+  desenlace         String? // null = abierto · 'ganado' | 'perdido'
+  fechaCierre       DateTime?
+  createdAt         DateTime  @default(now())
+  deal              Deal      @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  tenant            Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([dealId])
@@ -9523,33 +9526,33 @@ model McpToolCapability {
 /// `SELECT … FOR UPDATE` sobre `status = 'pending'`, así que un reintento del
 /// agente no ejecuta dos veces la misma acción.
 model McpApprovalRequest {
-  id                  String    @id @default(cuid())
-  tenantId            String
-  toolName            String
-  arguments           Json
-  argumentsHash       String
-  requestedById       String
-  roleName            String?
-  via                 String // /mcp | /api/mcp
-  status              String    @default("pending") // pending | approved | rejected | executed | failed | expired
-  reason              String?
-  resolvedById        String?
-  resolvedAt          DateTime?
-  executedAt          DateTime?
-  result              Json?
-  expiresAt           DateTime
-  createdAt           DateTime  @default(now())
+  id                        String    @id @default(cuid())
+  tenantId                  String
+  toolName                  String
+  arguments                 Json
+  argumentsHash             String
+  requestedById             String
+  roleName                  String?
+  via                       String // /mcp | /api/mcp
+  status                    String    @default("pending") // pending | approved | rejected | executed | failed | expired
+  reason                    String?
+  resolvedById              String?
+  resolvedAt                DateTime?
+  executedAt                DateTime?
+  result                    Json?
+  expiresAt                 DateTime
+  createdAt                 DateTime  @default(now())
   // ── Autorización por código enviado al WhatsApp del negocio ─────────
   // Cuando la herramienta es de riesgo `external` (p. ej. volkern_send_whatsapp)
   // se genera un código de 6 dígitos que se envía por WhatsApp al número
   // registrado del tenant. La página pública /mcp/autorizar/[token] lo valida
   // como firma de seguridad antes de ejecutar el envío.
-  whatsappCodeHash           String?   // hash bcrypt del código de 6 dígitos
-  whatsappCodeExpiresAt      DateTime? // expiración del código (default 15 min)
-  whatsappCodeSentAt         DateTime? // cuándo se envió el código por WhatsApp
-  whatsappCodeAttempts       Int       @default(0) // intentos de verificación (anti fuerza bruta)
-  whatsappPhoneNumber        String?   // número al que se envió el código
-  whatsappVerificationToken  String?   @unique // token para la URL pública de verificación
+  whatsappCodeHash          String? // hash bcrypt del código de 6 dígitos
+  whatsappCodeExpiresAt     DateTime? // expiración del código (default 15 min)
+  whatsappCodeSentAt        DateTime? // cuándo se envió el código por WhatsApp
+  whatsappCodeAttempts      Int       @default(0) // intentos de verificación (anti fuerza bruta)
+  whatsappPhoneNumber       String? // número al que se envió el código
+  whatsappVerificationToken String?   @unique // token para la URL pública de verificación
 
   @@index([tenantId, status])
   @@index([tenantId, createdAt])
