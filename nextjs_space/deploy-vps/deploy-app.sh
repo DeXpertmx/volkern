@@ -90,6 +90,10 @@ tg_resolve_credentials() {
     pg_cid=$(docker ps --filter name=volkern-erp_postgres --format '{{.ID}}' | head -1)
     [ -n "$pg_cid" ] && TG_CHAT_ID=$(docker exec "$pg_cid" psql -U volkern_erp -d volkern_erp -t -A -c "SELECT credenciales->>'admin_chat_id' FROM integrations WHERE credenciales->>'admin_chat_id' IS NOT NULL LIMIT 1" 2>/dev/null | tr -d '[:space:]' || true)
   fi
+  # Sin contenedores (app caída, primer deploy) los `[ -n ] &&` de arriba no se
+  # ejecutan: la función devolvería 1 y, con `set -e`, el deploy moriría en
+  # silencio ANTES de desplegar. Resolver la notificación es best-effort.
+  return 0
 }
 
 tg_notify() { # $1 = emoji, $2 = título, $3 = detalle
