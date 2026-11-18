@@ -29,16 +29,17 @@ export const GET = withTenantAuth(async (request, auth) => {
 
     const tenantId = auth.tenant!.id;
 
-    // Obtener todas las propiedades del tenant con filtros opcionales
-    const { properties } = await getProperties(tenantId, {
+    // Sólo salen las fichas marcadas con el interruptor de portales.
+    const { properties: todas } = await getProperties(tenantId, {
       status,
       operationType,
       limit: 10000,
     });
+    const properties = todas.filter((p) => p.publicableEnPortales);
 
     if (properties.length === 0) {
       return NextResponse.json(
-        { error: 'No hay propiedades para exportar' },
+        { error: 'No hay propiedades marcadas para publicar en portales' },
         { status: 404 }
       );
     }
@@ -104,16 +105,17 @@ export const POST = withTenantAuth(async (request, auth) => {
 
     const tenantId = auth.tenant!.id;
 
-    // Obtener todas las propiedades
-    const { properties } = await getProperties(tenantId, {
+    // Sólo salen las fichas marcadas con el interruptor de portales.
+    const { properties: todas } = await getProperties(tenantId, {
       status,
       operationType,
       limit: 10000,
     });
+    const properties = todas.filter((p) => p.publicableEnPortales);
 
     if (properties.length === 0) {
       return NextResponse.json(
-        { error: 'No hay propiedades para exportar' },
+        { error: 'No hay propiedades marcadas para publicar en portales' },
         { status: 404 }
       );
     }

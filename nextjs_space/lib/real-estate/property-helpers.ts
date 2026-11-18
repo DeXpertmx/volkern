@@ -57,6 +57,8 @@ export interface InmuebleParsed {
   energyCertExpiry: string | null;       // caducidad_certificado
   energyCertUrl: string | null;          // documento_certificado (URL PDF)
   status: string;                     // estado: 'disponible' | 'reservada' | 'vendida' | 'alquilada'
+  /** Interruptor de portales: sólo estas fichas salen en los feeds. */
+  publicableEnPortales: boolean;      // publicable_portales
   featured: boolean;                  // destacada
   longDescription: string | null;     // descripcion_larga
   seoTags: string | null;             // tags_seo
@@ -179,6 +181,8 @@ export function parseInmueble(item: CatalogoItem): InmuebleParsed {
     energyCertExpiry: f.caducidad_certificado || null,
     energyCertUrl: f.documento_certificado || null,
     status: f.estado || 'disponible',
+    // Sin marcar = no se publica: el comercial decide ficha a ficha.
+    publicableEnPortales: f.publicable_portales === true,
     featured: Boolean(f.destacada),
     longDescription: f.descripcion_larga || null,
     seoTags: f.tags_seo || null,
@@ -437,6 +441,9 @@ export function buildCustomFieldValues(
   if (data.energyCertExpiry) result.caducidad_certificado = data.energyCertExpiry;
   if (data.energyCertUrl) result.documento_certificado = data.energyCertUrl;
   if (data.status) result.estado = data.status;
+  if (data.publicableEnPortales !== undefined) {
+    result.publicable_portales = Boolean(data.publicableEnPortales);
+  }
   if (data.featured) result.destacada = true;
   if (data.longDescription) result.descripcion_larga = data.longDescription;
   if (data.seoTags) result.tags_seo = data.seoTags;

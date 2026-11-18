@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -49,6 +50,7 @@ import {
   Maximize,
   User,
   FileSignature,
+  Globe,
 } from 'lucide-react';
 import Link from 'next/link';
 import { OwnerCard, OwnerBadge } from '@/components/real-estate/OwnerCard';
@@ -186,6 +188,9 @@ function RealEstatePropertiesInner() {
   // Data
   const [properties, setProperties] = useState<InmuebleParsed[]>([]);
   const [loading, setLoading] = useState(true);
+  // Selección múltiple para la acción masiva de portales.
+  const [seleccionadas, setSeleccionadas] = useState<Set<string>>(new Set());
+  const [guardandoLote, setGuardandoLote] = useState(false);
   const [pagination, setPagination] = useState<PaginationState>({
     page: 1,
     limit: 20,
@@ -318,6 +323,88 @@ function RealEstatePropertiesInner() {
       }
     } catch (error) {
       toast.error('Error de conexión');
+    }
+  };
+
+  /**
+   * Interruptor de portales del listado. Se pinta al instante y se revierte si
+   * el PATCH falla, para que el comercial no crea que quedó guardado.
+   */
+  const handleTogglePublicable = async (property: InmuebleParsed) => {
+    const nuevo = !property.publicableEnPortales;
+    setProperties((prev) =>
+      prev.map((p) => (p.id === property.id ? { ...p, publicableEnPortales: nuevo } : p))
+    );
+    try {
+      const res = await apiFetch(`/api/real-estate/properties/${property.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ publicableEnPortales: nuevo }),
+      });
+      if (!res.ok) throw new Error('PATCH falló');
+      toast.success(
+        nuevo ? 'Se enviará a portales' : 'Dejará de enviarse a portales'
+      );
+    } catch {
+      setProperties((prev) =>
+        prev.map((p) =>
+          p.id === property.id ? { ...p, publicableEnPortales: !nuevo } : p
+        )
+      );
+      toast.error('No se pudo cambiar la publicación en portales');
+    }
+  };
+
+  const toggleSeleccion = (id: string) => {
+    setSeleccionadas((prev) => {
+      const siguiente = new Set(prev);
+      if (siguiente.has(id)) siguiente.delete(id);
+      else siguiente.add(id);
+      return siguiente;
+    });
+  };
+
+  const todasSeleccionadas =
+    properties.length > 0 && properties.every((p) => seleccionadas.has(p.id));
+
+  const toggleTodas = () => {
+    setSeleccionadas((prev) => {
+      if (properties.every((p) => prev.has(p.id))) return new Set();
+      return new Set(properties.map((p) => p.id));
+    });
+  };
+
+  /** Acción masiva: una sola petición para todas las fichas seleccionadas. */
+  const handleBulkPublicable = async (publicable: boolean) => {
+    const ids = Array.from(seleccionadas);
+    if (ids.length === 0) return;
+    setGuardandoLote(true);
+    try {
+      const res = await apiFetch('/api/real-estate/properties', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, publicableEnPortales: publicable }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Error al actualizar');
+      }
+      const seleccion = new Set(ids);
+      setProperties((prev) =>
+        prev.map((p) =>
+          seleccion.has(p.id) ? { ...p, publicableEnPortales: publicable } : p
+        )
+      );
+      toast.success(
+        publicable
+          ? `${ids.length} ${ids.length === 1 ? 'ficha se enviará' : 'fichas se enviarán'} a portales`
+          : `${ids.length} ${ids.length === 1 ? 'ficha deja' : 'fichas dejan'} de enviarse a portales`
+      );
+      setSeleccionadas(new Set());
+    } catch (error: any) {
+      toast.error(error?.message || 'No se pudieron actualizar las fichas');
+    } finally {
+      setGuardandoLote(false);
     }
   };
 
@@ -662,6 +749,43 @@ function RealEstatePropertiesInner() {
         </CardHeader>
       </Card>
 
+      {/* Acción masiva de portales: aparece al seleccionar fichas */}
+      {seleccionadas.size > 0 && (
+        <div className="sticky top-2 z-10 mb-3 flex flex-wrap items-center gap-2 rounded-lg border bg-background/95 p-2 shadow-sm backdrop-blur">
+          <span className="px-1 text-sm font-medium">
+            {seleccionadas.size} {seleccionadas.size === 1 ? 'ficha seleccionada' : 'fichas seleccionadas'}
+          </span>
+          <Button
+            size="sm"
+            onClick={() => handleBulkPublicable(true)}
+            disabled={guardandoLote}
+          >
+            {guardandoLote ? (
+              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+            ) : (
+              <Globe className="mr-1.5 h-4 w-4" />
+            )}
+            Marcar para portales
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => handleBulkPublicable(false)}
+            disabled={guardandoLote}
+          >
+            Quitar de portales
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setSeleccionadas(new Set())}
+            disabled={guardandoLote}
+          >
+            Limpiar selección
+          </Button>
+        </div>
+      )}
+
       {/* Table */}
       <Card>
         <CardContent className="p-0">
@@ -696,6 +820,13 @@ function RealEstatePropertiesInner() {
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
+                      <TableHead className="w-10">
+                        <Checkbox
+                          checked={todasSeleccionadas}
+                          onCheckedChange={toggleTodas}
+                          aria-label="Seleccionar todas las propiedades de esta página"
+                        />
+                      </TableHead>
                       <TableHead className="w-[300px]">Propiedad</TableHead>
                       <TableHead>Operación</TableHead>
                       <TableHead>Tipo</TableHead>
@@ -705,6 +836,7 @@ function RealEstatePropertiesInner() {
                       <TableHead className="text-center">Habs</TableHead>
                       <TableHead className="text-center">Área</TableHead>
                       <TableHead>Estado</TableHead>
+                      <TableHead className="text-center">Portales</TableHead>
                       <TableHead className="text-right w-[100px]">Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -715,6 +847,13 @@ function RealEstatePropertiesInner() {
                         className="group cursor-pointer hover:bg-muted/50"
                         onClick={() => router.push(`/dashboard/real-estate/properties?edit=${property.id}`)}
                       >
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <Checkbox
+                            checked={seleccionadas.has(property.id)}
+                            onCheckedChange={() => toggleSeleccion(property.id)}
+                            aria-label={`Seleccionar ${property.nombre}`}
+                          />
+                        </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <div className="h-12 w-16 rounded-lg overflow-hidden flex-shrink-0 bg-muted">
@@ -820,6 +959,21 @@ function RealEstatePropertiesInner() {
                         </TableCell>
                         <TableCell>
                           {getStatusBadge(property.status)}
+                        </TableCell>
+                        <TableCell
+                          className="text-center"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Switch
+                            checked={property.publicableEnPortales}
+                            onCheckedChange={() => handleTogglePublicable(property)}
+                            aria-label={`Publicar ${property.nombre} en portales`}
+                            title={
+                              property.publicableEnPortales
+                                ? 'Se envía a portales'
+                                : 'No se envía a portales'
+                            }
+                          />
                         </TableCell>
                         <TableCell className="text-right">
                           <div
@@ -974,6 +1128,24 @@ function RealEstatePropertiesInner() {
                       </button>
 
                       <div className="flex items-center justify-end gap-1 px-2 pb-2">
+                        <div className="mr-auto flex items-center gap-3 pl-2">
+                          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <Checkbox
+                              checked={seleccionadas.has(property.id)}
+                              onCheckedChange={() => toggleSeleccion(property.id)}
+                              aria-label={`Seleccionar ${property.nombre}`}
+                            />
+                            Seleccionar
+                          </label>
+                          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <Switch
+                              checked={property.publicableEnPortales}
+                              onCheckedChange={() => handleTogglePublicable(property)}
+                              aria-label={`Publicar ${property.nombre} en portales`}
+                            />
+                            Portales
+                          </label>
+                        </div>
                         <Button
                           variant="ghost"
                           size="icon"

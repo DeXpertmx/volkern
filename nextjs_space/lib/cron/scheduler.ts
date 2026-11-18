@@ -23,6 +23,11 @@ import {
   JOB_LABEL_PROMOS_ALERTAS,
   JOB_SCHEDULE_PROMOS_ALERTAS,
 } from './hospitality-promos-alertas';
+import {
+  JOB_ID_PORTAL_SYNC,
+  JOB_LABEL_PORTAL_SYNC,
+  JOB_SCHEDULE_PORTAL_SYNC,
+} from '../portals/cron';
 
 /**
  * Orquestador de Tareas Programadas para Gemma 4 Proactivity
@@ -328,6 +333,15 @@ export function initCronJobs() {
   }));
 
   console.log('✅ [Scheduler] Cierre de ejecuciones colgadas programado (cada 10 min)');
+
+  // 18. Sindicación multiportal: revisa cada 15 min qué conexiones toca enviar
+  //     según su frecuencia (Kyero/Fotocasa 6 h por defecto).
+  cron.schedule(JOB_SCHEDULE_PORTAL_SYNC, runCronJob(JOB_ID_PORTAL_SYNC, JOB_LABEL_PORTAL_SYNC, JOB_SCHEDULE_PORTAL_SYNC, async () => {
+    const { runPortalSyncCron } = await import('../portals/cron');
+    return await runPortalSyncCron();
+  }));
+
+  console.log('✅ [Scheduler] Sindicación multiportal programada (cada 15 min)');
 }
 
 /**

@@ -289,3 +289,74 @@ export const POST = withTenantAuth(async (req, auth) => {
     );
   }
 }, ['real-estate:write']);
+
+/**
+ * PATCH /api/real-estate/properties
+ *
+ * Acción masiva del listado: marca o desmarca varias fichas como publicables
+ * en portales de una sola vez (una petición por ficha obligaría a decenas de
+ * PATCH al seleccionar media cartera).
+ *
+ * Body: { ids: string[], publicableEnPortales: boolean }
+ */
+export const PATCH = withTenantAuth(async (req, auth) => {
+  const tenantId = auth.tenant!.id;
+
+  try {
+    const body = await req.json();
+    const ids: unknown = body?.ids;
+    const publicable = body?.publicableEnPortales;
+
+    if (!Array.isArray(ids) || ids.length === 0 || ids.some((id) => typeof id !== 'string')) {
+      return NextResponse.json(
+        { error: 'ids debe ser un array de identificadores' },
+        { status: 400 }
+      );
+    }
+    if (typeof publicable !== 'boolean') {
+      return NextResponse.json(
+        { error: 'publicableEnPortales debe ser true o false' },
+        { status: 400 }
+      );
+    }
+
+    // Sólo fichas del tenant y de tipo inmueble: los ids vienen del cliente.
+    const items = await prisma.catalogoItem.findMany({
+      where: { tenantId, tipo: 'inmueble', id: { in: ids as string[] } },
+      select: { id: true, customFieldValues: true },
+    });
+
+    if (items.length === 0) {
+      return NextResponse.json(
+        { error: 'Ninguna de las propiedades indicadas existe' },
+        { status: 404 }
+      );
+    }
+
+    await prisma.$transaction(
+      items.map((item) =>
+        prisma.catalogoItem.update({
+          where: { id: item.id },
+          data: {
+            customFieldValues: {
+              ...((item.customFieldValues as Record<string, any>) || {}),
+              publicable_portales: publicable,
+            },
+          },
+        })
+      )
+    );
+
+    return NextResponse.json({
+      ok: true,
+      actualizadas: items.length,
+      publicableEnPortales: publicable,
+    });
+  } catch (error) {
+    console.error('[Properties PATCH masivo] Error:', error);
+    return NextResponse.json(
+      { error: 'Error al actualizar las propiedades' },
+      { status: 500 }
+    );
+  }
+}, ['real-estate:write']);

@@ -216,6 +216,9 @@ export async function middleware(request: NextRequest) {
     // por email es público — la credencial es su token, no una sesión.
     pathname.startsWith('/checkin/') || 
     pathname.startsWith('/embed/') ||
+    // Feeds de sindicación: el portal se autentica con el token de la URL, no
+    // con sesión. Ver app/feeds/[token]/route.ts.
+    pathname.startsWith('/feeds/') ||
     pathname.startsWith('/tarjeta/') ||
     pathname.startsWith('/p/')
   ) {

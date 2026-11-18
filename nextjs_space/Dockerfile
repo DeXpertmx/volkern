@@ -28,10 +28,13 @@ COPY eslint-rules ./eslint-rules
 #   - npm 9.2.0 (el de la máquina de desarrollo; npm 10 rechaza el lock por peer-conflict)
 #   - --legacy-peer-deps (resolución zod@3 real)
 #   - (npx patch-package || true) con paréntesis: si npm ci falla, la capa falla y no se cachea
+#   - npm rebuild libxmljs2: --ignore-scripts salta el install del addon nativo
+#     que valida el XSD de los feeds de portal; sin esto el binario no existe.
 RUN npm install -g npm@9.2.0 && \
     npm ci --ignore-scripts --legacy-peer-deps && \
     (npx patch-package || true) && \
     npm rebuild esbuild && \
+    npm rebuild libxmljs2 && \
     true
 
 
@@ -127,6 +130,12 @@ ENV NODE_EXTRA_CA_CERTS=/usr/local/share/volkern-ca/fnmt-ac-componentes-informat
 COPY --from=builder /app/prisma ./prisma
 # Copiar Prisma Client generado (Next.js standalone trace a veces no lo incluye)
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+
+# libxmljs2 + su cargador `bindings`: el addon nativo valida el XSD de los
+# feeds de portal. El trazado de Next no siempre incluye el .node binario.
+COPY --from=builder /app/node_modules/libxmljs2 ./node_modules/libxmljs2
+COPY --from=builder /app/node_modules/bindings ./node_modules/bindings
+COPY --from=builder /app/node_modules/file-uri-to-path ./node_modules/file-uri-to-path
 
 # ── Migraciones: se aplican con el job `volkern-erp:migrator` (ver
 # deploy-vps/run-migrations.sh) ANTES del service update. El runner NO incluye

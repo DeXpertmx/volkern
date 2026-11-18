@@ -15,7 +15,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Building2, FileSignature, Home, LayoutDashboard, Settings2 } from 'lucide-react';
+import { Building2, FileSignature, Globe, Home, LayoutDashboard, Settings2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface SeccionPanel {
@@ -30,6 +30,7 @@ const SECCIONES: readonly SeccionPanel[] = [
   { href: '/dashboard/real-estate', label: 'Dashboard', icon: LayoutDashboard, exacto: true },
   { href: '/dashboard/real-estate/properties', label: 'Inmuebles', icon: Building2 },
   { href: '/dashboard/real-estate/captaciones', label: 'Captaciones', icon: FileSignature },
+  { href: '/dashboard/real-estate/portales', label: 'Portales', icon: Globe },
   { href: '/dashboard/configuracion/real-estate', label: 'Configuración', icon: Settings2 },
 ];
 

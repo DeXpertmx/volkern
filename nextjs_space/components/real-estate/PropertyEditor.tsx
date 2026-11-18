@@ -49,6 +49,7 @@ import { ModalDetalle } from './PropertyEditorModals';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import {
@@ -486,12 +487,29 @@ export function PropertyEditor({ propertyId, onBack }: PropertyEditorProps) {
             {seccion === 'disponibilidad' && <SeccionDisponibilidad {...propsSeccion} />}
             {seccion === 'cumplimiento' && <SeccionCumplimiento {...propsSeccion} />}
             {seccion === 'sincronizacion' && (
-              <div className="rounded-xl border bg-card p-8 text-center">
-                <Link2 className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
-                <h3 className="font-medium">Sincronizar con canales</h3>
-                <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-                  Aquí podrás conectar la ficha con portales y canales de distribución. Sección
-                  preparada para la integración con canales.
+              <div className="space-y-4">
+                <div className="flex items-start justify-between gap-4 rounded-xl border bg-card p-4">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <Link2 className="h-4 w-4 text-muted-foreground" />
+                      <h3 className="font-medium">Publicar en portales</h3>
+                    </div>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Sólo las fichas marcadas aquí se incluyen en los feeds de portales
+                      (Idealista, Fotocasa, MLS y JamesEdition). Si lo desactivas, la propiedad
+                      sigue en el CRM y en tu web, pero deja de enviarse.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={draft.publicableEnPortales}
+                    onCheckedChange={(v) => actualizar({ publicableEnPortales: v })}
+                    aria-label="Publicar en portales"
+                  />
+                </div>
+                <p className="px-1 text-xs text-muted-foreground">
+                  {draft.publicableEnPortales
+                    ? 'Esta propiedad se enviará en la próxima exportación a portales.'
+                    : 'Esta propiedad no se enviará a portales mientras el interruptor esté apagado.'}
                 </p>
               </div>
             )}

@@ -33,11 +33,13 @@ export const GET = withTenantAuth(async (request, auth) => {
 
     const tenantId = auth.tenant!.id;
 
-    const { properties } = await getProperties(tenantId, {
+    // El feed sólo incluye lo marcado para portales.
+    const { properties: todas } = await getProperties(tenantId, {
       status,
       operationType,
       limit,
     });
+    const properties = todas.filter((p) => p.publicableEnPortales);
 
     if (format === 'xml') {
       const xmlContent = generateIdealistaFeed(properties, {
@@ -107,12 +109,14 @@ export const POST = withTenantAuth(async (request, auth) => {
 
     const tenantId = auth.tenant!.id;
 
-    // Obtener propiedades activas
-    const { properties, total } = await getProperties(tenantId, {
+    // Obtener propiedades activas marcadas para portales
+    const { properties: todas } = await getProperties(tenantId, {
       status,
       operationType,
       limit: 50000,
     });
+    const properties = todas.filter((p) => p.publicableEnPortales);
+    const total = properties.length;
 
     const feedOptions = {
       tenantName: auth.tenant!.nombre,

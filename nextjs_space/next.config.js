@@ -24,6 +24,15 @@ const nextConfig = {
   // ═══ Images ════════════════════════════════════════════
   images: { unoptimized: true },
 
+  // ═══ Sindicación multiportal ═══════════════════════════
+  // libxmljs2 y los clientes FTP son módulos nativos/Node: no deben pasar por
+  // el bundler. El XSD de Kyero se lee del disco en runtime, así que hay que
+  // incluirlo en el trazado de ficheros del standalone.
+  serverExternalPackages: ['libxmljs2', 'basic-ftp', 'ssh2-sftp-client'],
+  outputFileTracingIncludes: {
+    '/**': ['./lib/portals/schemas/**'],
+  },
+
   // ═══ Experimental ══════════════════════════════════════
   // Optimiza imports de librerías con barrel exports,
   // transformándolos automáticamente en imports por módulo

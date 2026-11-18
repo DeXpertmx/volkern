@@ -37,6 +37,8 @@ export interface DraftInmueble {
   status: string;
   destacado: boolean;
   activo: boolean;
+  /** Interruptor de portales: decide si la ficha entra en los feeds. */
+  publicableEnPortales: boolean;
 
   address: string;
   city: string;
@@ -120,6 +122,7 @@ export function borradorDesdeInmueble(p: InmuebleParsed): DraftInmueble {
     status: p.status || 'disponible',
     destacado: Boolean(p.destacado),
     activo: Boolean(p.activo),
+    publicableEnPortales: Boolean(p.publicableEnPortales),
 
     address: p.address || '',
     city: p.city || '',
@@ -191,6 +194,7 @@ export function payloadDesdeBorrador(d: DraftInmueble): Record<string, unknown> 
     destacado: d.destacado,
     featured: d.destacado,
     activo: d.activo,
+    publicableEnPortales: d.publicableEnPortales,
 
     address: d.address || null,
     city: d.city || null,

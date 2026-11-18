@@ -9581,3 +9581,86 @@ model PortalEvento {
   @@index([tenantId, tipo, fecha])
   @@index([tenantId, fecha])
 }
+
+// ─── Sindicación multiportal ────────────────────────────────────────────────
+//
+// Registro maestro + adaptadores. El adaptador NUNCA escribe en los inmuebles:
+// solo lee `catalogo_items` (a través de `InmuebleParsed`) y devuelve el
+// fichero que se entrega al portal. Estas tres tablas son del orquestador.
+//
+// `credentialsEnc` es el JSON de credenciales cifrado con
+// PORTAL_ENCRYPTION_KEY (AES-256-GCM, ver `lib/portals/crypto.ts`). No hay
+// relación Prisma con `Tenant` a propósito: el aislamiento se hace filtrando
+// por `tenantId` en cada consulta, igual que en el resto del módulo.
+model PortalConnection {
+  id                   String    @id @default(cuid())
+  tenantId             String
+  /// kyero | idealista_ftp | fotocasa | generic_url | idealista_api
+  portalKey            String
+  enabled              Boolean   @default(false)
+  /// Configuración no secreta: defaults de ubicación, mapeos, URL base…
+  config               Json      @default("{}")
+  /// Credenciales cifradas (JSON). null = el portal no usa credenciales.
+  credentialsEnc       String?   @map("credentials_enc")
+  /// Token del feed público (solo portales pull). 32 bytes en base64url.
+  feedToken            String?   @unique @map("feed_token")
+  feedTokenRevokedAt   DateTime? @map("feed_token_revoked_at")
+  syncFrequencyMinutes Int       @default(360) @map("sync_frequency_minutes")
+  lastSyncAt           DateTime? @map("last_sync_at")
+  lastSuccessAt        DateTime? @map("last_success_at")
+  lastError            String?   @map("last_error")
+  consecutiveFailures  Int       @default(0) @map("consecutive_failures")
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@unique([tenantId, portalKey])
+  @@index([tenantId])
+  @@map("portal_connections")
+}
+
+model PortalPublication {
+  id              String    @id @default(cuid())
+  tenantId        String
+  propertyId      String
+  portalKey       String
+  externalId      String?
+  /// pending | published | updated | removed | error
+  status          String    @default("pending")
+  /// SHA-256 del payload mapeado: si no cambia, el inmueble no se reenvía.
+  lastPayloadHash String?   @map("last_payload_hash")
+  lastDeliveredAt DateTime? @map("last_delivered_at")
+  lastError       String?   @map("last_error")
+  attempts        Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([tenantId, propertyId, portalKey])
+  @@index([tenantId, portalKey, status])
+  @@map("portal_publications")
+}
+
+model PortalSyncLog {
+  id                  String    @id @default(cuid())
+  tenantId            String
+  portalKey           String
+  connectionId        String?
+  /// cron | manual | feed
+  trigger             String    @map("triggered_by")
+  /// running | success | partial | error | skipped
+  status              String
+  startedAt           DateTime  @default(now())
+  finishedAt          DateTime?
+  durationMs          Int?
+  propertiesTotal     Int       @default(0)
+  propertiesPublished Int       @default(0)
+  propertiesUpdated   Int       @default(0)
+  propertiesUnchanged Int       @default(0)
+  propertiesSkipped   Int       @default(0)
+  propertiesFailed    Int       @default(0)
+  propertiesRemoved   Int       @default(0)
+  errorMessage        String?
+  details             Json?
+
+  @@index([tenantId, portalKey, startedAt])
+  @@map("portal_sync_logs")
+}

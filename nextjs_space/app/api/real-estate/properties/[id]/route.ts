@@ -136,6 +136,7 @@ export const PATCH = withTenantAuth(async (req, auth, { params }: { params: { id
       { key: 'hasAirConditioning', field: 'aire_acondicionado' },
       { key: 'hasHeating', field: 'calefaccion' },
       { key: 'featured', field: 'destacada' },
+      { key: 'publicableEnPortales', field: 'publicable_portales' },
     ];
 
     for (const f of inmuebleFields) {
