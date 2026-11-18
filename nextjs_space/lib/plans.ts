@@ -40,6 +40,7 @@ export type CrmModule =
   | 'rrhh' | 'finanzas' | 'finanzas_consolidado'
   | 'insurance'
   | 'hospitality'
+  | 'real-estate'
   | 'compras'
   | 'calidad' | 'produccion' | 'inventario' | 'proyectos'
   | 'taskforce' | 'activos' | 'conocimiento' | 'estrategia'
