@@ -21,7 +21,9 @@ import {
  * Las filas salen siempre completas (matriz primero) para que la tabla compare
  * cuentas sin huecos cuando una oficina no tiene eventos todavía.
  */
-export const GET = withTenantAuth(async (req: NextRequest, auth) => {
+// `req` sin anotar: el wrapper tipa el parámetro como `Request` y una firma más
+// estrecha (`NextRequest`) no es asignable.
+export const GET = withTenantAuth(async (req, auth) => {
   const tenantId = auth.tenant!.id;
   const { searchParams } = new URL(req.url);
 

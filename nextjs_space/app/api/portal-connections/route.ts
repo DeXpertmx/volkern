@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { logger } from '@/lib/logger';
@@ -127,7 +128,9 @@ export const POST = withTenantAuth(async (req, auth) => {
         tenantId,
         portalKey,
         enabled: (body as any).enabled === true,
-        config,
+        // `config` es un objeto plano ya validado por el adaptador; Prisma lo
+        // guarda como Json y el tipo no admite estructuras genéricas.
+        config: config as unknown as Prisma.InputJsonValue,
         syncFrequencyMinutes: normalizarFrecuencia((body as any).syncFrequencyMinutes),
         credentialsEnc,
         feedToken: adapter.mode === 'pull' ? generarFeedToken() : null,
@@ -136,7 +139,7 @@ export const POST = withTenantAuth(async (req, auth) => {
         ...(existing && (body as any).enabled !== undefined
           ? { enabled: (body as any).enabled === true }
           : {}),
-        config,
+        config: config as unknown as Prisma.InputJsonValue,
         syncFrequencyMinutes: normalizarFrecuencia(
           (body as any).syncFrequencyMinutes,
           existing?.syncFrequencyMinutes ?? 360

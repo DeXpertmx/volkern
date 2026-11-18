@@ -42,12 +42,12 @@ async function marcaActual(tenantId: string, nombreCuenta: string) {
   };
 }
 
-export const GET = withTenantAuth(async (_req: NextRequest, auth) => {
+export const GET = withTenantAuth(async (_req, auth) => {
   const marca = await marcaActual(auth.tenant!.id, auth.tenant!.nombre);
   return NextResponse.json(marca);
 }, ['real-estate:read']);
 
-export const PUT = withTenantAuth(async (req: NextRequest, auth) => {
+export const PUT = withTenantAuth(async (req, auth) => {
   const tenantId = auth.tenant!.id;
 
   try {

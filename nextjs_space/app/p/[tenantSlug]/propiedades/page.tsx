@@ -218,12 +218,13 @@ export default async function PropertyListingPage({ params, searchParams }: Prop
       )}
       {/* Mismo tratamiento de hero que la portada, según la plantilla */}
       {plantilla === 'marca' ? (
-        <PortalHeroMarca companyName={companyName} brandingColor={brandingColor} />
+        <PortalHeroMarca companyName={companyName} brandingColor={brandingColor} tokens={tokens} />
       ) : heroProperties.length > 0 ? (
         <HeroCarousel
           properties={heroProperties}
           tenantSlug={tenantSlug}
           brandingColor={brandingColor}
+          tokens={tokens}
           logoUrl={logoUrl}
           companyName={companyName}
         />

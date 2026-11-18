@@ -363,7 +363,9 @@ export async function plantillaPorCuenta(ids: string[]): Promise<Map<string, Pla
       select: { tenantId: true, valor: true },
     });
     for (const fila of filas) {
-      resultado.set(fila.tenantId, normalizarPlantilla(fila.valor));
+      // `tenantId` es opcional en la configuración global.
+      if (!fila.tenantId) continue;
+      resultado.set(fila.tenantId, normalizarPlantilla(fila.valor ?? ''));
     }
   } catch {
     // Sin configuración se asume la plantilla por defecto.
