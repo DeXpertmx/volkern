@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { ShieldAlert, Phone, Clock, Send, CheckCircle2 } from 'lucide-react'
+import { ShieldAlert, Phone, Clock, Send, CheckCircle2, AlertCircle } from 'lucide-react'
 
 export default function AutorizarPage({
   params,

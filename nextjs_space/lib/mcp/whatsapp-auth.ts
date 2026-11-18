@@ -301,7 +301,7 @@ export async function verifyAndExecuteWhatsappAuthCode(params: {
   const result = await handleCallTool({
     name: solicitud.toolName,
     arguments: {
-      ...(solicitud.arguments ?? {}),
+      ...(solicitud.arguments as Record<string, unknown> | null ?? {}),
       tenantId: solicitud.tenantId,
       userId: solicitud.requestedById,
       source: 'mcp',
