@@ -28,6 +28,12 @@ import {
   type OpenRouterMessage,
   type OpenRouterTool,
 } from '@/lib/assistant/openrouter-client';
+import {
+  construirSalidaEstructurada,
+  resumenDeTexto,
+  type RegistroEjecucionAgente,
+  type SalidaEstructuradaAgente,
+} from '@/lib/agents/salida-estructurada';
 
 // Compatibilidad: las herramientas nativas viven en su módulo, pero quien
 // importaba HERRAMIENTAS desde aquí (pruebas de cobertura de permisos) sigue
@@ -51,6 +57,8 @@ export interface AgenteCrmResultado {
   texto: string;
   /** Nombres de las herramientas ejecutadas, en orden. */
   herramientas: string[];
+  /** Salida estructurada (P6): acciones, tarjetas y tablas para el chat. */
+  estructura: SalidaEstructuradaAgente;
 }
 
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
@@ -109,6 +117,7 @@ export async function ejecutarAgenteCrm(input: AgenteCrmInput): Promise<AgenteCr
   ];
 
   const ejecutadas: string[] = [];
+  const registros: RegistroEjecucionAgente[] = [];
 
   // Cinco vueltas como máximo: consultar lo que haga falta, registrar lo
   // ocurrido, dejar la nota y crear la tarea pendiente. El presupuesto total
@@ -126,11 +135,26 @@ export async function ejecutarAgenteCrm(input: AgenteCrmInput): Promise<AgenteCr
           autorizacion: { usuario: rolDelTurno, restricciones },
         });
         if (resultado?.ok !== false) ejecutadas.push(nombre);
+        // P6: lo ejecutado alimenta la salida estructurada, además del texto.
+        registros.push({
+          tool: nombre,
+          estado: 'ok',
+          resultado,
+          idempotente: Boolean(resultado?.idempotente),
+        });
         const serializado = JSON.stringify(resultado ?? { ok: true }).slice(0, 2000);
         console.log(`[AgenteCRM] ${nombre}(${JSON.stringify(args).slice(0, 160)}) → ${serializado.slice(0, 200)}`);
         return serializado;
       } catch (error: any) {
-        if (error instanceof PermisoDenegadoError) {
+        const denegado = error instanceof PermisoDenegadoError;
+        registros.push({
+          tool: nombre,
+          estado: denegado ? 'denegado' : 'error',
+          error: denegado
+            ? 'No tienes permiso para esta acción en el CRM. Pídeselo a un administrador.'
+            : error?.message || 'Error ejecutando la herramienta',
+        });
+        if (denegado) {
           console.warn(`[AgenteCRM] ${nombre} denegada: ${error.motivo}`);
           return JSON.stringify({
             ok: false,
@@ -150,6 +174,7 @@ export async function ejecutarAgenteCrm(input: AgenteCrmInput): Promise<AgenteCr
   return {
     texto: ejecutadas.length > 0 ? texto : '',
     herramientas: ejecutadas,
+    estructura: construirSalidaEstructurada(registros, resumenDeTexto(texto)),
   };
 }
 
@@ -190,7 +215,7 @@ Reglas:
 - No envíes correos ni mensajes reales: sólo registra en el CRM.
 - Si una herramienta responde con código sin_permiso, dilo tal cual al usuario y no la reintentes ni busques otra forma de hacer lo mismo.
 - Si una herramienta responde con idempotente: true, esa acción ya estaba guardada: no la repitas y dilo tal cual.
-- Al terminar, responde en español con un resumen breve en viñetas de lo que quedó guardado (tarea completada, nota, interacción, tarea creada con su fecha). Si algo no se pudo hacer, dilo.
+- Al terminar, responde en español con un resumen breve de UNA línea de lo que quedó guardado (tarea completada, nota, interacción, tarea creada con su fecha). Si algo no se pudo hacer, dilo en esa misma línea.
 
 Sólo puedes usar las herramientas de esta lista; si lo que piden no está cubierto, dilo en vez de improvisar:
 ${listaDeHerramientas}

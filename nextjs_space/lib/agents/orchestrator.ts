@@ -239,7 +239,7 @@ export class MinimaxOrchestratorAgent {
         success: true,
         response: texto,
         action: 'crm_agent',
-        metadata: { tools: resultado.herramientas },
+        metadata: { tools: resultado.herramientas, estructura: resultado.estructura },
       };
     } catch (error: any) {
       console.warn('[Orchestrator] Agente CRM no disponible:', error?.message || error);

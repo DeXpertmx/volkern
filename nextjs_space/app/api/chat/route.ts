@@ -46,6 +46,7 @@ export async function GET(req: Request) {
       role: m.senderId === session.user.id ? 'user' : 'agent',
       content: m.content,
       createdAt: m.createdAt,
+      estructura: (m.metadata as any)?.estructura ?? null,
     })),
   })
 }
@@ -106,12 +107,16 @@ export async function POST(req: Request) {
   })
 
   // 3. Guardar respuesta del agente
+  const estructura = result.metadata?.estructura
   const agentMessage = await prisma.chatMessage.create({
     data: {
       tenantId,
       channelId,
       senderId: null,
       content: result.response || 'No se pudo obtener una respuesta.',
+      // La salida estructurada viaja en metadata para que el chat la pinte
+      // también al recargar el historial, sin tocar el contenido de texto.
+      metadata: estructura ? { estructura } : {},
     },
   })
 
@@ -131,6 +136,7 @@ export async function POST(req: Request) {
       role: 'agent',
       content: agentMessage.content,
       createdAt: agentMessage.createdAt,
+      estructura: estructura ?? null,
     },
     metadata: result.metadata,
   })
