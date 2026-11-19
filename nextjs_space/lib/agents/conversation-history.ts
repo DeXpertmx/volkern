@@ -14,11 +14,11 @@ export interface MensajeDeHistorial {
 }
 
 /**
- * Seis turnos (doce mensajes) es suficiente para una conversación comercial y
- * mantiene el prompt corto: el agente no necesita todo el hilo, sólo el
- * contexto inmediato al que se refiere el usuario.
+ * Diez turnos (veinte mensajes) es la ventana de trabajo del Context Manager:
+ * suficiente para resolver referencias («el segundo», «esa propiedad»), sin
+ * disparar el coste del prompt. Lo anterior lo resume el Context Manager.
  */
-const MAX_MENSAJES_HISTORIAL = 12;
+const MAX_MENSAJES_HISTORIAL = 20;
 
 /**
  * Últimos mensajes del canal, del más antiguo al más reciente.

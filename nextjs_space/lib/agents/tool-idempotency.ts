@@ -14,8 +14,12 @@
 import { createHash } from 'node:crypto';
 import idempotencyService from '@/lib/skills/idempotency';
 
-/** Cuánto vive la clave: cubre el doble clic y el reintento de la misma sesión. */
-const TTL_SEGUNDOS = 15 * 60;
+/**
+ * Cuánto vive la clave: cinco minutos, como propone la auditoría (Etapa B).
+ * Cubre el doble clic y el reintento de la misma sesión sin dejar una clave
+ * que bloquee por error una petición legítima mucho después.
+ */
+const TTL_SEGUNDOS = 5 * 60;
 
 /** Clave cuando la ejecución no viene de un hilo (trabajos y pruebas). */
 export const SIN_CONVERSACION = 'sin-conversacion';

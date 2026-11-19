@@ -44,6 +44,7 @@ import {
   type RolDeUsuario,
 } from './crm-tool-permissions';
 import { registrarEjecucion, type DatosTraza } from './tool-execution-log';
+import { clasificarRiesgo, type ClaseRiesgo } from './riesgo-herramientas';
 
 export type OrigenHerramienta = 'crm' | 'mcp' | 'skill';
 
@@ -52,7 +53,12 @@ export interface DefinicionHerramienta {
   origen: OrigenHerramienta;
   descripcion: string;
   parametros: Record<string, any>;
+  /** Clase A/B/C/D, decidida en backend por `clasificarRiesgo`. */
+  riesgo: ClaseRiesgo;
 }
+
+/** Definición sin riesgo: se completa al componer el registro. */
+export type DefinicionSinRiesgo = Omit<DefinicionHerramienta, 'riesgo'>;
 
 /** Permiso ya resuelto del turno: rol del usuario y overrides de la empresa. */
 export interface AutorizacionHerramientas {
@@ -97,7 +103,7 @@ export const HERRAMIENTAS_MCP_EXPUESTAS = Object.keys(MCP_EXPUESTAS);
  * MCP; el schema es la descripción mínima para que el modelo sepa invocarlas,
  * y la ejecución va por `executeSkill`, no por una implementación paralela.
  */
-const HERRAMIENTAS_SKILL: Array<DefinicionHerramienta & { politica: PoliticaHerramienta }> = [
+const HERRAMIENTAS_SKILL: Array<DefinicionSinRiesgo & { politica: PoliticaHerramienta }> = [
   {
     nombre: 'get_pending_tasks',
     origen: 'skill',
@@ -143,7 +149,7 @@ export const POLITICAS_REGISTRO: PoliticasHerramientas = {
 };
 
 /** Las herramientas MCP expuestas, derivadas del catálogo (nunca una copia). */
-function definicionesMcp(): DefinicionHerramienta[] {
+function definicionesMcp(): DefinicionSinRiesgo[] {
   return HERRAMIENTAS_MCP_EXPUESTAS.map((nombre) => {
     const tool = VOLKERN_TOOLS.find((t) => t.name === nombre);
     if (!tool) {
@@ -160,6 +166,11 @@ function definicionesMcp(): DefinicionHerramienta[] {
   });
 }
 
+/** Riesgo de una herramienta: deriva de su permiso (A si es lectura, B si escribe). */
+function riesgoDe(nombre: string): ClaseRiesgo {
+  return clasificarRiesgo(nombre, POLITICAS_REGISTRO[nombre]?.accion).clase;
+}
+
 const DEFINICIONES: readonly DefinicionHerramienta[] = [
   ...HERRAMIENTAS.map((herramienta) => ({
     nombre: herramienta.function.name,
@@ -169,7 +180,7 @@ const DEFINICIONES: readonly DefinicionHerramienta[] = [
   })),
   ...definicionesMcp(),
   ...HERRAMIENTAS_SKILL,
-];
+].map((definicion) => ({ ...definicion, riesgo: riesgoDe(definicion.nombre) }));
 
 /** Todas las herramientas del registro, con su origen. */
 export function herramientasDelRegistro(): readonly DefinicionHerramienta[] {
@@ -280,6 +291,25 @@ export class PermisoDenegadoError extends Error {
   }
 }
 
+/**
+ * La herramienta es de clase C o D: el chat no la ejecuta directa, exige el
+ * flujo de aprobación (clase C) y reautenticación (clase D). No es un fallo de
+ * permiso: es una acción pendiente de aprobación.
+ */
+export class AprobacionRequeridaError extends Error {
+  readonly codigo = 'aprobacion_requerida';
+
+  constructor(
+    readonly herramienta: string,
+    readonly riesgo: ClaseRiesgo
+  ) {
+    super(
+      `La herramienta ${herramienta} es de clase ${riesgo} y requiere aprobación antes de ejecutarse`
+    );
+    this.name = 'AprobacionRequeridaError';
+  }
+}
+
 /** Ejecuta una herramienta del registro con la identidad de la sesión. */
 export async function ejecutarHerramientaDelAgente(
   nombre: string,
@@ -312,6 +342,12 @@ export async function ejecutarHerramientaDelAgente(
       throw new PermisoDenegadoError(permiso.motivo ?? `sin permiso para ${nombre}`);
     }
 
+    // Clase C/D: la autorización de rol no basta, exige el flujo de aprobación.
+    const riesgo = clasificarRiesgo(nombre, POLITICAS_REGISTRO[nombre]?.accion);
+    if (riesgo.requiereAprobacion) {
+      throw new AprobacionRequeridaError(nombre, riesgo.clase);
+    }
+
     const ejecutar = () => ejecutarPorOrigen(definicion, nombre, args, ctx);
 
     let resultado: any;
@@ -335,7 +371,11 @@ export async function ejecutarHerramientaDelAgente(
     traza.resultado = resultado;
     return resultado;
   } catch (error) {
-    traza.estado = error instanceof PermisoDenegadoError ? 'denegado' : 'error';
+    traza.estado = error instanceof PermisoDenegadoError
+      ? 'denegado'
+      : error instanceof AprobacionRequeridaError
+        ? 'aprobacion'
+        : 'error';
     traza.error = error instanceof Error ? error.message : String(error);
     throw error;
   } finally {
