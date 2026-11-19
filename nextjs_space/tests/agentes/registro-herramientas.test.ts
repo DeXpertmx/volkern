@@ -15,6 +15,7 @@ const h = vi.hoisted(() => ({
   llamadasMcp: [] as Array<{ name: string; arguments: Record<string, any> }>,
   llamadasSkill: [] as Array<{ nombre: string; payload: Record<string, any> }>,
   herramientasAlModelo: [] as string[][],
+  prompts: [] as string[],
   guion: [] as Array<{ nombre: string; args: Record<string, any> }>,
   respuestas: [] as string[],
 }));
@@ -46,11 +47,12 @@ vi.mock('@/lib/skills', () => ({
 
 vi.mock('@/lib/assistant/openrouter-client', () => ({
   callAssistantWithToolLoop: async (
-    _mensajes: unknown,
+    mensajes: Array<{ role: string; content: string }>,
     herramientas: Array<{ function: { name: string } }>,
     ejecutar: (nombre: string, args: Record<string, any>) => Promise<string>
   ) => {
     h.herramientasAlModelo.push(herramientas.map((t) => t.function.name));
+    h.prompts.push(mensajes[0]?.content ?? '');
     for (const paso of h.guion) h.respuestas.push(await ejecutar(paso.nombre, paso.args));
     return { choices: [{ message: { content: 'Resumen' } }] };
   },
@@ -69,6 +71,7 @@ import {
   herramientasParaElModelo,
   PermisoDenegadoError,
 } from '@/lib/agents/tool-registry';
+import { construirSistema } from '@/lib/agents/crm-tool-agent';
 
 const TENANT = 'tenant-a';
 
@@ -78,6 +81,7 @@ const ROL_CATALOGO = { id: 'r-catalogo', nombre: 'Catálogo', permisos: { catalo
 const ROL_AGENDA = { id: 'r-agenda', nombre: 'Agenda', permisos: { citas: { ver: true, crear: true, cancelar: true } } };
 const ROL_ADMINISTRACION = { id: 'r-admin', nombre: 'Administración', permisos: { catalogo: { ver: true } } };
 const ROL_SIN_PERMISOS = { id: 'r-vacio', nombre: 'Vacío', permisos: {} };
+const ROL_SUPERADMIN = { id: 'r-super', nombre: 'Superadmin', permisos: {} };
 
 function rol(role: typeof ROL_COMERCIAL | typeof ROL_SIN_PERMISOS, existe = true) {
   return { role, existe };
@@ -112,6 +116,7 @@ beforeEach(() => {
   h.llamadasMcp.length = 0;
   h.llamadasSkill.length = 0;
   h.herramientasAlModelo.length = 0;
+  h.prompts.length = 0;
   h.guion.length = 0;
   h.respuestas.length = 0;
 });
@@ -211,6 +216,45 @@ describe('exposición por rol', () => {
     expect(herramientasParaElModelo(rol(ROL_SIN_PERMISOS))).toEqual([]);
     expect(herramientasParaElModelo({ role: null, existe: true })).toEqual([]);
     expect(autorizarHerramienta('buscar_persona', rol(ROL_SIN_PERMISOS)).permitido).toBe(false);
+  });
+});
+
+describe('prompt del turno', () => {
+  it('enumera sólo las herramientas del rol', () => {
+    const prompt = construirSistema(
+      'America/Mexico_City',
+      herramientasParaElModelo(rol(ROL_COMERCIAL))
+    );
+
+    expect(prompt).toContain('- buscar_persona');
+    expect(prompt).toContain('- volkern_list_deals');
+    expect(prompt).toContain('- get_pending_tasks');
+
+    // Ni la cartera ni las finanzas: el comercial no las tiene.
+    expect(prompt).not.toContain('buscar_propiedades');
+    expect(prompt).not.toContain('volkern_list_catalogo');
+    expect(prompt).not.toContain('volkern_get_financial_dashboard');
+  });
+
+  it('no repite el nombre de ninguna herramienta en el texto', () => {
+    const herramientas = herramientasParaElModelo(rol(ROL_SUPERADMIN));
+    const prompt = construirSistema('America/Mexico_City', herramientas);
+
+    expect(herramientas.length).toBe(14);
+    for (const herramienta of herramientas) {
+      const nombre = herramienta.function.name;
+      expect(prompt.split(nombre).length - 1, `${nombre} aparece más de una vez`).toBe(1);
+    }
+  });
+
+  it('el prompt que recibe el modelo es el de su rol', async () => {
+    await pedir('u-catalogo', [{ nombre: 'volkern_list_catalogo', args: {} }]);
+
+    const prompt = h.prompts[0];
+    expect(prompt).toContain('- volkern_list_catalogo');
+    expect(prompt).not.toContain('volkern_list_deals');
+    expect(prompt).not.toContain('crear_nota');
+    expect(prompt).not.toContain('update_deal');
   });
 });
 

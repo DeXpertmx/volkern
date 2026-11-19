@@ -205,6 +205,8 @@ export class MinimaxOrchestratorAgent {
           userId,
           tenantId,
           historial: request.historial,
+          // El canal es la conversación: entra en la clave de idempotencia.
+          conversationId: request.chatId,
           timeoutMs: PRESUPUESTO_MS,
         }),
         new Promise<null>((resolve) => setTimeout(() => resolve(null), PRESUPUESTO_MS + 3000)),

@@ -42,6 +42,7 @@ const MODELOS = [
   'interaction',
   'catalogoItem',
   'mcpToolCapability',
+  'idempotencyRecord',
 ]
 
 export interface Violacion {
@@ -137,6 +138,15 @@ export function crearPrismaEnMemoria(datos: Record<string, Fila[]> = {}): Prisma
     return tabla === 'chatChannel' ? filas.map((f) => conMensajes(f, args)) : filas
   }
 
+  /**
+   * Columnas únicas por modelo. `create` falla como Postgres (P2002) si ya
+   * existe una fila con el mismo valor: es lo que espera la capa de
+   * idempotencia para detectar el duplicado.
+   */
+  const COLUMNAS_UNICAS: Record<string, string[]> = {
+    idempotencyRecord: ['key'],
+  }
+
   const modelo = (tabla: string) => ({
     findMany: async (args: any = {}) => {
       anotarAlcance(tabla, 'findMany', args.where)
@@ -159,7 +169,15 @@ export function crearPrismaEnMemoria(datos: Record<string, Fila[]> = {}): Prisma
       return leer(tabla, args).length
     },
     create: async (args: any = {}) => {
-      const fila = { id: `fake_${++contadorId}`, createdAt: new Date(), updatedAt: new Date(), ...(args.data ?? {}) }
+      const datos = args.data ?? {}
+      for (const campo of COLUMNAS_UNICAS[tabla] ?? []) {
+        if (datos[campo] !== undefined && tablas[tabla].some((f) => f[campo] === datos[campo])) {
+          const error: any = new Error(`[fake] ${tabla}.${campo} duplicado`)
+          error.code = 'P2002'
+          throw error
+        }
+      }
+      const fila = { id: `fake_${++contadorId}`, createdAt: new Date(), updatedAt: new Date(), ...datos }
       tablas[tabla].push(fila)
       return fila
     },
@@ -168,6 +186,11 @@ export function crearPrismaEnMemoria(datos: Record<string, Fila[]> = {}): Prisma
       if (!fila) throw new Error(`[fake] ${tabla}.update: registro no encontrado`)
       Object.assign(fila, args.data ?? {}, { updatedAt: new Date() })
       return fila
+    },
+    delete: async (args: any = {}) => {
+      const indice = tablas[tabla].findIndex((f) => coincide(f, args.where))
+      if (indice < 0) throw new Error(`[fake] ${tabla}.delete: registro no encontrado`)
+      return tablas[tabla].splice(indice, 1)[0]
     },
   })
 

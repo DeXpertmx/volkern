@@ -31,6 +31,11 @@ import { decideToolCall, type CapabilityOverride } from '@/lib/mcp/tool-policy';
 import type { OpenRouterTool } from '@/lib/assistant/openrouter-client';
 import { HERRAMIENTAS, ejecutarHerramientaCrm } from './herramientas-crm';
 import {
+  claveIdempotencia,
+  ejecutarUnaVez,
+  SIN_CONVERSACION,
+} from './tool-idempotency';
+import {
   evaluarPermisoHerramienta,
   PERMISOS_HERRAMIENTAS,
   type PoliticaHerramienta,
@@ -57,6 +62,8 @@ export interface AutorizacionHerramientas {
 export interface ContextoEjecucion {
   tenantId: string;
   userId: string;
+  /** Hilo del chat: parte de la clave de idempotencia. */
+  conversacionId?: string;
   /** Sin autorización no se ejecuta ninguna herramienta. */
   autorizacion: AutorizacionHerramientas;
 }
@@ -292,6 +299,30 @@ export async function ejecutarHerramientaDelAgente(
     throw new PermisoDenegadoError(permiso.motivo ?? `sin permiso para ${nombre}`);
   }
 
+  const ejecutar = () => ejecutarPorOrigen(definicion, nombre, args, ctx);
+
+  // Las lecturas no se cachean: repetir una consulta no duplica nada y una
+  // respuesta vieja sí puede mentir. La acción del permiso ya distingue ambas
+  // (`ver` es lectura), así que no hace falta una segunda marca.
+  if (POLITICAS_REGISTRO[nombre]?.accion === 'ver') return ejecutar();
+
+  const clave = claveIdempotencia({
+    userId: ctx.userId,
+    conversacionId: ctx.conversacionId ?? SIN_CONVERSACION,
+    herramienta: nombre,
+    argumentos: args,
+  });
+  const { resultado, repetida } = await ejecutarUnaVez(clave, ejecutar);
+  return marcarRepetida(resultado, repetida);
+}
+
+/** Ejecuta la herramienta por su origen, ya autorizada. */
+async function ejecutarPorOrigen(
+  definicion: DefinicionHerramienta,
+  nombre: string,
+  args: Record<string, any>,
+  ctx: ContextoEjecucion
+): Promise<any> {
   if (definicion.origen === 'crm') {
     return ejecutarHerramientaCrm(nombre, args, ctx);
   }
@@ -320,4 +351,16 @@ export async function ejecutarHerramientaDelAgente(
     nombre as any,
     { ...args, tenantId: ctx.tenantId, userId: ctx.userId, source: 'app' } as any
   );
+}
+
+/**
+ * Marca el resultado de un duplicado para que el modelo sepa que no acaba de
+ * crear nada: el objeto guardado se devuelve igual, con `idempotente: true`.
+ */
+function marcarRepetida<T>(resultado: T, repetida: boolean): T {
+  if (!repetida) return resultado;
+  if (resultado && typeof resultado === 'object' && !Array.isArray(resultado)) {
+    return { ...(resultado as Record<string, unknown>), idempotente: true } as T;
+  }
+  return { resultado, idempotente: true } as T;
 }

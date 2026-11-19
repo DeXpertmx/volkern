@@ -21,7 +21,12 @@ vi.mock('@/lib/db', async () => {
     {},
     { get: (_t, prop: string) => (prismaActual.prisma as any)[prop] }
   )
-  return { prisma: delegado, globalPrisma: delegado, getTenantDb: async () => delegado }
+  return {
+    prisma: delegado,
+    default: delegado,
+    globalPrisma: delegado,
+    getTenantDb: async () => delegado,
+  }
 })
 
 interface MensajeEnviado {

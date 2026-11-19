@@ -26,6 +26,7 @@ import {
 import {
   callAssistantWithToolLoop,
   type OpenRouterMessage,
+  type OpenRouterTool,
 } from '@/lib/assistant/openrouter-client';
 
 // Compatibilidad: las herramientas nativas viven en su módulo, pero quien
@@ -39,6 +40,8 @@ export interface AgenteCrmInput {
   userId: string;
   /** Turnos anteriores del hilo, para resolver referencias del usuario. */
   historial?: MensajeDeHistorial[];
+  /** Hilo del chat: con el usuario y los argumentos forma la clave de idempotencia. */
+  conversationId?: string;
   /** Presupuesto total de la conversación con herramientas (ms). */
   timeoutMs?: number;
 }
@@ -87,15 +90,6 @@ export async function ejecutarAgenteCrm(input: AgenteCrmInput): Promise<AgenteCr
   const usuario = await prisma.user.findUnique({ where: { id: userId }, select: { timezone: true, name: true } });
   const timezone = usuario?.timezone || 'America/Mexico_City';
 
-  const messages: OpenRouterMessage[] = [
-    { role: 'system', content: construirSistema(timezone) },
-    // El historial ya llega recortado y ordenado desde el canal. Sin él, «que
-    // tengan terraza» no tendría antecedente y empezaría una búsqueda nueva.
-    ...(input.historial ?? []),
-    { role: 'user', content: message },
-  ];
-
-  const ejecutadas: string[] = [];
   // El rol y las restricciones de la empresa se leen una sola vez por mensaje:
   // juntos deciden qué herramientas ve el modelo y vuelven a decidir, sin otra
   // consulta, si puede ejecutar cada una de las que pida.
@@ -103,19 +97,32 @@ export async function ejecutarAgenteCrm(input: AgenteCrmInput): Promise<AgenteCr
     cargarRolDeUsuario({ userId, tenantId }),
     cargarRestriccionesMcp(tenantId),
   ]);
+  const disponibles = herramientasParaElModelo(rolDelTurno, restricciones);
+
+  const messages: OpenRouterMessage[] = [
+    // El prompt sólo enumera estas herramientas: el rol no lee lo que no puede.
+    { role: 'system', content: construirSistema(timezone, disponibles) },
+    // El historial ya llega recortado y ordenado desde el canal. Sin él, «que
+    // tengan terraza» no tendría antecedente y empezaría una búsqueda nueva.
+    ...(input.historial ?? []),
+    { role: 'user', content: message },
+  ];
+
+  const ejecutadas: string[] = [];
 
   // Cinco vueltas como máximo: consultar lo que haga falta, registrar lo
   // ocurrido, dejar la nota y crear la tarea pendiente. El presupuesto total
   // acota la espera del chat aunque el modelo encadene llamadas.
   const respuesta = await callAssistantWithToolLoop(
     messages,
-    herramientasParaElModelo(rolDelTurno, restricciones),
+    disponibles,
     async (nombre, args) => {
       try {
         // El modelo propone; el registro autoriza antes de tocar la skill.
         const resultado = await ejecutarHerramientaDelAgente(nombre, args, {
           tenantId,
           userId,
+          conversacionId: input.conversationId,
           autorizacion: { usuario: rolDelTurno, restricciones },
         });
         if (resultado?.ok !== false) ejecutadas.push(nombre);
@@ -147,7 +154,19 @@ export async function ejecutarAgenteCrm(input: AgenteCrmInput): Promise<AgenteCr
 }
 
 /** Prompt del sistema, con el calendario de referencia para las fechas. */
-export function construirSistema(timezone: string, ahora = new Date()): string {
+export function construirSistema(
+  timezone: string,
+  /** Herramientas expuestas al rol en este turno (las mismas que ve el modelo). */
+  herramientas: OpenRouterTool[],
+  ahora = new Date()
+): string {
+  // Una línea por herramienta y nada más: el contrato y la descripción ya
+  // viajan en el esquema de cada tool, así que repetirlos aquí duplicaría el
+  // texto y volvería a nombrarla.
+  const listaDeHerramientas = herramientas.length
+    ? herramientas.map((h) => `- ${h.function.name}`).join('\n')
+    : '- (ninguna disponible en este turno)';
+
   return `Eres Gemma, la asistente de CRM de Volkern. Hoy es ${ahora.toLocaleDateString('es-MX', {
     timeZone: timezone,
     weekday: 'long',
@@ -159,19 +178,22 @@ export function construirSistema(timezone: string, ahora = new Date()): string {
 Tu trabajo es convertir lo que cuenta el comercial en cambios reales del CRM usando las herramientas. Un mensaje puede pedir VARIAS acciones: ejecuta todas, en orden, y no pidas confirmación salvo que falte el nombre de la persona o haya ambigüedad real.
 
 Reglas:
-- Primero llama a buscar_persona para confirmar de quién se habla. Si devuelve varios candidatos, pregunta cuál es.
-- Si buscar_persona no encuentra a nadie y hay que dejar constancia de una persona nueva (o el usuario pide darla de alta), usa crear_lead con los datos que haya dado: nombre, email, teléfono, empresa, cargo, dirección y origen. No inventes el correo: si no lo tiene, créala sin email y avísale de que la ficha quedó sin correo real. Si crear_lead devuelve yaExistia, no crees otra: sigue trabajando sobre esa ficha y dilo.
-- Lo que YA ocurrió (una llamada, un WhatsApp enviado, que no pudo ver el demo, que tiene otras herramientas) se registra con registrar_interaccion; el contexto de negocio (por qué le interesa Volkern, qué usa hoy) con crear_nota.
-- Lo que queda PENDIENTE se crea con crear_tarea (tipo llamada/email/reunion/seguimiento) y la fecha que pida el usuario.
-- Si dice que una tarea ya está hecha, usa completar_tarea con el TÍTULO EXACTO que devolvió buscar_persona (no inventes ni copies a medias el título).
-- Para consultar sin cambiar nada: el pipeline con volkern_list_deals, las tareas propias con get_pending_tasks, la cartera con volkern_list_catalogo o buscar_propiedades, la agenda con volkern_list_citas y el resumen de negocio con volkern_get_financial_dashboard. No inventes cifras: si la herramienta devuelve vacío, dilo.
-- Para mover un negocio de etapa, cambiar su importe o prioridad usa update_deal con nombre o correo.
+- Antes de cambiar algo de una persona, confirma de quién se habla con la herramienta de búsqueda; si devuelve varios candidatos, pregunta cuál es.
+- Si no hay ficha y hay que dejar constancia de una persona nueva (o el usuario pide darla de alta), créala con los datos que haya dado: nombre, email, teléfono, empresa, cargo, dirección y origen. No inventes el correo: si no lo tiene, créala sin email y avísale de que la ficha quedó sin correo real. Si la creación responde yaExistia, no dupliques: sigue trabajando sobre esa ficha y dilo.
+- Lo que YA ocurrió (una llamada, un WhatsApp enviado, que no pudo ver el demo, que tiene otras herramientas) se registra como interacción; el contexto de negocio (por qué le interesa Volkern, qué usa hoy) como nota interna.
+- Lo que queda PENDIENTE se crea como tarea (llamada, email, reunión, seguimiento) con la fecha que pida el usuario.
+- Si dice que una tarea ya está hecha, complétala con el TÍTULO EXACTO que devolvió la búsqueda: no lo inventes ni lo recortes.
+- Para consultar sin cambiar nada, usa las herramientas de consulta disponibles. No inventes cifras: si devuelven vacío, dilo.
 - Fechas: usa SIEMPRE las del calendario de referencia y el formato YYYY-MM-DD. "El jueves" es el próximo jueves; "el jueves de la siguiente semana" es el jueves de la semana que viene, no el de esta.
 - Si el usuario se refiere a algo ya dicho en la conversación ("que tengan terraza", "y más baratas", "los de ayer", "escríbele a él"), averigua a qué se refiere en los turnos anteriores y combina ese criterio con lo anterior, en vez de empezar de cero o preguntar lo que ya sabías.
 - No inventes datos, importes ni fechas que el usuario no haya dicho.
 - No envíes correos ni mensajes reales: sólo registra en el CRM.
 - Si una herramienta responde con código sin_permiso, dilo tal cual al usuario y no la reintentes ni busques otra forma de hacer lo mismo.
+- Si una herramienta responde con idempotente: true, esa acción ya estaba guardada: no la repitas y dilo tal cual.
 - Al terminar, responde en español con un resumen breve en viñetas de lo que quedó guardado (tarea completada, nota, interacción, tarea creada con su fecha). Si algo no se pudo hacer, dilo.
+
+Sólo puedes usar las herramientas de esta lista; si lo que piden no está cubierto, dilo en vez de improvisar:
+${listaDeHerramientas}
 
 Calendario de referencia:
 ${calendarioDeReferencia(timezone)}`;
