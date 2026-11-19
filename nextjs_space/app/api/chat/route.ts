@@ -11,6 +11,7 @@ import {
   tituloDesde,
   touchConversation,
 } from '@/lib/chat/gemma-conversations'
+import { cargarHistorialDeConversacion } from '@/lib/agents/conversation-history'
 
 /** Mensajes de una conversación (la más reciente si no se indica cuál). */
 export async function GET(req: Request) {
@@ -32,7 +33,7 @@ export async function GET(req: Request) {
   }
 
   const messages = await prisma.chatMessage.findMany({
-    where: { channelId, deletedAt: null },
+    where: { channelId, tenantId: session.user.tenantId!, deletedAt: null },
     orderBy: { createdAt: 'asc' },
     take: 200,
     include: { sender: { select: { id: true, name: true, email: true } } },
@@ -45,6 +46,7 @@ export async function GET(req: Request) {
       role: m.senderId === session.user.id ? 'user' : 'agent',
       content: m.content,
       createdAt: m.createdAt,
+      estructura: (m.metadata as any)?.estructura ?? null,
     })),
   })
 }
@@ -71,8 +73,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Conversación no encontrada' }, { status: 404 })
   }
 
-  // Si es el primer mensaje, el título de la conversación sale de él.
-  const previos = await prisma.chatMessage.count({ where: { channelId } })
+  // Antes de guardar el mensaje actual: si se leyera después, llegaría
+  // duplicado al modelo. Un historial vacío significa que es el primer mensaje
+  // del canal, y de ahí sale el título.
+  const historial = await cargarHistorialDeConversacion({ channelId, tenantId })
 
   // 1. Guardar mensaje del usuario
   const userMessage = await prisma.chatMessage.create({
@@ -84,7 +88,7 @@ export async function POST(req: Request) {
     },
   })
 
-  if (previos === 0) {
+  if (historial.length === 0) {
     await prisma.chatChannel.update({
       where: { id: channelId },
       data: { name: `${channelPrefix(userId)}${tituloDesde(message)}` },
@@ -99,15 +103,20 @@ export async function POST(req: Request) {
     chatId: channelId,
     isAuthenticated: true,
     userRole: (session.user as any).roleName,
+    historial,
   })
 
   // 3. Guardar respuesta del agente
+  const estructura = result.metadata?.estructura
   const agentMessage = await prisma.chatMessage.create({
     data: {
       tenantId,
       channelId,
       senderId: null,
       content: result.response || 'No se pudo obtener una respuesta.',
+      // La salida estructurada viaja en metadata para que el chat la pinte
+      // también al recargar el historial, sin tocar el contenido de texto.
+      metadata: estructura ? { estructura } : {},
     },
   })
 
@@ -127,6 +136,7 @@ export async function POST(req: Request) {
       role: 'agent',
       content: agentMessage.content,
       createdAt: agentMessage.createdAt,
+      estructura: estructura ?? null,
     },
     metadata: result.metadata,
   })

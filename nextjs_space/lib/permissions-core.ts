@@ -24,6 +24,10 @@
 // Tipos de permisos
 export type PermissionModule = 
   | 'leads' 
+  // El catálogo (CatalogoItem: inmuebles, productos y servicios) es una llave
+  // propia. Ver el pipeline de leads no es ver la cartera de inmuebles, y
+  // conceder el catálogo no debe abrir la ficha comercial de una persona.
+  | 'catalogo'
   | 'citas' 
   | 'estudiantes' 
   | 'cursos' 
@@ -92,6 +96,7 @@ export interface ModulePermissions {
 // cuando el rol usa el wildcard { all: true }.
 export const ALL_PERMISSION_MODULES: PermissionModule[] = [
   'leads',
+  'catalogo',
   'citas',
   'estudiantes',
   'cursos',

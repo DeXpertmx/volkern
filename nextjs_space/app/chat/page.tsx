@@ -26,6 +26,51 @@ interface Message {
   content: string
   createdAt: Date
   quickReplies?: string[]
+  estructura?: EstructuraAgente
+}
+
+interface CampoTarjeta {
+  etiqueta: string
+  valor: string
+}
+
+interface TarjetaEntidad {
+  tipo: string
+  titulo: string
+  subtitulo?: string
+  estado?: string
+  campos: CampoTarjeta[]
+}
+
+interface AccionAgente {
+  tool: string
+  etiqueta: string
+  estado: 'ok' | 'error' | 'denegado'
+  entidad?: string
+  id?: string
+  detalle?: string
+  error?: string
+  idempotente?: boolean
+  tarjeta?: TarjetaEntidad
+}
+
+interface ColumnaDatos {
+  clave: string
+  titulo: string
+}
+
+interface DatosAgente {
+  tipo: string
+  titulo: string
+  columnas: ColumnaDatos[]
+  filas: Array<Record<string, any>>
+  total: number
+}
+
+interface EstructuraAgente {
+  resumen: string
+  acciones: AccionAgente[]
+  datos: DatosAgente[]
 }
 
 interface Conversation {
@@ -53,6 +98,114 @@ const SUGERENCIAS = [
 ]
 
 const GEMMA_AVATAR = '/Gemma-perfil.jpg?v=2'
+
+/** Celda de tabla: números, fechas o texto, sin inyectar HTML. */
+function formatearCelda(valor: any): string {
+  if (valor === undefined || valor === null || valor === '') return '—'
+  if (typeof valor === 'number') return new Intl.NumberFormat('es-ES').format(valor)
+  const texto = String(valor)
+  const fecha = new Date(texto)
+  if (/^\d{4}-\d{2}-\d{2}/.test(texto) && !Number.isNaN(fecha.getTime())) {
+    return texto.length > 10
+      ? fecha.toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+      : fecha.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })
+  }
+  return texto
+}
+
+function IconoEstado({ estado }: { estado: AccionAgente['estado'] }) {
+  if (estado === 'error') return <span className="text-destructive">✕</span>
+  if (estado === 'denegado') return <span className="text-amber-500">🔒</span>
+  return <span className="text-emerald-500">✓</span>
+}
+
+function TarjetaEntidad({ tarjeta }: { tarjeta: TarjetaEntidad }) {
+  return (
+    <div className="mt-2 rounded-lg border border-border bg-card p-2.5">
+      <p className="text-sm font-semibold">{tarjeta.titulo}</p>
+      {tarjeta.subtitulo && <p className="text-xs text-muted-foreground">{tarjeta.subtitulo}</p>}
+      {tarjeta.campos.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+          {tarjeta.campos.map((c, i) => (
+            <span key={i} className="text-xs">
+              <span className="text-muted-foreground">{c.etiqueta}: </span>
+              {c.valor}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function IndicadorAccion({ accion }: { accion: AccionAgente }) {
+  return (
+    <div className="rounded-lg border border-border bg-background/60 px-3 py-2">
+      <div className="flex items-start gap-2">
+        <span className="mt-0.5"><IconoEstado estado={accion.estado} /></span>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold">
+            {accion.etiqueta}
+            {accion.idempotente && (
+              <span className="ml-1.5 font-normal text-muted-foreground">(ya estaba guardada)</span>
+            )}
+          </p>
+          {accion.detalle && <p className="text-xs text-muted-foreground">{accion.detalle}</p>}
+        </div>
+      </div>
+      {accion.tarjeta && <TarjetaEntidad tarjeta={accion.tarjeta} />}
+    </div>
+  )
+}
+
+function TablaDatos({ datos }: { datos: DatosAgente }) {
+  return (
+    <div className="overflow-hidden rounded-lg border border-border bg-background/60">
+      <p className="border-b border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground">
+        {datos.titulo} · {datos.total}
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-border">
+              {datos.columnas.map((c) => (
+                <th key={c.clave} className="px-3 py-1.5 text-left font-semibold text-muted-foreground">
+                  {c.titulo}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {datos.filas.map((f, i) => (
+              <tr key={f.id ?? i} className={i % 2 ? 'bg-background/40' : ''}>
+                {datos.columnas.map((c) => (
+                  <td key={c.clave} className="px-3 py-1.5">
+                    {formatearCelda(f[c.clave])}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+/** Salida estructurada del agente (P6): resumen + indicadores + tablas. */
+function EstructuraAgente({ estructura }: { estructura: EstructuraAgente }) {
+  return (
+    <div className="flex flex-col gap-2">
+      {estructura.resumen && <p className="text-sm leading-relaxed">{estructura.resumen}</p>}
+      {estructura.acciones.map((a, i) => (
+        <IndicadorAccion key={`${a.tool}-${i}`} accion={a} />
+      ))}
+      {estructura.datos.map((d, i) => (
+        <TablaDatos key={`${d.tipo}-${i}`} datos={d} />
+      ))}
+    </div>
+  )
+}
 
 /** Renderizado ligero: saltos de línea y **negritas**, sin inyectar HTML. */
 function RichText({ text }: { text: string }) {
@@ -300,6 +453,7 @@ export default function ChatPage() {
           role: m.role,
           content: m.content,
           createdAt: new Date(m.createdAt),
+          estructura: m.estructura ?? undefined,
         }))
       )
       if (data.conversationId) setActiveId(data.conversationId)
@@ -398,6 +552,7 @@ export default function ChatPage() {
             quickReplies: Array.isArray(data.metadata?.quickReplies)
               ? data.metadata.quickReplies
               : undefined,
+            estructura: data.agentMessage.estructura ?? undefined,
           },
         ])
       } catch {
@@ -643,7 +798,11 @@ export default function ChatPage() {
                             : 'rounded-tl-sm border border-border bg-card'
                         )}
                       >
-                        <RichText text={msg.content} />
+                        {msg.role === 'agent' && msg.estructura ? (
+                          <EstructuraAgente estructura={msg.estructura} />
+                        ) : (
+                          <RichText text={msg.content} />
+                        )}
                       </div>
 
                       <span

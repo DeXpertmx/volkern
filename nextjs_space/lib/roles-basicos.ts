@@ -49,6 +49,7 @@ const SOLO_VER: Record<string, boolean> = { ver: true };
 /** Módulos del día a día comercial (vertical por defecto de la plataforma). */
 const MODULOS_TRABAJO: Array<PermissionModule | 'contactos' | 'reportes'> = [
   'leads',
+  'catalogo',
   'citas',
   'campanas',
   'automatizaciones',

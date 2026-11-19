@@ -7225,6 +7225,30 @@ model ChatbotAuditLog {
   @@map("chatbot_audit_logs")
 }
 
+// Trazabilidad por herramienta del agente CRM: qué ejecutó, con qué
+// argumentos, cuánto tardó y qué devolvió. Complementa a ChatbotAuditLog,
+// que registra la intención del turno, con el detalle de cada tool.
+model ToolExecution {
+  id             String   @id @default(cuid())
+  tenantId       String
+  userId         String?
+  conversationId String?
+  toolName       String
+  origin         String? // crm | mcp | skill
+  arguments      Json?
+  result         Json?
+  durationMs     Int      @default(0)
+  status         String   @default("ok") // ok | error | denied
+  errorMessage   String?
+  idempotent     Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([conversationId])
+  @@index([toolName])
+  @@map("tool_executions")
+}
+
 // ============================================================
 // Data Deletion Requests (Meta/Facebook/Instagram/WhatsApp)
 // ============================================================
