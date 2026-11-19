@@ -7,7 +7,7 @@
  * modelo queda sólo como resumen de una línea.
  */
 
-export type EstadoAccion = 'ok' | 'error' | 'denegado';
+export type EstadoAccion = 'ok' | 'error' | 'denegado' | 'pendiente';
 export type TipoEntidad = 'lead' | 'contacto' | 'propiedad' | 'negocio' | 'cita' | 'tarea' | 'nota' | 'interaccion';
 export type TipoDatos = 'leads' | 'propiedades' | 'tareas' | 'citas' | 'negocios' | 'catalogo';
 
@@ -54,6 +54,8 @@ export interface DatosAgente {
 export interface SalidaEstructuradaAgente {
   resumen: string;
   acciones: AccionAgente[];
+  /** Acciones de clase C/D que el backend dejó a la espera de aprobación. */
+  pendientes: AccionAgente[];
   datos: DatosAgente[];
 }
 
@@ -89,13 +91,19 @@ export function construirSalidaEstructurada(
   resumen: string
 ): SalidaEstructuradaAgente {
   const acciones: AccionAgente[] = [];
+  const pendientes: AccionAgente[] = [];
   const datos: DatosAgente[] = [];
   for (const reg of registros) {
-    acciones.push(accionDeRegistro(reg));
+    const accion = accionDeRegistro(reg);
+    if (reg.estado === 'pendiente') {
+      pendientes.push(accion);
+    } else {
+      acciones.push(accion);
+    }
     const tabla = datosDeRegistro(reg);
     if (tabla) datos.push(tabla);
   }
-  return { resumen, acciones, datos };
+  return { resumen, acciones, pendientes, datos };
 }
 
 /** Colapsa el texto libre del modelo a una sola línea de resumen. */
@@ -113,6 +121,10 @@ function accionDeRegistro(reg: RegistroEjecucionAgente): AccionAgente {
     entidad: meta?.entidad,
     idempotente: reg.idempotente,
   };
+
+  if (reg.estado === 'pendiente') {
+    return { ...base, error: reg.error, detalle: reg.error || 'Pendiente de aprobación' };
+  }
 
   if (reg.estado !== 'ok') {
     return { ...base, error: reg.error, detalle: reg.error };

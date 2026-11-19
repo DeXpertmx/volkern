@@ -7,6 +7,13 @@ import { responseFormatter } from './response-formatter';
 import { fallbackAgent } from './fallback-agent';
 import { prisma } from '@/lib/db';
 import type { MensajeDeHistorial } from '@/lib/agents/conversation-history';
+import {
+  guardarContextoPendiente,
+  obtenerContextoPendiente,
+  limpiarContextoPendiente,
+  registrarEntidadesActivas,
+  type EntidadesActivas,
+} from '@/lib/agents/context-manager';
 
 export interface OrchestratorRequest {
   message: string;
@@ -19,6 +26,8 @@ export interface OrchestratorRequest {
   previousEntities?: Record<string, any>;
   /** Turnos anteriores del hilo de chat, ya en formato del modelo. */
   historial?: MensajeDeHistorial[];
+  /** Contexto de trabajo del Context Manager: resumen y entidades activas. */
+  contexto?: { resumen?: string | null; entidadesActivas?: EntidadesActivas };
 }
 
 export interface OrchestratorResponse {
@@ -49,7 +58,7 @@ export class MinimaxOrchestratorAgent {
       if (pendingConfirmation) return this.handlePendingConfirmation(request, pendingConfirmation);
 
       let activeContext = context;
-      const pendingCtx = await this.getPendingContext(userId);
+      const pendingCtx = await this.getPendingContext(userId, tenantId);
       if (pendingCtx) {
         activeContext = `El usuario está respondiendo a la intención previa: ${pendingCtx.intent}. Parámetros faltantes solicitados: ${pendingCtx.missingParams?.join(', ')}. Parámetros ya recolectados: ${JSON.stringify(pendingCtx.collectedParams)}`;
       }
@@ -118,7 +127,7 @@ export class MinimaxOrchestratorAgent {
 
       if (extraction.missingParams.length > 0) {
         const response = await responseFormatter.format({ intent: classification.intent, action: 'ask_clarification', success: false, missingParams: extraction.missingParams });
-        await this.savePendingContext(userId, { intent: classification.intent, missingParams: extraction.missingParams, collectedParams: extraction.entities });
+        await this.savePendingContext(tenantId, userId, { intent: classification.intent, missingParams: extraction.missingParams, collectedParams: extraction.entities });
         return { success: false, response: `${response.emoji} ${response.text}`, shouldWaitForMoreInfo: true, metadata: { missingParams: extraction.missingParams } };
       }
 
@@ -207,6 +216,7 @@ export class MinimaxOrchestratorAgent {
           historial: request.historial,
           // El canal es la conversación: entra en la clave de idempotencia.
           conversationId: request.chatId,
+          contexto: request.contexto,
           timeoutMs: PRESUPUESTO_MS,
         }),
         new Promise<null>((resolve) => setTimeout(() => resolve(null), PRESUPUESTO_MS + 3000)),
@@ -234,6 +244,17 @@ export class MinimaxOrchestratorAgent {
       const texto =
         resultado.texto ||
         `✅ Cambios guardados en el CRM: ${resultado.herramientas.map((h) => etiquetas[h] || h).join(', ')}.`;
+
+      // El Context Manager recuerda las entidades resueltas para que el próximo
+      // turno entienda «el segundo», «esa propiedad» o «el cliente anterior».
+      if (request.chatId) {
+        await registrarEntidadesActivas({
+          channelId: request.chatId,
+          tenantId,
+          userId,
+          entidades: entidadesDeAcciones(resultado.estructura.acciones),
+        }).catch(() => {});
+      }
 
       return {
         success: true,
@@ -421,41 +442,24 @@ export class MinimaxOrchestratorAgent {
     await prisma.pendingCommand.upsert({ where: { id: data.confirmationId }, update: data, create: { id: data.confirmationId, userId: data.userId, tenantId: data.tenantId, intent: data.intent, params: data.params as any, originalMessage: data.message, status: 'pending', expiresAt: new Date(Date.now() + 60 * 1000) } });
   }
 
-  private async savePendingContext(userId: string, ctx: any): Promise<void> {
+  // El contexto pendiente (intención + parámetros que faltan) ya no vive en
+  // `chatbotAuditLog` con tenant 'pending': el Context Manager lo guarda en
+  // `AgentConversationContext` con el tenant real de la sesión.
+  private async savePendingContext(tenantId: string, userId: string, ctx: any): Promise<void> {
     try {
-      await prisma.chatbotAuditLog.upsert({ 
-        where: { id: `ctx_${userId}` } as any, 
-        update: { detectedEntities: ctx as any }, 
-        create: { 
-          id: `ctx_${userId}`,
-          status: 'PENDING_CONTEXT', 
-          userId, 
-          tenantId: 'pending', 
-          detectedEntities: ctx as any,
-          createdAt: new Date()
-        } as any
-      });
+      await guardarContextoPendiente({ userId, tenantId, pendiente: ctx });
     } catch (e) { console.error('Error saving pending context:', e); }
   }
 
   private async clearPendingContext(userId: string): Promise<void> {
     try {
-      await prisma.chatbotAuditLog.deleteMany({ where: { userId, status: 'PENDING_CONTEXT' } });
-      await prisma.chatbotAuditLog.delete({ where: { id: `ctx_${userId}` } }).catch(() => {});
+      await limpiarContextoPendiente({ userId });
     } catch (e) { console.error('Error clearing pending context:', e); }
   }
 
-  private async getPendingContext(userId: string): Promise<any> {
+  private async getPendingContext(userId: string, tenantId: string): Promise<any> {
     try {
-      const record = await prisma.chatbotAuditLog.findUnique({ where: { id: `ctx_${userId}` } });
-      if (record && record.detectedEntities) {
-        // Only return if it's less than 5 minutes old
-        if (Date.now() - record.createdAt.getTime() < 5 * 60 * 1000) {
-          return record.detectedEntities;
-        } else {
-          await this.clearPendingContext(userId);
-        }
-      }
+      return await obtenerContextoPendiente({ userId, tenantId });
     } catch (e) { console.error('Error getting pending context:', e); }
     return null;
   }
@@ -510,6 +514,40 @@ export class MinimaxOrchestratorAgent {
     const total = logs.length;
     return { total, successRate: total > 0 ? (successCount / total) * 100 : 100 };
   }
+}
+
+/** Convierte las acciones ejecutadas del agente en entidades activas de trabajo. */
+function entidadesDeAcciones(
+  acciones: Array<{
+    entidad?: string
+    estado?: string
+    id?: string
+    etiqueta?: string
+    detalle?: string
+    tarjeta?: { titulo?: string }
+  }>
+): EntidadesActivas {
+  const entidades: EntidadesActivas = {}
+  for (const accion of acciones) {
+    if (accion.estado !== 'ok' || !accion.id) continue
+    const etiqueta = accion.tarjeta?.titulo || accion.detalle || accion.etiqueta || accion.entidad || ''
+    switch (accion.entidad) {
+      case 'lead':
+      case 'contacto':
+        entidades.persona = { id: accion.id, etiqueta }
+        break
+      case 'propiedad':
+        entidades.propiedad = { id: accion.id, etiqueta }
+        break
+      case 'negocio':
+        entidades.oportunidad = { id: accion.id, etiqueta }
+        break
+      case 'tarea':
+        entidades.tarea = { id: accion.id, etiqueta }
+        break
+    }
+  }
+  return entidades
 }
 
 export const orchestrator = new MinimaxOrchestratorAgent();

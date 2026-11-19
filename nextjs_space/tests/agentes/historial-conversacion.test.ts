@@ -207,8 +207,8 @@ describe('lectura del historial', () => {
     ])
   })
 
-  it('recorta a los últimos mensajes cuando el hilo es largo', async () => {
-    for (let i = 0; i < 20; i++) {
+  it('recorta a los últimos 10 turnos (20 mensajes) cuando el hilo es largo', async () => {
+    for (let i = 0; i < 30; i++) {
       prismaActual.tablas.chatMessage.push({
         id: `m${i}`,
         tenantId: TENANT,
@@ -223,8 +223,9 @@ describe('lectura del historial', () => {
     const { cargarHistorialDeConversacion } = await import('@/lib/agents/conversation-history')
     const historial = await cargarHistorialDeConversacion({ channelId: CHANNEL, tenantId: TENANT })
 
+    expect(historial).toHaveLength(20)
     expect(historial.map((m) => m.content)).toEqual(
-      Array.from({ length: 12 }, (_, i) => `mensaje ${i + 8}`)
+      Array.from({ length: 20 }, (_, i) => `mensaje ${i + 10}`)
     )
   })
 })

@@ -13,7 +13,7 @@
 
 import { prisma } from '@/lib/db';
 
-export type EstadoEjecucion = 'ok' | 'error' | 'denegado';
+export type EstadoEjecucion = 'ok' | 'error' | 'denegado' | 'aprobacion';
 
 /** Datos de una ejecución, ya listos para persistir (resultado crudo). */
 export interface DatosTraza {

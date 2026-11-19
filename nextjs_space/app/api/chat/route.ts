@@ -11,7 +11,7 @@ import {
   tituloDesde,
   touchConversation,
 } from '@/lib/chat/gemma-conversations'
-import { cargarHistorialDeConversacion } from '@/lib/agents/conversation-history'
+import { cargarContextoDeConversacion } from '@/lib/agents/context-manager'
 
 /** Mensajes de una conversación (la más reciente si no se indica cuál). */
 export async function GET(req: Request) {
@@ -75,8 +75,10 @@ export async function POST(req: Request) {
 
   // Antes de guardar el mensaje actual: si se leyera después, llegaría
   // duplicado al modelo. Un historial vacío significa que es el primer mensaje
-  // del canal, y de ahí sale el título.
-  const historial = await cargarHistorialDeConversacion({ channelId, tenantId })
+  // del canal, y de ahí sale el título. El Context Manager aporta también el
+  // resumen y las entidades activas de la conversación.
+  const contexto = await cargarContextoDeConversacion({ channelId, tenantId, userId })
+  const historial = contexto.historial
 
   // 1. Guardar mensaje del usuario
   const userMessage = await prisma.chatMessage.create({
@@ -104,6 +106,7 @@ export async function POST(req: Request) {
     isAuthenticated: true,
     userRole: (session.user as any).roleName,
     historial,
+    contexto: { resumen: contexto.resumen, entidadesActivas: contexto.entidadesActivas },
   })
 
   // 3. Guardar respuesta del agente

@@ -7249,6 +7249,27 @@ model ToolExecution {
   @@map("tool_executions")
 }
 
+// Contexto de trabajo del agente conversacional (Etapa B).
+// Sustituye el uso de `chatbotAuditLog` como memoria de trabajo: aquí viven el
+// resumen de la conversación, las entidades activas (persona/propiedad/
+// oportunidad/tarea) y el contexto pendiente del flujo determinista. La clave
+// es sintética —`conversacion:<channelId>` o `pendiente:<userId>`— para no
+// mezclar conversaciones, usuarios ni tenants.
+model AgentConversationContext {
+  clave     String   @id
+  tenantId  String
+  userId    String
+  resumen   Json?
+  entidades Json?
+  pendiente Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([userId])
+  @@map("agent_conversation_contexts")
+}
+
 // ============================================================
 // Data Deletion Requests (Meta/Facebook/Instagram/WhatsApp)
 // ============================================================

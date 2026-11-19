@@ -22,7 +22,9 @@ import {
   ejecutarHerramientaDelAgente,
   herramientasParaElModelo,
   PermisoDenegadoError,
+  AprobacionRequeridaError,
 } from '@/lib/agents/tool-registry';
+import { bloqueDeEntidades, type EntidadesActivas } from '@/lib/agents/context-manager';
 import {
   callAssistantWithToolLoop,
   type OpenRouterMessage,
@@ -48,6 +50,8 @@ export interface AgenteCrmInput {
   historial?: MensajeDeHistorial[];
   /** Hilo del chat: con el usuario y los argumentos forma la clave de idempotencia. */
   conversationId?: string;
+  /** Contexto de trabajo del Context Manager: resumen y entidades activas. */
+  contexto?: { resumen?: string | null; entidadesActivas?: EntidadesActivas };
   /** Presupuesto total de la conversación con herramientas (ms). */
   timeoutMs?: number;
 }
@@ -109,7 +113,7 @@ export async function ejecutarAgenteCrm(input: AgenteCrmInput): Promise<AgenteCr
 
   const messages: OpenRouterMessage[] = [
     // El prompt sólo enumera estas herramientas: el rol no lee lo que no puede.
-    { role: 'system', content: construirSistema(timezone, disponibles) },
+    { role: 'system', content: construirSistema(timezone, disponibles, input.contexto) },
     // El historial ya llega recortado y ordenado desde el canal. Sin él, «que
     // tengan terraza» no tendría antecedente y empezaría una búsqueda nueva.
     ...(input.historial ?? []),
@@ -147,13 +151,24 @@ export async function ejecutarAgenteCrm(input: AgenteCrmInput): Promise<AgenteCr
         return serializado;
       } catch (error: any) {
         const denegado = error instanceof PermisoDenegadoError;
+        const aprobacion = error instanceof AprobacionRequeridaError;
         registros.push({
           tool: nombre,
-          estado: denegado ? 'denegado' : 'error',
-          error: denegado
-            ? 'No tienes permiso para esta acción en el CRM. Pídeselo a un administrador.'
-            : error?.message || 'Error ejecutando la herramienta',
+          estado: aprobacion ? 'pendiente' : denegado ? 'denegado' : 'error',
+          error: aprobacion
+            ? 'Esta acción requiere aprobación antes de ejecutarse.'
+            : denegado
+              ? 'No tienes permiso para esta acción en el CRM. Pídeselo a un administrador.'
+              : error?.message || 'Error ejecutando la herramienta',
         });
+        if (aprobacion) {
+          console.warn(`[AgenteCRM] ${nombre} requiere aprobación (clase ${error.riesgo})`);
+          return JSON.stringify({
+            ok: false,
+            codigo: 'aprobacion_requerida',
+            mensaje: 'Esta acción requiere aprobación antes de ejecutarse.',
+          });
+        }
         if (denegado) {
           console.warn(`[AgenteCRM] ${nombre} denegada: ${error.motivo}`);
           return JSON.stringify({
@@ -183,6 +198,7 @@ export function construirSistema(
   timezone: string,
   /** Herramientas expuestas al rol en este turno (las mismas que ve el modelo). */
   herramientas: OpenRouterTool[],
+  contexto?: { resumen?: string | null; entidadesActivas?: EntidadesActivas },
   ahora = new Date()
 ): string {
   // Una línea por herramienta y nada más: el contrato y la descripción ya
@@ -192,6 +208,16 @@ export function construirSistema(
     ? herramientas.map((h) => `- ${h.function.name}`).join('\n')
     : '- (ninguna disponible en este turno)';
 
+  // Contexto de trabajo del Context Manager: resumen de lo anterior a la
+  // ventana y entidades ya resueltas para poder decir «el segundo» o «esa
+  // propiedad» sin volver a preguntar.
+  const bloqueContexto = [
+    contexto?.resumen ? `Resumen anterior: ${contexto.resumen}` : '',
+    bloqueDeEntidades(contexto?.entidadesActivas ?? {}),
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+
   return `Eres Gemma, la asistente de CRM de Volkern. Hoy es ${ahora.toLocaleDateString('es-MX', {
     timeZone: timezone,
     weekday: 'long',
@@ -200,7 +226,7 @@ export function construirSistema(
     year: 'numeric',
   })} (zona horaria ${timezone}).
 
-Tu trabajo es convertir lo que cuenta el comercial en cambios reales del CRM usando las herramientas. Un mensaje puede pedir VARIAS acciones: ejecuta todas, en orden, y no pidas confirmación salvo que falte el nombre de la persona o haya ambigüedad real.
+Tu trabajo es convertir lo que cuenta el comercial en cambios reales del CRM usando las herramientas. Un mensaje puede pedir VARIAS acciones: ejecuta todas, en orden. Las escrituras del CRM (clase B) se ejecutan según tus permisos, con trazabilidad; sólo pregunta antes si falta el nombre de la persona o hay ambigüedad real. Las operaciones con impacto externo (clase C) y las destructivas (clase D) exigen aprobación: si no tienes una herramienta para ellas, dilo y no busques un rodeo.
 
 Reglas:
 - Antes de cambiar algo de una persona, confirma de quién se habla con la herramienta de búsqueda; si devuelve varios candidatos, pregunta cuál es.
@@ -220,6 +246,6 @@ Reglas:
 Sólo puedes usar las herramientas de esta lista; si lo que piden no está cubierto, dilo en vez de improvisar:
 ${listaDeHerramientas}
 
-Calendario de referencia:
+${bloqueContexto ? `${bloqueContexto}\n\n` : ''}Calendario de referencia:
 ${calendarioDeReferencia(timezone)}`;
 }
