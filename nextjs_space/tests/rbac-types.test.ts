@@ -55,7 +55,7 @@ describe('ALL_MODULES', () => {
   });
 
   it('debe contener módulos esperados', () => {
-    const expectedModules = ['leads', 'citas', 'estudiantes', 'cursos', 'automatizaciones',
+    const expectedModules = ['leads', 'catalogo', 'citas', 'estudiantes', 'cursos', 'automatizaciones',
       'campanas', 'mensajes', 'analytics', 'configuracion', 'equipo',
       'whitelabel', 'telefonia', 'pages'];
     for (const mod of expectedModules) {
@@ -169,6 +169,7 @@ describe('MODULE_LABELS', () => {
 
   it('debe tener labels descriptivos', () => {
     expect(MODULE_LABELS.leads).toBe('Leads');
+    expect(MODULE_LABELS.catalogo).toBe('Catálogo');
     expect(MODULE_LABELS.citas).toBe('Citas');
     expect(MODULE_LABELS.analytics).toBe('Analíticas');
   });

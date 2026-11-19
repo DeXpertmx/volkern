@@ -6,6 +6,7 @@ import { entityExtractor } from './entity-extractor';
 import { responseFormatter } from './response-formatter';
 import { fallbackAgent } from './fallback-agent';
 import { prisma } from '@/lib/db';
+import type { MensajeDeHistorial } from '@/lib/agents/conversation-history';
 
 export interface OrchestratorRequest {
   message: string;
@@ -16,6 +17,8 @@ export interface OrchestratorRequest {
   userRole?: string;
   context?: string;
   previousEntities?: Record<string, any>;
+  /** Turnos anteriores del hilo de chat, ya en formato del modelo. */
+  historial?: MensajeDeHistorial[];
 }
 
 export interface OrchestratorResponse {
@@ -197,7 +200,13 @@ export class MinimaxOrchestratorAgent {
       // El agente ya respeta el presupuesto, pero el chat nunca debe quedarse
       // esperando: si se pasa, se responde con un aviso en vez de colgarse.
       const resultado = await Promise.race([
-        ejecutarAgenteCrm({ message, userId, tenantId, timeoutMs: PRESUPUESTO_MS }),
+        ejecutarAgenteCrm({
+          message,
+          userId,
+          tenantId,
+          historial: request.historial,
+          timeoutMs: PRESUPUESTO_MS,
+        }),
         new Promise<null>((resolve) => setTimeout(() => resolve(null), PRESUPUESTO_MS + 3000)),
       ]);
 

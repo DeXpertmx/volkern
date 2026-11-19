@@ -36,6 +36,7 @@ vi.mock('@/lib/assistant/openrouter-client', () => ({
 
 const ROL_SOLO_LECTURA = { nombre: 'Solo lectura', permisos: { leads: { ver: true } } }
 const ROL_COMERCIAL = { nombre: 'Comercial', permisos: { leads: { ver: true, crear: true, editar: true } } }
+const ROL_CATALOGO = { nombre: 'Catálogo', permisos: { catalogo: { ver: true } } }
 const ROL_SUPERADMIN = { nombre: 'Superadmin', permisos: {} }
 
 function sembrar() {
@@ -44,6 +45,7 @@ function sembrar() {
     user: [
       { id: 'u-lectura', tenantId: TENANT, name: 'Lola', role: ROL_SOLO_LECTURA },
       { id: 'u-comercial', tenantId: TENANT, name: 'Carla', role: ROL_COMERCIAL },
+      { id: 'u-catalogo', tenantId: TENANT, name: 'Catálogo', role: ROL_CATALOGO },
       { id: 'u-sin-rol', tenantId: TENANT, name: 'Sin rol', role: null },
       { id: 'u-super', tenantId: TENANT, name: 'Super', role: ROL_SUPERADMIN },
       { id: 'u-otro-tenant', tenantId: 'tenant-b', name: 'Ajeno', role: ROL_COMERCIAL },
@@ -55,6 +57,7 @@ function sembrar() {
     contact: [],
     chatChannel: [],
     chatMessage: [],
+    catalogoItem: [],
   })
 }
 
@@ -122,6 +125,23 @@ describe('herramienta de lectura', () => {
     const respuesta = respuestasHerramientas.join(' ')
     expect(respuesta).toContain('Ana Propia')
     expect(respuesta).not.toContain('sin_permiso')
+  })
+})
+
+describe('el catálogo tiene su propio permiso', () => {
+  it('leads.ver no autoriza a buscar inmuebles', async () => {
+    // El rol comercial ve leads, pero el catálogo es otra llave: no se hereda.
+    const resultado = await pedirHerramienta('u-comercial', 'buscar_propiedades', {})
+
+    expect(resultado.herramientas).toEqual([])
+    expect(respuestasHerramientas.join(' ')).toContain('sin_permiso')
+  })
+
+  it('catalogo.ver sí, aunque el rol no tenga leads', async () => {
+    const resultado = await pedirHerramienta('u-catalogo', 'buscar_propiedades', {})
+
+    expect(resultado.herramientas).toContain('buscar_propiedades')
+    expect(respuestasHerramientas.join(' ')).not.toContain('sin_permiso')
   })
 })
 

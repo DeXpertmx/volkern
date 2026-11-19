@@ -28,6 +28,7 @@ interface Role {
 
 const MODULES = [
   { id: 'leads', name: 'Leads / Prospectos', icon: 'Users' },
+  { id: 'catalogo', name: 'Catálogo (productos e inmuebles)', icon: 'Tags' },
   { id: 'citas', name: 'Agenda / Citas', icon: 'Calendar' },
   { id: 'ventas', name: 'Ventas / Pedidos', icon: 'ShoppingCart' },
   { id: 'finanzas', name: 'Finanzas / Facturación', icon: 'Receipt' },

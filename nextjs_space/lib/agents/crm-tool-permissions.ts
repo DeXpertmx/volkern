@@ -11,24 +11,37 @@
  * permiso.
  */
 import { prisma } from '@/lib/db';
-import { hasPermisoDeRol, type PermissionAction } from '@/lib/permissions-core';
+import {
+  hasPermisoDeRol,
+  type PermissionAction,
+  type PermissionModule,
+} from '@/lib/permissions-core';
 
 /**
- * Las tareas y las notas cuelgan del lead en este modelo (`Task.leadId`,
- * `Note.leadId`), así que todo se autoriza en el módulo `leads`: quien puede
- * editar la ficha puede anotar y crear seguimiento; quien solo la consulta, no.
+ * Cada herramienta declara **su** módulo, porque el agente toca más de uno.
+ *
+ * - Tareas y notas cuelgan del lead (`Task.leadId`, `Note.leadId`): se
+ *   autorizan en `leads`, igual que la ficha. Quien puede editarla puede
+ *   anotar y crear seguimiento; quien solo la consulta, no.
+ * - `buscar_propiedades` lee `CatalogoItem`, que es el catálogo de la cuenta
+ *   (inmuebles, productos y servicios) y tiene su propia llave. Autorizarla
+ *   con `leads.ver` dejaba ver la cartera a quien solo tenía el pipeline.
  */
-const MODULO = 'leads' as const;
+interface PoliticaHerramienta {
+  modulo: PermissionModule;
+  accion: PermissionAction;
+}
 
 export const PERMISOS_HERRAMIENTAS = {
-  buscar_persona: 'ver',
-  crear_lead: 'crear',
-  registrar_interaccion: 'editar',
-  crear_nota: 'editar',
-  crear_tarea: 'editar',
-  completar_tarea: 'editar',
-  reprogramar_tarea: 'editar',
-} as const satisfies Record<string, PermissionAction>;
+  buscar_persona: { modulo: 'leads', accion: 'ver' },
+  buscar_propiedades: { modulo: 'catalogo', accion: 'ver' },
+  crear_lead: { modulo: 'leads', accion: 'crear' },
+  registrar_interaccion: { modulo: 'leads', accion: 'editar' },
+  crear_nota: { modulo: 'leads', accion: 'editar' },
+  crear_tarea: { modulo: 'leads', accion: 'editar' },
+  completar_tarea: { modulo: 'leads', accion: 'editar' },
+  reprogramar_tarea: { modulo: 'leads', accion: 'editar' },
+} as const satisfies Record<string, PoliticaHerramienta>;
 
 export type HerramientaCrm = keyof typeof PERMISOS_HERRAMIENTAS;
 
@@ -71,8 +84,8 @@ export function evaluarPermisoHerramienta(
   herramienta: string,
   { role, existe }: RolDeUsuario
 ): ResultadoPermiso {
-  const accion = PERMISOS_HERRAMIENTAS[herramienta as HerramientaCrm];
-  if (!accion) {
+  const politica = PERMISOS_HERRAMIENTAS[herramienta as HerramientaCrm];
+  if (!politica) {
     return { permitido: false, motivo: `herramienta sin política de permisos: ${herramienta}` };
   }
 
@@ -83,10 +96,11 @@ export function evaluarPermisoHerramienta(
     };
   }
 
-  if (!hasPermisoDeRol(role, MODULO, accion)) {
+  const { modulo, accion } = politica;
+  if (!hasPermisoDeRol(role, modulo, accion)) {
     return {
       permitido: false,
-      motivo: `el rol "${role.nombre}" no tiene ${MODULO}.${accion}`,
+      motivo: `el rol "${role.nombre}" no tiene ${modulo}.${accion}`,
     };
   }
 

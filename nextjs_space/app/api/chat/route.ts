@@ -11,6 +11,7 @@ import {
   tituloDesde,
   touchConversation,
 } from '@/lib/chat/gemma-conversations'
+import { cargarHistorialDeConversacion } from '@/lib/agents/conversation-history'
 
 /** Mensajes de una conversación (la más reciente si no se indica cuál). */
 export async function GET(req: Request) {
@@ -32,7 +33,7 @@ export async function GET(req: Request) {
   }
 
   const messages = await prisma.chatMessage.findMany({
-    where: { channelId, deletedAt: null },
+    where: { channelId, tenantId: session.user.tenantId!, deletedAt: null },
     orderBy: { createdAt: 'asc' },
     take: 200,
     include: { sender: { select: { id: true, name: true, email: true } } },
@@ -71,8 +72,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Conversación no encontrada' }, { status: 404 })
   }
 
-  // Si es el primer mensaje, el título de la conversación sale de él.
-  const previos = await prisma.chatMessage.count({ where: { channelId } })
+  // Antes de guardar el mensaje actual: si se leyera después, llegaría
+  // duplicado al modelo. Un historial vacío significa que es el primer mensaje
+  // del canal, y de ahí sale el título.
+  const historial = await cargarHistorialDeConversacion({ channelId, tenantId })
 
   // 1. Guardar mensaje del usuario
   const userMessage = await prisma.chatMessage.create({
@@ -84,7 +87,7 @@ export async function POST(req: Request) {
     },
   })
 
-  if (previos === 0) {
+  if (historial.length === 0) {
     await prisma.chatChannel.update({
       where: { id: channelId },
       data: { name: `${channelPrefix(userId)}${tituloDesde(message)}` },
@@ -99,6 +102,7 @@ export async function POST(req: Request) {
     chatId: channelId,
     isAuthenticated: true,
     userRole: (session.user as any).roleName,
+    historial,
   })
 
   // 3. Guardar respuesta del agente

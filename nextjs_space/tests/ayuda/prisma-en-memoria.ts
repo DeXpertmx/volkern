@@ -25,6 +25,7 @@ const CON_TENANT = new Set([
   'task',
   'note',
   'user',
+  'catalogoItem',
 ])
 
 const MODELOS = [
@@ -37,6 +38,7 @@ const MODELOS = [
   'task',
   'note',
   'interaction',
+  'catalogoItem',
 ]
 
 export interface Violacion {

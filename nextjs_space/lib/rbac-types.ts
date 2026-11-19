@@ -255,6 +255,7 @@ export const DEFAULT_MODULE_PERMISSIONS: RBACModulePermissions = {
  */
 export const ALL_MODULES: RBACModule[] = [
   'leads',
+  'catalogo',
   'citas',
   'estudiantes',
   'cursos',
@@ -340,6 +341,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
  */
 export const MODULE_LABELS: Record<RBACModule, string> = {
   leads: 'Leads',
+  catalogo: 'Catálogo',
   citas: 'Citas',
   estudiantes: 'Estudiantes',
   cursos: 'Cursos',

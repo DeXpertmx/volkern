@@ -15,6 +15,7 @@ import {
   evaluarPermisoHerramienta,
   type RolDeUsuario,
 } from '@/lib/agents/crm-tool-permissions';
+import type { MensajeDeHistorial } from '@/lib/agents/conversation-history';
 import {
   callAssistantWithToolLoop,
   type OpenRouterMessage,
@@ -25,6 +26,8 @@ export interface AgenteCrmInput {
   message: string;
   tenantId: string;
   userId: string;
+  /** Turnos anteriores del hilo, para resolver referencias del usuario. */
+  historial?: MensajeDeHistorial[];
   /** Presupuesto total de la conversación con herramientas (ms). */
   timeoutMs?: number;
 }
@@ -76,6 +79,30 @@ export const HERRAMIENTAS: OpenRouterTool[] = [
         properties: {
           nombre: { type: 'string', description: 'Nombre completo o parcial de la persona' },
           email: { type: 'string', description: 'Correo electrónico, si se conoce' },
+        },
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'buscar_propiedades',
+      description:
+        'Busca inmuebles del catálogo por operación, tipo, zona, habitaciones, precio máximo y terraza. Si el usuario afina una búsqueda anterior ("que tengan terraza", "y más baratas", "sólo en el centro"), vuelve a llamarla con TODOS los criterios de antes más el nuevo: el filtro se acumula, no se reinicia.',
+      parameters: {
+        type: 'object',
+        properties: {
+          operacion: { type: 'string', enum: ['venta', 'alquiler'], description: 'Tipo de operación' },
+          tipo: {
+            type: 'string',
+            enum: ['casa', 'departamento', 'oficina', 'local', 'terreno'],
+            description: 'Tipo de inmueble',
+          },
+          zona: { type: 'string', description: 'Ciudad, barrio o colonia' },
+          habitaciones: { type: 'integer', description: 'Mínimo de habitaciones' },
+          precioMax: { type: 'number', description: 'Precio máximo' },
+          terraza: { type: 'boolean', description: 'Sólo inmuebles con terraza' },
         },
         additionalProperties: false,
       },
@@ -291,6 +318,35 @@ async function ejecutarHerramienta(
     case 'buscar_persona':
       return buscarPersona(tenantId, args.nombre, args.email);
 
+    case 'buscar_propiedades': {
+      // Se reutiliza la búsqueda natural del catálogo inmobiliario (la misma que
+      // usa el chatbot del portal) y se afina el resultado en memoria.
+      const { searchPropertiesByNaturalFilters } = await import('@/lib/skills/real-estate-skills');
+      const { properties } = await searchPropertiesByNaturalFilters({
+        tenantId,
+        tipo_operacion: args.operacion,
+        tipo_inmueble: args.tipo,
+        zona: args.zona,
+        habitaciones: args.habitaciones,
+        precio_max: args.precioMax,
+        limit: 50,
+      });
+      const inmuebles = (args.terraza === true
+        ? properties.filter((p: any) => p.hasTerrace)
+        : properties
+      )
+        .slice(0, 5)
+        .map((p: any) => ({
+          id: p.id,
+          nombre: p.nombre,
+          precio: p.precioBase,
+          zona: p.city,
+          habitaciones: p.bedrooms,
+          terraza: p.hasTerrace,
+        }));
+      return { propiedades: inmuebles };
+    }
+
     case 'crear_lead': {
       const nombre = String(args.nombre || '').trim();
       const email = String(args.email || '').trim();
@@ -415,6 +471,9 @@ export async function ejecutarAgenteCrm(input: AgenteCrmInput): Promise<AgenteCr
 
   const messages: OpenRouterMessage[] = [
     { role: 'system', content: construirSistema(timezone) },
+    // El historial ya llega recortado y ordenado desde el canal. Sin él, «que
+    // tengan terraza» no tendría antecedente y empezaría una búsqueda nueva.
+    ...(input.historial ?? []),
     { role: 'user', content: message },
   ];
 
@@ -479,6 +538,8 @@ Reglas:
 - Lo que queda PENDIENTE se crea con crear_tarea (tipo llamada/email/reunion/seguimiento) y la fecha que pida el usuario.
 - Si dice que una tarea ya está hecha, usa completar_tarea con el TÍTULO EXACTO que devolvió buscar_persona (no inventes ni copies a medias el título).
 - Fechas: usa SIEMPRE las del calendario de referencia y el formato YYYY-MM-DD. "El jueves" es el próximo jueves; "el jueves de la siguiente semana" es el jueves de la semana que viene, no el de esta.
+- Si el usuario se refiere a algo ya dicho en la conversación ("que tengan terraza", "y más baratas", "los de ayer", "escríbele a él"), averigua a qué se refiere en los turnos anteriores y combina ese criterio con lo anterior, en vez de empezar de cero o preguntar lo que ya sabías.
+- Para inmuebles usa buscar_propiedades con todos los filtros acumulados de la conversación (operación, tipo, zona, habitaciones, precio máximo, terraza).
 - No inventes datos, importes ni fechas que el usuario no haya dicho.
 - No envíes correos ni mensajes reales: sólo registra en el CRM.
 - Si una herramienta responde con código sin_permiso, dilo tal cual al usuario y no la reintentes ni busques otra forma de hacer lo mismo.
