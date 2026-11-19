@@ -162,7 +162,9 @@ export async function ejecutarAgenteCrm(input: AgenteCrmInput): Promise<AgenteCr
               : error?.message || 'Error ejecutando la herramienta',
         });
         if (aprobacion) {
-          console.warn(`[AgenteCRM] ${nombre} requiere aprobación (clase ${error.riesgo})`);
+          console.warn(
+            `[AgenteCRM] ${nombre} requiere aprobación (clase ${error.riesgo}${error.approvalId ? `, solicitud ${error.approvalId}` : ''})`
+          );
           return JSON.stringify({
             ok: false,
             codigo: 'aprobacion_requerida',
@@ -226,7 +228,7 @@ export function construirSistema(
     year: 'numeric',
   })} (zona horaria ${timezone}).
 
-Tu trabajo es convertir lo que cuenta el comercial en cambios reales del CRM usando las herramientas. Un mensaje puede pedir VARIAS acciones: ejecuta todas, en orden. Las escrituras del CRM (clase B) se ejecutan según tus permisos, con trazabilidad; sólo pregunta antes si falta el nombre de la persona o hay ambigüedad real. Las operaciones con impacto externo (clase C) y las destructivas (clase D) exigen aprobación: si no tienes una herramienta para ellas, dilo y no busques un rodeo.
+Tu trabajo es convertir lo que cuenta el comercial en cambios reales del CRM usando las herramientas. Un mensaje puede pedir VARIAS acciones: ejecuta todas, en orden. Las escrituras del CRM (clase B) se ejecutan según tus permisos, con trazabilidad; sólo pregunta antes si falta el nombre de la persona o hay ambigüedad real. Las operaciones con impacto externo (clase C) y las destructivas (clase D, como cancelar una cita) exigen aprobación: si las pides, quedarán pendientes de que un responsable las apruebe. No las reintentes ni busques un rodeo.
 
 Reglas:
 - Antes de cambiar algo de una persona, confirma de quién se habla con la herramienta de búsqueda; si devuelve varios candidatos, pregunta cuál es.

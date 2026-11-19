@@ -80,6 +80,9 @@ const ETIQUETAS: Record<string, { nombre: string; entidad?: TipoEntidad }> = {
   reprogramar_tarea: { nombre: 'Tarea reprogramada', entidad: 'tarea' },
   get_pending_tasks: { nombre: 'Tareas pendientes', entidad: 'tarea' },
   update_deal: { nombre: 'Negocio actualizado', entidad: 'negocio' },
+  search_properties_by_filters: { nombre: 'Búsqueda de inmuebles', entidad: 'propiedad' },
+  create_booking: { nombre: 'Cita reservada', entidad: 'cita' },
+  cancel_booking: { nombre: 'Cita cancelada', entidad: 'cita' },
   volkern_list_deals: { nombre: 'Pipeline de negocios', entidad: 'negocio' },
   volkern_list_citas: { nombre: 'Citas', entidad: 'cita' },
   volkern_list_catalogo: { nombre: 'Catálogo', entidad: 'propiedad' },
@@ -178,6 +181,15 @@ function detalleDeResultado(
       return { texto: 'Nota guardada en la ficha', id: r.id };
     case 'update_deal':
       return { texto: 'Negocio actualizado', id: r.id ?? r.deal?.id };
+    case 'create_booking': {
+      const cita = r.cita ?? r;
+      const cuando = cita?.fechaHora || cita?.fecha
+        ? ` para el ${new Date(cita.fechaHora || cita.fecha).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}`
+        : '';
+      return { texto: `Cita con ${cita?.lead?.nombre || 'la persona'} creada${cuando}`, id: cita?.id };
+    }
+    case 'cancel_booking':
+      return { texto: 'Cita cancelada', id: r.id ?? r.cita?.id };
     default:
       return { texto: resumenDeLista(tool, r) };
   }
@@ -220,6 +232,27 @@ function filasDe(
           terraza: p.terraza === true ? 'Sí' : 'No',
         })),
         total: r.propiedades?.length ?? 0,
+      };
+    case 'search_properties_by_filters':
+      return {
+        tipo: 'propiedades',
+        titulo: 'Inmuebles encontrados',
+        columnas: [
+          { clave: 'nombre', titulo: 'Inmueble' },
+          { clave: 'precio', titulo: 'Precio' },
+          { clave: 'zona', titulo: 'Zona' },
+          { clave: 'habitaciones', titulo: 'Hab.' },
+          { clave: 'terraza', titulo: 'Terraza' },
+        ],
+        filas: (r.properties ?? []).map((p: any) => ({
+          id: p.id,
+          nombre: p.nombre || 'Propiedad',
+          precio: p.precioBase ?? p.precio,
+          zona: p.city || p.zona || '',
+          habitaciones: p.bedrooms ?? p.habitaciones,
+          terraza: p.hasTerrace === true ? 'Sí' : 'No',
+        })),
+        total: r.total ?? r.properties?.length ?? 0,
       };
     case 'buscar_persona':
       return {

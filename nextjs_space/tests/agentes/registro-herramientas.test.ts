@@ -133,13 +133,18 @@ describe('registro único', () => {
     for (const nombre of HERRAMIENTAS_MCP_EXPUESTAS) {
       expect(nombres).toContain(nombre);
     }
-    expect(nombres).toEqual(expect.arrayContaining(['get_pending_tasks', 'update_deal']));
-    // Lo que ya tiene tool en el catálogo no se duplica como skill.
-    expect(nombres).not.toContain('create_booking');
-    expect(nombres).not.toContain('cancel_booking');
-    // 8 nativas + 4 del catálogo + 2 skills: la exposición es por valor, no
+    expect(nombres).toEqual(
+      expect.arrayContaining([
+        'get_pending_tasks',
+        'update_deal',
+        'search_properties_by_filters',
+        'create_booking',
+        'cancel_booking',
+      ])
+    );
+    // 8 nativas + 4 del catálogo + 5 skills: la exposición es por valor, no
     // las 43 tools completas.
-    expect(nombres).toHaveLength(14);
+    expect(nombres).toHaveLength(17);
   });
 
   it('toda herramienta tiene política con un módulo que existe', () => {
@@ -189,6 +194,7 @@ describe('exposición por rol', () => {
     const visibles = herramientasParaElModelo(rol(ROL_CATALOGO)).map((t) => t.function.name);
 
     expect(visibles).toContain('buscar_propiedades');
+    expect(visibles).toContain('search_properties_by_filters');
     expect(visibles).toContain('volkern_list_catalogo');
     expect(visibles).not.toContain('volkern_list_deals');
     expect(visibles).not.toContain('crear_nota');
@@ -197,11 +203,12 @@ describe('exposición por rol', () => {
   it('agenda abre las citas y no lo demás', () => {
     const visibles = herramientasParaElModelo(rol(ROL_AGENDA)).map((t) => t.function.name);
 
-    // Las citas se leen por el catálogo; agendar o cancelar no se duplica en
-    // el chat mientras el flujo de aprobación no exista.
+    // Agendar y cancelar entran por sus propias skills, no duplican el
+    // catálogo; la cartera y el pipeline siguen cerrados.
     expect(visibles).toContain('volkern_list_citas');
-    expect(visibles).not.toContain('create_booking');
-    expect(visibles).not.toContain('cancel_booking');
+    expect(visibles).toContain('create_booking');
+    expect(visibles).toContain('cancel_booking');
+    expect(visibles).not.toContain('search_properties_by_filters');
     expect(visibles).not.toContain('update_deal');
   });
 
@@ -240,7 +247,7 @@ describe('prompt del turno', () => {
     const herramientas = herramientasParaElModelo(rol(ROL_SUPERADMIN));
     const prompt = construirSistema('America/Mexico_City', herramientas);
 
-    expect(herramientas.length).toBe(14);
+    expect(herramientas.length).toBe(17);
     for (const herramienta of herramientas) {
       const nombre = herramienta.function.name;
       expect(prompt.split(nombre).length - 1, `${nombre} aparece más de una vez`).toBe(1);

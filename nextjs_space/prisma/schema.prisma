@@ -9578,7 +9578,7 @@ model McpApprovalRequest {
   argumentsHash             String
   requestedById             String
   roleName                  String?
-  via                       String // /mcp | /api/mcp
+  via                       String // /mcp | /api/mcp | /api/chat
   status                    String    @default("pending") // pending | approved | rejected | executed | failed | expired
   reason                    String?
   resolvedById              String?

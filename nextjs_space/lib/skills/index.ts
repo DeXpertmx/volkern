@@ -553,26 +553,41 @@ const getConversationWrapper = (input: { conversationId: string; tenantId: strin
 const getTasksByLeadWrapper = (input: { leadId: string; tenantId: string }) => 
   taskSkills.getTasksByLead(input.leadId, input.tenantId);
 
-const getPendingTasksWrapper = async (input: { userId: string; tenantId: string; email?: string; nombre?: string }) => {
-  const { tenantId, userId, email, nombre } = input;
+const getPendingTasksWrapper = async (input: { userId: string; tenantId: string; email?: string; nombre?: string; fechaDesde?: string; fechaHasta?: string }) => {
+  const { tenantId, userId, email, nombre, fechaDesde, fechaHasta } = input;
+
+  // Rango de vencimiento (Etapa C): "qué tengo esta semana" o "tareas de
+  // mayo". Fechas inválidas fallan explícito, no en silencio.
+  const desde = fechaDesde ? new Date(fechaDesde) : undefined;
+  const hasta = fechaHasta ? new Date(fechaHasta) : undefined;
+  if (desde && Number.isNaN(desde.getTime())) throw new Error('fechaDesde no es una fecha válida (usa YYYY-MM-DD).');
+  if (hasta && Number.isNaN(hasta.getTime())) throw new Error('fechaHasta no es una fecha válida (usa YYYY-MM-DD).');
+  const enRango = (t: any) => {
+    if (!t?.fechaVencimiento) return !desde && !hasta;
+    const d = new Date(t.fechaVencimiento).getTime();
+    if (desde && d < desde.getTime()) return false;
+    if (hasta && d > hasta.getTime()) return false;
+    return true;
+  };
+
   // "tareas pendientes de juan@x.com" → filtrar por ese lead/contacto
   if (email || nombre) {
     const { prisma } = await import('@/lib/db');
     const lead = email
       ? await prisma.lead.findFirst({ where: { tenantId, email } })
       : await prisma.lead.findFirst({ where: { tenantId, nombre: { contains: nombre, mode: 'insensitive' } } });
-    if (lead) return taskSkills.getTasksByLead(lead.id, tenantId);
+    if (lead) return (await taskSkills.getTasksByLead(lead.id, tenantId)).filter(enRango);
     const contact = email
       ? await prisma.contact.findFirst({ where: { tenantId, email } })
       : await prisma.contact.findFirst({ where: { tenantId, nombre: { contains: nombre, mode: 'insensitive' } } });
-    if (contact) return taskSkills.getTasksByLead(contact.id, tenantId);
+    if (contact) return (await taskSkills.getTasksByLead(contact.id, tenantId)).filter(enRango);
     throw new Error(`No encontré ningún lead o contacto${email ? ` con el email ${email}` : ` con el nombre "${nombre}"`}.`);
   }
   // El webhook pasa el conversationId del chat ("telegram:123456"); lo
   // resolvemos al userId real del usuario del tenant para que sus tareas
   // (asignadoA) coincidan.
   const realUserId = (await resolveRealUserId(tenantId, userId)) || userId;
-  return taskSkills.getPendingTasksByUser(realUserId, tenantId);
+  return (await taskSkills.getPendingTasksByUser(realUserId, tenantId)).filter(enRango);
 };
 
 /**

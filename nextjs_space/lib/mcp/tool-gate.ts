@@ -29,7 +29,15 @@ import { generateAndSendWhatsappAuthCode } from '@/lib/mcp/whatsapp-auth'
 /** Horas que vive una solicitud antes de caducar sin ejecutarse. */
 const APROBACION_VALIDEZ_HORAS = 24
 
-export type GateSurface = '/mcp' | '/api/mcp'
+export type GateSurface = '/mcp' | '/api/mcp' | '/api/chat'
+
+/**
+ * Superficie de las herramientas del AGENTE del chat (clase C/D). La ruta de
+ * resolución de aprobaciones la compara contra este valor para ejecutar por el
+ * registro del agente y no por `handleCallTool`; vive aquí, y no como cadena
+ * suelta, para que el gate y la ruta no puedan derivar.
+ */
+export const VIA_CHAT: GateSurface = '/api/chat'
 
 export type GateOutcome =
   | { kind: 'allow'; decision: 'allow'; reason: string; risk: ToolRisk | null }
@@ -165,52 +173,15 @@ export async function enforceToolGate(input: GateInput): Promise<GateOutcome> {
     return { kind: 'allow', decision: 'allow', reason: resuelta.reason, risk: resuelta.risk }
   }
 
-  const argumentsHash = hashToolArguments(args)
-  const expiresAt = new Date(Date.now() + APROBACION_VALIDEZ_HORAS * 60 * 60 * 1000)
-
-  let approvalId: string
-  try {
-    const creada = await prisma.mcpApprovalRequest.create({
-      data: {
-        tenantId,
-        toolName,
-        arguments: args as never,
-        argumentsHash,
-        requestedById: userId,
-        roleName: roleName ?? null,
-        via,
-        reason: resuelta.reason,
-        expiresAt,
-      },
-      select: { id: true },
-    })
-    approvalId = creada.id
-  } catch (error) {
-    // P2002: ya hay una pendiente idéntica; se devuelve ésa en vez de duplicar.
-    const existente = await prisma.mcpApprovalRequest.findFirst({
-      where: { tenantId, toolName, argumentsHash, status: 'pending' },
-      select: { id: true },
-    })
-    if (!existente) throw error
-    approvalId = existente.id
-  }
-
-  await auditar({
+  const { approvalId, expiresAt } = await crearOReutilizarSolicitud({
     tenantId,
     userId,
+    roleName: roleName ?? null,
     toolName,
-    accion: 'MCP_tool_approval_requested',
-    descripcion: `Aprobación solicitada para ${toolName}`,
-    metadata: {
-      via,
-      approvalId,
-      roleName: roleName ?? null,
-      risk: resuelta.risk,
-      // Los argumentos viven en la solicitud; en auditoría basta su huella.
-      argumentsHash,
-      argumentKeys: Object.keys(args).sort(),
-      motivo: resuelta.reason,
-    },
+    args,
+    via,
+    reason: resuelta.reason,
+    risk: resuelta.risk,
   })
 
   // ── Flujo de código por WhatsApp para envíos externos ─────────────────
@@ -260,6 +231,124 @@ export async function enforceToolGate(input: GateInput): Promise<GateOutcome> {
     approvalId,
     expiresAt,
   }
+}
+
+/**
+ * Crea (o reutiliza) una `McpApprovalRequest` pendiente.
+ *
+ * Comparte la lógica de dedupe y auditoría de `enforceToolGate`: un reintento
+ * idéntico no genera una segunda solicitud en la bandeja del responsable. El
+ * índice parcial único de la migración y el hash canónico de argumentos son el
+ * cerrojo; aquí se traducen en «devuelve la que ya está pendiente».
+ */
+async function crearOReutilizarSolicitud(params: {
+  tenantId: string
+  userId: string
+  roleName: string | null
+  toolName: string
+  args: Record<string, unknown>
+  via: GateSurface
+  reason: string
+  risk?: ToolRisk | null
+}): Promise<{ approvalId: string; expiresAt: Date }> {
+  const { tenantId, userId, roleName, toolName, args, via, reason, risk } = params
+  const argumentsHash = hashToolArguments(args)
+  const expiresAt = new Date(Date.now() + APROBACION_VALIDEZ_HORAS * 60 * 60 * 1000)
+
+  let approvalId: string
+  try {
+    const creada = await prisma.mcpApprovalRequest.create({
+      data: {
+        tenantId,
+        toolName,
+        arguments: args as never,
+        argumentsHash,
+        requestedById: userId,
+        roleName,
+        via,
+        reason,
+        expiresAt,
+      },
+      select: { id: true },
+    })
+    approvalId = creada.id
+  } catch (error) {
+    // P2002: ya hay una pendiente idéntica; se devuelve ésa en vez de duplicar.
+    const existente = await prisma.mcpApprovalRequest.findFirst({
+      where: { tenantId, toolName, argumentsHash, status: 'pending' },
+      select: { id: true },
+    })
+    if (!existente) throw error
+    approvalId = existente.id
+  }
+
+  await auditar({
+    tenantId,
+    userId,
+    toolName,
+    accion: 'MCP_tool_approval_requested',
+    descripcion: `Aprobación solicitada para ${toolName}`,
+    metadata: {
+      via,
+      approvalId,
+      roleName,
+      risk,
+      // Los argumentos viven en la solicitud; en auditoría basta su huella.
+      argumentsHash,
+      argumentKeys: Object.keys(args).sort(),
+      motivo: reason,
+    },
+  })
+
+  return { approvalId, expiresAt }
+}
+
+/**
+ * Puerta de aprobación para las herramientas del AGENTE del chat (clase C/D).
+ *
+ * Las tools del catálogo MCP resuelven su riesgo con `decideToolCall` sobre
+ * `TOOL_POLICIES`; las del agente (`cancel_booking`, por ejemplo) son skills
+ * sin fila en esa tabla, pero su clase A/B/C/D ya la decidió el backend en
+ * `riesgo-herramientas`. Aquí se crea la misma `McpApprovalRequest` que ve la
+ * bandeja MCP, con `via: VIA_CHAT` para que la resolución sepa ejecutar por
+ * el registro del agente y no por `handleCallTool`.
+ */
+export async function requestAgentToolApproval(params: {
+  tenantId: string
+  userId: string
+  roleName: string | null
+  toolName: string
+  args: Record<string, unknown>
+  risk: 'external' | 'destructive'
+}): Promise<{ approvalId: string; expiresAt: Date }> {
+  const { tenantId, userId, roleName, toolName, args, risk } = params
+  if (!tenantId || !userId) {
+    await auditar({
+      tenantId,
+      userId,
+      toolName,
+      accion: 'MCP_tool_denied',
+      descripcion: 'Aprobación del agente sin identidad completa',
+      metadata: { via: VIA_CHAT, motivo: 'identidad_incompleta' },
+    })
+    throw new Error('Sin identidad de empresa y usuario no se puede pedir aprobación.')
+  }
+
+  const reason =
+    risk === 'external'
+      ? 'La acción envía algo fuera del sistema y no se puede deshacer.'
+      : 'La acción borra o cancela datos de forma irreversible.'
+
+  return crearOReutilizarSolicitud({
+    tenantId,
+    userId,
+    roleName,
+    toolName,
+    args,
+    via: VIA_CHAT,
+    reason,
+    risk,
+  })
 }
 
 export interface ApprovalRow {
