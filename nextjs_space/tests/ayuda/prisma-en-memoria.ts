@@ -14,7 +14,7 @@
 export type Fila = Record<string, any>
 
 /** Claves que acotan una consulta a un tenant o a un registro concreto. */
-const CLAVES_DE_ALCANCE = ['tenantId', 'id', 'channelId', 'leadId', 'contactId', 'taskId', 'userId']
+const CLAVES_DE_ALCANCE = ['tenantId', 'id', 'clave', 'channelId', 'leadId', 'contactId', 'taskId', 'userId']
 
 /** Modelos con columna `tenantId`; el resto se considera acotado por relación. */
 const CON_TENANT = new Set([
@@ -29,6 +29,7 @@ const CON_TENANT = new Set([
   // Restricciones de tools MCP que guarda cada empresa.
   'mcpToolCapability',
   'toolExecution',
+  'agentConversationContext',
 ])
 
 const MODELOS = [
@@ -45,6 +46,7 @@ const MODELOS = [
   'mcpToolCapability',
   'idempotencyRecord',
   'toolExecution',
+  'agentConversationContext',
 ]
 
 export interface Violacion {
@@ -136,6 +138,7 @@ export function crearPrismaEnMemoria(datos: Record<string, Fila[]> = {}): Prisma
   const leer = (tabla: string, args: any = {}) => {
     let filas = tablas[tabla].filter((f) => coincide(f, args.where) && cumpleMensajes(f, args.where))
     if (args.orderBy) filas = ordenar(filas, args.orderBy)
+    if (args.skip) filas = filas.slice(args.skip)
     if (args.take) filas = filas.slice(0, args.take)
     return tabla === 'chatChannel' ? filas.map((f) => conMensajes(f, args)) : filas
   }
@@ -147,6 +150,7 @@ export function crearPrismaEnMemoria(datos: Record<string, Fila[]> = {}): Prisma
    */
   const COLUMNAS_UNICAS: Record<string, string[]> = {
     idempotencyRecord: ['key'],
+    agentConversationContext: ['clave'],
   }
 
   const modelo = (tabla: string) => ({
