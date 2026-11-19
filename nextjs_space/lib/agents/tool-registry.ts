@@ -43,6 +43,7 @@ import {
   type ResultadoPermiso,
   type RolDeUsuario,
 } from './crm-tool-permissions';
+import { registrarEjecucion, type DatosTraza } from './tool-execution-log';
 
 export type OrigenHerramienta = 'crm' | 'mcp' | 'skill';
 
@@ -285,35 +286,64 @@ export async function ejecutarHerramientaDelAgente(
   args: Record<string, any>,
   ctx: ContextoEjecucion
 ): Promise<any> {
-  const definicion = definicionDe(nombre);
-  if (!definicion) throw new PermisoDenegadoError(`herramienta desconocida: ${nombre}`);
-
-  // La autorización se comprueba aquí, en el único punto por el que se puede
-  // llegar a una skill: así no existe una llamada que se salte el permiso.
-  const permiso = autorizarHerramienta(
-    nombre,
-    ctx.autorizacion.usuario,
-    ctx.autorizacion.restricciones
-  );
-  if (!permiso.permitido) {
-    throw new PermisoDenegadoError(permiso.motivo ?? `sin permiso para ${nombre}`);
-  }
-
-  const ejecutar = () => ejecutarPorOrigen(definicion, nombre, args, ctx);
-
-  // Las lecturas no se cachean: repetir una consulta no duplica nada y una
-  // respuesta vieja sí puede mentir. La acción del permiso ya distingue ambas
-  // (`ver` es lectura), así que no hace falta una segunda marca.
-  if (POLITICAS_REGISTRO[nombre]?.accion === 'ver') return ejecutar();
-
-  const clave = claveIdempotencia({
+  const inicio = Date.now();
+  const traza: DatosTraza = {
+    tenantId: ctx.tenantId,
     userId: ctx.userId,
-    conversacionId: ctx.conversacionId ?? SIN_CONVERSACION,
+    conversationId: ctx.conversacionId,
     herramienta: nombre,
     argumentos: args,
-  });
-  const { resultado, repetida } = await ejecutarUnaVez(clave, ejecutar);
-  return marcarRepetida(resultado, repetida);
+    estado: 'ok',
+  };
+
+  try {
+    const definicion = definicionDe(nombre);
+    if (!definicion) throw new PermisoDenegadoError(`herramienta desconocida: ${nombre}`);
+    traza.origen = definicion.origen;
+
+    // La autorización se comprueba aquí, en el único punto por el que se puede
+    // llegar a una skill: así no existe una llamada que se salte el permiso.
+    const permiso = autorizarHerramienta(
+      nombre,
+      ctx.autorizacion.usuario,
+      ctx.autorizacion.restricciones
+    );
+    if (!permiso.permitido) {
+      throw new PermisoDenegadoError(permiso.motivo ?? `sin permiso para ${nombre}`);
+    }
+
+    const ejecutar = () => ejecutarPorOrigen(definicion, nombre, args, ctx);
+
+    let resultado: any;
+    // Las lecturas no se cachean: repetir una consulta no duplica nada y una
+    // respuesta vieja sí puede mentir. La acción del permiso ya distingue ambas
+    // (`ver` es lectura), así que no hace falta una segunda marca.
+    if (POLITICAS_REGISTRO[nombre]?.accion === 'ver') {
+      resultado = await ejecutar();
+    } else {
+      const clave = claveIdempotencia({
+        userId: ctx.userId,
+        conversacionId: ctx.conversacionId ?? SIN_CONVERSACION,
+        herramienta: nombre,
+        argumentos: args,
+      });
+      const ejecutada = await ejecutarUnaVez(clave, ejecutar);
+      traza.idempotente = ejecutada.repetida;
+      resultado = marcarRepetida(ejecutada.resultado, ejecutada.repetida);
+    }
+
+    traza.resultado = resultado;
+    return resultado;
+  } catch (error) {
+    traza.estado = error instanceof PermisoDenegadoError ? 'denegado' : 'error';
+    traza.error = error instanceof Error ? error.message : String(error);
+    throw error;
+  } finally {
+    traza.duracionMs = Date.now() - inicio;
+    // No espera un resultado: registrarEjecucion nunca lanza, así que un fallo
+    // de la tabla de trazabilidad no enmascara ni repite la operación.
+    await registrarEjecucion(traza);
+  }
 }
 
 /** Ejecuta la herramienta por su origen, ya autorizada. */

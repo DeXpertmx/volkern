@@ -28,6 +28,7 @@ const CON_TENANT = new Set([
   'catalogoItem',
   // Restricciones de tools MCP que guarda cada empresa.
   'mcpToolCapability',
+  'toolExecution',
 ])
 
 const MODELOS = [
@@ -43,6 +44,7 @@ const MODELOS = [
   'catalogoItem',
   'mcpToolCapability',
   'idempotencyRecord',
+  'toolExecution',
 ]
 
 export interface Violacion {
