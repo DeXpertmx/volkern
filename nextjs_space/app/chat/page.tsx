@@ -45,7 +45,7 @@ interface TarjetaEntidad {
 interface AccionAgente {
   tool: string
   etiqueta: string
-  estado: 'ok' | 'error' | 'denegado'
+  estado: 'ok' | 'error' | 'denegado' | 'pendiente'
   entidad?: string
   id?: string
   detalle?: string
@@ -70,6 +70,8 @@ interface DatosAgente {
 interface EstructuraAgente {
   resumen: string
   acciones: AccionAgente[]
+  /** Acciones de clase C/D a la espera de aprobación (P6/B). */
+  pendientes?: AccionAgente[]
   datos: DatosAgente[]
 }
 
@@ -116,6 +118,7 @@ function formatearCelda(valor: any): string {
 function IconoEstado({ estado }: { estado: AccionAgente['estado'] }) {
   if (estado === 'error') return <span className="text-destructive">✕</span>
   if (estado === 'denegado') return <span className="text-amber-500">🔒</span>
+  if (estado === 'pendiente') return <span className="text-amber-500">⏳</span>
   return <span className="text-emerald-500">✓</span>
 }
 
@@ -194,12 +197,26 @@ function TablaDatos({ datos }: { datos: DatosAgente }) {
 
 /** Salida estructurada del agente (P6): resumen + indicadores + tablas. */
 function EstructuraAgente({ estructura }: { estructura: EstructuraAgente }) {
+  const pendientes = estructura.pendientes ?? []
   return (
     <div className="flex flex-col gap-2">
       {estructura.resumen && <p className="text-sm leading-relaxed">{estructura.resumen}</p>}
       {estructura.acciones.map((a, i) => (
         <IndicadorAccion key={`${a.tool}-${i}`} accion={a} />
       ))}
+      {pendientes.length > 0 && (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-2.5">
+          <p className="flex items-center gap-1.5 text-xs font-semibold text-amber-600">
+            <span>⏳</span>
+            {pendientes.length === 1 ? 'Acción pendiente de aprobación' : 'Acciones pendientes de aprobación'}
+          </p>
+          <div className="mt-1.5 flex flex-col gap-1.5">
+            {pendientes.map((p, i) => (
+              <IndicadorAccion key={`${p.tool}-${i}`} accion={p} />
+            ))}
+          </div>
+        </div>
+      )}
       {estructura.datos.map((d, i) => (
         <TablaDatos key={`${d.tipo}-${i}`} datos={d} />
       ))}

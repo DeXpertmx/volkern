@@ -36,6 +36,7 @@ import {
   SIN_CONVERSACION,
 } from './tool-idempotency';
 import {
+  cargarRolDeUsuario,
   evaluarPermisoHerramienta,
   PERMISOS_HERRAMIENTAS,
   type PoliticaHerramienta,
@@ -45,6 +46,7 @@ import {
 } from './crm-tool-permissions';
 import { registrarEjecucion, type DatosTraza } from './tool-execution-log';
 import { clasificarRiesgo, type ClaseRiesgo } from './riesgo-herramientas';
+import { requestAgentToolApproval } from '@/lib/mcp/tool-gate';
 
 export type OrigenHerramienta = 'crm' | 'mcp' | 'skill';
 
@@ -108,17 +110,77 @@ const HERRAMIENTAS_SKILL: Array<DefinicionSinRiesgo & { politica: PoliticaHerram
     nombre: 'get_pending_tasks',
     origen: 'skill',
     descripcion:
-      'Lista las tareas pendientes del usuario ordenadas por vencimiento. Úsala para «qué tengo pendiente», «mis tareas» o «las tareas de Ana» (con nombre o correo).',
+      'Lista las tareas pendientes del usuario ordenadas por vencimiento, con un rango de fechas opcional. Úsala para «qué tengo pendiente», «mis tareas», «qué tengo esta semana» o «las tareas de Ana» (con nombre o correo).',
     parametros: {
       type: 'object',
       properties: {
         nombre: { type: 'string', description: 'Nombre de la persona, si se quieren sólo sus tareas' },
         email: { type: 'string', description: 'Correo de la persona, si se conoce' },
+        fechaDesde: { type: 'string', description: 'Sólo tareas que vencen desde esta fecha (YYYY-MM-DD)' },
+        fechaHasta: { type: 'string', description: 'Sólo tareas que vencen hasta esta fecha (YYYY-MM-DD)' },
       },
       additionalProperties: false,
     },
     // Las tareas cuelgan del lead: el mismo módulo que la ficha.
     politica: { modulo: 'leads', accion: 'ver' },
+  },
+  {
+    nombre: 'search_properties_by_filters',
+    origen: 'skill',
+    descripcion:
+      'Busca inmuebles del catálogo con filtros. Úsala para «casas en venta en Madrid con 3 habitaciones», «pisos por menos de 250 mil» o «locales en alquiler».',
+    parametros: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'La búsqueda en lenguaje natural, si no hay filtros sueltos' },
+        tipo_operacion: { type: 'string', description: 'venta o alquiler' },
+        tipo_inmueble: { type: 'string', description: 'casa, piso/departamento, oficina, local o terreno' },
+        zona: { type: 'string', description: 'Zona o ciudad' },
+        habitaciones: { type: 'number', description: 'Mínimo de habitaciones' },
+        precio_min: { type: 'number', description: 'Precio mínimo' },
+        precio_max: { type: 'number', description: 'Precio máximo' },
+      },
+      additionalProperties: false,
+    },
+    // Los inmuebles son CatalogoItem: la misma llave que la cartera.
+    politica: { modulo: 'catalogo', accion: 'ver' },
+  },
+  {
+    nombre: 'create_booking',
+    origen: 'skill',
+    descripcion:
+      'Crea una cita o reserva para una persona (fecha, hora, tipo, título y ubicación). Identifícala por nombre o correo y usa el calendario de referencia para las fechas.',
+    parametros: {
+      type: 'object',
+      properties: {
+        nombre: { type: 'string', description: 'Nombre de la persona' },
+        email: { type: 'string', description: 'Correo de la persona' },
+        fecha: { type: 'string', description: 'Fecha de la cita (YYYY-MM-DD)' },
+        hora: { type: 'string', description: 'Hora de la cita (HH:mm)' },
+        titulo: { type: 'string', description: 'Título de la cita' },
+        tipo: { type: 'string', description: 'reunion, servicio, llamada u otro' },
+        ubicacion: { type: 'string', description: 'Dónde es' },
+      },
+      additionalProperties: false,
+    },
+    politica: { modulo: 'citas', accion: 'crear' },
+  },
+  {
+    nombre: 'cancel_booking',
+    origen: 'skill',
+    descripcion:
+      'Cancela una cita o reserva. Es destructiva: no se ejecuta directa, queda pendiente de la aprobación de un responsable.',
+    parametros: {
+      type: 'object',
+      properties: {
+        nombre: { type: 'string', description: 'Nombre de la persona de la cita' },
+        email: { type: 'string', description: 'Correo de la persona de la cita' },
+        fecha: { type: 'string', description: 'Fecha de la cita a cancelar (YYYY-MM-DD)' },
+        motivo: { type: 'string', description: 'Motivo de la cancelación' },
+      },
+      additionalProperties: false,
+    },
+    politica: { modulo: 'citas', accion: 'cancelar' },
   },
   {
     nombre: 'update_deal',
@@ -301,7 +363,9 @@ export class AprobacionRequeridaError extends Error {
 
   constructor(
     readonly herramienta: string,
-    readonly riesgo: ClaseRiesgo
+    readonly riesgo: ClaseRiesgo,
+    /** Id de la `McpApprovalRequest` creada: la acción ya está en la bandeja. */
+    readonly approvalId?: string
   ) {
     super(
       `La herramienta ${herramienta} es de clase ${riesgo} y requiere aprobación antes de ejecutarse`
@@ -314,7 +378,8 @@ export class AprobacionRequeridaError extends Error {
 export async function ejecutarHerramientaDelAgente(
   nombre: string,
   args: Record<string, any>,
-  ctx: ContextoEjecucion
+  ctx: ContextoEjecucion,
+  opciones: { aprobacionConcedida?: boolean } = {}
 ): Promise<any> {
   const inicio = Date.now();
   const traza: DatosTraza = {
@@ -343,9 +408,20 @@ export async function ejecutarHerramientaDelAgente(
     }
 
     // Clase C/D: la autorización de rol no basta, exige el flujo de aprobación.
+    // No se rechaza sin más: se crea la solicitud en la bandeja MCP y se marca
+    // la acción como pendiente. `aprobacionConcedida` sólo la abre la ruta de
+    // resolución de aprobaciones, nunca el modelo ni el bucle de herramientas.
     const riesgo = clasificarRiesgo(nombre, POLITICAS_REGISTRO[nombre]?.accion);
-    if (riesgo.requiereAprobacion) {
-      throw new AprobacionRequeridaError(nombre, riesgo.clase);
+    if (riesgo.requiereAprobacion && !opciones.aprobacionConcedida) {
+      const solicitud = await requestAgentToolApproval({
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
+        roleName: ctx.autorizacion.usuario.role?.nombre ?? null,
+        toolName: nombre,
+        args,
+        risk: riesgo.clase === 'D' ? 'destructive' : 'external',
+      });
+      throw new AprobacionRequeridaError(nombre, riesgo.clase, solicitud.approvalId);
     }
 
     const ejecutar = () => ejecutarPorOrigen(definicion, nombre, args, ctx);
@@ -384,6 +460,39 @@ export async function ejecutarHerramientaDelAgente(
     // de la tabla de trazabilidad no enmascara ni repite la operación.
     await registrarEjecucion(traza);
   }
+}
+
+/**
+ * Ejecuta una herramienta C/D ya aprobada por un responsable en la bandeja MCP.
+ *
+ * La identidad es la de quien la PIDIÓ (atribución, no la de quien aprueba) y
+ * el permiso se vuelve a comprobar igual que en el turno del chat: aprobar no
+ * otorga nada que el rol no tuviera. `aprobacionConcedida` evita volver a
+ * pedir aprobación, que ya se concedió una vez y es lo único que esta puerta
+ * salta; el resto del camino (autorización, idempotencia, trazabilidad) es el
+ * mismo que usa el agente.
+ */
+export async function ejecutarHerramientaAprobadaDelChat(params: {
+  tenantId: string;
+  userId: string;
+  toolName: string;
+  args: Record<string, any>;
+}): Promise<any> {
+  const [usuario, restricciones] = await Promise.all([
+    cargarRolDeUsuario({ userId: params.userId, tenantId: params.tenantId }),
+    cargarRestriccionesMcp(params.tenantId),
+  ]);
+
+  return ejecutarHerramientaDelAgente(
+    params.toolName,
+    params.args,
+    {
+      tenantId: params.tenantId,
+      userId: params.userId,
+      autorizacion: { usuario, restricciones },
+    },
+    { aprobacionConcedida: true }
+  );
 }
 
 /** Ejecuta la herramienta por su origen, ya autorizada. */

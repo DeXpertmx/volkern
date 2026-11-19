@@ -21,10 +21,12 @@ import { NextResponse } from 'next/server';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { handleCallTool } from '@/lib/mcp/mcp-handler';
 import { roleKind } from '@/lib/mcp/tool-policy';
+import { ejecutarHerramientaAprobadaDelChat } from '@/lib/agents/tool-registry';
 import {
   auditApprovalOutcome,
   claimApproval,
   completeApproval,
+  VIA_CHAT,
 } from '@/lib/mcp/tool-gate';
 
 export const POST = withTenantAuth(async (request, auth, { params }) => {
@@ -110,29 +112,49 @@ export const POST = withTenantAuth(async (request, auth, { params }) => {
     // approved → ejecutar UNA vez, con la identidad del solicitante.
     const approval = claim.approval;
 
-    const result = await handleCallTool({
-      name: approval.toolName,
-      arguments: {
-        ...(approval.arguments ?? {}),
-        tenantId: approval.tenantId,
-        userId: approval.requestedById,
-        source: 'mcp',
-      },
-    });
+    let result: unknown;
+    let ok = false;
 
-    const parsed = (() => {
-      const text = result.content?.[0]?.text;
-      if (!text) return null;
+    if (approval.via === VIA_CHAT) {
+      // Herramienta del agente del chat (clase C/D): se ejecuta por el registro
+      // del agente, no por `handleCallTool`, que sólo resuelve tools del catálogo.
+      // La identidad sigue siendo la de quien la pidió, no la de quien aprueba.
       try {
-        return JSON.parse(text);
-      } catch {
-        return text;
+        result = await ejecutarHerramientaAprobadaDelChat({
+          tenantId: approval.tenantId,
+          userId: approval.requestedById,
+          toolName: approval.toolName,
+          args: (approval.arguments ?? {}) as Record<string, any>,
+        });
+        ok = true;
+      } catch (error) {
+        result = { error: error instanceof Error ? error.message : String(error) };
+        ok = false;
       }
-    })();
+    } else {
+      const respuesta = await handleCallTool({
+        name: approval.toolName,
+        arguments: {
+          ...(approval.arguments ?? {}),
+          tenantId: approval.tenantId,
+          userId: approval.requestedById,
+          source: 'mcp',
+        },
+      });
 
-    const ok = !result.isError;
+      const text = respuesta.content?.[0]?.text;
+      result = (() => {
+        if (!text) return null;
+        try {
+          return JSON.parse(text);
+        } catch {
+          return text;
+        }
+      })();
+      ok = !respuesta.isError;
+    }
 
-    await completeApproval({ approvalId: approval.id, ok, result: parsed });
+    await completeApproval({ approvalId: approval.id, ok, result: result as never });
 
     await auditApprovalOutcome({
       tenantId,
@@ -153,7 +175,7 @@ export const POST = withTenantAuth(async (request, auth, { params }) => {
       status: ok ? 'executed' : 'failed',
       approvalId: approval.id,
       toolName: approval.toolName,
-      result: parsed,
+      result,
     });
   } catch (error) {
     console.error('[MCP approvals] Error resolviendo:', error);

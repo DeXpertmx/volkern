@@ -35,10 +35,10 @@ const DESCRIPCION: Record<ClaseRiesgo, Omit<ClasificacionRiesgo, 'clase'>> = {
 }
 
 /**
- * Herramientas de clase C/D. Hoy el chat no expone ninguna (las de envío y
- * facturación llegan en la etapa siguiente), pero el registro las declara aquí
- * para que el ejecutor las bloquee desde ya si alguien intenta exponerlas sin
- * su flujo de aprobación.
+ * Herramientas de clase C/D. `cancel_booking` (D) ya se expone al chat y cuelga
+ * del flujo de aprobación MCP (Etapa C); el resto se declara aquí para que el
+ * ejecutor las bloquee desde ya si alguien intenta exponerlas sin su flujo de
+ * aprobación.
  */
 const CLASES_EXPLICITAS: Record<string, ClaseRiesgo> = {
   // Impacto externo: enviar mensajes reales por los canales.
@@ -47,6 +47,8 @@ const CLASES_EXPLICITAS: Record<string, ClaseRiesgo> = {
   // Destructivo: no hay vuelta atrás.
   delete_ad_schedule: 'D',
   cancel_invoice: 'D',
+  // Cancelar una cita/reserva la saca del circuito y avisa al cliente.
+  cancel_booking: 'D',
 }
 
 /** Clase por defecto según la acción del permiso de la herramienta. */
