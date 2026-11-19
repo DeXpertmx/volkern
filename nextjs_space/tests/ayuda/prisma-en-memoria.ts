@@ -26,6 +26,8 @@ const CON_TENANT = new Set([
   'note',
   'user',
   'catalogoItem',
+  // Restricciones de tools MCP que guarda cada empresa.
+  'mcpToolCapability',
 ])
 
 const MODELOS = [
@@ -39,6 +41,7 @@ const MODELOS = [
   'note',
   'interaction',
   'catalogoItem',
+  'mcpToolCapability',
 ]
 
 export interface Violacion {
@@ -64,6 +67,7 @@ function coincide(fila: Fila, where: Fila | undefined): boolean {
       const texto = String(actual ?? '')
       const patron = String(v.equals ?? v.contains ?? v.startsWith ?? '')
       const insensible = v.mode === 'insensitive'
+      if ('in' in v) return Array.isArray(v.in) && v.in.includes(actual)
       if ('equals' in v) return insensible ? texto.toLowerCase() === patron.toLowerCase() : actual === v.equals
       if ('contains' in v) return insensible ? texto.toLowerCase().includes(patron.toLowerCase()) : texto.includes(patron)
       if ('startsWith' in v) return texto.startsWith(patron)

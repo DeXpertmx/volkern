@@ -7,20 +7,31 @@
  * varias acciones descritas en lenguaje libre. En vez de añadir una regla por
  * frase, aquí el LLM elige y ejecuta las herramientas del CRM, y devuelve el
  * resumen de lo que realmente quedó guardado.
+ *
+ * Las herramientas no se declaran aquí: las compone `tool-registry.ts` a
+ * partir de las nativas, el catálogo MCP y las skills. Este módulo sólo hace
+ * dos cosas: pasarle al modelo lo que el rol puede usar y ejecutar lo que
+ * pide, comprobando el permiso otra vez antes de tocar datos.
  */
 
 import { prisma } from '@/lib/db';
-import {
-  cargarRolDeUsuario,
-  evaluarPermisoHerramienta,
-  type RolDeUsuario,
-} from '@/lib/agents/crm-tool-permissions';
+import { cargarRolDeUsuario } from '@/lib/agents/crm-tool-permissions';
 import type { MensajeDeHistorial } from '@/lib/agents/conversation-history';
+import {
+  cargarRestriccionesMcp,
+  ejecutarHerramientaDelAgente,
+  herramientasParaElModelo,
+  PermisoDenegadoError,
+} from '@/lib/agents/tool-registry';
 import {
   callAssistantWithToolLoop,
   type OpenRouterMessage,
-  type OpenRouterTool,
 } from '@/lib/assistant/openrouter-client';
+
+// Compatibilidad: las herramientas nativas viven en su módulo, pero quien
+// importaba HERRAMIENTAS desde aquí (pruebas de cobertura de permisos) sigue
+// funcionando.
+export { HERRAMIENTAS } from '@/lib/agents/herramientas-crm';
 
 export interface AgenteCrmInput {
   message: string;
@@ -66,399 +77,6 @@ function calendarioDeReferencia(timezone: string): string {
   return lineas.join('\n');
 }
 
-/** Herramientas expuestas al modelo. */
-export const HERRAMIENTAS: OpenRouterTool[] = [
-  {
-    type: 'function',
-    function: {
-      name: 'buscar_persona',
-      description:
-        'Busca un lead o contacto del CRM por nombre o correo y devuelve sus datos, tareas pendientes e interacciones recientes. Úsala antes de registrar cualquier cambio para confirmar de quién se habla.',
-      parameters: {
-        type: 'object',
-        properties: {
-          nombre: { type: 'string', description: 'Nombre completo o parcial de la persona' },
-          email: { type: 'string', description: 'Correo electrónico, si se conoce' },
-        },
-        additionalProperties: false,
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'buscar_propiedades',
-      description:
-        'Busca inmuebles del catálogo por operación, tipo, zona, habitaciones, precio máximo y terraza. Si el usuario afina una búsqueda anterior ("que tengan terraza", "y más baratas", "sólo en el centro"), vuelve a llamarla con TODOS los criterios de antes más el nuevo: el filtro se acumula, no se reinicia.',
-      parameters: {
-        type: 'object',
-        properties: {
-          operacion: { type: 'string', enum: ['venta', 'alquiler'], description: 'Tipo de operación' },
-          tipo: {
-            type: 'string',
-            enum: ['casa', 'departamento', 'oficina', 'local', 'terreno'],
-            description: 'Tipo de inmueble',
-          },
-          zona: { type: 'string', description: 'Ciudad, barrio o colonia' },
-          habitaciones: { type: 'integer', description: 'Mínimo de habitaciones' },
-          precioMax: { type: 'number', description: 'Precio máximo' },
-          terraza: { type: 'boolean', description: 'Sólo inmuebles con terraza' },
-        },
-        additionalProperties: false,
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'crear_lead',
-      description:
-        'Da de alta una ficha nueva de lead en el CRM. Úsala sólo cuando buscar_persona no encuentre a nadie (ni por nombre ni por correo). El nombre es obligatorio; el correo es opcional pero conviene pedirlo. No inventes el email: si no lo sabes, omítelo.',
-      parameters: {
-        type: 'object',
-        properties: {
-          nombre: { type: 'string', description: 'Nombre completo de la persona' },
-          email: { type: 'string', description: 'Correo electrónico, sólo si se conoce' },
-          telefono: { type: 'string', description: 'Teléfono, si se conoce' },
-          empresa: { type: 'string', description: 'Empresa donde trabaja' },
-          cargo: { type: 'string', description: 'Puesto o cargo' },
-          direccion: { type: 'string', description: 'Dirección postal' },
-          fuente: { type: 'string', description: 'Origen del contacto (web, referido, feria, chat…)' },
-          notas: { type: 'string', description: 'Contexto de negocio inicial para la ficha' },
-        },
-        required: ['nombre'],
-        additionalProperties: false,
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'registrar_interaccion',
-      description:
-        'Registra una interacción ya ocurrida con la persona (llamada, whatsapp, email, reunión, nota interna). No envía nada: sólo deja constancia en el historial.',
-      parameters: {
-        type: 'object',
-        properties: {
-          nombre: { type: 'string', description: 'Nombre o correo de la persona' },
-          tipo: {
-            type: 'string',
-            enum: ['llamada', 'email', 'whatsapp', 'reunion', 'nota_interna'],
-            description: 'Canal por el que ocurrió',
-          },
-          contenido: { type: 'string', description: 'Qué pasó, en una o dos frases claras' },
-          resultado: { type: 'string', description: 'Resultado breve, si aplica (ej. "sin respuesta", "pidió propuesta")' },
-        },
-        required: ['nombre', 'tipo', 'contenido'],
-        additionalProperties: false,
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'crear_nota',
-      description:
-        'Añade una nota interna a la ficha de la persona. Úsala para contexto de negocio (qué necesita, qué herramientas usa, objeciones), no para acciones futuras.',
-      parameters: {
-        type: 'object',
-        properties: {
-          nombre: { type: 'string', description: 'Nombre o correo de la persona' },
-          contenido: { type: 'string', description: 'Texto de la nota' },
-        },
-        required: ['nombre', 'contenido'],
-        additionalProperties: false,
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'crear_tarea',
-      description:
-        'Crea una tarea pendiente para la persona (llamada, email, reunión, seguimiento, recordatorio). Usa fechaVencimiento en formato YYYY-MM-DD.',
-      parameters: {
-        type: 'object',
-        properties: {
-          nombre: { type: 'string', description: 'Nombre o correo de la persona' },
-          titulo: { type: 'string', description: 'Título corto y accionable de la tarea' },
-          tipo: {
-            type: 'string',
-            enum: ['llamada', 'email', 'reunion', 'seguimiento', 'otro'],
-            description: 'Tipo de tarea',
-          },
-          descripcion: { type: 'string', description: 'Detalle de qué hay que hacer' },
-          fechaVencimiento: { type: 'string', description: 'Fecha límite en formato YYYY-MM-DD' },
-        },
-        required: ['nombre', 'titulo', 'fechaVencimiento'],
-        additionalProperties: false,
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'completar_tarea',
-      description: 'Marca como completada una tarea pendiente de la persona.',
-      parameters: {
-        type: 'object',
-        properties: {
-          nombre: { type: 'string', description: 'Nombre o correo de la persona' },
-          titulo: { type: 'string', description: 'Título (o parte del título) de la tarea a completar' },
-        },
-        required: ['nombre', 'titulo'],
-        additionalProperties: false,
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'reprogramar_tarea',
-      description: 'Cambia la fecha de vencimiento de una tarea pendiente. Usa YYYY-MM-DD.',
-      parameters: {
-        type: 'object',
-        properties: {
-          nombre: { type: 'string', description: 'Nombre o correo de la persona' },
-          titulo: { type: 'string', description: 'Título (o parte del título) de la tarea' },
-          fecha: { type: 'string', description: 'Nueva fecha en formato YYYY-MM-DD' },
-        },
-        required: ['nombre', 'titulo', 'fecha'],
-        additionalProperties: false,
-      },
-    },
-  },
-];
-
-/** Normaliza para comparar nombres sin acentos ni mayúsculas. */
-function normalizar(texto: string): string {
-  return String(texto || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim();
-}
-
-/** Búsqueda de personas con contexto útil para el modelo. */
-async function buscarPersona(tenantId: string, nombre?: string, email?: string) {
-  if (email) {
-    const lead = await prisma.lead.findFirst({
-      where: { tenantId, email: { equals: email, mode: 'insensitive' } },
-      select: { id: true, nombre: true, email: true, telefono: true, empresa: true, estado: true },
-    });
-    if (lead) return { tipo: 'lead', persona: lead, tareas: await tareasDe(tenantId, lead.id) };
-
-    const contacto = await prisma.contact.findFirst({
-      where: { tenantId, email: { equals: email, mode: 'insensitive' } },
-      select: { id: true, nombre: true, email: true, telefono: true },
-    });
-    if (contacto) return { tipo: 'contacto', persona: contacto, tareas: [] };
-    return { encontrado: false };
-  }
-
-  if (!nombre) return { encontrado: false, motivo: 'Falta el nombre o el correo' };
-
-  const leads = await prisma.lead.findMany({
-    where: { tenantId, nombre: { contains: nombre, mode: 'insensitive' } },
-    take: 5,
-    select: { id: true, nombre: true, email: true, telefono: true, empresa: true, estado: true },
-  });
-  if (leads.length === 1) {
-    return { tipo: 'lead', persona: leads[0], tareas: await tareasDe(tenantId, leads[0].id) };
-  }
-  if (leads.length > 1) return { tipo: 'lead', candidatos: leads };
-
-  const contactos = await prisma.contact.findMany({
-    where: { tenantId, nombre: { contains: nombre, mode: 'insensitive' } },
-    take: 5,
-    select: { id: true, nombre: true, email: true, telefono: true },
-  });
-  if (contactos.length === 1) return { tipo: 'contacto', persona: contactos[0], tareas: [] };
-  if (contactos.length > 1) return { tipo: 'contacto', candidatos: contactos };
-
-  // Último intento: por palabras sueltas del nombre (acentos/mayúsculas aparte).
-  const buscado = normalizar(nombre);
-  const todos = await prisma.lead.findMany({
-    where: { tenantId },
-    take: 2000,
-    select: { id: true, nombre: true, email: true, telefono: true, empresa: true, estado: true },
-  });
-  const coincidencias = todos.filter((l) =>
-    normalizar(l.nombre)
-      .split(/\s+/)
-      .some((t) => t.length > 2 && buscado.includes(t))
-  );
-  if (coincidencias.length === 1) {
-    return { tipo: 'lead', persona: coincidencias[0], tareas: await tareasDe(tenantId, coincidencias[0].id) };
-  }
-  if (coincidencias.length > 1) return { tipo: 'lead', candidatos: coincidencias.slice(0, 5) };
-
-  return { encontrado: false };
-}
-
-async function tareasDe(tenantId: string, leadId: string) {
-  return prisma.task.findMany({
-    where: { tenantId, leadId, completada: false },
-    orderBy: { fechaVencimiento: 'asc' },
-    take: 5,
-    select: { id: true, titulo: true, tipo: true, fechaVencimiento: true },
-  });
-}
-
-/** Ejecuta una herramienta con el contexto del tenant y el usuario. */
-async function ejecutarHerramienta(
-  nombre: string,
-  args: Record<string, any>,
-  ctx: { tenantId: string; userId: string }
-): Promise<any> {
-  const { skills } = await import('@/lib/skills');
-  const { tenantId, userId } = ctx;
-
-  switch (nombre) {
-    case 'buscar_persona':
-      return buscarPersona(tenantId, args.nombre, args.email);
-
-    case 'buscar_propiedades': {
-      // Se reutiliza la búsqueda natural del catálogo inmobiliario (la misma que
-      // usa el chatbot del portal) y se afina el resultado en memoria.
-      const { searchPropertiesByNaturalFilters } = await import('@/lib/skills/real-estate-skills');
-      const { properties } = await searchPropertiesByNaturalFilters({
-        tenantId,
-        tipo_operacion: args.operacion,
-        tipo_inmueble: args.tipo,
-        zona: args.zona,
-        habitaciones: args.habitaciones,
-        precio_max: args.precioMax,
-        limit: 50,
-      });
-      const inmuebles = (args.terraza === true
-        ? properties.filter((p: any) => p.hasTerrace)
-        : properties
-      )
-        .slice(0, 5)
-        .map((p: any) => ({
-          id: p.id,
-          nombre: p.nombre,
-          precio: p.precioBase,
-          zona: p.city,
-          habitaciones: p.bedrooms,
-          terraza: p.hasTerrace,
-        }));
-      return { propiedades: inmuebles };
-    }
-
-    case 'crear_lead': {
-      const nombre = String(args.nombre || '').trim();
-      const email = String(args.email || '').trim();
-      if (!nombre) throw new Error('Falta el nombre del lead');
-
-      // Evita duplicados aunque el modelo no haya buscado antes: mismo correo,
-      // o mismo nombre exacto cuando no hay correo con el que comparar.
-      const existente = email
-        ? await prisma.lead.findFirst({
-            where: { tenantId, email: { equals: email, mode: 'insensitive' } },
-            select: { id: true, nombre: true, email: true },
-          })
-        : await prisma.lead.findFirst({
-            where: { tenantId, nombre: { equals: nombre, mode: 'insensitive' } },
-            select: { id: true, nombre: true, email: true },
-          });
-      if (existente) {
-        return { ok: true, yaExistia: true, id: existente.id, nombre: existente.nombre, email: existente.email };
-      }
-
-      const lead = await (skills as any).create_lead({
-        tenantId,
-        userId,
-        nombre,
-        email: email || undefined,
-        telefono: args.telefono,
-        empresa: args.empresa,
-        cargo: args.cargo,
-        direccion: args.direccion,
-        fuente: args.fuente || 'chat',
-        notas: args.notas,
-      });
-      return {
-        ok: true,
-        id: lead.id,
-        nombre: lead.nombre,
-        email: lead.email,
-        // Sin correo, la skill guarda uno de respaldo: hay que avisarlo.
-        emailReal: Boolean(email),
-      };
-    }
-
-    case 'registrar_interaccion': {
-      const { createInteraction } = await import('@/lib/skills/interaction-skills');
-      const persona: any = await buscarPersona(tenantId, args.nombre, args.email);
-      const leadId = persona?.tipo === 'lead' ? persona.persona?.id : undefined;
-      const contactId = persona?.tipo === 'contacto' ? persona.persona?.id : undefined;
-      if (!leadId && !contactId) throw new Error(`No encontré a "${args.nombre}" en el CRM`);
-      const interaccion = await createInteraction({
-        tenantId,
-        leadId,
-        contactId,
-        tipo: args.tipo || 'nota_interna',
-        contenido: args.contenido,
-        resultado: args.resultado,
-        userId,
-        source: 'app',
-      });
-      return { ok: true, id: interaccion.id, tipo: interaccion.tipo };
-    }
-
-    case 'crear_nota': {
-      const persona: any = await buscarPersona(tenantId, args.nombre, args.email);
-      if (persona?.tipo !== 'lead') throw new Error(`No encontré una ficha de lead para "${args.nombre}"`);
-      const nota = await (skills as any).create_note({
-        tenantId,
-        leadId: persona.persona.id,
-        contenido: args.contenido,
-        userId,
-      });
-      return { ok: true, id: nota.id };
-    }
-
-    case 'crear_tarea': {
-      const tarea = await (skills as any).create_task({
-        tenantId,
-        nombre: args.nombre,
-        titulo: args.titulo,
-        tipo: args.tipo || 'seguimiento',
-        descripcion: args.descripcion,
-        fechaVencimiento: args.fechaVencimiento,
-        userId,
-      });
-      return { ok: true, id: tarea.id, titulo: tarea.titulo, fecha: tarea.fechaVencimiento };
-    }
-
-    case 'completar_tarea': {
-      const tarea = await (skills as any).complete_task({
-        tenantId,
-        nombre: args.nombre,
-        titulo: args.titulo,
-        userId,
-      });
-      return { ok: true, id: tarea.id, titulo: tarea.titulo };
-    }
-
-    case 'reprogramar_tarea': {
-      const tarea = await (skills as any).reschedule_task({
-        tenantId,
-        nombre: args.nombre,
-        titulo: args.titulo,
-        fecha: args.fecha,
-        userId,
-      });
-      return { ok: true, id: tarea.id, fecha: tarea.fechaVencimiento };
-    }
-
-    default:
-      throw new Error(`Herramienta desconocida: ${nombre}`);
-  }
-}
-
 /**
  * Ejecuta el agente con herramientas. Sólo devuelve texto si el modelo llegó a
  * ejecutar alguna: si no, el orquestador sigue su camino normal.
@@ -478,39 +96,48 @@ export async function ejecutarAgenteCrm(input: AgenteCrmInput): Promise<AgenteCr
   ];
 
   const ejecutadas: string[] = [];
-  // Cinco vueltas como máximo: buscar a la persona (o darla de alta si no
-  // existe), registrar lo ocurrido, dejar la nota y crear la tarea pendiente.
-  // El presupuesto total acota la espera del chat aunque el modelo encadene
-  // llamadas.
-  // El rol se lee una sola vez por mensaje y solo si el modelo llega a llamar
-  // alguna herramienta: la promesa se comparte entre todas las vueltas.
-  let rolDelTurno: Promise<RolDeUsuario> | null = null;
-  const rol = () => (rolDelTurno ??= cargarRolDeUsuario({ userId, tenantId }));
+  // El rol y las restricciones de la empresa se leen una sola vez por mensaje:
+  // juntos deciden qué herramientas ve el modelo y vuelven a decidir, sin otra
+  // consulta, si puede ejecutar cada una de las que pida.
+  const [rolDelTurno, restricciones] = await Promise.all([
+    cargarRolDeUsuario({ userId, tenantId }),
+    cargarRestriccionesMcp(tenantId),
+  ]);
 
-  const respuesta = await callAssistantWithToolLoop(messages, HERRAMIENTAS, async (nombre, args) => {
-    // El modelo propone; el backend autoriza. Se comprueba antes de tocar la
-    // skill, contra el rol del turno.
-    const permiso = evaluarPermisoHerramienta(nombre, await rol());
-    if (!permiso.permitido) {
-      console.warn(`[AgenteCRM] ${nombre} denegada: ${permiso.motivo}`);
-      return JSON.stringify({
-        ok: false,
-        codigo: 'sin_permiso',
-        mensaje: 'No tienes permiso para esta acción en el CRM. Pídeselo a un administrador.',
-      });
-    }
-
-    try {
-      const resultado = await ejecutarHerramienta(nombre, args, { tenantId, userId });
-      if (resultado?.ok !== false) ejecutadas.push(nombre);
-      const serializado = JSON.stringify(resultado ?? { ok: true }).slice(0, 2000);
-      console.log(`[AgenteCRM] ${nombre}(${JSON.stringify(args).slice(0, 160)}) → ${serializado.slice(0, 200)}`);
-      return serializado;
-    } catch (error: any) {
-      console.warn(`[AgenteCRM] ${nombre} falló:`, error?.message || error);
-      return JSON.stringify({ ok: false, error: error?.message || 'Error ejecutando la herramienta' });
-    }
-  }, 5, input.timeoutMs ?? 20000);
+  // Cinco vueltas como máximo: consultar lo que haga falta, registrar lo
+  // ocurrido, dejar la nota y crear la tarea pendiente. El presupuesto total
+  // acota la espera del chat aunque el modelo encadene llamadas.
+  const respuesta = await callAssistantWithToolLoop(
+    messages,
+    herramientasParaElModelo(rolDelTurno, restricciones),
+    async (nombre, args) => {
+      try {
+        // El modelo propone; el registro autoriza antes de tocar la skill.
+        const resultado = await ejecutarHerramientaDelAgente(nombre, args, {
+          tenantId,
+          userId,
+          autorizacion: { usuario: rolDelTurno, restricciones },
+        });
+        if (resultado?.ok !== false) ejecutadas.push(nombre);
+        const serializado = JSON.stringify(resultado ?? { ok: true }).slice(0, 2000);
+        console.log(`[AgenteCRM] ${nombre}(${JSON.stringify(args).slice(0, 160)}) → ${serializado.slice(0, 200)}`);
+        return serializado;
+      } catch (error: any) {
+        if (error instanceof PermisoDenegadoError) {
+          console.warn(`[AgenteCRM] ${nombre} denegada: ${error.motivo}`);
+          return JSON.stringify({
+            ok: false,
+            codigo: 'sin_permiso',
+            mensaje: 'No tienes permiso para esta acción en el CRM. Pídeselo a un administrador.',
+          });
+        }
+        console.warn(`[AgenteCRM] ${nombre} falló:`, error?.message || error);
+        return JSON.stringify({ ok: false, error: error?.message || 'Error ejecutando la herramienta' });
+      }
+    },
+    5,
+    input.timeoutMs ?? 20000
+  );
 
   const texto = respuesta?.choices?.[0]?.message?.content?.trim() || '';
   return {
@@ -537,9 +164,10 @@ Reglas:
 - Lo que YA ocurrió (una llamada, un WhatsApp enviado, que no pudo ver el demo, que tiene otras herramientas) se registra con registrar_interaccion; el contexto de negocio (por qué le interesa Volkern, qué usa hoy) con crear_nota.
 - Lo que queda PENDIENTE se crea con crear_tarea (tipo llamada/email/reunion/seguimiento) y la fecha que pida el usuario.
 - Si dice que una tarea ya está hecha, usa completar_tarea con el TÍTULO EXACTO que devolvió buscar_persona (no inventes ni copies a medias el título).
+- Para consultar sin cambiar nada: el pipeline con volkern_list_deals, las tareas propias con get_pending_tasks, la cartera con volkern_list_catalogo o buscar_propiedades, la agenda con volkern_list_citas y el resumen de negocio con volkern_get_financial_dashboard. No inventes cifras: si la herramienta devuelve vacío, dilo.
+- Para mover un negocio de etapa, cambiar su importe o prioridad usa update_deal con nombre o correo.
 - Fechas: usa SIEMPRE las del calendario de referencia y el formato YYYY-MM-DD. "El jueves" es el próximo jueves; "el jueves de la siguiente semana" es el jueves de la semana que viene, no el de esta.
 - Si el usuario se refiere a algo ya dicho en la conversación ("que tengan terraza", "y más baratas", "los de ayer", "escríbele a él"), averigua a qué se refiere en los turnos anteriores y combina ese criterio con lo anterior, en vez de empezar de cero o preguntar lo que ya sabías.
-- Para inmuebles usa buscar_propiedades con todos los filtros acumulados de la conversación (operación, tipo, zona, habitaciones, precio máximo, terraza).
 - No inventes datos, importes ni fechas que el usuario no haya dicho.
 - No envíes correos ni mensajes reales: sólo registra en el CRM.
 - Si una herramienta responde con código sin_permiso, dilo tal cual al usuario y no la reintentes ni busques otra forma de hacer lo mismo.

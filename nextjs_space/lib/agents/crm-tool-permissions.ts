@@ -27,10 +27,13 @@ import {
  *   (inmuebles, productos y servicios) y tiene su propia llave. Autorizarla
  *   con `leads.ver` dejaba ver la cartera a quien solo tenía el pipeline.
  */
-interface PoliticaHerramienta {
+export interface PoliticaHerramienta {
   modulo: PermissionModule;
   accion: PermissionAction;
 }
+
+/** Mapa de políticas: cada herramienta expuesta declara módulo y acción. */
+export type PoliticasHerramientas = Record<string, PoliticaHerramienta>;
 
 export const PERMISOS_HERRAMIENTAS = {
   buscar_persona: { modulo: 'leads', accion: 'ver' },
@@ -82,9 +85,11 @@ export async function cargarRolDeUsuario(params: {
  */
 export function evaluarPermisoHerramienta(
   herramienta: string,
-  { role, existe }: RolDeUsuario
+  { role, existe }: RolDeUsuario,
+  /** Políticas a consultar; por defecto, las nativas del agente. */
+  politicas: PoliticasHerramientas = PERMISOS_HERRAMIENTAS
 ): ResultadoPermiso {
-  const politica = PERMISOS_HERRAMIENTAS[herramienta as HerramientaCrm];
+  const politica = politicas[herramienta];
   if (!politica) {
     return { permitido: false, motivo: `herramienta sin política de permisos: ${herramienta}` };
   }
