@@ -180,9 +180,13 @@ function generateInvoiceHTML(invoice: any, tenant: any): string {
     .invoice-container {
       max-width: 800px;
       margin: 0 auto;
-      padding: 40px;
+      padding: 24px 40px 8px;
       background: #ffffff;
-      min-height: 1000px;
+      /* Altura útil de una A4 con los márgenes de 20 mm que pide la ruta
+         (297 − 20 − 20 = 257 mm), menos 4 mm de holgura por redondeos. Antes
+         eran 1000 px fijos: con box-sizing: border-box no cabían en la página y
+         el pie se iba solo a una segunda hoja en cualquier factura. */
+      min-height: calc(297mm - 60mm);
       display: flex;
       flex-direction: column;
     }
@@ -193,8 +197,8 @@ function generateInvoiceHTML(invoice: any, tenant: any): string {
       justify-content: space-between;
       align-items: flex-start;
       border-bottom: 3px solid #1e40af;
-      padding-bottom: 24px;
-      margin-bottom: 28px;
+      padding-bottom: 20px;
+      margin-bottom: 24px;
     }
     .emisor-block { flex: 1; }
     .logo-placeholder {
@@ -353,7 +357,7 @@ function generateInvoiceHTML(invoice: any, tenant: any): string {
     /* ── Notas ── */
     .notes-section {
       margin-top: auto;
-      margin-bottom: 20px;
+      margin-bottom: 16px;
     }
     .notes-block {
       background: #f8fafc;
@@ -402,7 +406,7 @@ function generateInvoiceHTML(invoice: any, tenant: any): string {
       font-size: 10px;
       color: #94a3b8;
       border-top: 1px solid #e2e8f0;
-      padding-top: 16px;
+      padding-top: 12px;
     }
     .doc-footer p { margin: 2px 0; }
     .footer-small { font-size: 9px; color: #cbd5e1; }
