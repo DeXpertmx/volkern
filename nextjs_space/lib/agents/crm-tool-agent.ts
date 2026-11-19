@@ -11,6 +11,11 @@
 
 import { prisma } from '@/lib/db';
 import {
+  cargarRolDeUsuario,
+  evaluarPermisoHerramienta,
+  type RolDeUsuario,
+} from '@/lib/agents/crm-tool-permissions';
+import {
   callAssistantWithToolLoop,
   type OpenRouterMessage,
   type OpenRouterTool,
@@ -418,7 +423,24 @@ export async function ejecutarAgenteCrm(input: AgenteCrmInput): Promise<AgenteCr
   // existe), registrar lo ocurrido, dejar la nota y crear la tarea pendiente.
   // El presupuesto total acota la espera del chat aunque el modelo encadene
   // llamadas.
+  // El rol se lee una sola vez por mensaje y solo si el modelo llega a llamar
+  // alguna herramienta: la promesa se comparte entre todas las vueltas.
+  let rolDelTurno: Promise<RolDeUsuario> | null = null;
+  const rol = () => (rolDelTurno ??= cargarRolDeUsuario({ userId, tenantId }));
+
   const respuesta = await callAssistantWithToolLoop(messages, HERRAMIENTAS, async (nombre, args) => {
+    // El modelo propone; el backend autoriza. Se comprueba antes de tocar la
+    // skill, contra el rol del turno.
+    const permiso = evaluarPermisoHerramienta(nombre, await rol());
+    if (!permiso.permitido) {
+      console.warn(`[AgenteCRM] ${nombre} denegada: ${permiso.motivo}`);
+      return JSON.stringify({
+        ok: false,
+        codigo: 'sin_permiso',
+        mensaje: 'No tienes permiso para esta acción en el CRM. Pídeselo a un administrador.',
+      });
+    }
+
     try {
       const resultado = await ejecutarHerramienta(nombre, args, { tenantId, userId });
       if (resultado?.ok !== false) ejecutadas.push(nombre);
@@ -459,6 +481,7 @@ Reglas:
 - Fechas: usa SIEMPRE las del calendario de referencia y el formato YYYY-MM-DD. "El jueves" es el próximo jueves; "el jueves de la siguiente semana" es el jueves de la semana que viene, no el de esta.
 - No inventes datos, importes ni fechas que el usuario no haya dicho.
 - No envíes correos ni mensajes reales: sólo registra en el CRM.
+- Si una herramienta responde con código sin_permiso, dilo tal cual al usuario y no la reintentes ni busques otra forma de hacer lo mismo.
 - Al terminar, responde en español con un resumen breve en viñetas de lo que quedó guardado (tarea completada, nota, interacción, tarea creada con su fecha). Si algo no se pudo hacer, dilo.
 
 Calendario de referencia:
