@@ -1,0 +1,875 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<title>Volkern CRM Real Estate · Dossier</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --ink: #0b1220;
+    --ink-2: #1e293b;
+    --slate: #475569;
+    --muted: #6b7a90;
+    --line: #e3e8f0;
+    --paper: #ffffff;
+    --tint: #f5f7fb;
+    --accent: #1d4ed8;
+    --accent-soft: #eef2ff;
+    --amber: #b4762a;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #e9edf4;
+    color: var(--ink-2);
+    font-family: 'Inter', 'DejaVu Sans', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    position: relative;
+    width: 210mm;
+    height: 297mm;
+    padding: 17mm 17mm 13mm;
+    background: var(--paper);
+    overflow: hidden;
+    page-break-after: always;
+    break-after: page;
+    margin: 0 auto 8mm;
+    display: flex;
+    flex-direction: column;
+  }
+  .page:last-child { page-break-after: auto; break-after: auto; margin-bottom: 0; }
+  .page.no-pad { padding: 0; }
+
+  /* ── tipografía ─────────────────────────────────────────────── */
+  h1, h2, h3, .serif {
+    font-family: 'Fraunces', 'DejaVu Serif', Georgia, serif;
+    font-weight: 500;
+    color: var(--ink);
+    margin: 0;
+  }
+  h2 {
+    font-size: 25pt;
+    line-height: 1.08;
+    letter-spacing: -0.015em;
+    margin: 2.5mm 0 3mm;
+  }
+  h3 { font-size: 12.5pt; line-height: 1.25; letter-spacing: -0.005em; }
+  p { margin: 0; }
+  .lead {
+    font-size: 10pt;
+    line-height: 1.6;
+    color: var(--slate);
+    max-width: 152mm;
+  }
+  .kicker {
+    display: flex;
+    align-items: center;
+    gap: 2.5mm;
+    font-size: 7.2pt;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .kicker::before {
+    content: '';
+    width: 9mm;
+    height: 1.4pt;
+    background: var(--accent);
+  }
+  .num {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 9pt;
+    color: var(--amber);
+    letter-spacing: 0.06em;
+  }
+  .caption {
+    font-size: 6.9pt;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    margin-top: 2.2mm;
+  }
+
+  /* ── cabecera y pie de página ───────────────────────────────── */
+  .runhead {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 6.8pt;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #9aa7ba;
+    border-bottom: 0.5pt solid var(--line);
+    padding-bottom: 2.2mm;
+    margin-bottom: 8mm;
+  }
+  .runfoot {
+    position: absolute;
+    left: 17mm;
+    right: 17mm;
+    bottom: 8mm;
+    display: flex;
+    justify-content: space-between;
+    font-size: 6.6pt;
+    letter-spacing: 0.1em;
+    color: #9aa7ba;
+    border-top: 0.5pt solid var(--line);
+    padding-top: 2.4mm;
+  }
+
+  /* ── imágenes ───────────────────────────────────────────────── */
+  .shot {
+    display: block;
+    width: 100%;
+    border: 0.5pt solid #dde4ee;
+    border-radius: 2.4mm;
+    box-shadow: 0 3mm 9mm rgba(15, 23, 42, 0.07);
+  }
+  .shot-cover { height: 104mm; object-fit: cover; object-position: top center; }
+
+  /* ── portada ─────────────────────────────────────────────────── */
+  .cover {
+    background:
+      radial-gradient(120% 90% at 8% 0%, #1b3a7a 0%, rgba(27, 58, 122, 0) 52%),
+      radial-gradient(90% 70% at 100% 100%, #0e3b52 0%, rgba(14, 59, 82, 0) 55%),
+      linear-gradient(160deg, #0a1424 0%, #0b1220 45%, #0a1a2a 100%);
+    color: #e8eef8;
+    padding: 22mm 20mm 18mm;
+    justify-content: space-between;
+  }
+  .cover::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(to right, rgba(255, 255, 255, 0.045) 0.4pt, transparent 0.4pt),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.045) 0.4pt, transparent 0.4pt);
+    background-size: 18mm 18mm;
+    pointer-events: none;
+    mask-image: radial-gradient(80% 60% at 70% 30%, #000 10%, transparent 80%);
+    -webkit-mask-image: radial-gradient(80% 60% at 70% 30%, #000 10%, transparent 80%);
+  }
+  .cover > * { position: relative; z-index: 1; }
+  .brandrow { display: flex; align-items: center; justify-content: space-between; }
+  .wordmark {
+    font-family: 'Inter', sans-serif;
+    font-size: 11pt;
+    font-weight: 700;
+    letter-spacing: 0.42em;
+    color: #ffffff;
+  }
+  .brandtag {
+    font-size: 6.6pt;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #93b4e6;
+  }
+  .cover h1 {
+    font-size: 44pt;
+    line-height: 1.02;
+    letter-spacing: -0.03em;
+    color: #ffffff;
+    max-width: 152mm;
+  }
+  .cover h1 em {
+    font-style: italic;
+    color: #a8c2f2;
+  }
+  .cover .lead {
+    color: #b8c7dd;
+    font-size: 10.5pt;
+    line-height: 1.62;
+    margin-top: 7mm;
+    max-width: 140mm;
+  }
+  .cookie {
+    font-size: 6.6pt;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #7f9bc4;
+    margin-bottom: 5mm;
+  }
+  .chips { display: flex; flex-wrap: wrap; gap: 2mm; margin-top: 9mm; }
+  .chip {
+    font-size: 7.2pt;
+    letter-spacing: 0.03em;
+    color: #d5e2f5;
+    border: 0.5pt solid rgba(255, 255, 255, 0.22);
+    border-radius: 999px;
+    padding: 1.8mm 3.4mm;
+  }
+  .cover-foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    font-size: 6.8pt;
+    letter-spacing: 0.08em;
+    color: #8ea6c8;
+    border-top: 0.5pt solid rgba(255, 255, 255, 0.16);
+    padding-top: 4mm;
+  }
+  .cover-foot strong { color: #e8eef8; font-weight: 500; }
+
+  /* ── rejillas ───────────────────────────────────────────────── */
+  .cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4mm 5mm;
+    margin-top: 7mm;
+  }
+  .card {
+    border: 0.5pt solid var(--line);
+    border-radius: 2.4mm;
+    padding: 7mm 6.5mm;
+    background: linear-gradient(180deg, #fbfcfe 0%, #f7f9fc 100%);
+  }
+  .card .num { display: block; margin-bottom: 2mm; }
+  .card h3 { font-size: 11pt; margin-bottom: 1.8mm; }
+  .card p { font-size: 9pt; line-height: 1.58; color: var(--slate); }
+
+  .band {
+    margin-top: auto;
+    border-top: 1.2pt solid var(--ink);
+    padding-top: 4mm;
+    display: grid;
+    grid-template-columns: 32mm 1fr;
+    gap: 6mm;
+  }
+  .band-k {
+    font-size: 6.8pt;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+    padding-top: 0.5mm;
+  }
+  .band p { font-size: 9pt; line-height: 1.55; color: var(--slate); }
+
+  .compare { margin-top: 9mm; border-top: 0.5pt solid var(--line); }
+  .compare-row {
+    display: grid;
+    grid-template-columns: 26mm 1fr 1fr;
+    gap: 5mm;
+    padding: 3.2mm 0;
+    border-bottom: 0.5pt solid var(--line);
+    font-size: 8.4pt;
+    line-height: 1.45;
+    color: var(--slate);
+  }
+  .compare-row.head { font-size: 6.8pt; letter-spacing: 0.14em; text-transform: uppercase; color: #9aa7ba; }
+  .compare-row .lbl { color: var(--ink-2); font-weight: 600; font-size: 8.2pt; }
+  .compare-row .win { color: var(--ink); font-weight: 500; }
+
+  .triple {
+    margin-top: auto;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6mm;
+    border-top: 1.2pt solid var(--ink);
+    padding-top: 4.5mm;
+  }
+  .triple strong { display: block; font-size: 8.8pt; color: var(--ink-2); margin-bottom: 1.4mm; }
+  .triple span { font-size: 8pt; line-height: 1.45; color: var(--slate); }
+
+  .plainlist {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2mm;
+    margin-top: 3mm;
+  }
+  .plainlist span {
+    font-size: 7.6pt;
+    color: var(--slate);
+    border: 0.5pt solid var(--line);
+    border-radius: 999px;
+    padding: 1.6mm 3.4mm;
+    background: #fafbfe;
+  }
+
+  .pillars {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6mm 7mm;
+    margin-top: 9mm;
+  }
+  .pillar { border-top: 1.2pt solid var(--ink); padding-top: 3.5mm; }
+  .pillar .tag {
+    font-size: 6.8pt;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .pillar h3 { font-size: 12pt; margin: 2mm 0 2mm; }
+  .pillar p { font-size: 8.6pt; line-height: 1.58; color: var(--slate); }
+
+  .quote {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 15pt;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+    border-left: 1.6pt solid var(--amber);
+    padding: 1mm 0 1mm 6mm;
+    margin-top: 9mm;
+    max-width: 150mm;
+  }
+  .quote small {
+    display: block;
+    font-family: 'Inter', sans-serif;
+    font-size: 7pt;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-top: 3mm;
+  }
+
+  .split {
+    display: grid;
+    grid-template-columns: 100mm 1fr;
+    gap: 7mm;
+    margin-top: 6mm;
+  }
+  .bullets { list-style: none; margin: 0; padding: 0; }
+  .bullets li {
+    position: relative;
+    padding-left: 6mm;
+    margin-bottom: 4.2mm;
+    font-size: 8.8pt;
+    line-height: 1.55;
+    color: var(--slate);
+  }
+  .bullets li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 1.5mm;
+    width: 2.4mm;
+    height: 2.4mm;
+    border: 0.9pt solid var(--accent);
+    border-radius: 50%;
+  }
+  .bullets li strong { color: var(--ink-2); font-weight: 600; }
+
+  .notes {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 5mm;
+    margin-top: 6mm;
+  }
+  .notes div p { font-size: 8.2pt; line-height: 1.5; color: var(--slate); }
+  .notes div .n {
+    font-size: 6.6pt;
+    letter-spacing: 0.14em;
+    color: var(--amber);
+    display: block;
+    margin-bottom: 1.6mm;
+  }
+
+  .code {
+    background: #0b1220;
+    color: #d8e3f6;
+    border-radius: 2mm;
+    padding: 4.5mm 5mm;
+    font-family: 'DejaVu Sans Mono', ui-monospace, monospace;
+    font-size: 7.4pt;
+    line-height: 1.65;
+    margin: 5mm 0 4mm;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .code .k { color: #8fb3ff; }
+  .code .a { color: #f0c48a; }
+
+  .stack { display: grid; gap: 5mm; margin-top: 4mm; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; }
+  .two-col--wide { grid-template-columns: 112mm 1fr; }
+
+  .steps { margin-top: 6mm; border-top: 0.5pt solid var(--line); }
+  .step {
+    display: grid;
+    grid-template-columns: 24mm 1fr;
+    gap: 5mm;
+    padding: 6.5mm 0;
+    border-bottom: 0.5pt solid var(--line);
+  }
+  .step .t {
+    font-size: 7.5pt;
+    letter-spacing: 0.06em;
+    color: var(--amber);
+    font-weight: 600;
+    padding-top: 0.6mm;
+  }
+  .step p { font-size: 9pt; line-height: 1.52; color: var(--slate); }
+  .step p strong { color: var(--ink-2); font-weight: 600; }
+
+  .cta {
+    margin-top: auto;
+    background: linear-gradient(135deg, #0b1220 0%, #10233d 100%);
+    color: #e6eefb;
+    border-radius: 3mm;
+    padding: 8mm 9mm;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8mm;
+    align-items: center;
+  }
+  .cta h3 { color: #ffffff; font-size: 15pt; margin-bottom: 2.5mm; }
+  .cta p { font-size: 8.6pt; line-height: 1.55; color: #b7c8e0; max-width: 104mm; }
+  .cta .who {
+    text-align: right;
+    font-size: 7.2pt;
+    letter-spacing: 0.06em;
+    color: #cfe0f8;
+    line-height: 1.9;
+  }
+  .cta .who strong {
+    display: block;
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 13pt;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: #ffffff;
+    margin-bottom: 1mm;
+  }
+
+  .muted-note { font-size: 7.4pt; color: var(--muted); line-height: 1.5; }
+
+  @page { size: A4; margin: 0; }
+  @media print {
+    html, body { background: #ffffff; }
+    .page { margin: 0; box-shadow: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ─────────────────────────── 01 · PORTADA ─────────────────────────── -->
+<section class="page cover">
+  <div class="brandrow">
+    <div class="wordmark">VOLKERN</div>
+    <div class="brandtag">CRM Real Estate</div>
+  </div>
+
+  <div>
+    <div class="cookie">Dossier comercial · Noviembre 2026</div>
+    <h1>Toda la operación inmobiliaria, <em>en un solo lugar</em>.</h1>
+    <p class="lead">
+      Propiedades, interesados, visitas, documentación y comisiones en la misma plataforma.
+      Con su marca, su portal y su forma de trabajar: sin saltar entre el Excel, el móvil
+      y cinco herramientas más.
+    </p>
+    <div class="chips">
+      <span class="chip">Portal público con su marca</span>
+      <span class="chip">CRM de interesados y visitas</span>
+      <span class="chip">Ficha con mapa y WhatsApp</span>
+      <span class="chip">Comisiones y exportación a portales</span>
+    </div>
+  </div>
+
+  <div class="cover-foot">
+    <div>Capturas reales de la cuenta de demostración</div>
+    <div><strong>volkern.app</strong> · CRM Real Estate</div>
+  </div>
+</section>
+
+<!-- ─────────────────────────── 02 · DOLORES ─────────────────────────── -->
+<section class="page">
+  <div class="runhead"><span>Volkern · CRM Real Estate</span><span>El punto de partida</span></div>
+
+  <div class="kicker">El punto de partida</div>
+  <h2>El día a día, tal y como<br />suele ser</h2>
+  <p class="lead">
+    Ninguna agencia se rompe por una propiedad mal publicada. Se desgasta por la suma de
+    pequeños roces que nadie tiene tiempo de arreglar.
+  </p>
+
+  <div class="cards">
+    <div class="card">
+      <span class="num">01</span>
+      <h3>La ficha vive en tres sitios</h3>
+      <p>El Excel del equipo, la carpeta de fotos y el mensaje de WhatsApp. Cuando cambia el precio, alguien lo descubre una semana después.</p>
+    </div>
+    <div class="card">
+      <span class="num">02</span>
+      <h3>La consulta llega y espera</h3>
+      <p>Un interesado escribe el domingo por la noche. El lunes hay veinte mensajes y ya nadie recuerda quién preguntó por qué.</p>
+    </div>
+    <div class="card">
+      <span class="num">03</span>
+      <h3>Publicar es un trabajo en sí mismo</h3>
+      <p>La misma propiedad reescrita para la web, para el portal y para el CSV. Copiar, pegar, corregir y repetir con cada cambio.</p>
+    </div>
+    <div class="card">
+      <span class="num">04</span>
+      <h3>El cierre se reconstruye a mano</h3>
+      <p>Comisión, reserva y reparto entre agente y oficina. Se calcula al final, con calculadora y buena memoria.</p>
+    </div>
+  </div>
+
+  <blockquote class="quote">
+    «Por separado, cada roce se aguanta. Juntos son la razón por la que un equipo
+    deja de crecer aunque tenga más propiedades que nunca.»
+    <small>Lo que nos cuentan los equipos antes de empezar</small>
+  </blockquote>
+
+  <div class="band">
+    <span class="band-k">Sin drama</span>
+    <p>Casi nunca es falta de herramientas. Es que la propiedad, el interesado y el cierre
+    viven en sistemas que no se hablan entre sí, y el equipo hace de puente a mano.</p>
+  </div>
+
+  <div class="runfoot"><span>volkern.app</span><span>02 / 10</span></div>
+</section>
+
+<!-- ─────────────────────────── 03 · PROPUESTA ─────────────────────────── -->
+<section class="page">
+  <div class="runhead"><span>Volkern · CRM Real Estate</span><span>La propuesta</span></div>
+
+  <div class="kicker">La propuesta</div>
+  <h2>Una sola ficha.<br />Todo el recorrido.</h2>
+  <p class="lead">
+    Volkern CRM Real Estate reúne en una misma plataforma lo que normalmente vive repartido
+    entre un CRM, una web, una hoja de cálculo y el móvil de cada comercial. Se capta una vez,
+    se publica en todos los canales y se sigue al interesado hasta el cierre.
+  </p>
+
+  <div class="pillars">
+    <div class="pillar">
+      <div class="tag">Captación</div>
+      <h3>Una ficha que no se duplica</h3>
+      <p>Catálogo con fotos, características, certificación energética, ubicación y campos propios de su operación. Se edita una vez y el cambio aparece en todas partes.</p>
+    </div>
+    <div class="pillar">
+      <div class="tag">Publicación</div>
+      <h3>Un portal con su marca</h3>
+      <p>Web pública de propiedades con buscador, filtros y ficha completa, en su subdominio o integrada en la web que ya tiene.</p>
+    </div>
+    <div class="pillar">
+      <div class="tag">Seguimiento</div>
+      <h3>Cada consulta, en su sitio</h3>
+      <p>La consulta entra al CRM con la propiedad y el canal de origen. Visitas, pipeline, tareas e historial en la ficha del interesado.</p>
+    </div>
+    <div class="pillar">
+      <div class="tag">Cierre</div>
+      <h3>Sin calculadora ni hojas aparte</h3>
+      <p>Comisión con reparto agente/oficina, exportación a portales y documentación ligada a la operación desde el primer día.</p>
+    </div>
+  </div>
+
+  <div class="compare">
+    <div class="compare-row head"><span></span><span>Hoy</span><span>Con Volkern</span></div>
+    <div class="compare-row">
+      <span class="lbl">Propiedad</span>
+      <span>Tres versiones en tres sitios</span>
+      <span class="win">Una ficha, un cambio que llega a todas partes</span>
+    </div>
+    <div class="compare-row">
+      <span class="lbl">Consulta</span>
+      <span>Bandeja personal, sin contexto</span>
+      <span class="win">Interesado con propiedad, canal e historial</span>
+    </div>
+    <div class="compare-row">
+      <span class="lbl">Publicación</span>
+      <span>Web, portal y CSV por separado</span>
+      <span class="win">Un alta publicada en todos los canales</span>
+    </div>
+    <div class="compare-row">
+      <span class="lbl">Comisión</span>
+      <span>Calculadora al cerrar</span>
+      <span class="win">Reparto calculado y ligado a la operación</span>
+    </div>
+  </div>
+
+  <div class="band">
+    <span class="band-k">Sin retoques</span>
+    <p>A partir de aquí, todo son capturas de la demo: sin renders, sin maquetas y sin
+    pantallas reconstruidas para la ocasión.</p>
+  </div>
+
+  <div class="runfoot"><span>volkern.app</span><span>03 / 10</span></div>
+</section>
+
+<!-- ─────────────────────────── 04 · PORTAL ─────────────────────────── -->
+<section class="page">
+  <div class="runhead"><span>01 · Captación y publicación</span><span>Portal público</span></div>
+
+  <div class="kicker">01 · Captación y publicación</div>
+  <h2>Su catálogo, con la imagen<br />de su marca</h2>
+
+  <img class="shot shot-cover" src="img/portal.jpg" alt="Portal público de propiedades con buscador, filtros y tarjetas" style="margin-top:6mm" />
+  <div class="caption">Portal público de la demo · volkern.app/p/demo-real-estate/propiedades</div>
+
+  <div class="notes">
+    <div>
+      <span class="n">Buscar</span>
+      <p>Buscador y filtros por operación, tipo y zona. El resultado se actualiza sin recargar la página.</p>
+    </div>
+    <div>
+      <span class="n">Leer de un vistazo</span>
+      <p>Cada tarjeta muestra estado, certificación y precio. Lo destacado se reconoce sin abrir la ficha.</p>
+    </div>
+    <div>
+      <span class="n">No salir de su web</span>
+      <p>La ficha se abre dentro del mismo portal, con su logotipo y su dominio.</p>
+    </div>
+  </div>
+
+  <div class="band">
+    <span class="band-k">Una sola fuente</span>
+    <p>El portal no es un folleto aparte: es la misma ficha que el equipo actualiza en el
+    panel. Se guarda una vez y el cambio aparece aquí.</p>
+  </div>
+
+  <div class="runfoot"><span>volkern.app</span><span>04 / 10</span></div>
+</section>
+
+<!-- ─────────────────────────── 05 · FICHA ─────────────────────────── -->
+<section class="page">
+  <div class="runhead"><span>02 · La ficha del inmueble</span><span>Detalle público</span></div>
+
+  <div class="kicker">02 · La ficha del inmueble</div>
+  <h2>Todo lo que el cliente pregunta,<br />antes de preguntarlo</h2>
+
+  <div class="split">
+    <div>
+      <img class="shot" src="img/ficha.jpg" alt="Ficha pública del inmueble con galería, certificación energética, mapa y formulario" />
+      <div class="caption">Ficha real de la demo · Casa en Playacar</div>
+    </div>
+    <div>
+      <ul class="bullets">
+        <li><strong>Galería completa:</strong> foto principal y miniaturas, sin salir de la ficha.</li>
+        <li><strong>Características y superficies</strong> en bloques escaneables, no en un párrafo.</li>
+        <li><strong>Certificación energética</strong> con escala, consumo y emisiones, cuando el inmueble la tiene.</li>
+        <li><strong>Ubicación con mapa</strong> y enlace para abrir la ruta en el móvil del interesado.</li>
+        <li><strong>Contacto inmediato:</strong> formulario y WhatsApp directo al número del negocio.</li>
+        <li><strong>Inmuebles relacionados</strong> para alargar la visita en lugar de perderla.</li>
+      </ul>
+      <p class="muted-note" style="margin-top:6mm">
+        Cada inmueble enseña solo lo que tiene cargado: si no hay coordenadas, no aparece
+        un mapa vacío; si no hay certificado, no queda un hueco.
+      </p>
+    </div>
+  </div>
+
+  <div class="triple">
+    <div><strong>Enlace directo</strong><span>La ficha se comparte por WhatsApp o correo, sin perder el contexto.</span></div>
+    <div><strong>Sin huecos vacíos</strong><span>Si falta el certificado o las coordenadas, la sección no se pinta.</span></div>
+    <div><strong>Igual en el móvil</strong><span>El interesado la abre desde el anuncio y ve lo mismo.</span></div>
+  </div>
+
+  <div class="runfoot"><span>volkern.app</span><span>05 / 10</span></div>
+</section>
+
+<!-- ─────────────────────────── 06 · WIDGET ─────────────────────────── -->
+<section class="page">
+  <div class="runhead"><span>03 · Su web</span><span>Widget embebible</span></div>
+
+  <div class="kicker">03 · Su web</div>
+  <h2>El catálogo dentro de su web,<br />en dos líneas</h2>
+  <p class="lead">
+    Si ya tiene web, no hace falta cambiarla. Se inserta el widget donde quiera mostrar las
+    propiedades y el catálogo se actualiza solo desde el panel, con los mismos filtros,
+    la misma ficha, el mapa y el WhatsApp.
+  </p>
+
+  <div class="two-col two-col--wide" style="margin-top:3mm">
+    <div>
+      <img class="shot" src="img/widget.jpg" alt="Widget de propiedades embebible con tarjetas y filtros" />
+      <div class="caption">Widget con datos de la demo, incrustado en una página cualquiera</div>
+    </div>
+    <div>
+      <div class="code"><span class="k">&lt;script</span> src=<span class="a">"https://volkern.app/propiedades-embed.js"</span>
+        data-tenant-id=<span class="a">"SU_CUENTA"</span><span class="k">&gt;&lt;/script&gt;</span>
+<span class="k">&lt;div</span> id=<span class="a">"volkern-propiedades"</span><span class="k">&gt;&lt;/div&gt;</span></div>
+      <ul class="bullets">
+        <li><strong>Mismo catálogo y mismos filtros</strong> que el portal, sin duplicar contenido.</li>
+        <li><strong>Ficha completa incluida:</strong> galería, certificación, mapa y WhatsApp.</li>
+        <li><strong>Cero mantenimiento:</strong> al publicar una propiedad en el panel, aparece en su web.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="triple">
+    <div><strong>Sin tocar su diseño</strong><span>El widget hereda la tipografía y el ancho del contenedor donde se coloca.</span></div>
+    <div><strong>Con su WhatsApp de negocio</strong><span>El botón usa el número de su agencia; el interesado escribe al equipo, no a un buzón.</span></div>
+    <div><strong>Actualizado al publicar</strong><span>No hay que volver a pegar el código cada vez que cambia el catálogo.</span></div>
+  </div>
+
+  <div class="runfoot"><span>volkern.app</span><span>06 / 10</span></div>
+</section>
+
+<!-- ─────────────────────────── 07 · PANEL ─────────────────────────── -->
+<section class="page">
+  <div class="runhead"><span>04 · El panel del equipo</span><span>Operación diaria</span></div>
+
+  <div class="kicker">04 · El panel del equipo</div>
+  <h2>La operación a la vista,<br />sin abrir cinco pestañas</h2>
+
+  <div class="stack">
+    <div style="width:158mm;margin:0 auto">
+      <img class="shot" src="img/panel-dashboard.jpg" alt="Dashboard inmobiliario con cartera, precio medio, leads y visitas" />
+      <div class="caption">Dashboard: cartera, precio medio, leads del portal, visitas y propiedades destacadas.</div>
+    </div>
+    <div style="width:158mm;margin:0 auto">
+      <img class="shot" src="img/panel-propiedades.jpg" alt="Listado operativo de propiedades con estados y filtros" />
+      <div class="caption">Propiedades: estados, búsqueda, filtros y acceso a la ficha del propietario desde la propia fila.</div>
+    </div>
+  </div>
+
+  <div class="runfoot"><span>volkern.app</span><span>07 / 10</span></div>
+</section>
+
+<!-- ─────────────────────────── 08 · OPERACIÓN ─────────────────────────── -->
+<section class="page">
+  <div class="runhead"><span>05 · Publicar, exportar, repartir</span><span>Cierre de la operación</span></div>
+
+  <div class="kicker">05 · Publicar, exportar, repartir</div>
+  <h2>Del alta al reparto,<br />sin hojas aparte</h2>
+
+  <img class="shot" src="img/panel-alta.jpg" alt="Alta de propiedad con datos, precio, ubicación y certificación energética" style="margin-top:4mm" />
+  <div class="caption">Alta de una propiedad: datos, ubicación, superficies y certificación energética en un solo formulario.</div>
+
+  <div class="two-col" style="margin-top:5mm">
+    <div>
+      <img class="shot" src="img/panel-exportacion.jpg" alt="Configuración de exportación XML Idealista y CSV Fotocasa" />
+      <div class="caption">Exportación XML compatible con Idealista y CSV compatible con Fotocasa.</div>
+    </div>
+    <div>
+      <img class="shot" src="img/panel-comisiones.jpg" alt="Configuración de comisiones con reparto agente y agencia" />
+      <div class="caption">Comisión por porcentaje, importe fijo o suscripción, con reparto agente/oficina.</div>
+    </div>
+  </div>
+
+  <p class="muted-note" style="margin-top:5mm">
+    Los campos del inmueble no están cerrados: cada agencia añade los suyos (orientación,
+    año de construcción, gastos de comunidad, lo que use de verdad) sin tocar código.
+  </p>
+
+  <div class="runfoot"><span>volkern.app</span><span>08 / 10</span></div>
+</section>
+
+<!-- ─────────────────────────── 09 · DÍA A DÍA ─────────────────────────── -->
+<section class="page">
+  <div class="runhead"><span>06 · En marcha</span><span>Un día con Volkern</span></div>
+
+  <div class="kicker">06 · En marcha</div>
+  <h2>Un lunes cualquiera<br />con Volkern</h2>
+
+  <div class="steps">
+    <div class="step">
+      <div class="t">09:00</div>
+      <p><strong>Alta de la propiedad desde el móvil.</strong> Datos, fotos y certificación energética. Al guardar, ya está publicada en el portal y en la web de la agencia.</p>
+    </div>
+    <div class="step">
+      <div class="t">11:30</div>
+      <p><strong>Entra una consulta desde la ficha.</strong> Llega al CRM con la propiedad, el canal de origen y el mensaje del interesado. Nada se queda en una bandeja personal.</p>
+    </div>
+    <div class="step">
+      <div class="t">13:00</div>
+      <p><strong>Se agenda la visita</strong> desde la ficha del interesado. Queda en su historial y en el pipeline, con la etapa y el responsable.</p>
+    </div>
+    <div class="step">
+      <div class="t">17:00</div>
+      <p><strong>Recordatorio automático.</strong> El interesado recibe el aviso; el agente abre la ficha completa antes de salir, sin buscar en el correo.</p>
+    </div>
+    <div class="step">
+      <div class="t">Semana 2</div>
+      <p><strong>Oferta registrada.</strong> El pipeline refleja el estado real de la operación y quién tiene que hacer qué.</p>
+    </div>
+    <div class="step">
+      <div class="t">Cierre</div>
+      <p><strong>Comisión calculada y repartida.</strong> La documentación queda ligada a la operación: no hay que reconstruir nada meses después.</p>
+    </div>
+  </div>
+
+  <p class="muted-note" style="margin-top:6mm">
+    El ejemplo es un recorrido típico, no una promesa de plazos: cada agencia ajusta etapas,
+    responsables y automatizaciones a su forma de vender.
+  </p>
+
+  <div class="triple">
+    <div><strong>No se duplica la ficha</strong><span>Una edición, todos los canales.</span></div>
+    <div><strong>No se pierde una consulta</strong><span>Cada interesado queda con su inmueble.</span></div>
+    <div><strong>No se recalcula el cierre</strong><span>El reparto nace de la propia operación.</span></div>
+  </div>
+
+  <div class="runfoot"><span>volkern.app</span><span>09 / 10</span></div>
+</section>
+
+<!-- ─────────────────────────── 10 · CIERRE ─────────────────────────── -->
+<section class="page">
+  <div class="runhead"><span>Volkern · CRM Real Estate</span><span>Siguiente paso</span></div>
+
+  <div class="kicker">Siguiente paso</div>
+  <h2>Empezar no exige<br />mudar su operación</h2>
+  <p class="lead">
+    No hay que cambiar de web, ni renombrar propiedades, ni reescribir el catálogo a mano.
+    Se importa lo que ya tiene y se configura lo que le hace distinto.
+  </p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="t">01</div>
+      <p><strong>Importamos su catálogo</strong> desde CSV o XML, con fotos y datos existentes.</p>
+    </div>
+    <div class="step">
+      <div class="t">02</div>
+      <p><strong>Configuramos su marca:</strong> portal, dominio, colores y los campos propios de sus inmuebles.</p>
+    </div>
+    <div class="step">
+      <div class="t">03</div>
+      <p><strong>Ajustamos comisiones y etapas</strong> del pipeline a cómo trabaja hoy el equipo.</p>
+    </div>
+    <div class="step">
+      <div class="t">04</div>
+      <p><strong>Formamos al equipo</strong> en una sesión y acompañamos la primera semana de uso real.</p>
+    </div>
+  </div>
+
+  <p class="muted-note" style="margin-top:6mm">
+    Volkern es una plataforma multi-agencia: cada cuenta ve solo su catálogo, sus interesados
+    y sus números. Las agencias con varias oficinas pueden trabajar con permisos por equipo.
+  </p>
+
+  <div style="margin-top:5mm">
+    <span class="band-k" style="padding:0">Lo que no hace falta</span>
+    <div class="plainlist">
+      <span>Cambiar su web actual</span>
+      <span>Contratar un desarrollo aparte</span>
+      <span>Mudar el dominio</span>
+      <span>Reescribir el catálogo a mano</span>
+    </div>
+  </div>
+
+  <blockquote class="quote" style="margin-top:10mm">
+    «No se trata de añadir otra herramienta. Se trata de que la que ya usa
+    el equipo deje de tener costuras.»
+    <small>El criterio con el que diseñamos cada pantalla</small>
+  </blockquote>
+
+  <div class="cta" style="margin-top:9mm">
+    <div>
+      <h3>¿Lo ve con sus propios datos?</h3>
+      <p>Preparamos una demostración guiada con su catálogo y su marca, para que el equipo
+      reconozca su día a día en la pantalla y no un ejemplo genérico.</p>
+    </div>
+    <div class="who">
+      <strong>Hablemos</strong>
+      ventas@volkern.com<br />
+      volkern.app
+    </div>
+  </div>
+
+  <div class="runfoot"><span>Volkern CRM Real Estate · Dossier comercial</span><span>10 / 10</span></div>
+</section>
+
+</body>
+</html>
