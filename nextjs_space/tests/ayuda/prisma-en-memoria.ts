@@ -28,6 +28,8 @@ const CON_TENANT = new Set([
   'catalogoItem',
   // Restricciones de tools MCP que guarda cada empresa.
   'mcpToolCapability',
+  'mcpApprovalRequest',
+  'auditLog',
   'toolExecution',
   'agentConversationContext',
 ])
@@ -44,6 +46,8 @@ const MODELOS = [
   'interaction',
   'catalogoItem',
   'mcpToolCapability',
+  'mcpApprovalRequest',
+  'auditLog',
   'idempotencyRecord',
   'toolExecution',
   'agentConversationContext',
