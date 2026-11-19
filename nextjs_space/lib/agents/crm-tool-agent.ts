@@ -57,7 +57,7 @@ export interface AgenteCrmInput {
 }
 
 export interface AgenteCrmResultado {
-  /** Texto para el chat (vacío si no se ejecutó ninguna herramienta). */
+  /** Texto para el chat (vacío sólo si no hubo ni ejecución ni acción pendiente). */
   texto: string;
   /** Nombres de las herramientas ejecutadas, en orden. */
   herramientas: string[];
@@ -93,8 +93,9 @@ function calendarioDeReferencia(timezone: string): string {
 }
 
 /**
- * Ejecuta el agente con herramientas. Sólo devuelve texto si el modelo llegó a
- * ejecutar alguna: si no, el orquestador sigue su camino normal.
+ * Ejecuta el agente con herramientas. Devuelve texto si el modelo ejecutó
+ * alguna o dejó acciones de clase C/D pendientes de aprobación; si no hay ni
+ * una cosa ni la otra, el orquestador sigue su camino normal.
  */
 export async function ejecutarAgenteCrm(input: AgenteCrmInput): Promise<AgenteCrmResultado> {
   const { message, tenantId, userId } = input;
@@ -188,10 +189,17 @@ export async function ejecutarAgenteCrm(input: AgenteCrmInput): Promise<AgenteCr
   );
 
   const texto = respuesta?.choices?.[0]?.message?.content?.trim() || '';
+  const estructura = construirSalidaEstructurada(registros, resumenDeTexto(texto));
+
+  // Un turno puede terminar sin herramientas ejecutadas pero con acciones de
+  // clase C/D esperando aprobación (p. ej. cancel_booking). La respuesta no debe
+  // quedar vacía: el orquestador la descartaría y el chat caería al clasificador
+  // legacy, perdiendo el bloque «Acción pendiente de aprobación».
+  const hayContenido = ejecutadas.length > 0 || estructura.pendientes.length > 0;
   return {
-    texto: ejecutadas.length > 0 ? texto : '',
+    texto: hayContenido ? texto || '⏳ Acción pendiente de aprobación en la bandeja MCP.' : '',
     herramientas: ejecutadas,
-    estructura: construirSalidaEstructurada(registros, resumenDeTexto(texto)),
+    estructura,
   };
 }
 

@@ -231,7 +231,17 @@ export class MinimaxOrchestratorAgent {
         };
       }
 
-      if (!resultado.texto && resultado.herramientas.length === 0) return null;
+      // Una acción de clase C/D puede quedar pendiente de aprobación sin que se
+      // ejecute ninguna herramienta: ese turno también es una respuesta válida
+      // (el chat debe mostrar el bloque «Acción pendiente de aprobación»), no
+      // una excusa para caer al clasificador legacy.
+      if (
+        !resultado.texto &&
+        resultado.herramientas.length === 0 &&
+        resultado.estructura.pendientes.length === 0
+      ) {
+        return null;
+      }
 
       const etiquetas: Record<string, string> = {
         buscar_persona: 'búsqueda de la ficha',
