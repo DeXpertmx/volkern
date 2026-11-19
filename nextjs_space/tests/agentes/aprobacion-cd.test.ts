@@ -27,6 +27,21 @@ vi.mock('@/lib/skills', () => ({
   },
 }));
 
+// El «modelo» se guiona: pide las herramientas que indica el test y devuelve
+// un resumen fijo. Así se puede probar el turno en el que la única herramienta
+// queda pendiente de aprobación sin depender de un LLM real.
+const guionPendiente: Array<{ nombre: string; args: Record<string, any> }> = [];
+vi.mock('@/lib/assistant/openrouter-client', () => ({
+  callAssistantWithToolLoop: async (
+    _mensajes: unknown,
+    _herramientas: unknown,
+    ejecutar: (nombre: string, args: Record<string, any>) => Promise<string>
+  ) => {
+    for (const paso of guionPendiente) await ejecutar(paso.nombre, paso.args);
+    return { choices: [{ message: { content: 'He dejado la cancelación pendiente de aprobación.' } }] };
+  },
+}));
+
 import {
   ejecutarHerramientaDelAgente,
   ejecutarHerramientaAprobadaDelChat,
@@ -57,6 +72,7 @@ beforeEach(() => {
     mcpApprovalRequest: [],
   });
   h.llamadasSkill.length = 0;
+  guionPendiente.length = 0;
 });
 
 describe('aprobación de clase C/D desde el chat', () => {
@@ -111,5 +127,28 @@ describe('aprobación de clase C/D desde el chat', () => {
     ).rejects.toBeInstanceOf(PermisoDenegadoError);
 
     expect(h.llamadasSkill).toEqual([]);
+  });
+});
+
+describe('turno del agente con una acción pendiente (no se descarta)', () => {
+  it('cancel_booking como única herramienta devuelve texto y pendientes, sin ejecutar nada', async () => {
+    guionPendiente.push({ nombre: 'cancel_booking', args: { nombre: 'Ana', fecha: '2026-12-01' } });
+
+    const { ejecutarAgenteCrm } = await import('@/lib/agents/crm-tool-agent');
+    const resultado = await ejecutarAgenteCrm({
+      message: 'cancela la cita de Ana',
+      tenantId: TENANT,
+      userId: 'u-agenda',
+    });
+
+    // Nada ejecutado: la acción quedó a la espera de aprobación.
+    expect(resultado.herramientas).toEqual([]);
+    expect(h.llamadasSkill).toEqual([]);
+
+    // Pero el turno no se descarta: conserva texto y la acción pendiente, que es
+    // lo que el chat muestra como «Acción pendiente de aprobación».
+    expect(resultado.texto).toBeTruthy();
+    expect(resultado.estructura.pendientes).toHaveLength(1);
+    expect(resultado.estructura.pendientes[0]).toMatchObject({ tool: 'cancel_booking', estado: 'pendiente' });
   });
 });
