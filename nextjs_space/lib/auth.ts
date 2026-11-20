@@ -78,7 +78,7 @@ export const authOptions: NextAuthOptions = {
         }
         
 
-        // Buscamos el usuario incluyendo el tokenVersion para cierre global
+        // El tokenVersion viaja al JWT para poder revocar sesiones en bloque
         const user = await prisma.user.findUnique({
           where: { email: cleanEmail },
           select: {
@@ -192,25 +192,11 @@ export const authOptions: NextAuthOptions = {
           logger.error({ err: mfaError, event: 'mfa_check_error' }, 'Error verificando 2FA (se continúa para no bloquear el login si el esquema falla)')
         }
 
-        // ── SESIÓN ÚNICA POR USUARIO ──
-        // Cada login incrementa tokenVersion en BD: el JWT de la sesión
-        // anterior deja de coincidir con la versión vigente y el session
-        // callback la rechaza (el dispositivo previo vuelve al login).
-        let sessionVersion = user.tokenVersion
-        try {
-          const updated = await prisma.user.update({
-            where: { id: user.id },
-            data: { tokenVersion: { increment: 1 } },
-            select: { tokenVersion: true },
-          })
-          sessionVersion = updated.tokenVersion
-        } catch (e) {
-          // Si el bump falla no bloqueamos el login: la sesión nace con la
-          // versión actual (las sesiones previas seguirían válidas hasta el
-          // próximo login exitoso).
-          logger.error({ err: e, event: 'session_bump_failed', userId: user.id }, 'No se pudo incrementar tokenVersion en login')
-        }
-
+        // El login NO toca tokenVersion: una sesión nueva no invalida las que
+        // ya están abiertas en otros dispositivos. La versión vigente viaja al
+        // JWT y solo cambia con una revocación explícita
+        // (POST /api/auth/logout-all), que cierra todas las sesiones del
+        // usuario a la vez; el cierre por inactividad no depende de esto.
         return {
           id: user.id,
           email: user.email,
@@ -221,7 +207,7 @@ export const authOptions: NextAuthOptions = {
           roleName: user.role?.nombre,
           accountType: user.tenant?.accountType,
           tenantSubdomain: user.tenant?.subdomain,
-          tokenVersion: sessionVersion,
+          tokenVersion: user.tokenVersion,
         }
       }
     })
@@ -242,8 +228,7 @@ export const authOptions: NextAuthOptions = {
         token.accountType = (user as any).accountType
         token.tokenVersion = (user as any).tokenVersion
         token.tenantSubdomain = (user as any).tenantSubdomain
-        // Sesión única + cierre por inactividad (ver lib/session-policy.ts):
-        token.sessionVersion = (user as any).tokenVersion
+        // Revocación explícita + cierre por inactividad (lib/session-policy.ts)
         token.lastActivity = Math.floor(Date.now() / 1000)
       }
       return token
@@ -261,27 +246,20 @@ export const authOptions: NextAuthOptions = {
           return {} as any
         }
 
-        // ── Sesión única por usuario ──
-        // El JWT debe llevar la versión de sesión vigente en BD. Tokens sin
-        // sessionVersion (anteriores al cambio o acuñados a mano) se comparan
-        // por el claim legacy tokenVersion; si no llevan ninguno, se aceptan
-        // hasta que expiren solos (24 h).
-        const expectedVersion =
-          typeof claims.sessionVersion === 'number'
-            ? claims.sessionVersion
-            : typeof claims.tokenVersion === 'number'
-              ? claims.tokenVersion
-              : null
-        if (expectedVersion !== null) {
+        // ── Revocación explícita (logout-all) ──
+        // El JWT lleva el tokenVersion vigente al iniciar sesión y debe seguir
+        // coincidiendo con el de BD. Los tokens sin versión (acuñados a mano o
+        // anteriores a este claim) se aceptan hasta que expiren solos (24 h).
+        const versionDelToken = claims.tokenVersion
+        if (typeof versionDelToken === 'number') {
           try {
             const row = await prisma.user.findUnique({
               where: { id: token.sub! },
               select: { tokenVersion: true },
             })
             if (!row) return {} as any // usuario eliminado
-            if (row.tokenVersion !== expectedVersion) {
-              // Sesión reemplazada por un login posterior o revocada
-              // (p. ej. /api/auth/logout-all): sesión inválida.
+            if (row.tokenVersion !== versionDelToken) {
+              // Revocada (p. ej. /api/auth/logout-all): sesión inválida.
               return {} as any
             }
           } catch (e) {
@@ -299,7 +277,6 @@ export const authOptions: NextAuthOptions = {
         ;(session.user as any).accountType = token.accountType as string
         ;(session.user as any).tokenVersion = token.tokenVersion as number
         ;(session.user as any).tenantSubdomain = token.tenantSubdomain as string
-        ;(session.user as any).sessionVersion = claims.sessionVersion ?? claims.tokenVersion
         // Datos del cierre por inactividad que consume el aviso del dashboard
         // (GET /api/session/status) para no duplicar la política en el cliente.
         ;(session.user as any).lastActivity = claims.lastActivity

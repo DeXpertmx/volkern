@@ -3,13 +3,15 @@
  *
  * Política de sesión para el ERP (next-auth v4, estrategia JWT):
  *
- * 1. SESIÓN ÚNICA POR USUARIO
- *    Al iniciar sesión (credentials authorize) se incrementa `tokenVersion`
- *    del usuario en BD y se guarda como `sessionVersion` en el JWT. La
- *    validación (session callback + middleware) exige que el `sessionVersion`
- *    del JWT coincida con el vigente en BD: si no, la sesión es inválida.
- *    Con esto, el login en un dispositivo B invalida la sesión del
- *    dispositivo A (una sola sesión activa por usuario).
+ * 1. VARIAS SESIONES SIMULTÁNEAS CON REVOCACIÓN EXPLÍCITA
+ *    El JWT lleva el `tokenVersion` vigente en BD al iniciar sesión y la
+ *    validación (session callback) exige que siga coincidiendo con el de BD.
+ *    El login NO incrementa `tokenVersion`, así que varios dispositivos pueden
+ *    estar abiertos a la vez; la versión solo cambia cuando se pide una
+ *    revocación explícita (`POST /api/auth/logout-all`), que invalida todas
+ *    las sesiones del usuario de golpe.
+ *    (Antes cada login la incrementaba: abrir sesión en un dispositivo
+ *    cerraba la del otro, y el chat contestaba 401 sin explicación.)
  *
  * 2. CIERRE POR INACTIVIDAD
  *    El middleware comprueba el claim `lastActivity` (epoch segundos) del
@@ -25,16 +27,15 @@
 
 /** Claims extra que el ERP añade al JWT de next-auth (además de los estándar). */
 export interface SessionClaims {
-  /** Versión de la sesión vigente (= tokenVersion en BD al hacer login). */
-  sessionVersion?: number
+  /** Versión de la sesión (= `User.tokenVersion` al iniciar sesión). */
+  tokenVersion?: number
   /** Última actividad del usuario, epoch en segundos. */
   lastActivity?: number
-  /** Claims legacy del ERP (se preservan; tokenVersion sigue en BD). */
+  /** Claims del ERP para el scoping por tenant/rol. */
   tenantId?: string
   roleId?: string
   roleName?: string
   accountType?: string
-  tokenVersion?: number
   tenantSubdomain?: string
   [key: string]: unknown
 }

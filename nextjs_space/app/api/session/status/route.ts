@@ -12,7 +12,8 @@ import { authOptions } from '@/lib/auth'
  * refresco deslizante de la cookie (ver SESSION_STATUS_PATH en
  * lib/session-policy.ts), de modo que sondearla no mantiene viva la sesión.
  *
- * Si la sesión ya expiró por inactividad (o la sesión única la invalidó), el
+ * Si la sesión ya expiró por inactividad (o una revocación con logout-all la
+ * invalidó), el
  * session callback devuelve una sesión vacía y aquí se responde 401.
  */
 export async function GET() {

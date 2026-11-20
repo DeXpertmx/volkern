@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ─── Mocks ────────────────────────────────────────────────────────────
-// prisma: la validación de sesión única consulta tokenVersion en BD
+// prisma: la validación de tokenVersion consulta la versión vigente en BD
 const prismaUserFindUnique = vi.fn();
 vi.mock('@/lib/db', () => ({
   prisma: {
@@ -71,14 +71,14 @@ describe('authOptions — inactividad en el session callback', () => {
   });
 });
 
-describe('authOptions — sesión única (sessionVersion) en el session callback', () => {
+describe('authOptions — revocación (tokenVersion) en el session callback', () => {
   const NOW = Math.floor(Date.now() / 1000);
 
-  it('sessionVersion coincide con BD → sesión completa', async () => {
+  it('tokenVersion coincide con BD → sesión completa', async () => {
     prismaUserFindUnique.mockResolvedValueOnce({ tokenVersion: 3 });
     const res = await callbacks.session({
       session: makeSession(),
-      token: { sub: 'u1', lastActivity: NOW - 60, sessionVersion: 3 },
+      token: { sub: 'u1', lastActivity: NOW - 60, tokenVersion: 3 },
     });
     expect(res.user.email).toBe('t@v.app');
     expect(prismaUserFindUnique).toHaveBeenCalledWith({
@@ -87,33 +87,16 @@ describe('authOptions — sesión única (sessionVersion) en el session callback
     });
   });
 
-  it('sessionVersion distinta de BD (login posterior en otro dispositivo) → sesión vacía', async () => {
+  it('tokenVersion distinta de BD (revocación con logout-all) → sesión vacía', async () => {
     prismaUserFindUnique.mockResolvedValueOnce({ tokenVersion: 7 });
     const res = await callbacks.session({
       session: makeSession(),
-      token: { sub: 'u1', lastActivity: NOW - 60, sessionVersion: 3 },
+      token: { sub: 'u1', lastActivity: NOW - 60, tokenVersion: 3 },
     });
     expect(res).toEqual({});
   });
 
-  it('token legacy sin sessionVersion: compara con tokenVersion del claim', async () => {
-    prismaUserFindUnique.mockResolvedValueOnce({ tokenVersion: 5 });
-    const ok = await callbacks.session({
-      session: makeSession(),
-      token: { sub: 'u1', lastActivity: NOW - 60, tokenVersion: 5 },
-    });
-    expect(ok.user.email).toBe('t@v.app');
-
-    prismaUserFindUnique.mockResolvedValueOnce({ tokenVersion: 6 });
-    const ko = await callbacks.session({
-      session: makeSession(),
-      token: { sub: 'u1', lastActivity: NOW - 60, tokenVersion: 5 },
-    });
-    expect(ko).toEqual({});
-  });
-
-  it('token sin sessionVersion ni tokenVersion: se acepta (sesiones pre-cambio/acuñadas)', async () => {
-    prismaUserFindUnique.mockResolvedValueOnce({ tokenVersion: 9 });
+  it('token sin tokenVersion: se acepta y no consulta BD (acuñado a mano)', async () => {
     const res = await callbacks.session({
       session: makeSession(),
       token: { sub: 'u1', lastActivity: NOW - 60 },
@@ -126,7 +109,7 @@ describe('authOptions — sesión única (sessionVersion) en el session callback
     prismaUserFindUnique.mockResolvedValueOnce(null);
     const res = await callbacks.session({
       session: makeSession(),
-      token: { sub: 'u1', lastActivity: NOW - 60, sessionVersion: 1 },
+      token: { sub: 'u1', lastActivity: NOW - 60, tokenVersion: 1 },
     });
     expect(res).toEqual({});
   });
@@ -135,7 +118,7 @@ describe('authOptions — sesión única (sessionVersion) en el session callback
     prismaUserFindUnique.mockRejectedValueOnce(new Error('db down'));
     const res = await callbacks.session({
       session: makeSession(),
-      token: { sub: 'u1', lastActivity: NOW - 60, sessionVersion: 1 },
+      token: { sub: 'u1', lastActivity: NOW - 60, tokenVersion: 1 },
     });
     expect(res.user.email).toBe('t@v.app');
   });

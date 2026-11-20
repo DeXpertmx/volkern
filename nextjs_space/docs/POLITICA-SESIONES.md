@@ -11,17 +11,18 @@
 | Vida absoluta de la sesión | **24 h** | `session.maxAge` en `lib/auth.ts` |
 | Cierre por inactividad | **1800 s (30 min)**, configurable | `SESSION_IDLE_TIMEOUT_SECONDS` → `lib/session-policy.ts` |
 | Ventana de aviso previo | **120 s** (nunca más de la mitad del timeout) | `SESSION_EXPIRY_WARNING_SECONDS` → `lib/session-policy.ts` |
-| Sesiones simultáneas por usuario | **1** | `tokenVersion` en BD + `sessionVersion` en el JWT |
+| Sesiones simultáneas por usuario | **sin límite** (revocables en bloque) | `tokenVersion` en BD y en el JWT |
 | Cookie de sesión | `next-auth.session-token` (httpOnly, SameSite=Lax) | `lib/session-policy.ts` / `lib/auth.ts` |
 
-## 1. Sesión única por usuario
+## 1. Varias sesiones simultáneas y revocación explícita
 
-Al iniciar sesión (`authorize()` en `lib/auth.ts`) se **incrementa
-`User.tokenVersion`** en la base de datos y ese valor viaja en el JWT como
-`sessionVersion`.
+Al iniciar sesión (`authorize()` en `lib/auth.ts`) el JWT recibe el
+`User.tokenVersion` vigente como claim `tokenVersion`. **El login no incrementa
+`tokenVersion`**: iniciar sesión en un dispositivo no toca las sesiones ya
+abiertas.
 
-En cada petición, el callback `session` compara el `sessionVersion` del JWT con
-el `tokenVersion` vigente en BD:
+En cada petición, el callback `session` compara el `tokenVersion` del JWT con
+el vigente en BD:
 
 - coinciden → sesión válida;
 - no coinciden, o el usuario ya no existe → **sesión vacía** (equivale a no
@@ -32,13 +33,21 @@ el `tokenVersion` vigente en BD:
 
 Consecuencias:
 
-- iniciar sesión en un dispositivo **invalida** la sesión anterior del mismo
-  usuario (una sola sesión activa);
-- el endpoint `POST /api/auth/logout-all` (que incrementa `tokenVersion`) pasa a
-  ser **efectivo**: revoca todas las sesiones del usuario de inmediato;
-- los JWT anteriores a este cambio llevan el claim legacy `tokenVersion` y se
-  validan igual; si no llevan ninguna versión (p. ej. tokens acuñados a mano),
-  se aceptan hasta que caduquen solos.
+- un usuario puede tener **varias sesiones a la vez** (escritorio, móvil, otra
+  pestaña); abrir una no cierra las demás;
+- el endpoint `POST /api/auth/logout-all` incrementa `tokenVersion` y por eso
+  **revoca todas** las sesiones del usuario de inmediato; es el único camino
+  para cerrar sesiones ajenas sin esperar a su caducidad;
+- los JWT sin `tokenVersion` (p. ej. acuñados a mano) se aceptan hasta que
+  caduquen solos; los que lo llevan se validan contra BD como el resto.
+
+> **Cambio del 2026-11-20.** Antes cada login incrementaba `tokenVersion`, de
+> modo que entrar desde el móvil invalidaba la sesión del escritorio. El chat
+> abierto en esa pestaña recibía 401 en cada mensaje y el cliente lo mostraba
+> como un error genérico («No pude procesar tu mensaje»), un callejón sin
+> salida: reintentar no servía y no se pedía volver a iniciar sesión. Ahora el
+> login no revoca nada, y el chat, ante un 401, avisa de que la sesión se cerró
+> y ofrece el login con `callbackUrl=/chat`.
 
 ## 2. Cierre por inactividad
 
@@ -118,8 +127,8 @@ curl -s -o /dev/null -D - https://volkern.app/dashboard | grep -iE '^HTTP|^locat
 
 - `lib/session-policy.ts` — política pura y *edge-safe* (timeout, expiración,
   refresco, ventana de aviso, rutas).
-- `lib/auth.ts` — incremento de `tokenVersion` en el login y validación en el
-  callback `session`.
+- `lib/auth.ts` — `tokenVersion` en el JWT al iniciar sesión (sin incremento) y
+  validación en el callback `session`.
 - `middleware.ts` — comprobación por petición, cookie deslizante y `401
   SESSION_IDLE_EXPIRED`.
 - `app/api/session/{status,renew}/route.ts` — estado y renovación.
