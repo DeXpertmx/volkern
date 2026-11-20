@@ -410,6 +410,10 @@ async function saveDetectedPatterns(tenantId: string, patterns: DetectedPattern[
         data: {
           tenantId,
           intent: 'detected_pattern',
+          // `status` es obligatorio en el modelo: sin él el create fallaba en
+          // validación y el catch lo dejaba en un console.error, así que los
+          // patrones detectados no se guardaban nunca.
+          status: 'SUCCESS',
           skillParams: {
             type: pattern.type,
             severity: pattern.severity,
@@ -419,7 +423,7 @@ async function saveDetectedPatterns(tenantId: string, patterns: DetectedPattern[
             context: pattern.context,
             recommendation: pattern.recommendation,
           },
-        } as any,
+        },
       })
     }
   } catch (error) {
@@ -539,13 +543,16 @@ async function sendPatternAlerts(tenantId: string, patterns: DetectedPattern[]):
       data: {
         tenantId,
         intent: 'pattern_alert_sent',
+        // Obligatorio en el modelo; sin él la fila de cooldown no se escribía
+        // y el `.catch` vacío ocultaba el motivo.
+        status: 'SUCCESS',
         skillParams: {
           patternCount: notifiablePatterns.length,
           severities: notifiablePatterns.map(p => p.severity),
           channels: config.channels,
         },
-      } as any,
-    }).catch(() => {})
+      },
+    }).catch((error) => console.error('[PatternDetector] Error registrando alerta enviada:', error))
 
     await Promise.allSettled(sendPromises)
     console.log(`[PatternDetector] ✅ ${sendPromises.length} notificaciones enviadas para tenant ${tenantId}`)

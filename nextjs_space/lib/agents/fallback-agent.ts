@@ -87,7 +87,25 @@ export class FallbackAgent {
   private async logFallback(context: { userId: string; tenantId: string; errorType: string; originalMessage: string; severity: string; shouldRetry: boolean; shouldEscalate: boolean; response: string; attempts?: number; error?: Error }): Promise<void> {
     try {
       await prisma.chatbotAuditLog.create({
-        data: { intent: 'fallback_triggered', userId: context.userId, tenantId: context.tenantId, skillParams: { errorType: context.errorType, originalMessage: context.originalMessage.substring(0, 200), shouldRetry: context.shouldRetry, shouldEscalate: context.shouldEscalate, attempts: context.attempts || 0, response: context.response.substring(0, 200), errorMessage: context.error?.message } } as any
+        data: {
+          intent: 'fallback_triggered',
+          userId: context.userId,
+          tenantId: context.tenantId,
+          // `status` es obligatorio en ChatbotAuditLog: sin él el create fallaba
+          // en validación y el catch lo reducía a un console.error, así que la
+          // auditoría de fallbacks no se guardaba nunca (y `getFallbackStats`
+          // siempre veía cero fallos).
+          status: 'SUCCESS',
+          skillParams: {
+            errorType: context.errorType,
+            originalMessage: context.originalMessage.substring(0, 200),
+            shouldRetry: context.shouldRetry,
+            shouldEscalate: context.shouldEscalate,
+            attempts: context.attempts || 0,
+            response: context.response.substring(0, 200),
+            errorMessage: context.error?.message,
+          },
+        },
       });
       if (context.severity === 'critical') await this.notifyAdmins(context);
     } catch (e) { console.error('Error logging fallback:', e); }

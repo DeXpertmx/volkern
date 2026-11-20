@@ -408,6 +408,11 @@ async function saveSuggestion(suggestion: ImprovementSuggestion): Promise<void> 
       data: {
         tenantId: suggestion.tenantId,
         intent: 'improvement_suggestion',
+        // `status` es obligatorio en ChatbotAuditLog: sin él el create fallaba
+        // en validación y el catch lo reducía a un console.error, así que la
+        // sugerencia no se guardaba nunca (y `getRecentSuggestions` la veía
+        // una y otra vez como nueva).
+        status: 'SUCCESS',
         skillParams: {
           id: suggestion.id,
           type: suggestion.type,
@@ -421,8 +426,8 @@ async function saveSuggestion(suggestion: ImprovementSuggestion): Promise<void> 
           estimatedImpact: suggestion.estimatedImpact,
           category: suggestion.category,
           sourcePattern: suggestion.sourcePattern,
-        } as any,
-      } as any,
+        },
+      },
     })
   } catch (error) {
     console.error('[ImprovementEngine] Error guardando sugerencia:', error)
