@@ -216,6 +216,32 @@ describe('format — quickReplies', () => {
   });
 });
 
+// ─── detectar_ghosting (leads inactivos) ──────────────────────────────
+describe('format — detectar_ghosting', () => {
+  it('lista los leads fantasma en vez del genérico ¡Hecho!', async () => {
+    const r = await fmt({
+      intent: 'detectar_ghosting',
+      action: 'execute',
+      success: true,
+      data: [
+        { nombre: 'Eduardo Cázares', horasInactivo: 120, draftRescate: '¿Seguimos con el Penthouse?' },
+        { nombre: 'Sophie Laurent', horasInactivo: 72 },
+      ],
+    });
+    expect(r.emoji).toBe('👻');
+    expect(r.text).toContain('*Leads fantasma (2):*');
+    expect(r.text).toContain('Eduardo Cázares — inactivo 120h (~5 días)');
+    expect(r.text).toContain('Sophie Laurent — inactivo 72h (~3 días)');
+    expect(r.text).toContain('💬 ¿Seguimos con el Penthouse?');
+    expect(r.text).not.toContain('¡Hecho!');
+  });
+
+  it('sin leads fantasma devuelve mensaje de tranquilidad', async () => {
+    const r = await fmt({ intent: 'detectar_ghosting', action: 'execute', success: true, data: [] });
+    expect(r.text).toContain('No hay leads fantasma');
+  });
+});
+
 // ─── Intent desconocido (usa consulta_general como fallback) ─────────
 describe('format — fallback a consulta_general', () => {
   it('execute exitoso con intent desconocido usa plantilla genérica', async () => {

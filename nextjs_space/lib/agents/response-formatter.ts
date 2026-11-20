@@ -31,6 +31,7 @@ export class ResponseFormatterAgent {
     'crear_conversacion': '💬', 'cerrar_conversacion': '🔒',
     'enviar_mensaje': '💬', 'enviar_mensaje_interno': '📢',
     'crear_negocio': '💼', 'actualizar_negocio': '📊', 'mis_negocios': '📈', 'calificar_lead': '🎯',
+    'detectar_ghosting': '👻',
     'crear_factura': '🧾', 'estado_fiscal': '🔎', 'rectificar_factura': '🔄',
     'registrar_gasto': '💰', 'crear_proveedor': '🏢', 'analizar_gastos': '📊', 'proyeccion_financiera': '🔮',
     'salud_inventario': '📦', 'ajustar_stock': '📤', 'buscar_producto': '🔎', 'gestionar_catalogo': '📋',
@@ -182,6 +183,10 @@ export class ResponseFormatterAgent {
       execute: (data) => this.formatDealsList(data),
       error: () => 'No pude recuperar los deals.',
       empty: () => 'No hay deals en el pipeline.'
+    },
+    'detectar_ghosting': {
+      execute: (data) => this.formatGhostingList(data),
+      error: () => 'No pude detectar los leads inactivos.'
     },
     'buscar_inmuebles': {
       execute: (data) => this.formatPropertiesList(data),
@@ -569,6 +574,20 @@ export class ResponseFormatterAgent {
     });
     if (deals.length > 5) response += `\nY ${deals.length - 5} más...`;
     return response;
+  }
+
+  private formatGhostingList(data: any): string {
+    const leads = Array.isArray(data) ? data : (data?.leads || []);
+    if (leads.length === 0) return 'No hay leads fantasma: todos tus leads activos tienen actividad reciente.';
+    const lines = leads.slice(0, 8).map((l: any) => {
+      const nombre = String(l?.nombre || 'Lead sin nombre');
+      const horas = Number(l?.horasInactivo ?? 0);
+      const dias = (horas / 24).toFixed(1).replace(/\.0$/, '');
+      const rescate = l?.draftRescate ? `\n   💬 ${String(l.draftRescate)}` : '';
+      return `• ${nombre} — inactivo ${horas}h (~${dias} días)${rescate}`;
+    });
+    const suffix = leads.length > 8 ? `\n… y ${leads.length - 8} más` : '';
+    return `*Leads fantasma (${leads.length}):*\n${lines.join('\n')}${suffix}`;
   }
 
   private formatBurnRate(data: any): string {
