@@ -6,6 +6,9 @@ vi.mock('@/lib/assistant/openrouter-client', () => ({
 
 import {
   INTENTS_QUE_REQUIEREN_IA,
+  LISTADOS_QUE_ADMITEN_IA,
+  esPreguntaComparativa,
+  debeRedactarConIA,
   esResultadoVacio,
   redactarRespuestaInteligente,
 } from '@/lib/agents/redaccion-inteligente';
@@ -31,6 +34,39 @@ describe('INTENTS_QUE_REQUIEREN_IA', () => {
     expect(INTENTS_QUE_REQUIEREN_IA.has('mis_citas')).toBe(false);
     expect(INTENTS_QUE_REQUIEREN_IA.has('crear_tarea')).toBe(false);
     expect(INTENTS_QUE_REQUIEREN_IA.has('buscar_lead')).toBe(false);
+  });
+
+  it('marca los listados que pueden usar IA cuando piden comparar', () => {
+    expect(LISTADOS_QUE_ADMITEN_IA.has('mis_tareas')).toBe(true);
+    expect(LISTADOS_QUE_ADMITEN_IA.has('tareas_vencidas')).toBe(true);
+    expect(LISTADOS_QUE_ADMITEN_IA.has('mis_negocios')).toBe(true);
+    expect(LISTADOS_QUE_ADMITEN_IA.has('mis_citas')).toBe(true);
+    expect(LISTADOS_QUE_ADMITEN_IA.has('crear_tarea')).toBe(false);
+  });
+});
+
+// ─── Comparativa en listados ────────────────────────────────────────────
+describe('esPreguntaComparativa / debeRedactarConIA', () => {
+  it('detecta cuando la pregunta pide elegir o priorizar', () => {
+    expect(esPreguntaComparativa('cuál de mis tareas es más urgente')).toBe(true);
+    expect(esPreguntaComparativa('qué hago primero')).toBe(true);
+    expect(esPreguntaComparativa('prioriza mis tareas pendientes')).toBe(true);
+    expect(esPreguntaComparativa('ordena mis negocios por importe')).toBe(true);
+    expect(esPreguntaComparativa('dame el top 3 de leads')).toBe(true);
+    expect(esPreguntaComparativa('cuál es la tarea más importante')).toBe(true);
+  });
+
+  it('NO detecta comparativa en un listado plano', () => {
+    expect(esPreguntaComparativa('muestra mis tareas')).toBe(false);
+    expect(esPreguntaComparativa('dame mis citas de esta semana')).toBe(false);
+    expect(esPreguntaComparativa('lista mis negocios')).toBe(false);
+  });
+
+  it('enruta a IA los análisis siempre y los listados sólo con comparativa', () => {
+    expect(debeRedactarConIA('analizar_gastos', 'cómo van los gastos')).toBe(true);
+    expect(debeRedactarConIA('mis_tareas', 'muestra mis tareas')).toBe(false);
+    expect(debeRedactarConIA('mis_tareas', 'cuál de mis tareas es más urgente')).toBe(true);
+    expect(debeRedactarConIA('crear_tarea', 'crea una tarea')).toBe(false);
   });
 });
 
@@ -106,5 +142,25 @@ describe('redactarRespuestaInteligente', () => {
     });
 
     expect(resultado).toBeNull();
+  });
+
+  it('refuerza el prompt para elegir/ordenar cuando la pregunta es comparativa', async () => {
+    mockedCall.mockResolvedValue({
+      id: 'resp-2',
+      choices: [{ message: { content: 'La más urgente es la llamada a Eduardo: vence hoy.', role: 'assistant' }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+    } as any);
+
+    await redactarRespuestaInteligente({
+      intent: 'mis_tareas',
+      message: 'cuál de mis tareas es más urgente',
+      data: [
+        { titulo: 'Llamar a Eduardo', fechaVencimiento: new Date().toISOString() },
+        { titulo: 'Enviar propuesta', fechaVencimiento: '2026-12-01T10:00:00Z' },
+      ],
+    });
+
+    const system = mockedCall.mock.calls[0][0].find((m) => m.role === 'system');
+    expect(system?.content).toContain('eligiendo y ordenando');
   });
 });

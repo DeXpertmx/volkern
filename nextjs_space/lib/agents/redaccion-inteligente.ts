@@ -18,11 +18,9 @@ import type { MensajeDeHistorial } from '@/lib/agents/conversation-history';
 import { bloqueDeEntidades, type EntidadesActivas } from '@/lib/agents/context-manager';
 
 /**
- * Intents cuya respuesta requiere inteligencia: análisis, proyecciones,
+ * Intents cuya respuesta SIEMPRE requiere inteligencia: análisis, proyecciones,
  * auditorías e insights donde una plantilla fija no responde de verdad (o que
  * ni siquiera tienen plantilla y hoy caen al «✅ ¡Hecho!» genérico).
- * Las consultas simples (listados, confirmaciones) NO están aquí: siguen con
- * plantilla, que es más rápida y precisa para eso.
  */
 export const INTENTS_QUE_REQUIEREN_IA = new Set<string>([
   'detectar_ghosting',
@@ -50,6 +48,61 @@ export const INTENTS_QUE_REQUIEREN_IA = new Set<string>([
   'verificar_mermas',
   'sugerir_precio_inmueble',
 ]);
+
+/**
+ * Listados que, en general, se responden con plantilla (más rápida y precisa),
+ * pero que SÍ merecen IA cuando la pregunta pide comparar o priorizar: «cuál de
+ * mis tareas es más urgente» no es un listado, es una decisión, y una plantilla
+ * que vuelca todo no la responde.
+ */
+export const LISTADOS_QUE_ADMITEN_IA = new Set<string>([
+  'mis_tareas',
+  'tareas_vencidas',
+  'tareas_hoy',
+  'mis_citas',
+  'llamadas_pendientes',
+  'llamadas_vencidas',
+  'mis_negocios',
+  'listar_leads',
+  'listar_contactos',
+  'buscar_inmuebles',
+  'recomendar_inmuebles',
+]);
+
+/**
+ * ¿El mensaje pide elegir, ordenar o jerarquizar en vez de un listado plano?
+ * Es lo que distingue «muestra mis tareas» (plantilla) de «cuál de mis tareas
+ * es más urgente» (IA, que elige y prioriza).
+ */
+export function esPreguntaComparativa(message: string): boolean {
+  const texto = String(message ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+  // Jerarquía explícita: «prioriza», «ordena por urgencia», «top 3», «qué hago primero».
+  const jerarquia =
+    /\b(prioriza|prioridad|ordena|ordename|clasifica|rank|ranking|top\s*\d+|primero|por\s+d[ondeo]\s+(?:empiezo|empezar|arranco|comienzo)|cual\s+(?:hago|atiendo|resuelvo|llamo|empiezo|reviso|priorizo))\b/;
+
+  // Comparativos y superlativos de elección: «más urgente», «lo más importante».
+  const comparativo =
+    /\b(mas|menos|mayor|menor)\s+(urgente|importante|prioritari[oa]|critic[oa]|rentable|avanzad[oa]|atrasad[oa]|cercan[oa]|lejan[oa]|mejor|peor|vencid[oa])\b/;
+
+  // Pregunta de elección: «cuál es la más…», «qué tarea conviene primero».
+  const preguntaElegir =
+    /\b(cual|cuales|que)\b[^.!?\n]{0,80}\b(mas|menos|primero|antes|conviene|recomiendas)\b/;
+
+  return jerarquia.test(texto) || comparativo.test(texto) || preguntaElegir.test(texto);
+}
+
+/**
+ * ¿Este turno se redacta con IA? Los análisis siempre; los listados sólo cuando
+ * la pregunta pide comparar o priorizar (en ese caso la plantilla no responde).
+ */
+export function debeRedactarConIA(intent: string, message: string): boolean {
+  if (INTENTS_QUE_REQUIEREN_IA.has(intent)) return true;
+  return LISTADOS_QUE_ADMITEN_IA.has(intent) && esPreguntaComparativa(message);
+}
 
 export interface RedaccionInteligenteInput {
   intent: string;
@@ -81,11 +134,15 @@ export async function redactarRespuestaInteligente(input: RedaccionInteligenteIn
   // sin reventar el prompt ni dejar que se invente el resto.
   const datos = JSON.stringify(data).slice(0, 6000);
 
+  const instruccionComparativa = esPreguntaComparativa(message)
+    ? '\n- Si la pregunta pide elegir o jerarquizar ("cuál es más urgente", "qué hago primero"), responde eligiendo y ordenando por el criterio que pidió (urgencia, prioridad, importe, fecha…). No vuelques la lista completa sin criterio.'
+    : '';
+
   const system = `Eres Gemma, la asistente de CRM de Volkern. El sistema acaba de resolver la consulta del usuario con la herramienta "${intent}" y obtuvo unos datos. Tu trabajo es convertir esos datos en una respuesta natural, directa y útil en español.
 
 Reglas:
 - Responde a la pregunta del usuario usando SOLO los datos que se te dan. No inventes cifras, nombres, fechas ni conclusiones que no estén en los datos.
-- Empieza con la conclusión o el dato más importante en una o dos frases; después detalla sólo lo que aporte valor (máx. 8 viñetas con "• ").
+- Empieza con la conclusión o el dato más importante en una o dos frases; después detalla sólo lo que aporte valor (máx. 8 viñetas con "• ").${instruccionComparativa}
 - Si los datos indican que no hay nada que reportar, dilo con calma y en positivo (sin inventar nada).
 - No menciones "la herramienta", "los datos" ni el nombre técnico del intent; habla de resultados de negocio.
 - Si la pregunta se refiere a algo ya dicho en la conversación, resuélvelo con el historial y no repitas lo que ya se dijo.
