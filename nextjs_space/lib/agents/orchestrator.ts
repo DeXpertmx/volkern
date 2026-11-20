@@ -4,6 +4,7 @@ import { confidenceChecker } from './confidence-checker';
 import { commandValidator } from './command-validator';
 import { entityExtractor } from './entity-extractor';
 import { responseFormatter } from './response-formatter';
+import { INTENTS_QUE_REQUIEREN_IA, redactarRespuestaInteligente } from './redaccion-inteligente';
 import { fallbackAgent } from './fallback-agent';
 import { prisma } from '@/lib/db';
 import type { MensajeDeHistorial } from '@/lib/agents/conversation-history';
@@ -142,13 +143,19 @@ export class MinimaxOrchestratorAgent {
       }
 
       const skillResult = await this.executeSkill(classification.intent, extraction.entities, tenantId);
-      const response = await responseFormatter.format({ intent: classification.intent, action: 'execute' as any, success: true, data: skillResult });
+      const respuesta = await this.formatearResultado({
+        intent: classification.intent,
+        message,
+        data: skillResult,
+        historial: request.historial,
+        contexto: request.contexto,
+      });
 
       await this.clearPendingContext(userId);
       this.retryCount.delete(userId);
       await this.logSuccess({ userId, tenantId, intent: classification.intent, duration: Date.now() - startTime, result: skillResult });
 
-      return { success: true, response: `${response.emoji} ${response.text}`, action: classification.intent, metadata: { result: skillResult, quickReplies: response.quickReplies } };
+      return { success: true, response: respuesta.texto, action: classification.intent, metadata: { result: skillResult, quickReplies: respuesta.quickReplies } };
 
     } catch (error) {
       const attemptCount = this.retryCount.get(userId) || 0;
@@ -280,6 +287,34 @@ export class MinimaxOrchestratorAgent {
       console.warn('[Orchestrator] Agente CRM no disponible:', error?.message || error);
       return null;
     }
+  }
+
+  /**
+   * Convierte el resultado de una skill en la respuesta final del chat.
+   *
+   * Las consultas de análisis/insight se redactan con IA (DeepSeek) a partir de
+   * los datos reales, para responder de verdad a lo que preguntó el usuario en
+   * vez de volcar una plantilla. Lo simple (listados, confirmaciones) sigue con
+   * la plantilla determinista, más rápida y precisa. Si la IA falla o no hay
+   * datos, la plantilla queda como red de seguridad.
+   */
+  private async formatearResultado(opts: {
+    intent: string;
+    message: string;
+    data: any;
+    historial?: MensajeDeHistorial[];
+    contexto?: OrchestratorRequest['contexto'];
+  }): Promise<{ texto: string; quickReplies?: string[] }> {
+    const { intent, message, data, historial, contexto } = opts;
+
+    if (INTENTS_QUE_REQUIEREN_IA.has(intent)) {
+      const redaccion = await redactarRespuestaInteligente({ intent, message, data, historial, contexto });
+      if (redaccion) return { texto: redaccion };
+      // Fallo o sin datos: la plantilla responde el turno igualmente.
+    }
+
+    const response = await responseFormatter.format({ intent, action: 'execute' as any, success: true, data });
+    return { texto: `${response.emoji} ${response.text}`, quickReplies: response.quickReplies };
   }
 
   private async executeSkill(intent: string, params: any, tenantId: string): Promise<any> {
