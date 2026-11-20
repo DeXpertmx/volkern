@@ -61,9 +61,9 @@ export class EntityExtractorAgent {
     recomendar_inmuebles: { required: [], optional: ['tipo_operacion', 'zona', 'presupuesto', 'tipo_inmueble'], questions: { zona: '¿En qué zona buscas?', presupuesto: '¿Qué presupuesto manejas?', tipo_operacion: '¿Compra o alquiler?' } }
   };
 
-  async extract(params: { message: string; intent: string; context?: string; previousEntities?: Partial<ExtractedEntities> }): Promise<EntityExtractionResult> {
+  async extract(params: { message: string; intent: string; context?: string; previousEntities?: Partial<ExtractedEntities>; userId?: string; tenantId?: string }): Promise<EntityExtractionResult> {
     const startTime = Date.now();
-    const { message, intent, context, previousEntities = {} } = params;
+    const { message, intent, context, previousEntities = {}, userId, tenantId } = params;
 
     const regexEntities = this.extractWithRegex(message);
     const aiEntities = await this.extractWithAI(message, intent, context);
@@ -108,7 +108,7 @@ export class EntityExtractorAgent {
       suggestedQuestion = entitySchema?.questions[missingParams[0]] || `¿Podrías proporcionarme ${missingParams[0]}?`;
     }
 
-    await this.logExtraction({ message, intent, entities: combinedEntities, missingParams, duration: Date.now() - startTime });
+    await this.logExtraction({ message, intent, entities: combinedEntities, missingParams, duration: Date.now() - startTime, userId, tenantId });
 
     return { success: missingParams.length === 0, entities: combinedEntities, missingParams, suggestedQuestion };
   }
@@ -244,13 +244,36 @@ export class EntityExtractorAgent {
     return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
   }
 
-  private async logExtraction(data: { message: string; intent: string; entities: Partial<ExtractedEntities>; missingParams: string[]; duration: number }): Promise<void> {
+  /**
+   * Deja rastro de la extracción en `chatbotAuditLog` (tabla
+   * `chatbot_audit_logs`).
+   *
+   * Antes se escribía con `event`/`metadata`/`severity`, columnas que no existen
+   * en el modelo: cada extracción fallaba con
+   * «PrismaClientValidationError: Argument `tenantId` is missing» y la auditoría
+   * no se guardaba nunca. Se usan las columnas reales del modelo y el
+   * `tenantId`/`userId` del turno, que son los que identifican de quién es la
+   * extracción.
+   */
+  private async logExtraction(data: { message: string; intent: string; entities: Partial<ExtractedEntities>; missingParams: string[]; duration: number; userId?: string; tenantId?: string }): Promise<void> {
+    // Sin tenant la fila no es atribuible y `tenantId` es obligatorio en el
+    // modelo: no se intenta escribir a ciegas.
+    if (!data.tenantId) return;
+    // `rawMessage` va completo en `inputRaw`: se omite del JSON de entidades
+    // para no duplicar el mensaje en cada fila.
+    const { rawMessage: _rawMessage, ...entidades } = data.entities;
     try {
-      await (prisma.chatbotAuditLog.create as any)({
+      await prisma.chatbotAuditLog.create({
         data: {
-          event: 'entity_extraction',
-          metadata: { message: data.message.substring(0, 200), intent: data.intent, entities: data.entities, missingParams: data.missingParams, durationMs: data.duration },
-          severity: data.missingParams.length > 0 ? 'warning' : 'info'
+          tenantId: data.tenantId,
+          userId: data.userId || null,
+          intent: data.intent,
+          // Con parámetros faltantes el turno queda esperando datos del usuario.
+          status: data.missingParams.length > 0 ? 'PENDING' : 'SUCCESS',
+          inputRaw: data.message.substring(0, 500),
+          executionTimeMs: data.duration,
+          detectedEntities: entidades as any,
+          skillParams: { missingParams: data.missingParams } as any
         }
       });
     } catch (error) {

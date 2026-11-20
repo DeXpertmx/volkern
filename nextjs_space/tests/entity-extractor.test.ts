@@ -246,3 +246,40 @@ describe('EntityExtractor — getRequiredParams y getMissingParamsMessage', () =
     expect(msg).toBe('');
   });
 });
+
+describe('EntityExtractor — auditoría de la extracción', () => {
+  const extractor = new EntityExtractorAgent();
+  let create: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    const { prisma } = await import('@/lib/db');
+    create = prisma.chatbotAuditLog.create as unknown as ReturnType<typeof vi.fn>;
+    create.mockReset();
+    create.mockResolvedValue({});
+  });
+
+  it('guarda la extracción con tenantId y userId del turno', async () => {
+    const result = await extractor.extract({
+      message: 'crea una tarea para llamar a Lucía mañana',
+      intent: 'crear_tarea',
+      userId: 'user-1',
+      tenantId: 'tenant-1',
+    });
+
+    expect(create).toHaveBeenCalledTimes(1);
+    const { data } = create.mock.calls[0][0];
+    expect(data.tenantId).toBe('tenant-1');
+    expect(data.userId).toBe('user-1');
+    expect(data.intent).toBe('crear_tarea');
+    // Sin título la extracción queda a la espera de datos del usuario.
+    expect(data.status).toBe(result.missingParams.length > 0 ? 'PENDING' : 'SUCCESS');
+    expect(data.inputRaw).toContain('Lucía');
+    // `rawMessage` viaja en inputRaw, no duplicado dentro de las entidades.
+    expect(data.detectedEntities).not.toHaveProperty('rawMessage');
+  });
+
+  it('no escribe auditoría si el turno no trae tenantId', async () => {
+    await extractor.extract({ message: 'crea una tarea', intent: 'crear_tarea' });
+    expect(create).not.toHaveBeenCalled();
+  });
+});

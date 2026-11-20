@@ -109,7 +109,11 @@ export class MinimaxOrchestratorAgent {
         message, 
         intent: classification.intent, 
         context: contextForExtractor,
-        previousEntities: pendingCtx?.collectedParams
+        previousEntities: pendingCtx?.collectedParams,
+        // Identidad del turno: la auditoría de la extracción se guarda con
+        // estas columnas (sin `tenantId` el create no es válido).
+        userId,
+        tenantId
       });
       
       const validation = await commandValidator.validate({ intent: classification.intent, params: extraction.entities, message, userId, tenantId, userRole });
