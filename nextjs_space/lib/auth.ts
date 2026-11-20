@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db'
 import bcrypt from 'bcryptjs'
 import { TwoFactorService } from './security/two-factor'
 import { logger } from '@/lib/logger'
+import { avisarSiHashCorrupto } from './auth/hash-password'
 import {
   isSessionIdleExpired,
   getSessionIdleTimeoutSeconds,
@@ -133,10 +134,15 @@ export const authOptions: NextAuthOptions = {
           return null
         }
 
-        const isPasswordValid = await bcrypt.compare(
+        // La forma del hash se revisa antes de comparar: un valor que no sea un
+        // bcrypt de 60 caracteres no valida nunca, y la cuenta se quedaba fuera
+        // sin más rastro que «contraseña inválida». El aviso delata el hash roto.
+        const hashUtilizable = avisarSiHashCorrupto({ hash: user.password, userId: user.id })
+
+        const isPasswordValid = hashUtilizable && (await bcrypt.compare(
           credentials.password,
           user.password
-        )
+        ))
         
         if (!isPasswordValid) {
           logger.warn(

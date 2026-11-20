@@ -54,6 +54,10 @@ for a in "$@"; do [ "$a" = "--keep" ] && CLEANUP=0; done
 SERVICE="volkern-erp_app"
 IMAGE="volkern-erp:latest"
 APP_URL="https://volkern.app"
+# Reintentos del roll ante un fallo transitorio de red de Swarm. Después de
+# actualizar la app no se puede tirar el deploy por algo que un segundo intento
+# resuelve: los smokes y el marcador se quedaban sin ejecutar.
+REINTENTOS_ROLL=3
 
 # Se rellenan en el paso 1; declaradas aquí para que el trap de salida pueda
 # leerlas aunque el deploy falle antes del `docker load`.
@@ -239,8 +243,43 @@ if [ -n "$IMAGE_COMMIT" ]; then
   fi
 fi
 
+# ── 3b. Roll con reintento ante fallos transitorios de red ──────
+# `docker service update` sale distinto de cero cuando Swarm pausa la
+# actualización por una tarea fallida y, con `set -e`, eso abortaba el deploy
+# AUNQUE Swarm dejara luego la tarea nueva corriendo: la app quedaba ya
+# actualizada pero sin smokes ni marcador. El fallo observado fue
+# «failed to set up container networking: Address already in use», transitorio
+# (el nodo aún retenía la dirección del contenedor anterior); reintentar el
+# roll lo resuelve.
+
+# ¿La última tarea del servicio falló por un problema transitorio de red?
+es_fallo_transitorio_de_red() {
+  local estado
+  # Solo la tarea más reciente: el historial conserva fallos anteriores que ya
+  # no dicen nada sobre el roll actual. El `|| true` evita que el SIGPIPE de
+  # `head` aborte el script con `pipefail`.
+  estado=$(docker service ps "$SERVICE" --no-trunc --format '{{.CurrentState}} {{.Error}}' 2>/dev/null | head -1 || true)
+  echo "$estado" | grep -qiE 'address already in use|no available IPv4 addresses'
+}
+
+# Actualiza el servicio; si el roll falla por red, lo reintenta.
+actualizar_servicio() {
+  local intento rc
+  for intento in $(seq 1 $REINTENTOS_ROLL); do
+    rc=0
+    docker service update "${UPDATE_ARGS[@]}" "$SERVICE" || rc=$?
+    if [ "$rc" -eq 0 ]; then return 0; fi
+    if ! es_fallo_transitorio_de_red; then return "$rc"; fi
+    if [ "$intento" -lt "$REINTENTOS_ROLL" ]; then
+      echo "   ⚠️  El roll falló por red (intento $intento/$REINTENTOS_ROLL): se reintenta ..." >&2
+      sleep 5
+    fi
+  done
+  return 1
+}
+
 echo "→ [3/5] service update --force --image $DEPLOY_IMAGE en $SERVICE ..."
-docker service update "${UPDATE_ARGS[@]}" "$SERVICE"
+actualizar_servicio || exit 1
 
 # ── 4. Esperar convergencia de la nueva tarea ───────────────────
 # La primera tarea listada es la más reciente; converge cuando está Running
@@ -268,7 +307,16 @@ esperar_running() {
 }
 
 echo "→ [4/5] Esperando convergencia (máx. 180s) ..."
-esperar_running "Tarea nueva corriendo" || exit 1
+for intento in $(seq 1 $REINTENTOS_ROLL); do
+  if esperar_running "Tarea nueva corriendo"; then break; fi
+  # Solo se reintenta si la tarea falló por red y quedan intentos; cualquier
+  # otro fallo (o agotar los reintentos) sigue abortando el deploy.
+  if [ "$intento" -ge "$REINTENTOS_ROLL" ] || ! es_fallo_transitorio_de_red; then
+    exit 1
+  fi
+  echo "   ⚠️  La tarea falló por red (intento $intento/$REINTENTOS_ROLL): se reintenta el roll ..." >&2
+  actualizar_servicio || exit 1
+done
 
 # ── 4b. Verificar que el contenedor corre la imagen recién cargada ──
 # El paso 5 (HTTP 200) no basta: un contenedor anclado a la imagen vieja
@@ -302,7 +350,7 @@ while :; do
     exit 1
   fi
   echo "   ⚠️  Contenedor en otra imagen ($RUNNING_IMAGE ≠ sha256:$NEW_ID_FULL) — reintentando roll..."
-  docker service update "${UPDATE_ARGS[@]}" "$SERVICE"
+  actualizar_servicio || exit 1
   esperar_running "Tarea nueva corriendo tras reintento" || exit 1
 done
 

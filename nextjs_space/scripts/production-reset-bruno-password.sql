@@ -24,6 +24,23 @@ BEGIN
   END IF;
 END $$;
 
+-- La forma del hash se valida ANTES de escribir: un valor que no sea bcrypt de
+-- 60 caracteres deja la cuenta inaccesible (bcrypt.compare siempre devuelve
+-- false) y el fallo solo se nota cuando la persona intenta entrar. psql no
+-- interpola variables dentro de DO $$ ... $$, así que la comprobación va con
+-- \gset y \if.
+SELECT CASE
+         WHEN :'password_hash' ~ '^\$2[aby]\$[0-9]{2}\$[./A-Za-z0-9]{53}$' THEN 'true'
+         ELSE 'false'
+       END AS password_hash_valido \gset
+\if :password_hash_valido
+\else
+  -- `\quit` no admite código de salida, así que el aborto se señaliza con un
+  -- error de SQL y ON_ERROR_STOP: el script termina con código distinto de 0.
+  \set ON_ERROR_STOP on
+  DO $$ BEGIN RAISE EXCEPTION 'password_hash no tiene forma de bcrypt (60 caracteres: $2b$<coste>$<salt><hash>). Abortando sin escribir.'; END $$;
+\endif
+
 UPDATE "User"
    SET password = :'password_hash',
        "updatedAt" = now()
