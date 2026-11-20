@@ -12,6 +12,7 @@
  */
 
 import { prisma } from '@/lib/db'
+import { logger } from '@/lib/logger'
 import { cargarHistorialDeConversacion, type MensajeDeHistorial } from './conversation-history'
 
 /** Turnos que viajan completos al modelo. */
@@ -57,11 +58,25 @@ export interface ContextoDeConversacion {
 const claveDeConversacion = (channelId: string) => `conversacion:${channelId}`
 const claveDePendiente = (userId: string) => `pendiente:${userId}`
 
+/**
+ * Quita surrogates UTF-16 sin pareja. Prisma no puede serializarlos en un campo
+ * Json y rechaza la escritura entera (`InvalidArg: unexpected end of hex
+ * escape`); un recorte que parte un emoji por la mitad los produce.
+ */
+function sinSurrogatesSueltos(texto: string): string {
+  return texto.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '')
+}
+
+/** Normaliza y recorta a `max` caracteres sin dejar un emoji partido. */
+function recortar(texto: string, max: number): string {
+  return sinSurrogatesSueltos(texto.replace(/\s+/g, ' ').trim().slice(0, max))
+}
+
 /** Resumen determinista de los mensajes que quedan fuera de la ventana. */
 export function resumirMensajes(mensajes: Array<{ role: string; content: string }>): ResumenConversacion {
   const plano = mensajes.map((m) => String(m.content || '')).filter(Boolean)
-  const primero = (plano[0] || '').replace(/\s+/g, ' ').trim().slice(0, 160)
-  const ultimo = (plano[plano.length - 1] || '').replace(/\s+/g, ' ').trim().slice(0, 160)
+  const primero = recortar(plano[0] || '', 160)
+  const ultimo = recortar(plano[plano.length - 1] || '', 160)
 
   return {
     texto: [
@@ -142,6 +157,11 @@ export async function registrarEntidadesActivas(params: {
 
   const actuales = (fila?.entidades as EntidadesActivas | null) ?? {}
   const mezcladas: EntidadesActivas = { ...actuales, ...entidades }
+  // La etiqueta viene del modelo: se limpia antes de guardarla en un Json.
+  for (const tipo of Object.keys(mezcladas) as Array<keyof EntidadesActivas>) {
+    const entidad = mezcladas[tipo]
+    if (entidad?.etiqueta) mezcladas[tipo] = { ...entidad, etiqueta: sinSurrogatesSueltos(entidad.etiqueta) }
+  }
 
   await persistir(clave, tenantId, userId, {
     resumen: fila?.resumen,
@@ -199,18 +219,31 @@ export async function limpiarContextoPendiente(params: {
     .catch(() => {})
 }
 
-/** Upsert sin depender de `upsert` del cliente (el doble en memoria no lo trae). */
+/**
+ * Upsert sin depender de `upsert` del cliente (el doble en memoria no lo trae).
+ *
+ * El contexto es una caché derivada que se recalcula en cada turno: si la
+ * escritura falla, se avisa en el log y el turno continúa. Dejarlo propagar
+ * dejaba al usuario sin respuesta por un detalle de persistencia.
+ */
 async function persistir(
   clave: string,
   tenantId: string,
   userId: string,
   datos: { resumen?: any; entidades?: any; pendiente?: any }
 ): Promise<void> {
-  const existente = await prisma.agentConversationContext.findUnique({ where: { clave } })
-  if (existente) {
-    await prisma.agentConversationContext.update({ where: { clave }, data: datos })
-  } else {
-    await prisma.agentConversationContext.create({ data: { clave, tenantId, userId, ...datos } })
+  try {
+    const existente = await prisma.agentConversationContext.findUnique({ where: { clave } })
+    if (existente) {
+      await prisma.agentConversationContext.update({ where: { clave }, data: datos })
+    } else {
+      await prisma.agentConversationContext.create({ data: { clave, tenantId, userId, ...datos } })
+    }
+  } catch (e) {
+    logger.warn(
+      { err: e, event: 'agent_context_persist_failed', clave, tenantId },
+      'No se pudo guardar el contexto de la conversación; el turno continúa'
+    )
   }
 }
 

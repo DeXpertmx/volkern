@@ -9,6 +9,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { reiniciarPrisma, prismaActual } from '../ayuda/prisma-en-memoria'
 
+vi.mock('@/lib/logger', () => ({ logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() } }))
+
 vi.mock('@/lib/db', async () => {
   const { prismaActual } = await import('../ayuda/prisma-en-memoria')
   const delegado = new Proxy({}, { get: (_t, prop: string) => (prismaActual.prisma as any)[prop] })
@@ -75,6 +77,32 @@ describe('ventana y resumen', () => {
       (c) => c.clave === `conversacion:${CHANNEL}`
     )
     expect(fila?.resumen?.texto).toContain('Resumen de')
+  })
+
+  it('no deja surrogates sueltos al recortar un emoji en el límite del resumen', async () => {
+    // 159 caracteres + emoji: el corte a 160 parte el par y Prisma no puede
+    // serializar un JSON con un surrogate suelto.
+    sembrar(45)
+    prismaActual.tablas.chatMessage[0].content = `${'a'.repeat(159)}😀 resto`
+    const { resumirMensajes } = await import('@/lib/agents/context-manager')
+
+    const resumen = resumirMensajes(prismaActual.tablas.chatMessage.map((m) => ({ role: 'user', content: m.content })))
+
+    expect(resumen.texto).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/)
+    expect(resumen.texto).toContain('a'.repeat(159))
+  })
+
+  it('el resumen persistido no contiene surrogates sueltos (Prisma rechaza ese JSON)', async () => {
+    sembrar(45)
+    prismaActual.tablas.chatMessage[0].content = `${'a'.repeat(159)}😀 resto`
+    const { cargarContextoDeConversacion } = await import('@/lib/agents/context-manager')
+
+    await cargarContextoDeConversacion({ channelId: CHANNEL, tenantId: TENANT, userId: USER })
+
+    const fila = prismaActual.tablas.agentConversationContext.find(
+      (c) => c.clave === `conversacion:${CHANNEL}`
+    )
+    expect(fila?.resumen?.texto).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/)
   })
 
   it('no mezcla mensajes de otra conversación ni de otro tenant', async () => {
