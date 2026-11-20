@@ -101,6 +101,30 @@ const SUGERENCIAS = [
 
 const GEMMA_AVATAR = '/Gemma-perfil.jpg?v=2'
 
+/** A dónde vuelve el usuario tras reautenticarse desde el chat. */
+const LOGIN_CHAT_URL = '/auth/login?callbackUrl=/chat'
+
+/**
+ * Aviso de sesión cerrada. Un 401 en el chat no es un fallo transitorio: la
+ * sesión caducó por inactividad o se revocó, y reintentar no sirve. El único
+ * camino es volver a iniciar sesión.
+ */
+function AvisoSesionCerrada() {
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-amber-700 dark:text-amber-300">
+        Tu sesión se cerró. Vuelve a iniciar sesión para seguir hablando con Gemma.
+      </p>
+      <a
+        href={LOGIN_CHAT_URL}
+        className="shrink-0 rounded-full bg-primary px-3.5 py-1.5 text-center text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+      >
+        Iniciar sesión
+      </a>
+    </div>
+  )
+}
+
 /** Celda de tabla: números, fechas o texto, sin inyectar HTML. */
 function formatearCelda(valor: any): string {
   if (valor === undefined || valor === null || valor === '') return '—'
@@ -451,6 +475,7 @@ export default function ChatPage() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [avatarError, setAvatarError] = useState<string | null>(null)
   const [avatarOk, setAvatarOk] = useState(false)
+  const [sesionCerrada, setSesionCerrada] = useState(false)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -462,6 +487,10 @@ export default function ChatPage() {
       const res = await fetch(`/api/chat?conversationId=${encodeURIComponent(id)}`, {
         credentials: 'include',
       })
+      if (res.status === 401) {
+        setSesionCerrada(true)
+        return
+      }
       if (!res.ok) throw new Error('No se pudo cargar la conversación')
       const data = await res.json()
       setMessages(
@@ -487,6 +516,10 @@ export default function ChatPage() {
     ;(async () => {
       try {
         const res = await fetch('/api/chat/conversations', { credentials: 'include' })
+        if (res.status === 401) {
+          if (!cancelled) setSesionCerrada(true)
+          return
+        }
         if (!res.ok) throw new Error('No autorizado')
         const data = await res.json()
         if (cancelled) return
@@ -518,7 +551,7 @@ export default function ChatPage() {
   const enviar = useCallback(
     async (texto: string) => {
       const limpio = texto.trim()
-      if (!limpio || loading) return
+      if (!limpio || loading || sesionCerrada) return
 
       setMessages((prev) => [
         ...prev,
@@ -534,6 +567,10 @@ export default function ChatPage() {
           credentials: 'include',
           body: JSON.stringify({ message: limpio, conversationId: activeId }),
         })
+        if (res.status === 401) {
+          setSesionCerrada(true)
+          return
+        }
         if (!res.ok) throw new Error('Error al enviar mensaje')
         const data = await res.json()
         const convId: string | null = data.conversationId || activeId
@@ -586,7 +623,7 @@ export default function ChatPage() {
         setLoading(false)
       }
     },
-    [activeId, loading]
+    [activeId, loading, sesionCerrada]
   )
 
   const nuevoChat = useCallback(async () => {
@@ -595,6 +632,10 @@ export default function ChatPage() {
     setMessages([])
     try {
       const res = await fetch('/api/chat/conversations', { method: 'POST', credentials: 'include' })
+      if (res.status === 401) {
+        setSesionCerrada(true)
+        return
+      }
       if (!res.ok) throw new Error('No se pudo crear la conversación')
       const data = await res.json()
       setActiveId(data.id)
@@ -627,6 +668,10 @@ export default function ChatPage() {
         credentials: 'include',
       })
       const data = await res.json().catch(() => ({}))
+      if (res.status === 401) {
+        setSesionCerrada(true)
+        return
+      }
       if (!res.ok) throw new Error(data?.error || 'No se pudo subir la imagen')
       const url = data.url || data.publicUrl || data.downloadUrl
       if (url) setPerfil((prev) => (prev ? { ...prev, avatar: url } : prev))
@@ -743,6 +788,8 @@ export default function ChatPage() {
 
         <main className="flex-1 overflow-y-auto">
           <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-4 py-6 sm:px-6">
+            {sesionCerrada && <AvisoSesionCerrada />}
+
             {cargandoHistorial ? (
               <div className="flex justify-center py-10">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -879,15 +926,19 @@ export default function ChatPage() {
               ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Escribe tu consulta… (ej: 'casas en venta en Madrid con 3 habitaciones')"
-              disabled={loading}
+              placeholder={
+                sesionCerrada
+                  ? 'Sesión cerrada · vuelve a iniciar sesión'
+                  : "Escribe tu consulta… (ej: 'casas en venta en Madrid con 3 habitaciones')"
+              }
+              disabled={loading || sesionCerrada}
               autoComplete="off"
               className="h-11 flex-1 rounded-full border-border bg-background px-4"
             />
             <Button
               type="submit"
               size="icon"
-              disabled={loading || !input.trim()}
+              disabled={loading || sesionCerrada || !input.trim()}
               className="h-11 w-11 shrink-0 rounded-full"
               aria-label="Enviar mensaje"
             >
