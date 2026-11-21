@@ -163,4 +163,27 @@ describe('redactarRespuestaInteligente', () => {
     const system = mockedCall.mock.calls[0][0].find((m) => m.role === 'system');
     expect(system?.content).toContain('eligiendo y ordenando');
   });
+
+  it('pondera las tareas vencidas antes que las de hoy y aporta el instante actual', async () => {
+    mockedCall.mockResolvedValue({
+      id: 'resp-3',
+      choices: [{ message: { content: 'La más urgente es la tarea ya vencida.', role: 'assistant' }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+    } as any);
+
+    await redactarRespuestaInteligente({
+      intent: 'mis_tareas',
+      message: 'cuál de mis tareas es más urgente',
+      data: [
+        { titulo: 'Tarea vencida', fechaVencimiento: '2026-01-01T10:00:00Z' },
+        { titulo: 'Tarea de hoy', fechaVencimiento: new Date().toISOString() },
+      ],
+    });
+
+    const system = mockedCall.mock.calls[0][0].find((m) => m.role === 'system');
+    const user = mockedCall.mock.calls[0][0].find((m) => m.role === 'user');
+    expect(system?.content).toContain('Una tarea vencida es SIEMPRE más urgente');
+    expect(system?.content).toContain('de la más antigua a la más reciente');
+    expect(user?.content).toContain('Instante actual');
+  });
 });

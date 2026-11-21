@@ -138,11 +138,21 @@ export async function redactarRespuestaInteligente(input: RedaccionInteligenteIn
     ? '\n- Si la pregunta pide elegir o jerarquizar ("cuál es más urgente", "qué hago primero"), responde eligiendo y ordenando por el criterio que pidió (urgencia, prioridad, importe, fecha…). No vuelques la lista completa sin criterio.'
     : '';
 
+  // El instante real, para que la IA decida «vencida» comparando contra el
+  // ahora y no contra lo que recuerde de su entrenamiento.
+  const ahoraISO = new Date().toISOString();
+
+  // Regla transversal de urgencia para tareas: lo vencido pesa SIEMPRE más que
+  // lo que vence hoy. Sin esto, en producción la IA eligió la tarea de hoy por
+  // encima de una ya vencida, que es justo la que más urge atender.
+  const instruccionVencidas =
+    '\n- Si los datos incluyen tareas con `fechaVencimiento`, ordena de más a menos urgente: 1) VENCIDAS (`fechaVencimiento` anterior al instante actual), de la más antigua a la más reciente; 2) las que vencen hoy; 3) las futuras, de la más próxima a la más lejana. Una tarea vencida es SIEMPRE más urgente que una que vence hoy, aunque la de hoy parezca más inmediata.';
+
   const system = `Eres Gemma, la asistente de CRM de Volkern. El sistema acaba de resolver la consulta del usuario con la herramienta "${intent}" y obtuvo unos datos. Tu trabajo es convertir esos datos en una respuesta natural, directa y útil en español.
 
 Reglas:
 - Responde a la pregunta del usuario usando SOLO los datos que se te dan. No inventes cifras, nombres, fechas ni conclusiones que no estén en los datos.
-- Empieza con la conclusión o el dato más importante en una o dos frases; después detalla sólo lo que aporte valor (máx. 8 viñetas con "• ").${instruccionComparativa}
+- Empieza con la conclusión o el dato más importante en una o dos frases; después detalla sólo lo que aporte valor (máx. 8 viñetas con "• ").${instruccionComparativa}${instruccionVencidas}
 - Si los datos indican que no hay nada que reportar, dilo con calma y en positivo (sin inventar nada).
 - No menciones "la herramienta", "los datos" ni el nombre técnico del intent; habla de resultados de negocio.
 - Si la pregunta se refiere a algo ya dicho en la conversación, resuélvelo con el historial y no repitas lo que ya se dijo.
@@ -158,6 +168,8 @@ Reglas:
   const user = [
     bloqueContexto ? `${bloqueContexto}\n\n` : '',
     `Pregunta del usuario: ${message}`,
+    '',
+    `Instante actual (para comparar vencimientos): ${ahoraISO}`,
     '',
     `Datos obtenidos (JSON):`,
     datos,
