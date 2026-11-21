@@ -142,7 +142,7 @@ export class MinimaxOrchestratorAgent {
         return { success: true, response: `${response.emoji} ${response.text}`, action: classification.intent };
       }
 
-      const skillResult = await this.executeSkill(classification.intent, extraction.entities, tenantId);
+      const skillResult = await this.executeSkill(classification.intent, { ...extraction.entities, userId }, tenantId);
       const respuesta = await this.formatearResultado({
         intent: classification.intent,
         message,

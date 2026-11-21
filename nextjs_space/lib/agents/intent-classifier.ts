@@ -1485,6 +1485,16 @@ REGLAS ESTRICTAS:\n1. Devuelve SOLO JSON, nada más.\n2. confidence debe ser un 
     // ═══ 6. DEALS / PIPELINE DE VENTAS ═══
     const DEAL_ENTITY = /\b(?:deal|deals|negocio|negocios|oportunidad|pipeline)\b/i
 
+    // 6a0. PRIORIZAR/ORDENAR EL PIPELINE ("prioriza mis negocios", "ordena los
+    // deals por importe") — es un listado comparativo (mis_negocios), no una
+    // creación ni una actualización; la redacción con IA decide el orden.
+    if (
+      /\b(?:prioriza|priorizar|ordena|ordenar|clasifica|clasificar|rank|ranking|top\s*\d+|qu[eé]\s+(?:negocios?|deals?)\s+(?:hago|atiendo|empiezo|priorizo|reviso))\b/i.test(message) &&
+      DEAL_ENTITY.test(message)
+    ) {
+      return { intent: 'mis_negocios', confidence: 0.85, extractedParams: extracted }
+    }
+
     // 6a. CREAR NEGOCIO ("crea un deal con juan@x.com por 5000€ por el paquete")
     // NOTA: verbo propio sin "alta" — "pon prioridad alta al deal" no debe
     // disparar creación ("alta" solo es crear en "dar de alta").
