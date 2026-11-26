@@ -12,7 +12,7 @@ This endpoint performs batch synchronization for all tenants with active Google 
 - **POST** `/api/integraciones/google-calendar/sync-all` - Triggers bidirectional sync for all active tenants
 - **GET** `/api/integraciones/google-calendar/sync-all` - Health check (returns active integration count)
 
-**Authentication:** Uses `x-sync-secret` header with key `<GCAL_SYNC_SECRET>`
+**Authentication:** `Authorization: Bearer <GCAL_SYNC_SECRET>`. There is no default key.
 
 ### 2. Middleware Updated
 **File:** `/middleware.ts`
@@ -26,6 +26,8 @@ Added the sync-all endpoint to public paths to allow unauthenticated access (con
 - **Name:** Volkern Google Calendar Auto-Sync
 - **Frequency:** Every hour (3600 seconds)
 - **Timezone:** Europe/Madrid
+
+**VPS status (2026-11-26):** no cron entry or host script calls this endpoint; an external scheduler must send `Authorization` with the same `GCAL_SYNC_SECRET`.
 
 ### 4. Sync Process
 For each active tenant (`GoogleCalendarIntegration.activo = true`):
@@ -70,8 +72,8 @@ curl -X POST "http://localhost:3000/api/integraciones/google-calendar/sync-all" 
 }
 ```
 
-## Environment Variable (Optional)
-Set `GOOGLE_CALENDAR_SYNC_SECRET` to customize the secret key (default: `<GCAL_SYNC_SECRET>`).
+## Environment Variable (Required)
+`GCAL_SYNC_SECRET` is required: without it the endpoint fails instead of falling back to a key from the repository. On the VPS it lives in `/root/volkern-erp/.env` and in the `volkern-erp_app` service spec.
 
 ## Date Created
 January 15, 2026
