@@ -182,159 +182,239 @@ Si no has solicitado este envío, ignora este mensaje y no compartas el código.
  * Valida el código de autorización y, si es correcto, aprueba la solicitud
  * y ejecuta el envío de WhatsApp con la identidad del solicitante.
  *
- * Devuelve { ok, approved, executed, result, error }. Si ok es false, el
- * llamante debe devolver el error al usuario.
+/**
+ * Motivo tipado del resultado de la verificación. La ruta HTTP lo traduce a un
+ * status, sin depender del texto del mensaje: «Código incorrecto. Te quedan 2
+ * intento(s)» contiene «intento» y antes se servía como 429.
  */
+export type MotivoVerificacion =
+  | 'solicitud_no_encontrada'
+  | 'ya_resuelta'
+  | 'codigo_caducado'
+  | 'intentos_agotados'
+  | 'codigo_incorrecto'
+  | 'envio_fallido'
+
+/** Fila reclamada, tal como la lee la transacción con `FOR UPDATE`. */
+interface SolicitudReclamada {
+  id: string
+  tenantId: string
+  toolName: string
+  arguments: Record<string, unknown> | null
+  requestedById: string
+  status: string
+  whatsappCodeHash: string | null
+  whatsappCodeExpiresAt: Date | null
+  whatsappCodeAttempts: number
+}
+
+/** Resultado del reclamo: o se ejecuta, o se devuelve el motivo sin ejecutar. */
+type Reclamo =
+  | { ok: true; solicitud: SolicitudReclamada }
+  | {
+      ok: false
+      motivo: MotivoVerificacion
+      error: string
+      approvalId?: string
+    }
+
+/** Mensaje de error de un envío fallido, sin asumir la forma del resultado. */
+function mensajeDeEnvioFallido(result: unknown): string {
+  if (result && typeof result === 'object' && 'error' in result) {
+    const error = (result as { error?: unknown }).error
+    if (typeof error === 'string' && error) return error
+  }
+  return 'No se pudo completar el envío'
+}
+
 export async function verifyAndExecuteWhatsappAuthCode(params: {
   verificationToken: string
   code: string
-  ip?: string
 }): Promise<{
   ok: boolean
   approved: boolean
   executed: boolean
   result?: any
   error?: string
+  motivo?: MotivoVerificacion
   approvalId?: string
 }> {
-  const { verificationToken, code, ip } = params
+  const { verificationToken, code } = params
 
-  const solicitud = await prisma.mcpApprovalRequest.findFirst({
-    where: { whatsappVerificationToken: verificationToken },
-    select: {
-      id: true,
-      tenantId: true,
-      toolName: true,
-      arguments: true,
-      requestedById: true,
-      status: true,
-      whatsappCodeHash: true,
-      whatsappCodeExpiresAt: true,
-      whatsappCodeAttempts: true,
-      whatsappCodeSentAt: true,
+  // Reclamo atómico. La fila se bloquea (`SELECT … FOR UPDATE`) y la validación
+  // del código y el paso a `approved` ocurren en la MISMA transacción: solo una
+  // petición puede reclamarla. Antes, dos verificaciones simultáneas leían la
+  // solicitud como pendiente, validaban el mismo código y ambas ejecutaban el
+  // envío; ahora la segunda encuentra el estado `approved` y no ejecuta.
+  //
+  // El timeout es mayor que el de Prisma por defecto (5 s) porque el bloqueo
+  // espera turno: bcrypt (~100 ms) más la espera de la fila no deben acabar en
+  // un P2028 con la solicitud a medio camino.
+  const reclamo = await prisma.$transaction(
+    async (tx): Promise<Reclamo> => {
+      const filas = await tx.$queryRaw<SolicitudReclamada[]>`
+        SELECT id, "tenantId", "toolName", arguments, "requestedById", status,
+               "whatsappCodeHash", "whatsappCodeExpiresAt", "whatsappCodeAttempts"
+        FROM "mcp_approval_requests"
+        WHERE "whatsappVerificationToken" = ${verificationToken}
+        FOR UPDATE
+      `
+
+      const solicitud = filas[0]
+      if (!solicitud) {
+        return { ok: false, motivo: 'solicitud_no_encontrada', error: 'Solicitud no encontrada' }
+      }
+
+      if (solicitud.status !== 'pending') {
+        return {
+          ok: false,
+          motivo: 'ya_resuelta',
+          error: `La solicitud ya fue ${solicitud.status} y no se puede modificar.`,
+          approvalId: solicitud.id,
+        }
+      }
+
+      if (solicitud.whatsappCodeAttempts >= MAX_ATTEMPTS) {
+        await tx.mcpApprovalRequest.update({
+          where: { id: solicitud.id },
+          data: { status: 'expired', reason: 'Máximo de intentos excedido' },
+        })
+        return {
+          ok: false,
+          motivo: 'intentos_agotados',
+          error: 'Demasiados intentos fallidos. La solicitud caducó.',
+          approvalId: solicitud.id,
+        }
+      }
+
+      if (
+        !solicitud.whatsappCodeExpiresAt ||
+        new Date(solicitud.whatsappCodeExpiresAt) < new Date()
+      ) {
+        await tx.mcpApprovalRequest.update({
+          where: { id: solicitud.id },
+          data: { status: 'expired', reason: 'Código expirado' },
+        })
+        return {
+          ok: false,
+          motivo: 'codigo_caducado',
+          error: 'El código de autorización expiró.',
+          approvalId: solicitud.id,
+        }
+      }
+
+      const codeOk = solicitud.whatsappCodeHash
+        ? await compareAuthCode(code, solicitud.whatsappCodeHash)
+        : false
+
+      // El intento se cuenta dentro del bloqueo: dos intentos simultáneos no
+      // pueden saltarse el límite de MAX_ATTEMPTS.
+      await tx.mcpApprovalRequest.update({
+        where: { id: solicitud.id },
+        data: { whatsappCodeAttempts: { increment: 1 } },
+      })
+
+      if (!codeOk) {
+        const restantes = MAX_ATTEMPTS - (solicitud.whatsappCodeAttempts + 1)
+        return {
+          ok: false,
+          motivo: 'codigo_incorrecto',
+          error: `Código incorrecto. Te quedan ${restantes > 0 ? restantes : 0} intento(s).`,
+          approvalId: solicitud.id,
+        }
+      }
+
+      // Reserva del derecho de ejecución: el paso a `approved` dentro de la
+      // transacción es lo que hace que el resto de intentos no ejecute.
+      await tx.mcpApprovalRequest.update({
+        where: { id: solicitud.id },
+        data: {
+          status: 'approved',
+          resolvedById: solicitud.requestedById, // autoprobación mediante código del negocio
+          resolvedAt: new Date(),
+          reason: 'Autorizado por código de firma enviado al WhatsApp del negocio',
+        },
+      })
+
+      return { ok: true, solicitud }
     },
-  })
+    { timeout: 15_000 }
+  )
 
-  if (!solicitud) {
-    return { ok: false, approved: false, executed: false, error: 'Solicitud no encontrada' }
-  }
-
-  if (solicitud.status !== 'pending') {
+  if (!reclamo.ok) {
     return {
       ok: false,
       approved: false,
       executed: false,
-      error: `La solicitud ya fue ${solicitud.status} y no se puede modificar.`,
-      approvalId: solicitud.id,
+      error: reclamo.error,
+      motivo: reclamo.motivo,
+      approvalId: reclamo.approvalId,
     }
   }
 
-  // Anti fuerza bruta: máximo 3 intentos.
-  if (solicitud.whatsappCodeAttempts >= MAX_ATTEMPTS) {
-    await prisma.mcpApprovalRequest.update({
-      where: { id: solicitud.id },
-      data: { status: 'expired', reason: 'Máximo de intentos excedido' },
+  // Ejecución fuera de la transacción (no se retiene el bloqueo durante la
+  // llamada externa). El estado final se escribe SIEMPRE: `executed` o
+  // `failed`, nunca queda `approved` ambiguo si el envío lanza.
+  const { solicitud } = reclamo
+  let result: unknown = null
+  let executed = false
+
+  try {
+    const { handleCallTool } = await import('@/lib/mcp/mcp-handler')
+    const respuesta = await handleCallTool({
+      name: solicitud.toolName,
+      arguments: {
+        ...(solicitud.arguments ?? {}),
+        tenantId: solicitud.tenantId,
+        userId: solicitud.requestedById,
+        source: 'mcp',
+      },
     })
-    return {
-      ok: false,
-      approved: false,
-      executed: false,
-      error: 'Demasiados intentos fallidos. La solicitud caducó.',
-      approvalId: solicitud.id,
+
+    const texto = respuesta.content?.[0]?.text
+    if (texto) {
+      try {
+        result = JSON.parse(texto)
+      } catch {
+        result = texto
+      }
     }
+    executed = !respuesta.isError
+  } catch (error) {
+    result = { error: error instanceof Error ? error.message : String(error) }
+    executed = false
   }
 
-  // Código expirado.
-  if (
-    !solicitud.whatsappCodeExpiresAt ||
-    new Date(solicitud.whatsappCodeExpiresAt) < new Date()
-  ) {
-    await prisma.mcpApprovalRequest.update({
-      where: { id: solicitud.id },
-      data: { status: 'expired', reason: 'Código expirado' },
+  // Cierre condicionado al estado que dejó el reclamo: si el barrido de
+  // huérfanas ya cerró la fila, no se pisa su desenlace.
+  let cerrada = true
+  try {
+    const cierre = await prisma.mcpApprovalRequest.updateMany({
+      where: { id: solicitud.id, status: 'approved' },
+      data: {
+        status: executed ? 'executed' : 'failed',
+        executedAt: new Date(),
+        result: result as never,
+      },
     })
-    return {
-      ok: false,
-      approved: false,
-      executed: false,
-      error: 'El código de autorización expiró.',
-      approvalId: solicitud.id,
-    }
+    cerrada = cierre.count > 0
+  } catch (error) {
+    console.error('[MCP verify-code] No se pudo registrar el desenlace:', error)
   }
-
-  // Comparar código.
-  const codeOk = solicitud.whatsappCodeHash
-    ? await compareAuthCode(code, solicitud.whatsappCodeHash)
-    : false
-
-  // Incrementar intentos siempre que se intente un código.
-  await prisma.mcpApprovalRequest.update({
-    where: { id: solicitud.id },
-    data: { whatsappCodeAttempts: { increment: 1 } },
-  })
-
-  if (!codeOk) {
-    const restantes = MAX_ATTEMPTS - (solicitud.whatsappCodeAttempts + 1)
-    return {
-      ok: false,
-      approved: false,
-      executed: false,
-      error: `Código incorrecto. Te quedan ${restantes > 0 ? restantes : 0} intento(s).`,
-      approvalId: solicitud.id,
-    }
+  if (!cerrada) {
+    console.warn(
+      '[MCP verify-code] La solicitud ya estaba cerrada al registrar el desenlace:',
+      solicitud.id
+    )
   }
-
-  // Código correcto: aprobar la solicitud.
-  const ahora = new Date()
-  const aprobada = await prisma.mcpApprovalRequest.update({
-    where: { id: solicitud.id },
-    data: {
-      status: 'approved',
-      resolvedById: solicitud.requestedById, // autoprobación mediante código del negocio
-      resolvedAt: ahora,
-      reason: 'Autorizado por código de firma enviado al WhatsApp del negocio',
-    },
-  })
-
-  // Ejecutar el envío con la identidad de quien pidió la acción.
-  const { handleCallTool } = await import('@/lib/mcp/mcp-handler')
-  const result = await handleCallTool({
-    name: solicitud.toolName,
-    arguments: {
-      ...(solicitud.arguments as Record<string, unknown> | null ?? {}),
-      tenantId: solicitud.tenantId,
-      userId: solicitud.requestedById,
-      source: 'mcp',
-    },
-  })
-
-  const parsed = (() => {
-    const text = result.content?.[0]?.text
-    if (!text) return null
-    try {
-      return JSON.parse(text)
-    } catch {
-      return text
-    }
-  })()
-
-  const executed = !result.isError
-
-  await prisma.mcpApprovalRequest.update({
-    where: { id: solicitud.id },
-    data: {
-      status: executed ? 'executed' : 'failed',
-      executedAt: ahora,
-      result: parsed as never,
-    },
-  })
 
   return {
     ok: executed,
     approved: true,
     executed,
-    result: parsed,
-    error: result.isError ? parsed?.error : undefined,
+    result,
+    error: executed ? undefined : mensajeDeEnvioFallido(result),
+    motivo: executed ? undefined : 'envio_fallido',
     approvalId: solicitud.id,
   }
 }

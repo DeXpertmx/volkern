@@ -369,6 +369,21 @@ export function initCronJobs() {
   }));
 
   console.log('✅ [Scheduler] Sindicación multiportal programada (cada 15 min)');
+
+  // 19. Aprobaciones MCP reclamadas sin desenlace.
+  // Verificar el código pasa la solicitud a `approved` y ejecuta fuera de la
+  // transacción; si el proceso muere en medio, la fila queda reclamada y sin
+  // resultado. Este barrido la cierra como `failed` para que el estado sea
+  // terminal y el cliente pueda volver a pedir la acción.
+  cron.schedule('*/10 * * * *', runCronJob('mcp-approvals-reconcile', 'Aprobaciones MCP sin desenlace', '*/10 * * * *', async () => {
+    const { reconciliarAprobacionesHuerfanas } = await import('../mcp/approval-reconcile');
+    const { cerradas } = await reconciliarAprobacionesHuerfanas();
+    return cerradas > 0
+      ? { mensaje: `${cerradas} aprobación(es) cerrada(s) sin desenlace` }
+      : undefined;
+  }));
+
+  console.log('✅ [Scheduler] Reconciliación de aprobaciones MCP programada (cada 10 min)');
 }
 
 /**
