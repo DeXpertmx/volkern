@@ -8,9 +8,10 @@ import { AGENT_SKILLS } from '@/lib/seo/agent-skills'
  */
 export async function GET(
   _req: Request,
-  { params }: { params: { skill: string } }
+  { params }: { params: Promise<{ skill: string }> }
 ) {
-  const skill = AGENT_SKILLS.find(s => s.name === params.skill)
+  const { skill: nombre } = await params
+  const skill = AGENT_SKILLS.find(s => s.name === nombre)
   if (!skill) {
     return new Response(JSON.stringify({ error: 'Skill no encontrado' }), {
       status: 404,
