@@ -320,8 +320,8 @@ Volkern/
 │   │   └── schema.prisma        # 6,949 líneas, 50+ modelos
 │   ├── tests/                    # 842+ tests
 │   ├── hooks/                    # Custom hooks React
+│   ├── mcp-server/               # Servidor MCP (fuente única)
 │   └── gemma-app/               # App móvil Expo (32,335+ archivos)
-├── mcp-server/                   # Servidor MCP
 ├── documentacion_tecnica/        # Documentación completa (20+ docs)
 ├── auditor/                      # Scripts de auditoría
 ├── *.md                          # Documentación de integraciones y fixes
