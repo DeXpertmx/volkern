@@ -29,6 +29,7 @@ export interface AprobacionEjecutable {
   requestedById: string
   arguments?: Record<string, unknown> | null
   argumentsHash: string
+  operationId?: string | null
 }
 
 export interface ResultadoEjecucion {
@@ -86,8 +87,8 @@ export async function ejecutarToolDelCatalogo(
  * Ejecuta la aprobación gobernando el recibo del envío WhatsApp.
  *
  * Solo los envíos llevan recibo; el resto de herramientas se ejecuta tal cual.
- * Si otro intento del mismo mensaje ya lo mandó (o lo tiene en vuelo), no se
- * ejecuta: se devuelve lo que se sabe de aquel intento.
+ * Si otra petición con el mismo `operationId` ya lo mandó (o lo tiene en
+ * vuelo), no se ejecuta: se devuelve lo que se sabe de aquel intento.
  */
 export async function ejecutarAprobacion(params: {
   aprobacion: AprobacionEjecutable
@@ -99,6 +100,7 @@ export async function ejecutarAprobacion(params: {
   const clave = claveIdempotenciaEnvio({
     tenantId: aprobacion.tenantId,
     toolName: aprobacion.toolName,
+    operationId: aprobacion.operationId,
     approvalId: aprobacion.id,
   })
   const reclamo = await reclamarEnvioIdempotente({
@@ -107,6 +109,7 @@ export async function ejecutarAprobacion(params: {
     toolName: aprobacion.toolName,
     approvalId: aprobacion.id,
     argumentsHash: aprobacion.argumentsHash,
+    operationId: aprobacion.operationId,
   })
   if (!reclamo.reclamado) return resultadoDeReclamoAjeno(reclamo)
 

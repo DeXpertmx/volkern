@@ -175,6 +175,7 @@ async function filaPendiente(hash: string) {
     toolName: 'volkern_send_whatsapp',
     arguments: { leadId: 'lead-1', message: 'Hola' },
     argumentsHash: 'hash-1',
+    operationId: null,
     requestedById: 'user-solicita',
     status: 'pending',
     whatsappCodeHash: hash,
@@ -334,10 +335,11 @@ describe('verifyAndExecuteWhatsappAuthCode — reclamo, desenlace y reconciliaci
     expect(h.fila.executedAt).toBeNull()
   })
 
-  it('un recibo en curso del mismo contenido bloquea el envío', async () => {
+  it('sin operationId, un recibo en curso del mismo contenido bloquea el envío', async () => {
     const claveAjena = claveIdempotenciaEnvio({
       tenantId: 'tenant-a',
       toolName: 'volkern_send_whatsapp',
+      operationId: null,
       approvalId: 'ap-otra',
     })
     h.recibos.set(claveAjena, {
@@ -359,10 +361,11 @@ describe('verifyAndExecuteWhatsappAuthCode — reclamo, desenlace y reconciliaci
     expect(h.recibos.size).toBe(1)
   })
 
-  it('un recibo incierto del mismo contenido bloquea el envío', async () => {
+  it('sin operationId, un recibo incierto del mismo contenido bloquea el envío', async () => {
     const claveAjena = claveIdempotenciaEnvio({
       tenantId: 'tenant-a',
       toolName: 'volkern_send_whatsapp',
+      operationId: null,
       approvalId: 'ap-otra',
     })
     h.recibos.set(claveAjena, {
@@ -385,10 +388,11 @@ describe('verifyAndExecuteWhatsappAuthCode — reclamo, desenlace y reconciliaci
     )
   })
 
-  it('un recibo enviado del mismo contenido no bloquea la repetición', async () => {
+  it('sin operationId, un recibo enviado del mismo contenido no bloquea la repetición', async () => {
     const claveAjena = claveIdempotenciaEnvio({
       tenantId: 'tenant-a',
       toolName: 'volkern_send_whatsapp',
+      operationId: null,
       approvalId: 'ap-otra',
     })
     h.recibos.set(claveAjena, {
@@ -408,12 +412,98 @@ describe('verifyAndExecuteWhatsappAuthCode — reclamo, desenlace y reconciliaci
     expect(res.executed).toBe(true)
   })
 
+  it('con operationId, el mismo contenido en curso de otra operación no bloquea', async () => {
+    const claveAjena = claveIdempotenciaEnvio({
+      tenantId: 'tenant-a',
+      toolName: 'volkern_send_whatsapp',
+      operationId: 'op-vieja',
+      approvalId: 'ap-otra',
+    })
+    h.recibos.set(claveAjena, {
+      key: claveAjena,
+      tenantId: 'tenant-a',
+      toolName: 'volkern_send_whatsapp',
+      approvalId: 'ap-otra',
+      argumentsHash: 'hash-1',
+      status: 'en_curso',
+      result: null,
+      updatedAt: new Date(),
+    })
+    h.fila.operationId = 'op-nueva'
+
+    const res = await verifyAndExecuteWhatsappAuthCode({ verificationToken: TOKEN, code: CODIGO })
+
+    expect(h.handleCallTool).toHaveBeenCalledTimes(1)
+    expect(res.executed).toBe(true)
+  })
+
+  it('el mismo operationId no reenvía aunque sea otra solicitud', async () => {
+    h.fila.operationId = 'op-42'
+    const clave = claveIdempotenciaEnvio({
+      tenantId: 'tenant-a',
+      toolName: 'volkern_send_whatsapp',
+      operationId: 'op-42',
+      approvalId: 'ap-1',
+    })
+    // El envío lo hizo otra solicitud con el mismo operationId.
+    h.recibos.set(clave, {
+      key: clave,
+      tenantId: 'tenant-a',
+      toolName: 'volkern_send_whatsapp',
+      approvalId: 'ap-anterior',
+      status: 'enviado',
+      result: { ok: true, messageId: 'wamid-42' },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+
+    const res = await verifyAndExecuteWhatsappAuthCode({ verificationToken: TOKEN, code: CODIGO })
+
+    expect(h.handleCallTool).not.toHaveBeenCalled()
+    expect(res.executed).toBe(true)
+    expect(res.result).toMatchObject({ messageId: 'wamid-42' })
+  })
+
+  it('un operationId nuevo permite repetir el mismo mensaje', async () => {
+    // Hay un recibo del mismo mensaje, pero de otra operación.
+    const claveVieja = claveIdempotenciaEnvio({
+      tenantId: 'tenant-a',
+      toolName: 'volkern_send_whatsapp',
+      operationId: 'op-vieja',
+      approvalId: 'ap-anterior',
+    })
+    h.recibos.set(claveVieja, {
+      key: claveVieja,
+      tenantId: 'tenant-a',
+      toolName: 'volkern_send_whatsapp',
+      approvalId: 'ap-anterior',
+      status: 'enviado',
+      result: { ok: true, messageId: 'wamid-viejo' },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+    h.fila.operationId = 'op-nueva'
+
+    const res = await verifyAndExecuteWhatsappAuthCode({ verificationToken: TOKEN, code: CODIGO })
+
+    expect(h.handleCallTool).toHaveBeenCalledTimes(1)
+    expect(res.executed).toBe(true)
+    const claveNueva = claveIdempotenciaEnvio({
+      tenantId: 'tenant-a',
+      toolName: 'volkern_send_whatsapp',
+      operationId: 'op-nueva',
+      approvalId: 'ap-1',
+    })
+    expect(h.recibos.get(claveNueva)).toMatchObject({ status: 'enviado', approvalId: 'ap-1' })
+  })
+
   it('un envío que quedó en curso no se repite cuando llega una petición nueva', async () => {
     // El recibo de la solicitud anterior sigue en `en_curso`: su proceso murió
     // o el barrido cerró la fila mientras el proveedor seguía trabajando.
     const clave = claveIdempotenciaEnvio({
       tenantId: 'tenant-a',
       toolName: 'volkern_send_whatsapp',
+      operationId: null,
       approvalId: 'ap-1',
     })
     h.recibos.set(clave, {
@@ -439,6 +529,7 @@ describe('verifyAndExecuteWhatsappAuthCode — reclamo, desenlace y reconciliaci
     const clave = claveIdempotenciaEnvio({
       tenantId: 'tenant-a',
       toolName: 'volkern_send_whatsapp',
+      operationId: null,
       approvalId: 'ap-1',
     })
     h.recibos.set(clave, {
@@ -464,6 +555,7 @@ describe('verifyAndExecuteWhatsappAuthCode — reclamo, desenlace y reconciliaci
     const clave = claveIdempotenciaEnvio({
       tenantId: 'tenant-a',
       toolName: 'volkern_send_whatsapp',
+      operationId: null,
       approvalId: 'ap-1',
     })
 
@@ -493,6 +585,7 @@ describe('verifyAndExecuteWhatsappAuthCode — reclamo, desenlace y reconciliaci
     const clave = claveIdempotenciaEnvio({
       tenantId: 'tenant-a',
       toolName: 'volkern_send_whatsapp',
+      operationId: null,
       approvalId: 'ap-1',
     })
     h.handleCallTool.mockResolvedValueOnce({
@@ -510,6 +603,7 @@ describe('verifyAndExecuteWhatsappAuthCode — reclamo, desenlace y reconciliaci
     const clave = claveIdempotenciaEnvio({
       tenantId: 'tenant-a',
       toolName: 'volkern_send_whatsapp',
+      operationId: null,
       approvalId: 'ap-1',
     })
     // Sin respuesta del proveedor: el mensaje pudo salir.
@@ -532,6 +626,7 @@ describe('verifyAndExecuteWhatsappAuthCode — reclamo, desenlace y reconciliaci
     const clave = claveIdempotenciaEnvio({
       tenantId: 'tenant-a',
       toolName: 'volkern_send_whatsapp',
+      operationId: null,
       approvalId: 'ap-1',
     })
     h.fallaConfirmacion = true
@@ -548,6 +643,7 @@ describe('verifyAndExecuteWhatsappAuthCode — reclamo, desenlace y reconciliaci
     const clave = claveIdempotenciaEnvio({
       tenantId: 'tenant-a',
       toolName: 'volkern_send_whatsapp',
+      operationId: null,
       approvalId: 'ap-1',
     })
     h.recibos.set(clave, {
@@ -571,6 +667,7 @@ describe('verifyAndExecuteWhatsappAuthCode — reclamo, desenlace y reconciliaci
     const clave = claveIdempotenciaEnvio({
       tenantId: 'tenant-a',
       toolName: 'volkern_send_whatsapp',
+      operationId: null,
       approvalId: 'ap-1',
     })
     h.recibos.set(clave, {
@@ -599,6 +696,7 @@ describe('verifyAndExecuteWhatsappAuthCode — reclamo, desenlace y reconciliaci
     const clave = claveIdempotenciaEnvio({
       tenantId: 'tenant-a',
       toolName: 'volkern_send_whatsapp',
+      operationId: null,
       approvalId: 'ap-1',
     })
     h.recibos.set(clave, {
@@ -623,6 +721,7 @@ describe('verifyAndExecuteWhatsappAuthCode — reclamo, desenlace y reconciliaci
     const clave = claveIdempotenciaEnvio({
       tenantId: 'tenant-a',
       toolName: 'volkern_send_whatsapp',
+      operationId: null,
       approvalId: 'ap-1',
     })
     h.handleCallTool.mockImplementationOnce(async () => {

@@ -531,6 +531,11 @@ export const VOLKERN_TOOLS: VolkernTool[] = [
           type: "string",
           enum: ["texto", "imagen", "documento"],
           description: "Message type (default: texto)"
+        },
+        operationId: {
+          type: "string",
+          description:
+            "Optional idempotency identifier. Reusing it never sends the message twice; a new value allows repeating the same message."
         }
       },
       required: ["leadId", "mensaje"]

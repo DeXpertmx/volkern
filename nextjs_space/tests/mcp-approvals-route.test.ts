@@ -110,6 +110,7 @@ function montarFila(overrides: Record<string, unknown> = {}) {
     toolName: 'volkern_delete_contact',
     arguments: { id: 'c-1' },
     argumentsHash: 'hash-1',
+    operationId: null,
     requestedById: 'user-solicita',
     roleName: 'Sales Agent',
     via: '/mcp',
@@ -160,6 +161,7 @@ beforeEach(() => {
 const CLAVE_ENVIO = claveIdempotenciaEnvio({
   tenantId: 'tenant-a',
   toolName: 'volkern_send_whatsapp',
+  operationId: null,
   approvalId: 'ap-1',
 })
 

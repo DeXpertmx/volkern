@@ -25,7 +25,7 @@ vi.mock('@/lib/db', () => ({
 
 import { prisma } from '@/lib/db'
 import { decideToolCall, TOOL_POLICIES, listToolPolicies } from '@/lib/mcp/tool-policy'
-import { enforceToolGate, claimApproval, hashToolArguments } from '@/lib/mcp/tool-gate'
+import { enforceToolGate, claimApproval, hashToolArguments, operationIdDeArgs } from '@/lib/mcp/tool-gate'
 import { VOLKERN_TOOLS } from '../mcp-server/src/tools-catalog'
 
 const capFindMany = vi.mocked(prisma.mcpToolCapability.findMany)
@@ -37,6 +37,47 @@ beforeEach(() => {
   vi.clearAllMocks()
   capFindMany.mockResolvedValue([] as never)
   auditCreate.mockResolvedValue({} as never)
+})
+
+describe('Identificador explícito de operación', () => {
+  it('recorta el operationId y devuelve null si falta o está vacío', () => {
+    expect(operationIdDeArgs({ operationId: '  op-42  ' })).toBe('op-42')
+    expect(operationIdDeArgs({ operationId: '   ' })).toBeNull()
+    expect(operationIdDeArgs({ operationId: 42 })).toBeNull()
+    expect(operationIdDeArgs({})).toBeNull()
+  })
+
+  it('guarda el operationId recortado, o null si no viene', async () => {
+    approvalCreate.mockResolvedValue({ id: 'ap-1' } as never)
+
+    await enforceToolGate({
+      tenantId: 'tenant-a',
+      userId: 'user-1',
+      roleName: 'Admin',
+      toolName: 'volkern_send_whatsapp',
+      args: { leadId: 'lead-1', mensaje: 'Hola', operationId: '  op-42 ' },
+      via: '/mcp',
+    })
+    expect(approvalCreate).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ operationId: 'op-42' }),
+      })
+    )
+
+    await enforceToolGate({
+      tenantId: 'tenant-a',
+      userId: 'user-1',
+      roleName: 'Admin',
+      toolName: 'volkern_send_whatsapp',
+      args: { leadId: 'lead-1', mensaje: 'Hola' },
+      via: '/mcp',
+    })
+    expect(approvalCreate).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ operationId: null }),
+      })
+    )
+  })
 })
 
 describe('Matriz de riesgo × rol', () => {

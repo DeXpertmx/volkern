@@ -6,9 +6,11 @@
  * reintento podría mandar el mensaje otra vez. Para evitarlo se crea un recibo
  * ANTES de llamar al proveedor.
  *
- * El recibo identifica la solicitud: reintentarla no reenvía. Además se bloquea
- * cualquier recibo del MISMO CONTENIDO que siga `en_curso` o quede `incierto`,
- * que es lo que impide que el barrido reabra el duplicado.
+ * La identidad es el `operationId` explícito de la solicitud: el mismo valor no
+ * reenvía aunque llegue por otra solicitud, y uno nuevo permite repetir el mismo
+ * mensaje. Sin `operationId` la identidad es el id de la solicitud, y entonces
+ * además se bloquea cualquier recibo del MISMO CONTENIDO que siga `en_curso` o
+ * `incierto`: es lo que impide que el barrido reabra el duplicado.
  *
  * Estados del recibo:
  *   - `en_curso`: reclamado, sin desenlace. Un `en_curso` caducado es un
@@ -51,16 +53,21 @@ export function clasificarFalloDeEnvio(result: unknown): DesenlaceDeEnvio {
 }
 
 /**
- * Clave del recibo: la solicitud. El bloqueo por contenido, más abajo, cubre el
- * caso de que otra solicitud pida el mismo mensaje mientras ésta no se cierra.
+ * Clave del recibo. La identidad es el `operationId` explícito de la solicitud:
+ * el mismo valor no reenvía (es el mismo intento) y uno nuevo permite repetir
+ * el mismo mensaje. Sin `operationId` se usa el id de la solicitud, que hace la
+ * operación única por petición en vez de por contenido.
  */
 export function claveIdempotenciaEnvio(params: {
   tenantId: string;
   toolName: string;
+  operationId?: string | null;
   approvalId: string;
 }): string {
+  const operacion = params.operationId?.trim();
+  const identidad = operacion ? `operacion:${operacion}` : `solicitud:${params.approvalId}`;
   return createHash('sha256')
-    .update(`${params.tenantId}|${params.toolName}|${params.approvalId}`)
+    .update(`${params.tenantId}|${params.toolName}|${identidad}`)
     .digest('hex');
 }
 
@@ -84,9 +91,10 @@ function reclamoDesde(recibo: { status: string; result: unknown }): ReclamoEnvio
  * Intenta quedarse con el envío. Devuelve `reclamado: false` cuando ya existe un
  * recibo que impide enviar: quien llama NO debe hacerlo.
  *
- * Además de la clave de la solicitud, bloquea un intento anterior del MISMO
- * CONTENIDO que siga `en_curso` o quede `incierto`: otra solicitud que pida el
- * mismo mensaje no lo repite mientras no se sepa su desenlace.
+ * La clave identifica la operación. Además, sin `operationId` dos solicitudes
+ * del mismo mensaje son operaciones distintas y podrían repetirlo, así que se
+ * bloquean si el intento anterior del MISMO CONTENIDO sigue `en_curso` o quedó
+ * `incierto`: el barrido ya no reabre el duplicado.
  */
 export async function reclamarEnvioIdempotente(params: {
   clave: string;
@@ -94,17 +102,23 @@ export async function reclamarEnvioIdempotente(params: {
   toolName: string;
   approvalId: string;
   argumentsHash: string;
+  operationId?: string | null;
 }): Promise<ReclamoEnvio> {
   const { clave, tenantId, toolName, approvalId, argumentsHash } = params;
 
+  // Bloqueo por contenido solo cuando no hay identidad explícita: con un
+  // `operationId` nuevo, repetir el mismo mensaje es deliberado.
+  const bloqueoPorContenido = !params.operationId?.trim();
   const reciboDelMismoContenido = () =>
     prisma.whatsappSendReceipt.findFirst({
       where: { tenantId, toolName, argumentsHash, status: { in: [EN_CURSO, INCIERTO] } },
       select: { status: true, result: true },
     });
 
-  const previo = await reciboDelMismoContenido();
-  if (previo) return reclamoDesde(previo);
+  if (bloqueoPorContenido) {
+    const previo = await reciboDelMismoContenido();
+    if (previo) return reclamoDesde(previo);
+  }
 
   // 1. Camino normal: no hay recibo para esta clave.
   try {
@@ -137,8 +151,10 @@ export async function reclamarEnvioIdempotente(params: {
 
   // 4. La clave desapareció entre el conflicto y la lectura, pero puede haber
   //    un intento del mismo contenido: se comprueba antes de fallar cerrado.
-  const previoTrasConflicto = await reciboDelMismoContenido();
-  if (previoTrasConflicto) return reclamoDesde(previoTrasConflicto);
+  if (bloqueoPorContenido) {
+    const previo = await reciboDelMismoContenido();
+    if (previo) return reclamoDesde(previo);
+  }
 
   return { reclamado: false, estado: EN_CURSO, resultado: null };
 }

@@ -63,6 +63,18 @@ export type GateOutcome =
       phoneNumberMasked: string
     }
 
+/**
+ * Identificador explícito de operación que manda el cliente MCP. Se guarda en
+ * la solicitud y es la identidad de idempotencia del envío: el mismo valor no
+ * reenvía, uno nuevo permite repetir el mismo mensaje.
+ */
+export function operationIdDeArgs(args: Record<string, unknown>): string | null {
+  const valor = args.operationId
+  if (typeof valor !== 'string') return null
+  const limpio = valor.trim()
+  return limpio ? limpio.slice(0, 200) : null
+}
+
 export interface GateInput {
   tenantId?: string
   userId?: string
@@ -182,6 +194,7 @@ export async function enforceToolGate(input: GateInput): Promise<GateOutcome> {
     via,
     reason: resuelta.reason,
     risk: resuelta.risk,
+    operationId: operationIdDeArgs(args),
   })
 
   // ── Flujo de código por WhatsApp para envíos externos ─────────────────
@@ -250,8 +263,9 @@ async function crearOReutilizarSolicitud(params: {
   via: GateSurface
   reason: string
   risk?: ToolRisk | null
+  operationId?: string | null
 }): Promise<{ approvalId: string; expiresAt: Date }> {
-  const { tenantId, userId, roleName, toolName, args, via, reason, risk } = params
+  const { tenantId, userId, roleName, toolName, args, via, reason, risk, operationId } = params
   const argumentsHash = hashToolArguments(args)
   const expiresAt = new Date(Date.now() + APROBACION_VALIDEZ_HORAS * 60 * 60 * 1000)
 
@@ -263,6 +277,7 @@ async function crearOReutilizarSolicitud(params: {
         toolName,
         arguments: args as never,
         argumentsHash,
+        operationId: operationId ?? null,
         requestedById: userId,
         roleName,
         via,
@@ -348,6 +363,7 @@ export async function requestAgentToolApproval(params: {
     via: VIA_CHAT,
     reason,
     risk,
+    operationId: operationIdDeArgs(args),
   })
 }
 
@@ -357,6 +373,8 @@ export interface ApprovalRow {
   toolName: string
   arguments: Record<string, unknown>
   argumentsHash: string
+  /** Identificador explícito de operación que mandó el cliente. */
+  operationId: string | null
   requestedById: string
   roleName: string | null
   via: string
@@ -396,7 +414,7 @@ export async function claimApproval(params: {
 
   return prisma.$transaction(async (tx) => {
     const filas = await tx.$queryRaw<ApprovalRow[]>`
-      SELECT id, "tenantId", "toolName", arguments, "argumentsHash",
+      SELECT id, "tenantId", "toolName", arguments, "argumentsHash", "operationId",
              "requestedById", "roleName", via, status, "expiresAt",
              "whatsappCodeHash", "whatsappVerificationToken"
       FROM "mcp_approval_requests"

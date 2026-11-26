@@ -9576,6 +9576,9 @@ model McpApprovalRequest {
   toolName                  String
   arguments                 Json
   argumentsHash             String
+  // Identificador explícito de la operación (lo manda el cliente MCP). Es la
+  // identidad de idempotencia del envío: repetir el mismo valor no reenvía.
+  operationId               String?
   requestedById             String
   roleName                  String?
   via                       String // /mcp | /api/mcp | /api/chat
@@ -9618,8 +9621,9 @@ model WhatsappSendReceipt {
   tenantId      String
   toolName      String
   approvalId    String
-  // Hash de los argumentos del envío. Bloquea un segundo envío del mismo
-  // contenido mientras el anterior siga en vuelo o sin confirmar.
+  // Hash de los argumentos de la solicitud. Sin `operationId`, bloquea un
+  // segundo envío del mismo contenido mientras el anterior siga en vuelo o
+  // sin confirmar.
   argumentsHash String?
   status        String   @default("en_curso") // en_curso | enviado | incierto
   result        Json?

@@ -277,6 +277,7 @@ interface SolicitudReclamada {
   toolName: string
   arguments: Record<string, unknown> | null
   argumentsHash: string
+  operationId: string | null
   requestedById: string
   status: string
   whatsappCodeHash: string | null
@@ -329,7 +330,7 @@ export async function verifyAndExecuteWhatsappAuthCode(params: {
   const reclamo = await prisma.$transaction(
     async (tx): Promise<Reclamo> => {
       const filas = await tx.$queryRaw<SolicitudReclamada[]>`
-        SELECT id, "tenantId", "toolName", arguments, "argumentsHash",
+        SELECT id, "tenantId", "toolName", arguments, "argumentsHash", "operationId",
                "requestedById", status, "whatsappCodeHash", "whatsappCodeExpiresAt",
                "whatsappCodeAttempts"
         FROM "mcp_approval_requests"
