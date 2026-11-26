@@ -20,7 +20,7 @@ La conclusión sale de una asimetría medida:
 
 | | Open Instinct | Volkern |
 |---|---|---|
-| Lo que **ejecuta** (herramientas) | Composio (apps de terceros) | **191 skills** propias + 44 tools MCP |
+| Lo que **ejecuta** (herramientas) | Composio (apps de terceros) | **191 skills** propias + 43 tools MCP |
 | Lo que **identifica** (quién llama) | Inkbox (teléfono), Maritime (VM) | tenant + usuario + **ApiKey con scopes** |
 | Lo que **gobierna** (qué puede hacer) | tabla de capacidades + guardián por llamada | disperso y, en la puerta ancha, **ausente** |
 
@@ -208,7 +208,7 @@ agente, ya construido y ya probado.
   `admin:write`, `orders:write`, `hr:read`… y los del agente: **`mcp:read`, `mcp:execute`, `agent:skill`**.
 - `POST /api/users/me/skill-key` ya acuña una clave `vk_live_…` con `['agent:skill','mcp:execute','mcp:read']`.
 - `app/api/mcp/route.ts`: MCP remoto con scopes, entitlements por tenant y límite por clave/usuario.
-- `mcp-server/`: paquete npm con **44 tools** (43 nombres `volkern_*`) y flujo comercial completo.
+- `mcp-server/`: paquete npm con **43 tools** (`volkern_*`) y flujo comercial completo.
 - Modelos de auditoría: `AuditLog` (con `cambiosAntes`/`cambiosDespues`, `hash`, `metadata`) y
   `ApiRequestLog`.
 
