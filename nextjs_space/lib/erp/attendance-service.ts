@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db';
 import crypto from 'crypto';
+import { requerido } from '@/lib/env-required';
 
 /**
  * AttendanceService — control horario basado EXCLUSIVAMENTE en geolocalización.
@@ -34,8 +35,6 @@ import crypto from 'crypto';
  *   - Endpoints `/api/erp/attendance/punch` y `/api/erp/attendance/status` siguen activos.
  */
 export class AttendanceService {
-  private static SECRET = process.env.ATTENDANCE_INTEGRITY_SECRET || 'v0lkern_attendance_secure_v2';
-
   /**
    * Velocidad máxima plausible entre dos marcajes consecutivos del mismo empleado.
    * Configurable por tenant (default 250 km/h — cubre una emergencia + Alta Velocidad
@@ -57,7 +56,7 @@ export class AttendanceService {
     tenantId: string;
   }): string {
     const payload = `${data.employeeId}|${data.timestamp}|${data.type}|${data.tenantId}`;
-    return crypto.createHmac('sha256', this.SECRET).update(payload).digest('hex');
+    return crypto.createHmac('sha256', requerido('ATTENDANCE_INTEGRITY_SECRET')).update(payload).digest('hex');
   }
 
   /**

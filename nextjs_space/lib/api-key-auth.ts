@@ -4,14 +4,13 @@ import { logger } from './logger';
 import { getServerSession } from 'next-auth';
 import { authOptions } from './auth';
 import { hashApiKey, isValidApiKeyFormat, hasScope, hasAnyScope, extractApiKeyFromRequest } from './api-keys';
+import { requerido } from './env-required';
 import { decideRestCall } from './mcp/tool-policy';
 import { auditRestDenial } from './rest-gate';
 import jwt from 'jsonwebtoken';
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { unstable_noStore as noStore } from 'next/cache';
-
-const CUSTOMER_JWT_SECRET = process.env.CUSTOMER_JWT_SECRET || 'volkern-customer-portal-secret-2026';
 
 export type AuthenticatedHandler = (
   req: Request,
@@ -413,7 +412,7 @@ export async function authenticateRequest(
     // Si no parece API key, probar como JWT
     if (!bearerToken.startsWith('vk_')) {
       try {
-        const decoded: any = jwt.verify(bearerToken, CUSTOMER_JWT_SECRET);
+        const decoded: any = jwt.verify(bearerToken, requerido('CUSTOMER_JWT_SECRET'));
         if (decoded && decoded.uid && decoded.tid) {
           // Cargar tenant
           const tenant = await prisma.tenant.findUnique({

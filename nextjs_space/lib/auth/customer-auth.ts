@@ -2,8 +2,8 @@ import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { randomBytes, randomUUID } from 'crypto';
+import { requerido } from '@/lib/env-required';
 
-const JWT_SECRET = process.env.CUSTOMER_JWT_SECRET || 'volkern-customer-portal-secret-2026';
 const JWT_EXPIRES_IN = '7d';
 
 /**
@@ -75,7 +75,7 @@ export class CustomerAuthService {
           cid: customerUser.contactId,
           role: customerUser.role 
         }, 
-        JWT_SECRET, 
+        requerido('CUSTOMER_JWT_SECRET'), 
         { expiresIn: JWT_EXPIRES_IN }
       );
 
@@ -139,7 +139,7 @@ export class CustomerAuthService {
         tid: internalUser.tenantId, 
         role: internalUser.role?.nombre || 'admin'
       }, 
-      JWT_SECRET, 
+      requerido('CUSTOMER_JWT_SECRET'), 
       { expiresIn: JWT_EXPIRES_IN }
     );
 
@@ -165,7 +165,7 @@ export class CustomerAuthService {
    */
   static async validateToken(token: string) {
     try {
-      const decoded: any = jwt.verify(token, JWT_SECRET);
+      const decoded: any = jwt.verify(token, requerido('CUSTOMER_JWT_SECRET'));
 
       // ── 1. Try session-based validation (erp_customer_users) ──
       const session = await prisma.erp_customer_sessions.findUnique({

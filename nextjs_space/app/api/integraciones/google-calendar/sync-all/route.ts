@@ -8,15 +8,13 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { syncAllFutureCitas, syncFromGoogleToVolkern } from '@/lib/google-calendar'
-
-// Clave secreta para autorizar llamadas internas (cron jobs)
-const SYNC_SECRET = process.env.GCAL_SYNC_SECRET || 'volkern-gcal-sync-2024'
+import { requerido } from '@/lib/env-required'
 
 export async function POST(request: NextRequest) {
   try {
     // Verificar autorización
     const authHeader = request.headers.get('authorization')
-    if (authHeader !== `Bearer ${SYNC_SECRET}`) {
+    if (authHeader !== `Bearer ${requerido('GCAL_SYNC_SECRET')}`) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 

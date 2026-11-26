@@ -1,8 +1,8 @@
 import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { requerido } from '@/lib/env-required';
 
-const JWT_SECRET = process.env.ACADEMY_JWT_SECRET || 'volkern-academy-secret-2026';
 const JWT_EXPIRES_IN = '30d'; // Longer sessions for learning
 
 /**
@@ -74,7 +74,7 @@ export class AcademyAuthService {
         eid: (user as any).estudiante?.id,
         role: user.role 
       }, 
-      JWT_SECRET, 
+      requerido('ACADEMY_JWT_SECRET'), 
       { expiresIn: JWT_EXPIRES_IN }
     );
 
@@ -113,7 +113,7 @@ export class AcademyAuthService {
    */
   static async validateToken(token: string) {
     try {
-      const decoded: any = jwt.verify(token, JWT_SECRET);
+      const decoded: any = jwt.verify(token, requerido('ACADEMY_JWT_SECRET'));
       
       const session = await prisma.erp_academy_sessions.findUnique({
         where: { token, revoked: false },
@@ -139,7 +139,7 @@ export class AcademyAuthService {
    * Internal auditing for Academy.
    */
   private static async logEvent(tenantId: string, userId: string, eventType: string, entityType: string, entityId: string, payload?: any) {
-    const integrityHash = jwt.sign({ tenantId, userId, eventType, timestamp: Date.now() }, JWT_SECRET);
+    const integrityHash = jwt.sign({ tenantId, userId, eventType, timestamp: Date.now() }, requerido('ACADEMY_JWT_SECRET'));
     
     return await prisma.erp_academy_audit_logs.create({
       data: {

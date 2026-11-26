@@ -1,8 +1,7 @@
 import { prisma } from '@/lib/db';
 import { createHmac } from 'crypto';
 import { Decimal } from '@prisma/client/runtime/library';
-
-const ACCOUNTING_SECRET = process.env.ACCOUNTING_SECRET || 'volkern-accounting-default-secret-2026';
+import { requerido } from '@/lib/env-required';
 
 export interface EntryLineInput {
   accountId: string;
@@ -57,7 +56,7 @@ export class EntryManager {
       previousHash
     });
 
-    const entryHash = createHmac('sha256', ACCOUNTING_SECRET)
+    const entryHash = createHmac('sha256', requerido('ACCOUNTING_SECRET'))
       .update(entryData)
       .digest('hex');
 
@@ -146,7 +145,7 @@ export class EntryManager {
         previousHash: entry.previousHash
       });
 
-      const calculatedHash = createHmac('sha256', ACCOUNTING_SECRET)
+      const calculatedHash = createHmac('sha256', requerido('ACCOUNTING_SECRET'))
         .update(entryData)
         .digest('hex');
 

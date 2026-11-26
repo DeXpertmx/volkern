@@ -12,7 +12,7 @@ This endpoint performs batch synchronization for all tenants with active Google 
 - **POST** `/api/integraciones/google-calendar/sync-all` - Triggers bidirectional sync for all active tenants
 - **GET** `/api/integraciones/google-calendar/sync-all` - Health check (returns active integration count)
 
-**Authentication:** Uses `x-sync-secret` header with key `volkern-gcal-sync-2026`
+**Authentication:** Uses `x-sync-secret` header with key `<GCAL_SYNC_SECRET>`
 
 ### 2. Middleware Updated
 **File:** `/middleware.ts`
@@ -43,7 +43,7 @@ curl -X GET "http://localhost:3000/api/integraciones/google-calendar/sync-all"
 
 # Trigger sync
 curl -X POST "http://localhost:3000/api/integraciones/google-calendar/sync-all" \
-  -H "x-sync-secret: volkern-gcal-sync-2026" \
+  -H "Authorization: Bearer <GCAL_SYNC_SECRET>" \
   -H "Content-Type: application/json"
 ```
 
@@ -71,7 +71,7 @@ curl -X POST "http://localhost:3000/api/integraciones/google-calendar/sync-all" 
 ```
 
 ## Environment Variable (Optional)
-Set `GOOGLE_CALENDAR_SYNC_SECRET` to customize the secret key (default: `volkern-gcal-sync-2026`).
+Set `GOOGLE_CALENDAR_SYNC_SECRET` to customize the secret key (default: `<GCAL_SYNC_SECRET>`).
 
 ## Date Created
 January 15, 2026
