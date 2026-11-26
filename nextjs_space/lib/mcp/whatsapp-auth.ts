@@ -114,7 +114,8 @@ export async function generateAndSendWhatsappAuthCode(params: {
   const code = generateAuthCode()
   const codeHash = await hashAuthCode(code)
   const verificationToken = generateVerificationToken()
-  const codeExpiresAt = new Date(Date.now() + CODE_TTL_MINUTES * 60 * 1000)
+  const ahora = new Date()
+  const codeExpiresAt = new Date(ahora.getTime() + CODE_TTL_MINUTES * 60 * 1000)
 
   const baseUrl = process.env.NEXTAUTH_URL || 'https://volkern.app'
   const verificationUrl = `${baseUrl}/mcp/autorizar/${verificationToken}`
@@ -124,6 +125,60 @@ export async function generateAndSendWhatsappAuthCode(params: {
   const phoneNumberMasked = digits.length >= 4
     ? `****${digits.slice(-4)}`
     : `****${business.phoneNumber}`
+
+  // Reserva atómica del código. El gate reutiliza la solicitud pendiente cuando
+  // dos llamadas traen los mismos argumentos; sin este cerrojo ambas emitían un
+  // código y la segunda sobrescribía el token de la primera, dejando su enlace
+  // muerto. El UPDATE condicionado compite por la fila: en Postgres la segunda
+  // espera el bloqueo y reevalúa el WHERE, que ya no coincide porque el código
+  // vigente no ha caducado. Solo la ganadora emite y envía; la otra devuelve el
+  // código vigente, así que un segundo código nunca invalida al primero.
+  const reserva = await prisma.mcpApprovalRequest.updateMany({
+    where: {
+      id: approvalId,
+      tenantId,
+      status: 'pending',
+      OR: [{ whatsappCodeExpiresAt: null }, { whatsappCodeExpiresAt: { lte: ahora } }],
+    },
+    data: {
+      whatsappCodeHash: codeHash,
+      whatsappCodeExpiresAt: codeExpiresAt,
+      whatsappCodeSentAt: null,
+      whatsappCodeAttempts: 0,
+      whatsappPhoneNumber: business.phoneNumber,
+      whatsappVerificationToken: verificationToken,
+    },
+  })
+
+  if (reserva.count === 0) {
+    const vigente = await prisma.mcpApprovalRequest.findFirst({
+      where: { id: approvalId, tenantId },
+      select: {
+        status: true,
+        whatsappVerificationToken: true,
+        whatsappCodeExpiresAt: true,
+      },
+    })
+
+    if (
+      !vigente ||
+      vigente.status !== 'pending' ||
+      !vigente.whatsappVerificationToken ||
+      !vigente.whatsappCodeExpiresAt ||
+      vigente.whatsappCodeExpiresAt <= new Date()
+    ) {
+      // El código se venció entre la reserva fallida y la lectura, o la
+      // solicitud dejó de estar pendiente: no hay enlace que devolver.
+      throw new Error('La solicitud no admite un código de autorización')
+    }
+
+    return {
+      verificationToken: vigente.whatsappVerificationToken,
+      verificationUrl: `${baseUrl}/mcp/autorizar/${vigente.whatsappVerificationToken}`,
+      codeExpiresAt: vigente.whatsappCodeExpiresAt,
+      phoneNumberMasked,
+    }
+  }
 
   const mensaje = `
 🔐 Código de autorización WhatsApp CRM
@@ -144,12 +199,32 @@ Si no has solicitado este envío, ignora este mensaje y no compartas el código.
 `.trim()
 
   try {
-    await sendMessageWithUserInstance(
+    const envio = await sendMessageWithUserInstance(
       business.instanceName,
       business.phoneNumber,
       mensaje
     )
+    if (envio?.success === false) {
+      throw new Error(envio.error || 'El envío del código no se confirmó')
+    }
   } catch (sendError) {
+    // Sin envío no hay código válido: liberar la reserva para que el reintento
+    // pueda emitir otro (y el gate caiga a la bandeja si no hay canal). El
+    // WHERE por token evita borrar una reserva posterior.
+    await prisma.mcpApprovalRequest
+      .updateMany({
+        where: { id: approvalId, whatsappVerificationToken: verificationToken },
+        data: {
+          whatsappCodeHash: null,
+          whatsappCodeExpiresAt: null,
+          whatsappCodeSentAt: null,
+          whatsappVerificationToken: null,
+        },
+      })
+      .catch((error) =>
+        console.error('[whatsapp-auth] No se pudo liberar la reserva del código:', error)
+      )
+
     console.error(
       '[whatsapp-auth] No se pudo enviar el código por WhatsApp:',
       sendError instanceof Error ? sendError.message : String(sendError)
@@ -157,18 +232,16 @@ Si no has solicitado este envío, ignora este mensaje y no compartas el código.
     throw sendError
   }
 
-  // Guardar hash, expiración, teléfono y token en la solicitud de aprobación.
-  await prisma.mcpApprovalRequest.update({
-    where: { id: approvalId },
-    data: {
-      whatsappCodeHash: codeHash,
-      whatsappCodeExpiresAt: codeExpiresAt,
-      whatsappCodeSentAt: new Date(),
-      whatsappCodeAttempts: 0,
-      whatsappPhoneNumber: business.phoneNumber,
-      whatsappVerificationToken: verificationToken,
-    },
-  })
+  // La marca de envío es informativa: si falla, el código ya está emitido y
+  // entregado, así que no se invalida la solicitud.
+  await prisma.mcpApprovalRequest
+    .updateMany({
+      where: { id: approvalId, whatsappVerificationToken: verificationToken },
+      data: { whatsappCodeSentAt: new Date() },
+    })
+    .catch((error) =>
+      console.error('[whatsapp-auth] No se pudo marcar el envío del código:', error)
+    )
 
   return {
     verificationToken,
@@ -201,6 +274,7 @@ interface SolicitudReclamada {
   tenantId: string
   toolName: string
   arguments: Record<string, unknown> | null
+  argumentsHash: string
   requestedById: string
   status: string
   whatsappCodeHash: string | null
@@ -253,8 +327,8 @@ export async function verifyAndExecuteWhatsappAuthCode(params: {
   const reclamo = await prisma.$transaction(
     async (tx): Promise<Reclamo> => {
       const filas = await tx.$queryRaw<SolicitudReclamada[]>`
-        SELECT id, "tenantId", "toolName", arguments, "requestedById", status,
-               "whatsappCodeHash", "whatsappCodeExpiresAt", "whatsappCodeAttempts"
+        SELECT id, "tenantId", "toolName", arguments, "argumentsHash", "requestedById",
+               status, "whatsappCodeHash", "whatsappCodeExpiresAt", "whatsappCodeAttempts"
         FROM "mcp_approval_requests"
         WHERE "whatsappVerificationToken" = ${verificationToken}
         FOR UPDATE
