@@ -197,6 +197,18 @@ export async function POST(req: Request) {
     // «no es allow» a propósito: una decisión futura del gate falla cerrada en
     // vez de caer al camino de ejecución, que es el bypass que tuvo `ask_code`.
     if (gate.kind !== 'allow') {
+      if (gate.kind === 'replay') {
+        return NextResponse.json({
+          jsonrpc: '2.0',
+          id,
+          result: {
+            status: gate.status,
+            approvalId: gate.approvalId,
+            result: gate.result,
+          },
+        })
+      }
+
       if (gate.kind === 'deny') {
         return jsonRpcError(id, -32003, gate.reason, 403)
       }

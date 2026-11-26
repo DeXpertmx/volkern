@@ -30,6 +30,7 @@ import { VOLKERN_TOOLS } from '../mcp-server/src/tools-catalog'
 
 const capFindMany = vi.mocked(prisma.mcpToolCapability.findMany)
 const approvalCreate = vi.mocked(prisma.mcpApprovalRequest.create)
+const approvalFindFirst = vi.mocked(prisma.mcpApprovalRequest.findFirst)
 const auditCreate = vi.mocked(prisma.auditLog.create)
 const transaction = vi.mocked(prisma.$transaction)
 
@@ -219,15 +220,23 @@ describe('enforceToolGate', () => {
     )
   })
 
-  it('reutiliza la solicitud pendiente idéntica en vez de duplicarla', async () => {
+  it('si la operación la creó otra petición a la vez, devuelve esa misma solicitud', async () => {
     approvalCreate.mockRejectedValue({ code: 'P2002' })
-    vi.mocked(prisma.mcpApprovalRequest.findFirst).mockResolvedValue({ id: 'ap-ya-existe' } as never)
+    vi.mocked(prisma.mcpApprovalRequest.findFirst).mockResolvedValue({
+      id: 'ap-ya-existe',
+      status: 'pending',
+      expiresAt: new Date(Date.now() + 60_000),
+      result: null,
+      whatsappVerificationToken: null,
+      whatsappCodeExpiresAt: null,
+      whatsappPhoneNumber: null,
+    } as never)
 
     const out = await enforceToolGate({
       ...base,
       roleName: 'Admin',
       toolName: 'volkern_delete_contact',
-      args: { id: 'c-1', tenantId: 'tenant-a', userId: 'user-a' },
+      args: { id: 'c-1', operationId: 'op-1', tenantId: 'tenant-a', userId: 'user-a' },
     })
 
     expect(out.kind).toBe('ask')
@@ -423,5 +432,100 @@ describe('claimApproval — la acción se ejecuta una sola vez', () => {
     const b = hashToolArguments({ b: { d: 3, c: 2 }, a: 1 })
     expect(a).toBe(b)
     expect(a).not.toBe(hashToolArguments({ a: 1, b: { c: 2, d: 4 } }))
+  })
+})
+
+describe('Idempotencia por operationId', () => {
+  const filas: any[] = []
+
+  const llamar = (operationId: string) =>
+    enforceToolGate({
+      tenantId: 'tenant-a',
+      userId: 'user-1',
+      roleName: 'Admin',
+      toolName: 'volkern_delete_contact',
+      args: { id: 'c-1', operationId },
+      via: '/mcp',
+    })
+
+  const filaPrevia = (status: string) => ({
+    id: 'ap-previa',
+    tenantId: 'tenant-a',
+    toolName: 'volkern_delete_contact',
+    operationId: 'op-1',
+    status,
+    result: { ok: true, borrado: 'c-1' },
+    expiresAt: new Date(Date.now() + 60_000),
+    whatsappVerificationToken: null,
+    whatsappCodeExpiresAt: null,
+    whatsappPhoneNumber: null,
+  })
+
+  beforeEach(() => {
+    filas.length = 0
+    approvalCreate.mockImplementation(async ({ data }: any) => {
+      const duplicada =
+        data.operationId &&
+        filas.some((f) => f.tenantId === data.tenantId && f.operationId === data.operationId)
+      if (duplicada) throw Object.assign(new Error('unique'), { code: 'P2002' })
+      const fila = { id: `ap-${filas.length + 1}`, status: 'pending', result: null, ...data }
+      filas.push(fila)
+      return { id: fila.id } as never
+    })
+    approvalFindFirst.mockImplementation(
+      async ({ where }: any) =>
+        (filas.find((f) =>
+          Object.entries(where).every(([campo, valor]) => f[campo] === valor)
+        ) as never) ?? (null as never)
+    )
+  })
+
+  it('dos peticiones simultáneas con el mismo operationId devuelven una sola solicitud', async () => {
+    const [primera, segunda] = await Promise.all([llamar('op-1'), llamar('op-1')])
+
+    expect(filas).toHaveLength(1)
+    expect((primera as any).approvalId).toBe('ap-1')
+    expect((segunda as any).approvalId).toBe('ap-1')
+    expect(primera.kind).toBe('ask')
+    expect(segunda.kind).toBe('ask')
+  })
+
+  it('sin operationId, dos llamadas idénticas crean dos solicitudes', async () => {
+    const llamarSinId = () =>
+      enforceToolGate({
+        tenantId: 'tenant-a',
+        userId: 'user-1',
+        roleName: 'Admin',
+        toolName: 'volkern_delete_contact',
+        args: { id: 'c-1' },
+        via: '/mcp',
+      })
+
+    const primera = await llamarSinId()
+    const segunda = await llamarSinId()
+
+    // No hay índice por argumentos: el gate no finge deduplicar.
+    expect(filas).toHaveLength(2)
+    expect(primera.kind).toBe('ask')
+    expect((primera as any).approvalId).not.toBe((segunda as any).approvalId)
+  })
+
+  it('el mismo operationId no crea otra solicitud si la primera ya se ejecutó', async () => {
+    filas.push(filaPrevia('executed'))
+
+    const res = await llamar('op-1')
+
+    expect(res.kind).toBe('replay')
+    expect((res as any).status).toBe('executed')
+    expect((res as any).result).toMatchObject({ borrado: 'c-1' })
+    expect(approvalCreate).not.toHaveBeenCalled()
+  })
+
+  it('un operationId nuevo permite repetir la misma acción', async () => {
+    const primera = await llamar('op-1')
+    const segunda = await llamar('op-2')
+
+    expect(filas).toHaveLength(2)
+    expect((primera as any).approvalId).not.toBe((segunda as any).approvalId)
   })
 })

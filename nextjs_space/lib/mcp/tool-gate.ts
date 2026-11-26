@@ -51,6 +51,15 @@ export type GateOutcome =
       expiresAt: Date
     }
   | {
+      kind: 'replay'
+      decision: 'ask'
+      reason: string
+      risk: ToolRisk | null
+      approvalId: string
+      status: string
+      result: unknown
+    }
+  | {
       kind: 'ask_code'
       decision: 'ask'
       reason: string
@@ -73,6 +82,43 @@ export function operationIdDeArgs(args: Record<string, unknown>): string | null 
   if (typeof valor !== 'string') return null
   const limpio = valor.trim()
   return limpio ? limpio.slice(0, 200) : null
+}
+
+/** Columnas suficientes para reutilizar o reproducir una solicitud existente. */
+const CAMPOS_SOLICITUD = {
+  id: true,
+  status: true,
+  expiresAt: true,
+  result: true,
+  whatsappVerificationToken: true,
+  whatsappCodeExpiresAt: true,
+  whatsappPhoneNumber: true,
+} as const
+
+interface SolicitudPrevia {
+  id: string
+  status: string
+  expiresAt: Date
+  result: unknown
+  whatsappVerificationToken: string | null
+  whatsappCodeExpiresAt: Date | null
+  whatsappPhoneNumber: string | null
+}
+
+/**
+ * Una operación ya resuelta no se vuelve a ejecutar: se devuelve su desenlace.
+ * Es lo que impide que el mismo `operationId` reenvíe el WhatsApp.
+ */
+function replayDeSolicitud(solicitud: SolicitudPrevia, risk: ToolRisk | null): GateOutcome {
+  return {
+    kind: 'replay',
+    decision: 'ask',
+    reason: `La operación ya se resolvió (${solicitud.status}); no se volvió a ejecutar.`,
+    risk,
+    approvalId: solicitud.id,
+    status: solicitud.status,
+    result: solicitud.result,
+  }
 }
 
 export interface GateInput {
@@ -133,10 +179,11 @@ async function auditar(params: {
 /**
  * Resuelve la decisión y, si es `ask`, crea (o reutiliza) la solicitud.
  *
- * Reutilizar importa: un agente que reintenta tres veces la misma acción no
- * debe generar tres solicitudes idénticas en la bandeja del responsable. El
- * índice parcial único de la migración lo garantiza y aquí se traduce en
- * "devuelve la que ya está pendiente".
+ * Reutilizar importa: un agente que reintenta la misma operación no debe
+ * generar varias solicitudes en la bandeja del responsable. La identidad es el
+ * `operationId` y el índice único `(empresa, operationId)` la impone; aquí se
+ * traduce en «devuelve la que ya existe». Sin `operationId` no hay identidad:
+ * cada llamada crea su propia solicitud y no se deduplica por argumentos.
  */
 export async function enforceToolGate(input: GateInput): Promise<GateOutcome> {
   const { tenantId, userId, roleName, toolName, args, via } = input
@@ -185,7 +232,20 @@ export async function enforceToolGate(input: GateInput): Promise<GateOutcome> {
     return { kind: 'allow', decision: 'allow', reason: resuelta.reason, risk: resuelta.risk }
   }
 
-  const { approvalId, expiresAt } = await crearOReutilizarSolicitud({
+  const operationId = operationIdDeArgs(args)
+
+  // Misma operación, ya resuelta: se reproduce el desenlace sin crear nada ni
+  // mandar un código nuevo. Si sigue pendiente, se cae al flujo normal, que
+  // reutiliza el código vigente en vez de emitir otro.
+  if (operationId) {
+    const previa = (await prisma.mcpApprovalRequest.findFirst({
+      where: { tenantId, operationId },
+      select: CAMPOS_SOLICITUD,
+    })) as SolicitudPrevia | null
+    if (previa && previa.status !== 'pending') return replayDeSolicitud(previa, resuelta.risk)
+  }
+
+  const { approvalId, expiresAt, existente } = await crearOReutilizarSolicitud({
     tenantId,
     userId,
     roleName: roleName ?? null,
@@ -194,8 +254,11 @@ export async function enforceToolGate(input: GateInput): Promise<GateOutcome> {
     via,
     reason: resuelta.reason,
     risk: resuelta.risk,
-    operationId: operationIdDeArgs(args),
+    operationId,
   })
+  if (existente && existente.status !== 'pending') {
+    return replayDeSolicitud(existente, resuelta.risk)
+  }
 
   // ── Flujo de código por WhatsApp para envíos externos ─────────────────
   // `volkern_send_whatsapp` es de riesgo `external`: se envía un código de 6
@@ -249,10 +312,10 @@ export async function enforceToolGate(input: GateInput): Promise<GateOutcome> {
 /**
  * Crea (o reutiliza) una `McpApprovalRequest` pendiente.
  *
- * Comparte la lógica de dedupe y auditoría de `enforceToolGate`: un reintento
- * idéntico no genera una segunda solicitud en la bandeja del responsable. El
- * índice parcial único de la migración y el hash canónico de argumentos son el
- * cerrojo; aquí se traducen en «devuelve la que ya está pendiente».
+ * Comparte la lógica de auditoría de `enforceToolGate`. La unicidad de
+ * `(empresa, operationId)` es el único cerrojo: un reintento de la misma
+ * operación devuelve la fila existente y una llamada sin `operationId` crea su
+ * propia solicitud.
  */
 async function crearOReutilizarSolicitud(params: {
   tenantId: string
@@ -264,7 +327,11 @@ async function crearOReutilizarSolicitud(params: {
   reason: string
   risk?: ToolRisk | null
   operationId?: string | null
-}): Promise<{ approvalId: string; expiresAt: Date }> {
+}): Promise<{
+  approvalId: string
+  expiresAt: Date
+  existente: SolicitudPrevia | null
+}> {
   const { tenantId, userId, roleName, toolName, args, via, reason, risk, operationId } = params
   const argumentsHash = hashToolArguments(args)
   const expiresAt = new Date(Date.now() + APROBACION_VALIDEZ_HORAS * 60 * 60 * 1000)
@@ -287,14 +354,17 @@ async function crearOReutilizarSolicitud(params: {
       select: { id: true },
     })
     approvalId = creada.id
-  } catch (error) {
-    // P2002: ya hay una pendiente idéntica; se devuelve ésa en vez de duplicar.
-    const existente = await prisma.mcpApprovalRequest.findFirst({
-      where: { tenantId, toolName, argumentsHash, status: 'pending' },
-      select: { id: true },
-    })
+  } catch (error: any) {
+    // P2002 solo puede venir del índice único (empresa, operationId): otra
+    // petición creó la operación entre la comprobación previa y este INSERT.
+    // Sin `operationId` no hay índice que colisione y un error es un error.
+    if (error?.code !== 'P2002' || !operationId) throw error
+    const existente = (await prisma.mcpApprovalRequest.findFirst({
+      where: { tenantId, operationId },
+      select: CAMPOS_SOLICITUD,
+    })) as SolicitudPrevia | null
     if (!existente) throw error
-    approvalId = existente.id
+    return { approvalId: existente.id, expiresAt: existente.expiresAt, existente }
   }
 
   await auditar({
@@ -315,7 +385,7 @@ async function crearOReutilizarSolicitud(params: {
     },
   })
 
-  return { approvalId, expiresAt }
+  return { approvalId, expiresAt, existente: null }
 }
 
 /**

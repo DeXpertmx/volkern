@@ -9601,38 +9601,15 @@ model McpApprovalRequest {
   whatsappCodeAttempts      Int       @default(0) // intentos de verificación (anti fuerza bruta)
   whatsappPhoneNumber       String? // número al que se envió el código
   whatsappVerificationToken String?   @unique // token para la URL pública de verificación
-
   @@index([tenantId, status])
   @@index([tenantId, createdAt])
+  // Identidad de la operación: la propia solicitud hace de recibo. Un mismo
+  // operationId no puede generar dos solicitudes, luego no puede enviar dos veces.
+  @@unique([tenantId, operationId])
   @@index([argumentsHash])
   @@index([whatsappVerificationToken])
   @@index([whatsappCodeExpiresAt])
   @@map("mcp_approval_requests")
-}
-
-// ─── Idempotencia de envíos WhatsApp ────────────────────────────────────────
-//
-// Un envío aprobado se identifica por (empresa, herramienta, argumentos). El
-// recibo se crea ANTES de llamar al proveedor: si el proceso muere o el barrido
-// cierra la solicitud por falta de desenlace, el reintento choca con la clave y
-// no vuelve a mandar el mismo WhatsApp. Solo un envío fallido libera el recibo.
-model WhatsappSendReceipt {
-  key           String   @id // sha256(tenantId | toolName | operación o solicitud)
-  tenantId      String
-  toolName      String
-  approvalId    String
-  // Hash de los argumentos de la solicitud. Sin `operationId`, bloquea un
-  // segundo envío del mismo contenido mientras el anterior siga en vuelo o
-  // sin confirmar.
-  argumentsHash String?
-  status        String   @default("en_curso") // en_curso | enviado | incierto
-  result        Json?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  @@index([approvalId])
-  @@index([tenantId, toolName, argumentsHash])
-  @@map("whatsapp_send_receipts")
 }
 
 // ─── Portal público: analítica ──────────────────────────────────────────────
