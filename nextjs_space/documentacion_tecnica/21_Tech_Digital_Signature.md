@@ -203,7 +203,7 @@ en producción debe configurarse la instancia real del tenant.
 
 - **URL interna:** `http://libresign` (resoluble desde el contenedor de la app vía DXnet; también
   `http://libresign_libresign`). El compose está en `/root/libresign.yaml` del VPS.
-- **Usuario:** `admin` / `LibreSignAdmin2026!` · **App password API:** generado con
+- **Usuario:** `admin` / `<NEXTCLOUD_ADMIN_PASSWORD>` · **App password API:** generado con
   `occ user:add-app-password` (se guarda cifrado en `ClientSignatureSettings` del tenant).
 - **Dependencias instaladas:** Java 21, JSignPDF 2.3.0, PDFtk 3.3.3, OpenSSL root cert.
 - **Método de identificación:** email (`identify_method`).

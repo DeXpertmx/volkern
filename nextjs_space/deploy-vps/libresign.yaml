@@ -1,10 +1,11 @@
+# Antes de desplegar: exportar POSTGRES_PASSWORD y NEXTCLOUD_ADMIN_PASSWORD.
 version: "3.7"
 services:
 
   ## --------------------------- LIBRESIGN (NEXTCLOUD) --------------------------- ##
 
   libresign:
-    image: nextcloud:apache
+    image: nextcloud:35.0.3-apache
     hostname: libresign
     networks:
       - DXnet
@@ -18,9 +19,9 @@ services:
       - POSTGRES_HOST=libresign-db
       - POSTGRES_DB=libresign
       - POSTGRES_USER=libresign
-      - POSTGRES_PASSWORD=libresign_pg_2026
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - NEXTCLOUD_ADMIN_USER=admin
-      - NEXTCLOUD_ADMIN_PASSWORD=LibreSignAdmin2026!
+      - NEXTCLOUD_ADMIN_PASSWORD=${NEXTCLOUD_ADMIN_PASSWORD}
       - NEXTCLOUD_TRUSTED_DOMAINS=localhost firma.dimension.expert
       - OVERWRITEPROTOCOL=https
       - OVERWRITEHOST=firma.dimension.expert
@@ -59,7 +60,7 @@ services:
     environment:
       - POSTGRES_DB=libresign
       - POSTGRES_USER=libresign
-      - POSTGRES_PASSWORD=libresign_pg_2026
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
 
     deploy:
       mode: replicated
