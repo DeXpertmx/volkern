@@ -13,7 +13,24 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyAndExecuteWhatsappAuthCode } from '@/lib/mcp/whatsapp-auth'
+import {
+  verifyAndExecuteWhatsappAuthCode,
+  type MotivoVerificacion,
+} from '@/lib/mcp/whatsapp-auth'
+
+/**
+ * Traducción del motivo tipado al status HTTP. No se inspecciona el texto del
+ * mensaje: «Código incorrecto. Te quedan 2 intento(s)» contiene «intento» y
+ * acababa devolviendo 429 en lugar de 400.
+ */
+const STATUS_POR_MOTIVO: Record<MotivoVerificacion, number> = {
+  codigo_incorrecto: 400,
+  envio_fallido: 400,
+  solicitud_no_encontrada: 400,
+  ya_resuelta: 400,
+  codigo_caducado: 410,
+  intentos_agotados: 429,
+}
 
 export const dynamic = 'force-dynamic'
 
@@ -42,21 +59,17 @@ export async function POST(
     const resultado = await verifyAndExecuteWhatsappAuthCode({
       verificationToken: verificationToken || '',
       code: code.trim(),
-      ip: request.headers.get('x-forwarded-for') ?? undefined,
     })
 
     if (!resultado.ok) {
-      const status = resultado.error?.includes('expiró')
-        ? 410
-        : resultado.error?.includes('intento')
-          ? 429
-          : 400
+      const status = resultado.motivo ? STATUS_POR_MOTIVO[resultado.motivo] : 400
       return NextResponse.json(
         {
           success: false,
           approved: resultado.approved,
           executed: resultado.executed,
           error: resultado.error,
+          motivo: resultado.motivo,
           approvalId: resultado.approvalId,
         },
         { status }
