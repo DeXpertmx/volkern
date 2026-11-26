@@ -185,12 +185,16 @@ export async function handleCallTool(request: MCPCallToolRequest): Promise<MCPCa
     };
   } catch (error) {
     console.error(`[MCP] Error ejecutando tool ${name}:`, error);
+    // Los errores tipados (p. ej. un envío de WhatsApp) traen su desenlace:
+    // se conserva para que quien decide reintentar no tenga que mirar el texto.
+    const desenlace = (error as { desenlace?: unknown })?.desenlace;
     return {
       content: [{
         type: 'text',
-        text: JSON.stringify({ 
+        text: JSON.stringify({
           error: error instanceof Error ? error.message : 'Error desconocido',
           tool: name,
+          ...(typeof desenlace === 'string' ? { desenlace } : {}),
         }),
       }],
       isError: true,

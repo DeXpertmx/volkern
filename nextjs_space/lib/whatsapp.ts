@@ -121,6 +121,34 @@ async function loadCredentialsFromDB(tenantId: string, allowPlatformFallback = f
  * @param allowPlatformFallback Usar el número oficial de la plataforma cuando
  *   el tenant no tenga WhatsApp propio conectado (solo rutas de notificación).
  */
+/** Qué se puede afirmar de un envío que falló. */
+export type DesenlaceEnvioWhatsapp = 'no_enviado' | 'incierto';
+
+/**
+ * Fallo de envío con desenlace explícito. Evita deducir del texto si el mensaje
+ * pudo salir: un 4xx del proveedor es un rechazo; un timeout o un 5xx, un
+ * resultado incierto.
+ */
+export class ErrorDeEnvioWhatsapp extends Error {
+  readonly desenlace: DesenlaceEnvioWhatsapp;
+  readonly status?: number;
+
+  constructor(mensaje: string, desenlace: DesenlaceEnvioWhatsapp, status?: number) {
+    super(mensaje);
+    this.name = 'ErrorDeEnvioWhatsapp';
+    this.desenlace = desenlace;
+    this.status = status;
+  }
+}
+
+function desenlacePorStatus(status: number): DesenlaceEnvioWhatsapp {
+  // 4xx = el proveedor respondió que no, salvo los reintentables (408, 425,
+  // 429), que no dicen si llegó a procesar el mensaje.
+  const rechazoConfirmado =
+    status >= 400 && status < 500 && status !== 408 && status !== 425 && status !== 429;
+  return rechazoConfirmado ? 'no_enviado' : 'incierto';
+}
+
 export async function sendWhatsAppMessage(to: string, message: string, tenantId: string, allowPlatformFallback = false) {
   try {
     console.log('📤 [WhatsApp] Intentando enviar mensaje...')
@@ -174,7 +202,12 @@ export async function sendWhatsAppMessage(to: string, message: string, tenantId:
         errorMessage += errorText
       }
       
-      throw new Error(errorMessage)
+      return {
+        success: false,
+        error: errorMessage,
+        desenlace: desenlacePorStatus(response.status),
+        status: response.status,
+      }
     }
 
     const result = await response.json()
@@ -186,12 +219,36 @@ export async function sendWhatsAppMessage(to: string, message: string, tenantId:
       data: result,
     }
   } catch (error: any) {
+    // Sin respuesta del proveedor (red, timeout, JSON roto): pudo salir.
     console.error('❌ [WhatsApp] Error enviando mensaje:', error)
     return {
       success: false,
       error: error.message,
+      desenlace: 'incierto' as DesenlaceEnvioWhatsapp,
     }
   }
+}
+
+/**
+ * Igual que `sendWhatsAppMessage` pero lanza `ErrorDeEnvioWhatsapp` cuando el
+ * envío falla. Lo usa el camino MCP, donde el desenlace tiene que viajar con el
+ * error en lugar de deducirse del texto.
+ */
+export async function enviarWhatsappOFallar(
+  to: string,
+  message: string,
+  tenantId: string,
+  allowPlatformFallback = false
+) {
+  const resultado = await sendWhatsAppMessage(to, message, tenantId, allowPlatformFallback)
+  if (!resultado.success) {
+    throw new ErrorDeEnvioWhatsapp(
+      resultado.error ?? 'El envío de WhatsApp falló',
+      (resultado as { desenlace?: DesenlaceEnvioWhatsapp }).desenlace ?? 'incierto',
+      (resultado as { status?: number }).status
+    )
+  }
+  return resultado
 }
 
 /**

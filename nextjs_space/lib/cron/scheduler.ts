@@ -377,10 +377,17 @@ export function initCronJobs() {
   // terminal y el cliente pueda volver a pedir la acción.
   cron.schedule('*/10 * * * *', runCronJob('mcp-approvals-reconcile', 'Aprobaciones MCP sin desenlace', '*/10 * * * *', async () => {
     const { reconciliarAprobacionesHuerfanas } = await import('../mcp/approval-reconcile');
+    const { reconciliarRecibosSinConfirmar } = await import('../mcp/whatsapp-idempotency');
     const { cerradas } = await reconciliarAprobacionesHuerfanas();
-    return cerradas > 0
-      ? { mensaje: `${cerradas} aprobación(es) cerrada(s) sin desenlace` }
-      : undefined;
+    // Un envío que llevaba demasiado sin respuesta deja de figurar «en curso»:
+    // pasa a incierto y sigue bloqueando el reintento (pudo salir).
+    const { marcados } = await reconciliarRecibosSinConfirmar();
+    if (cerradas === 0 && marcados === 0) return undefined;
+    const partes = [
+      cerradas > 0 ? `${cerradas} aprobación(es) sin desenlace` : null,
+      marcados > 0 ? `${marcados} envío(s) marcados como inciertos` : null,
+    ].filter(Boolean);
+    return { mensaje: partes.join('; ') };
   }));
 
   console.log('✅ [Scheduler] Reconciliación de aprobaciones MCP programada (cada 10 min)');

@@ -21,13 +21,8 @@ import { prisma } from '@/lib/db'
 import bcrypt from 'bcryptjs'
 import crypto from 'node:crypto'
 import { sendMessageWithUserInstance } from '@/lib/evolution-instances'
-import {
-  claveIdempotenciaEnvio,
-  confirmarEnvioIdempotente,
-  liberarEnvioIdempotente,
-  reclamarEnvioIdempotente,
-  resultadoDeReclamoAjeno,
-} from '@/lib/mcp/whatsapp-idempotency'
+import { ejecutarAprobacion, ejecutarToolDelCatalogo } from '@/lib/mcp/approval-execution'
+import { completeApproval } from '@/lib/mcp/tool-gate'
 
 const CODE_TTL_MINUTES = 15
 const MAX_ATTEMPTS = 3
@@ -334,8 +329,9 @@ export async function verifyAndExecuteWhatsappAuthCode(params: {
   const reclamo = await prisma.$transaction(
     async (tx): Promise<Reclamo> => {
       const filas = await tx.$queryRaw<SolicitudReclamada[]>`
-        SELECT id, "tenantId", "toolName", arguments, "argumentsHash", "requestedById",
-               status, "whatsappCodeHash", "whatsappCodeExpiresAt", "whatsappCodeAttempts"
+        SELECT id, "tenantId", "toolName", arguments, "argumentsHash",
+               "requestedById", status, "whatsappCodeHash", "whatsappCodeExpiresAt",
+               "whatsappCodeAttempts"
         FROM "mcp_approval_requests"
         WHERE "whatsappVerificationToken" = ${verificationToken}
         FOR UPDATE
@@ -434,94 +430,15 @@ export async function verifyAndExecuteWhatsappAuthCode(params: {
   }
 
   // Ejecución fuera de la transacción (no se retiene el bloqueo durante la
-  // llamada externa). El estado final se escribe SIEMPRE: `executed` o
-  // `failed`, nunca queda `approved` ambiguo si el envío lanza.
+  // llamada externa). El recibo del envío y el cierre del desenlace viven en
+  // `ejecutarAprobacion`, compartido con la bandeja de aprobaciones.
   const { solicitud } = reclamo
-  let result: unknown = null
-  let executed = false
-
-  // Clave de idempotencia del envío: (empresa, herramienta, argumentos). El
-  // recibo se crea antes de llamar al proveedor, así que si una solicitud
-  // anterior con los mismos argumentos ya lo mandó —o lo tiene en vuelo cuando
-  // el barrido cerró su fila— este intento no repite el mensaje.
-  const claveEnvio = claveIdempotenciaEnvio({
-    tenantId: solicitud.tenantId,
-    toolName: solicitud.toolName,
-    argumentsHash: solicitud.argumentsHash,
-  })
-  const reclamoEnvio = await reclamarEnvioIdempotente({
-    clave: claveEnvio,
-    tenantId: solicitud.tenantId,
-    toolName: solicitud.toolName,
-    approvalId: solicitud.id,
+  const { ok: executed, result } = await ejecutarAprobacion({
+    aprobacion: solicitud,
+    ejecutar: () => ejecutarToolDelCatalogo(solicitud),
   })
 
-  if (!reclamoEnvio.reclamado) {
-    const previo = resultadoDeReclamoAjeno(reclamoEnvio)
-    executed = previo.ok
-    result = previo.result
-  } else {
-    try {
-      const { handleCallTool } = await import('@/lib/mcp/mcp-handler')
-      const respuesta = await handleCallTool({
-        name: solicitud.toolName,
-        arguments: {
-          ...(solicitud.arguments ?? {}),
-          tenantId: solicitud.tenantId,
-          userId: solicitud.requestedById,
-          source: 'mcp',
-        },
-      })
-
-      const texto = respuesta.content?.[0]?.text
-      if (texto) {
-        try {
-          result = JSON.parse(texto)
-        } catch {
-          result = texto
-        }
-      }
-      executed = !respuesta.isError
-    } catch (error) {
-      result = { error: error instanceof Error ? error.message : String(error) }
-      executed = false
-    }
-
-    if (executed) {
-      await confirmarEnvioIdempotente({
-        clave: claveEnvio,
-        approvalId: solicitud.id,
-        result,
-      })
-    } else {
-      // El envío falló: se libera la clave para que el reintento legítimo pueda
-      // intentarlo (sin liberar nunca un envío ya confirmado).
-      await liberarEnvioIdempotente({ clave: claveEnvio, approvalId: solicitud.id })
-    }
-  }
-
-  // Cierre condicionado al estado que dejó el reclamo: si el barrido de
-  // huérfanas ya cerró la fila, no se pisa su desenlace.
-  let cerrada = true
-  try {
-    const cierre = await prisma.mcpApprovalRequest.updateMany({
-      where: { id: solicitud.id, status: 'approved' },
-      data: {
-        status: executed ? 'executed' : 'failed',
-        executedAt: new Date(),
-        result: result as never,
-      },
-    })
-    cerrada = cierre.count > 0
-  } catch (error) {
-    console.error('[MCP verify-code] No se pudo registrar el desenlace:', error)
-  }
-  if (!cerrada) {
-    console.warn(
-      '[MCP verify-code] La solicitud ya estaba cerrada al registrar el desenlace:',
-      solicitud.id
-    )
-  }
+  await completeApproval({ approvalId: solicitud.id, ok: executed, result })
 
   return {
     ok: executed,

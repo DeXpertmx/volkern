@@ -30,6 +30,9 @@ vi.mock('@/lib/mcp/mcp-handler', () => ({
 
 const cumpleRecibo = (recibo: any, where: Record<string, any>) =>
   Object.entries(where).every(([campo, condicion]: any) => {
+    if (condicion && typeof condicion === 'object' && 'in' in condicion) {
+      return (condicion.in as unknown[]).includes(recibo[campo])
+    }
     if (condicion && typeof condicion === 'object' && 'lt' in condicion) {
       return (
         recibo[campo] != null &&
@@ -67,6 +70,12 @@ vi.mock('@/lib/db', () => ({
       findUnique: async ({ where }: any) => {
         const recibo = recibos.get(where.key)
         return recibo ? { ...recibo } : null
+      },
+      findFirst: async ({ where }: any) => {
+        for (const recibo of recibos.values()) {
+          if (cumpleRecibo(recibo, where)) return { ...recibo }
+        }
+        return null
       },
       updateMany: async ({ where, data }: any) => {
         const recibo = recibos.get(where.key)
@@ -151,7 +160,7 @@ beforeEach(() => {
 const CLAVE_ENVIO = claveIdempotenciaEnvio({
   tenantId: 'tenant-a',
   toolName: 'volkern_send_whatsapp',
-  argumentsHash: 'hash-1',
+  approvalId: 'ap-1',
 })
 
 function filaWhatsapp() {
@@ -313,7 +322,9 @@ describe('POST /api/mcp/approvals/[id]', () => {
     recibos.clear()
     const segunda = filaWhatsapp()
     ;(callTool as any).mockResolvedValueOnce({
-      content: [{ type: 'text', text: JSON.stringify({ error: 'sin canal' }) }],
+      content: [
+        { type: 'text', text: JSON.stringify({ error: 'Error 400: sin canal', desenlace: 'no_enviado' }) },
+      ],
       isError: true,
     })
 
@@ -326,7 +337,7 @@ describe('POST /api/mcp/approvals/[id]', () => {
     expect(fila.status).toBe('executed')
   })
 
-  it('una excepción del envío libera el recibo y cierra la solicitud como fallida', async () => {
+  it('una excepción del envío deja el recibo incierto y cierra la solicitud como fallida', async () => {
     const { fila } = filaWhatsapp()
     ;(callTool as any).mockRejectedValueOnce(new Error('Evolution caída'))
 
@@ -336,7 +347,8 @@ describe('POST /api/mcp/approvals/[id]', () => {
     expect(res.status).toBe(200)
     expect(body.status).toBe('failed')
     expect(body.result.error).toBe('Evolution caída')
-    expect(recibos.size).toBe(0)
+    // El mensaje pudo salir: la clave se queda y bloquea el reintento.
+    expect(recibos.get(CLAVE_ENVIO)).toMatchObject({ status: 'incierto' })
     expect(fila.status).toBe('failed')
   })
 

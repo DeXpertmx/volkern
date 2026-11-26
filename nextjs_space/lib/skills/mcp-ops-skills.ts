@@ -17,7 +17,7 @@ import { checkAvailability, createCitaConEfectos, CitaError } from '@/lib/servic
 import { crearCotizacionDesdeCatalogo } from '@/lib/cotizaciones/from-catalog'
 import { crearOrdenVentaDesdeCotizacion } from '@/lib/ordenes-venta/from-cotizacion'
 import { crearContratoDesdeCotizacion } from '@/lib/contratos/from-cotizacion'
-import { sendWhatsAppMessage } from '@/lib/whatsapp'
+import { enviarWhatsappOFallar, ErrorDeEnvioWhatsapp } from '@/lib/whatsapp'
 import { verifyFinancialIntegrity } from '@/lib/security/integrity-service'
 import { ProductionService } from '@/lib/erp/production-service'
 import { projectFinancialForecast, taxProspector } from '@/lib/skills/financial-consolidation-skills'
@@ -450,12 +450,24 @@ export async function listarTasksMcp(input: any) {
 /** volkern_send_whatsapp — {leadId, mensaje, tipo?} */
 export async function enviarWhatsappMcp(input: any) {
   const { tenantId, leadId, mensaje, tipo = 'texto' } = input
-  if (!leadId || !mensaje) throw new Error('leadId y mensaje son requeridos')
-  if (tipo !== 'texto') throw new Error(`El envío de ${tipo} vía MCP aún no está soportado; usa texto`)
+  // Todo fallo anterior al envío es un `no_enviado` explícito: el mensaje no
+  // pudo salir y el reintento es seguro.
+  if (!leadId || !mensaje) {
+    throw new ErrorDeEnvioWhatsapp('leadId y mensaje son requeridos', 'no_enviado')
+  }
+  if (tipo !== 'texto') {
+    throw new ErrorDeEnvioWhatsapp(
+      `El envío de ${tipo} vía MCP aún no está soportado; usa texto`,
+      'no_enviado'
+    )
+  }
   const lead = await prisma.lead.findFirst({ where: { id: leadId, tenantId } })
-  if (!lead) throw new Error('Lead no encontrado')
-  if (!lead.telefono) throw new Error('El lead no tiene teléfono registrado')
-  const resultado = await sendWhatsAppMessage(lead.telefono, mensaje, tenantId)
+  if (!lead) throw new ErrorDeEnvioWhatsapp('Lead no encontrado', 'no_enviado')
+  if (!lead.telefono) {
+    throw new ErrorDeEnvioWhatsapp('El lead no tiene teléfono registrado', 'no_enviado')
+  }
+  // Lanza con desenlace: un rechazo del proveedor ya no se disfraza de éxito.
+  const resultado = await enviarWhatsappOFallar(lead.telefono, mensaje, tenantId)
   return { success: true, leadId, telefono: lead.telefono, resultado }
 }
 

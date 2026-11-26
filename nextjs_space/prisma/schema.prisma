@@ -9614,16 +9614,20 @@ model McpApprovalRequest {
 // cierra la solicitud por falta de desenlace, el reintento choca con la clave y
 // no vuelve a mandar el mismo WhatsApp. Solo un envío fallido libera el recibo.
 model WhatsappSendReceipt {
-  key        String   @id // sha256(tenantId | toolName | argumentsHash)
-  tenantId   String
-  toolName   String
-  approvalId String
-  status     String   @default("en_curso") // en_curso | enviado
-  result     Json?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  key           String   @id // sha256(tenantId | toolName | operación o solicitud)
+  tenantId      String
+  toolName      String
+  approvalId    String
+  // Hash de los argumentos del envío. Bloquea un segundo envío del mismo
+  // contenido mientras el anterior siga en vuelo o sin confirmar.
+  argumentsHash String?
+  status        String   @default("en_curso") // en_curso | enviado | incierto
+  result        Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([approvalId])
+  @@index([tenantId, toolName, argumentsHash])
   @@map("whatsapp_send_receipts")
 }
 

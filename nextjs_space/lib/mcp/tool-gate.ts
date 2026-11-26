@@ -396,8 +396,8 @@ export async function claimApproval(params: {
 
   return prisma.$transaction(async (tx) => {
     const filas = await tx.$queryRaw<ApprovalRow[]>`
-      SELECT id, "tenantId", "toolName", arguments, "argumentsHash", "requestedById",
-             "roleName", via, status, "expiresAt",
+      SELECT id, "tenantId", "toolName", arguments, "argumentsHash",
+             "requestedById", "roleName", via, status, "expiresAt",
              "whatsappCodeHash", "whatsappVerificationToken"
       FROM "mcp_approval_requests"
       WHERE id = ${approvalId} AND "tenantId" = ${tenantId}
