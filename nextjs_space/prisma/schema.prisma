@@ -9601,6 +9601,12 @@ model McpApprovalRequest {
   whatsappCodeAttempts      Int       @default(0) // intentos de verificación (anti fuerza bruta)
   whatsappPhoneNumber       String? // número al que se envió el código
   whatsappVerificationToken String?   @unique // token para la URL pública de verificación
+  // Desenlace real del envío: el ACK de Evolution resuelve el caso de un envío
+  // que no confirmó al responder, sin volver a mandarlo.
+  whatsappMessageId         String?
+  entregaEstado             String? // enviado | entregado | leido | fallido
+  entregaActualizadaEn      DateTime?
+
   @@index([tenantId, status])
   @@index([tenantId, createdAt])
   // Identidad de la operación: la propia solicitud hace de recibo. Un mismo
@@ -9608,6 +9614,7 @@ model McpApprovalRequest {
   @@unique([tenantId, operationId])
   @@index([argumentsHash])
   @@index([whatsappVerificationToken])
+  @@index([whatsappMessageId])
   @@index([whatsappCodeExpiresAt])
   @@map("mcp_approval_requests")
 }

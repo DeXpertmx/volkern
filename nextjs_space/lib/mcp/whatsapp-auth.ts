@@ -22,6 +22,7 @@ import bcrypt from 'bcryptjs'
 import crypto from 'node:crypto'
 import { sendMessageWithUserInstance } from '@/lib/evolution-instances'
 import { ejecutarToolDelCatalogo } from '@/lib/mcp/approval-execution'
+import { idDeMensajeEnResultado } from '@/lib/mcp/whatsapp-entrega'
 import { completeApproval } from '@/lib/mcp/tool-gate'
 
 const CODE_TTL_MINUTES = 15
@@ -435,7 +436,13 @@ export async function verifyAndExecuteWhatsappAuthCode(params: {
   const { solicitud } = reclamo
   const { ok: executed, result } = await ejecutarToolDelCatalogo(solicitud)
 
-  await completeApproval({ approvalId: solicitud.id, ok: executed, result })
+  const whatsappMessageId = idDeMensajeEnResultado(result)
+  await completeApproval({
+    approvalId: solicitud.id,
+    ok: executed,
+    result,
+    ...(whatsappMessageId ? { whatsappMessageId } : {}),
+  })
 
   return {
     ok: executed,

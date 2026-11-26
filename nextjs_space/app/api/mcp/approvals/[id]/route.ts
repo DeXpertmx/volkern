@@ -34,6 +34,7 @@ import {
   VIA_CHAT,
 } from '@/lib/mcp/tool-gate';
 import { ejecutarToolDelCatalogo } from '@/lib/mcp/approval-execution';
+import { idDeMensajeEnResultado } from '@/lib/mcp/whatsapp-entrega';
 
 export const POST = withTenantAuth(async (request, auth, { params }) => {
   try {
@@ -181,7 +182,13 @@ export const POST = withTenantAuth(async (request, auth, { params }) => {
     }
     const { ok, result } = ejecucion
 
-    await completeApproval({ approvalId: approval.id, ok, result: result as never });
+    const whatsappMessageId = idDeMensajeEnResultado(result);
+    await completeApproval({
+      approvalId: approval.id,
+      ok,
+      result: result as never,
+      ...(whatsappMessageId ? { whatsappMessageId } : {}),
+    });
 
     await auditApprovalOutcome({
       tenantId,

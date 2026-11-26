@@ -138,6 +138,21 @@ describe('verifyAndExecuteWhatsappAuthCode — reclamo, desenlace y reconciliaci
     expect(h.fila.status).toBe('executed')
   })
 
+  it('guarda el id del mensaje para poder casar su ACK de entrega', async () => {
+    h.handleCallTool.mockResolvedValue({
+      content: [
+        { type: 'text', text: JSON.stringify({ ok: true, messageId: 'wamid-abc' }) },
+      ],
+      isError: false,
+    })
+
+    const res = await verifyAndExecuteWhatsappAuthCode({ verificationToken: TOKEN, code: CODIGO })
+
+    expect(res.ok).toBe(true)
+    expect(h.fila.whatsappMessageId).toBe('wamid-abc')
+    expect(h.fila.status).toBe('executed')
+  })
+
   it('un código incorrecto cuenta el intento y no ejecuta', async () => {
     const res = await verifyAndExecuteWhatsappAuthCode({ verificationToken: TOKEN, code: '000000' })
 

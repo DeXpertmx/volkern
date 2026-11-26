@@ -543,6 +543,8 @@ export async function completeApproval(params: {
   approvalId: string
   ok: boolean
   result: unknown
+  /** Id del mensaje del proveedor: es la llave para casar su ACK después. */
+  whatsappMessageId?: string | null
 }): Promise<void> {
   try {
     await prisma.mcpApprovalRequest.update({
@@ -551,6 +553,9 @@ export async function completeApproval(params: {
         status: params.ok ? 'executed' : 'failed',
         executedAt: new Date(),
         result: params.result as never,
+        ...(params.whatsappMessageId
+          ? { whatsappMessageId: params.whatsappMessageId }
+          : {}),
       },
     })
   } catch (error) {
