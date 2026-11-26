@@ -34,6 +34,14 @@ import {
   completeApproval,
   VIA_CHAT,
 } from '@/lib/mcp/tool-gate';
+import {
+  claveIdempotenciaEnvio,
+  confirmarEnvioIdempotente,
+  liberarEnvioIdempotente,
+  reclamarEnvioIdempotente,
+  resultadoDeReclamoAjeno,
+  type ReclamoEnvio,
+} from '@/lib/mcp/whatsapp-idempotency';
 
 export const POST = withTenantAuth(async (request, auth, { params }) => {
   try {
@@ -157,44 +165,85 @@ export const POST = withTenantAuth(async (request, auth, { params }) => {
           })
         : null;
 
-    if (approval.via === VIA_CHAT) {
-      // Herramienta del agente del chat (clase C/D): se ejecuta por el registro
-      // del agente, no por `handleCallTool`, que sólo resuelve tools del catálogo.
-      // La identidad sigue siendo la de quien la pidió, no la de quien aprueba.
-      try {
-        result = await ejecutarHerramientaAprobadaDelChat({
+    // Clave de idempotencia del envío: la misma que usa `verify-code`. Si otra
+    // solicitud —por ejemplo la que el barrido cerró sin desenlace— ya envió
+    // este mismo WhatsApp, esta aprobación no lo repite.
+    const claveEnvio =
+      approval.toolName === 'volkern_send_whatsapp'
+        ? claveIdempotenciaEnvio({
+            tenantId: approval.tenantId,
+            toolName: approval.toolName,
+            argumentsHash: approval.argumentsHash,
+          })
+        : null;
+    const reclamoEnvio: ReclamoEnvio = claveEnvio
+      ? await reclamarEnvioIdempotente({
+          clave: claveEnvio,
           tenantId: approval.tenantId,
-          userId: approval.requestedById,
           toolName: approval.toolName,
-          args: (approval.arguments ?? {}) as Record<string, any>,
-          conversacionId: pendiente?.conversacionId,
-        });
-        ok = true;
-      } catch (error) {
-        result = { error: error instanceof Error ? error.message : String(error) };
-        ok = false;
-      }
-    } else {
-      const respuesta = await handleCallTool({
-        name: approval.toolName,
-        arguments: {
-          ...(approval.arguments ?? {}),
-          tenantId: approval.tenantId,
-          userId: approval.requestedById,
-          source: 'mcp',
-        },
-      });
+          approvalId: approval.id,
+        })
+      : { reclamado: true };
 
-      const text = respuesta.content?.[0]?.text;
-      result = (() => {
-        if (!text) return null;
+    if (!reclamoEnvio.reclamado) {
+      const previo = resultadoDeReclamoAjeno(reclamoEnvio);
+      ok = previo.ok;
+      result = previo.result;
+    } else {
+      if (approval.via === VIA_CHAT) {
+        // Herramienta del agente del chat (clase C/D): se ejecuta por el registro
+        // del agente, no por `handleCallTool`, que sólo resuelve tools del catálogo.
+        // La identidad sigue siendo la de quien la pidió, no la de quien aprueba.
         try {
-          return JSON.parse(text);
-        } catch {
-          return text;
+          result = await ejecutarHerramientaAprobadaDelChat({
+            tenantId: approval.tenantId,
+            userId: approval.requestedById,
+            toolName: approval.toolName,
+            args: (approval.arguments ?? {}) as Record<string, any>,
+            conversacionId: pendiente?.conversacionId,
+          });
+          ok = true;
+        } catch (error) {
+          result = { error: error instanceof Error ? error.message : String(error) };
+          ok = false;
         }
-      })();
-      ok = !respuesta.isError;
+      } else {
+        // Una excepción del handler no debe dejar la solicitud en `approved` con
+        // el recibo en `en_curso`: se trata como ejecución fallida y se libera.
+        try {
+          const respuesta = await handleCallTool({
+            name: approval.toolName,
+            arguments: {
+              ...(approval.arguments ?? {}),
+              tenantId: approval.tenantId,
+              userId: approval.requestedById,
+              source: 'mcp',
+            },
+          });
+
+          const text = respuesta.content?.[0]?.text;
+          result = (() => {
+            if (!text) return null;
+            try {
+              return JSON.parse(text);
+            } catch {
+              return text;
+            }
+          })();
+          ok = !respuesta.isError;
+        } catch (error) {
+          result = { error: error instanceof Error ? error.message : String(error) };
+          ok = false;
+        }
+      }
+
+      if (claveEnvio) {
+        if (ok) {
+          await confirmarEnvioIdempotente({ clave: claveEnvio, approvalId: approval.id, result });
+        } else {
+          await liberarEnvioIdempotente({ clave: claveEnvio, approvalId: approval.id });
+        }
+      }
     }
 
     await completeApproval({ approvalId: approval.id, ok, result: result as never });

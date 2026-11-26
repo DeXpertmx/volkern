@@ -18,6 +18,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const h = vi.hoisted(() => ({
   fila: null as any,
   handleCallTool: vi.fn(),
+  /** Recibos de idempotencia por clave (tabla whatsapp_send_receipts). */
+  recibos: new Map<string, any>(),
   /** Cola que emula el `FOR UPDATE`: una transacción cada vez. */
   colaLock: Promise.resolve() as Promise<unknown>,
 }))
@@ -58,6 +60,17 @@ vi.mock('@/lib/db', () => {
     }
   }
 
+  const cumpleRecibo = (recibo: any, where: Record<string, any>) =>
+    Object.entries(where).every(([campo, condicion]: any) => {
+      if (condicion && typeof condicion === 'object' && 'lt' in condicion) {
+        return (
+          recibo[campo] != null &&
+          new Date(recibo[campo]).getTime() < new Date(condicion.lt).getTime()
+        )
+      }
+      return recibo[campo] === condicion
+    })
+
   const cumple = (where: Record<string, any>) =>
     Object.entries(where).every(([clave, condicion]) => {
       const valor = h.fila[clave] ?? null
@@ -80,12 +93,47 @@ vi.mock('@/lib/db', () => {
           return { count: 1 }
         },
       },
+      whatsappSendReceipt: {
+        create: async ({ data }: any) => {
+          if (h.recibos.has(data.key)) {
+            throw Object.assign(new Error('clave duplicada'), { code: 'P2002' })
+          }
+          const ahora = new Date()
+          const recibo = {
+            status: 'en_curso',
+            result: null,
+            createdAt: ahora,
+            updatedAt: ahora,
+            ...data,
+          }
+          h.recibos.set(data.key, recibo)
+          return { ...recibo }
+        },
+        findUnique: async ({ where }: any) => {
+          const recibo = h.recibos.get(where.key)
+          return recibo ? { ...recibo } : null
+        },
+        updateMany: async ({ where, data }: any) => {
+          const recibo = h.recibos.get(where.key)
+          if (!recibo || !cumpleRecibo(recibo, where)) return { count: 0 }
+          // `@updatedAt` de Prisma: toda escritura refresca la ventana.
+          Object.assign(recibo, data, { updatedAt: new Date() })
+          return { count: 1 }
+        },
+        deleteMany: async ({ where }: any) => {
+          const recibo = h.recibos.get(where.key)
+          if (!recibo || !cumpleRecibo(recibo, where)) return { count: 0 }
+          h.recibos.delete(where.key)
+          return { count: 1 }
+        },
+      },
     },
   }
 })
 
 import { hashAuthCode, verifyAndExecuteWhatsappAuthCode } from '@/lib/mcp/whatsapp-auth'
 import { reconciliarAprobacionesHuerfanas } from '@/lib/mcp/approval-reconcile'
+import { claveIdempotenciaEnvio } from '@/lib/mcp/whatsapp-idempotency'
 
 const CODIGO = '123456'
 const TOKEN = 'a'.repeat(48)
@@ -96,6 +144,7 @@ async function filaPendiente(hash: string) {
     tenantId: 'tenant-a',
     toolName: 'volkern_send_whatsapp',
     arguments: { leadId: 'lead-1', message: 'Hola' },
+    argumentsHash: 'hash-1',
     requestedById: 'user-solicita',
     status: 'pending',
     whatsappCodeHash: hash,
@@ -115,6 +164,7 @@ function envioOk() {
 beforeEach(async () => {
   vi.clearAllMocks()
   h.colaLock = Promise.resolve()
+  h.recibos.clear()
   h.fila = await filaPendiente(await hashAuthCode(CODIGO))
   h.handleCallTool.mockResolvedValue(envioOk())
 })
@@ -249,6 +299,107 @@ describe('verifyAndExecuteWhatsappAuthCode — reclamo, desenlace y reconciliaci
     expect(cerradas).toBe(0)
     expect(h.fila.status).toBe('approved')
     expect(h.fila.executedAt).toBeNull()
+  })
+
+  it('un envío que quedó en curso no se repite cuando llega una petición nueva', async () => {
+    // El recibo de la solicitud anterior sigue en `en_curso`: su proceso murió
+    // o el barrido cerró la fila mientras el proveedor seguía trabajando.
+    const clave = claveIdempotenciaEnvio({
+      tenantId: 'tenant-a',
+      toolName: 'volkern_send_whatsapp',
+      argumentsHash: 'hash-1',
+    })
+    h.recibos.set(clave, {
+      key: clave,
+      tenantId: 'tenant-a',
+      toolName: 'volkern_send_whatsapp',
+      approvalId: 'ap-anterior',
+      status: 'en_curso',
+      result: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+
+    const res = await verifyAndExecuteWhatsappAuthCode({ verificationToken: TOKEN, code: CODIGO })
+
+    expect(h.handleCallTool).not.toHaveBeenCalled()
+    expect(res.ok).toBe(false)
+    expect(res.error).toContain('envío en curso')
+    expect(h.fila.status).toBe('failed')
+  })
+
+  it('un envío ya confirmado devuelve su resultado sin reenviar el mensaje', async () => {
+    const clave = claveIdempotenciaEnvio({
+      tenantId: 'tenant-a',
+      toolName: 'volkern_send_whatsapp',
+      argumentsHash: 'hash-1',
+    })
+    h.recibos.set(clave, {
+      key: clave,
+      tenantId: 'tenant-a',
+      toolName: 'volkern_send_whatsapp',
+      approvalId: 'ap-anterior',
+      status: 'enviado',
+      result: { ok: true, messageId: 'wamid-1' },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+
+    const res = await verifyAndExecuteWhatsappAuthCode({ verificationToken: TOKEN, code: CODIGO })
+
+    expect(h.handleCallTool).not.toHaveBeenCalled()
+    expect(res.executed).toBe(true)
+    expect(res.result).toMatchObject({ messageId: 'wamid-1' })
+    expect(h.fila.status).toBe('executed')
+  })
+
+  it('el envío correcto deja el recibo en enviado y un fallo lo libera', async () => {
+    const clave = claveIdempotenciaEnvio({
+      tenantId: 'tenant-a',
+      toolName: 'volkern_send_whatsapp',
+      argumentsHash: 'hash-1',
+    })
+
+    await verifyAndExecuteWhatsappAuthCode({ verificationToken: TOKEN, code: CODIGO })
+    expect(h.recibos.get(clave)).toMatchObject({ status: 'enviado', approvalId: 'ap-1' })
+
+    // Segundo escenario: el envío falla y la clave queda libre para reintentar.
+    h.recibos.clear()
+    h.fila = await filaPendiente(await hashAuthCode(CODIGO))
+    h.handleCallTool.mockRejectedValueOnce(new Error('Evolution caída'))
+
+    const res = await verifyAndExecuteWhatsappAuthCode({ verificationToken: TOKEN, code: CODIGO })
+
+    expect(res.ok).toBe(false)
+    expect(h.recibos.size).toBe(0)
+  })
+
+  it('un recibo caducado no bloquea un envío nuevo', async () => {
+    const clave = claveIdempotenciaEnvio({
+      tenantId: 'tenant-a',
+      toolName: 'volkern_send_whatsapp',
+      argumentsHash: 'hash-1',
+    })
+    h.recibos.set(clave, {
+      key: clave,
+      tenantId: 'tenant-a',
+      toolName: 'volkern_send_whatsapp',
+      approvalId: 'ap-vieja',
+      status: 'enviado',
+      result: { ok: true },
+      updatedAt: new Date(Date.now() - 25 * 60 * 60_000),
+    })
+
+    const res = await verifyAndExecuteWhatsappAuthCode({ verificationToken: TOKEN, code: CODIGO })
+
+    expect(h.handleCallTool).toHaveBeenCalledTimes(1)
+    expect(res.executed).toBe(true)
+    expect(h.recibos.get(clave)).toMatchObject({ status: 'enviado', approvalId: 'ap-1' })
+    // El recibo tomado vuelve a estar vigente: un reintento inmediato no vuelve
+    // a enviar, porque `updatedAt` refrescó la ventana.
+    expect(new Date(h.recibos.get(clave).updatedAt).getTime()).toBeGreaterThan(
+      Date.now() - 60_000
+    )
   })
 
   it('la reconciliación no toca solicitudes pendientes ni ya resueltas', async () => {

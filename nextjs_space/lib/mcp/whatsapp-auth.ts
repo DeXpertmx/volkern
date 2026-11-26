@@ -21,6 +21,13 @@ import { prisma } from '@/lib/db'
 import bcrypt from 'bcryptjs'
 import crypto from 'node:crypto'
 import { sendMessageWithUserInstance } from '@/lib/evolution-instances'
+import {
+  claveIdempotenciaEnvio,
+  confirmarEnvioIdempotente,
+  liberarEnvioIdempotente,
+  reclamarEnvioIdempotente,
+  resultadoDeReclamoAjeno,
+} from '@/lib/mcp/whatsapp-idempotency'
 
 const CODE_TTL_MINUTES = 15
 const MAX_ATTEMPTS = 3
@@ -433,30 +440,64 @@ export async function verifyAndExecuteWhatsappAuthCode(params: {
   let result: unknown = null
   let executed = false
 
-  try {
-    const { handleCallTool } = await import('@/lib/mcp/mcp-handler')
-    const respuesta = await handleCallTool({
-      name: solicitud.toolName,
-      arguments: {
-        ...(solicitud.arguments ?? {}),
-        tenantId: solicitud.tenantId,
-        userId: solicitud.requestedById,
-        source: 'mcp',
-      },
-    })
+  // Clave de idempotencia del envío: (empresa, herramienta, argumentos). El
+  // recibo se crea antes de llamar al proveedor, así que si una solicitud
+  // anterior con los mismos argumentos ya lo mandó —o lo tiene en vuelo cuando
+  // el barrido cerró su fila— este intento no repite el mensaje.
+  const claveEnvio = claveIdempotenciaEnvio({
+    tenantId: solicitud.tenantId,
+    toolName: solicitud.toolName,
+    argumentsHash: solicitud.argumentsHash,
+  })
+  const reclamoEnvio = await reclamarEnvioIdempotente({
+    clave: claveEnvio,
+    tenantId: solicitud.tenantId,
+    toolName: solicitud.toolName,
+    approvalId: solicitud.id,
+  })
 
-    const texto = respuesta.content?.[0]?.text
-    if (texto) {
-      try {
-        result = JSON.parse(texto)
-      } catch {
-        result = texto
+  if (!reclamoEnvio.reclamado) {
+    const previo = resultadoDeReclamoAjeno(reclamoEnvio)
+    executed = previo.ok
+    result = previo.result
+  } else {
+    try {
+      const { handleCallTool } = await import('@/lib/mcp/mcp-handler')
+      const respuesta = await handleCallTool({
+        name: solicitud.toolName,
+        arguments: {
+          ...(solicitud.arguments ?? {}),
+          tenantId: solicitud.tenantId,
+          userId: solicitud.requestedById,
+          source: 'mcp',
+        },
+      })
+
+      const texto = respuesta.content?.[0]?.text
+      if (texto) {
+        try {
+          result = JSON.parse(texto)
+        } catch {
+          result = texto
+        }
       }
+      executed = !respuesta.isError
+    } catch (error) {
+      result = { error: error instanceof Error ? error.message : String(error) }
+      executed = false
     }
-    executed = !respuesta.isError
-  } catch (error) {
-    result = { error: error instanceof Error ? error.message : String(error) }
-    executed = false
+
+    if (executed) {
+      await confirmarEnvioIdempotente({
+        clave: claveEnvio,
+        approvalId: solicitud.id,
+        result,
+      })
+    } else {
+      // El envío falló: se libera la clave para que el reintento legítimo pueda
+      // intentarlo (sin liberar nunca un envío ya confirmado).
+      await liberarEnvioIdempotente({ clave: claveEnvio, approvalId: solicitud.id })
+    }
   }
 
   // Cierre condicionado al estado que dejó el reclamo: si el barrido de

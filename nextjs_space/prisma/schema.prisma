@@ -9607,6 +9607,26 @@ model McpApprovalRequest {
   @@map("mcp_approval_requests")
 }
 
+// ─── Idempotencia de envíos WhatsApp ────────────────────────────────────────
+//
+// Un envío aprobado se identifica por (empresa, herramienta, argumentos). El
+// recibo se crea ANTES de llamar al proveedor: si el proceso muere o el barrido
+// cierra la solicitud por falta de desenlace, el reintento choca con la clave y
+// no vuelve a mandar el mismo WhatsApp. Solo un envío fallido libera el recibo.
+model WhatsappSendReceipt {
+  key        String   @id // sha256(tenantId | toolName | argumentsHash)
+  tenantId   String
+  toolName   String
+  approvalId String
+  status     String   @default("en_curso") // en_curso | enviado
+  result     Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([approvalId])
+  @@map("whatsapp_send_receipts")
+}
+
 // ─── Portal público: analítica ──────────────────────────────────────────────
 //
 // Eventos del portal inmobiliario público por cuenta. Se guardan sin datos
