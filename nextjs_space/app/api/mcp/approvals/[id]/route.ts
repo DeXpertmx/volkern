@@ -23,6 +23,11 @@ import { handleCallTool } from '@/lib/mcp/mcp-handler';
 import { roleKind } from '@/lib/mcp/tool-policy';
 import { ejecutarHerramientaAprobadaDelChat } from '@/lib/agents/tool-registry';
 import {
+  borrarProcesoPendiente,
+  cargarProcesoPendiente,
+  reanudarProcesoAprobado,
+} from '@/lib/agents/proceso-pendiente';
+import {
   auditApprovalOutcome,
   claimApproval,
   completeApproval,
@@ -91,6 +96,9 @@ export const POST = withTenantAuth(async (request, auth, { params }) => {
     }
 
     if (claim.status === 'rejected') {
+      // El proceso que esperaba esta aprobación no se reanuda: se descarta.
+      await borrarProcesoPendiente(claim.approval.id);
+
       await auditApprovalOutcome({
         tenantId,
         userId: resolverId,
@@ -115,6 +123,17 @@ export const POST = withTenantAuth(async (request, auth, { params }) => {
     let result: unknown;
     let ok = false;
 
+    // Si la solicitud pausó un proceso orquestado, guarda su hilo: la acción
+    // aprobada debe caer en la misma clave de idempotencia del turno.
+    const pendiente =
+      approval.via === VIA_CHAT
+        ? await cargarProcesoPendiente({
+            approvalId: approval.id,
+            tenantId,
+            userId: approval.requestedById,
+          })
+        : null;
+
     if (approval.via === VIA_CHAT) {
       // Herramienta del agente del chat (clase C/D): se ejecuta por el registro
       // del agente, no por `handleCallTool`, que sólo resuelve tools del catálogo.
@@ -125,6 +144,7 @@ export const POST = withTenantAuth(async (request, auth, { params }) => {
           userId: approval.requestedById,
           toolName: approval.toolName,
           args: (approval.arguments ?? {}) as Record<string, any>,
+          conversacionId: pendiente?.conversacionId,
         });
         ok = true;
       } catch (error) {
@@ -170,12 +190,34 @@ export const POST = withTenantAuth(async (request, auth, { params }) => {
       },
     });
 
+    // Proceso pausado: con la acción ya ejecutada se corren los pasos que
+    // quedaban. Si la ejecución falló, el proceso se descarta.
+    let proceso: unknown = null;
+    if (pendiente) {
+      if (ok) {
+        try {
+          proceso = await reanudarProcesoAprobado({
+            approvalId: approval.id,
+            tenantId,
+            userId: approval.requestedById,
+          });
+        } catch (error) {
+          // La aprobación ya está completada: un fallo al reanudar no la revierte.
+          await borrarProcesoPendiente(approval.id);
+          console.error('[MCP approvals] Error reanudando el proceso:', error);
+        }
+      } else {
+        await borrarProcesoPendiente(approval.id);
+      }
+    }
+
     return NextResponse.json({
       success: ok,
       status: ok ? 'executed' : 'failed',
       approvalId: approval.id,
       toolName: approval.toolName,
       result,
+      proceso,
     });
   } catch (error) {
     console.error('[MCP approvals] Error resolviendo:', error);

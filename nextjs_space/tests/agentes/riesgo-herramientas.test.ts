@@ -60,17 +60,25 @@ describe('clasificación centralizada', () => {
   })
 })
 
-describe('el registro expone una sola herramienta de clase C/D', () => {
-  it('cancel_booking es destructiva (D) y el resto son A (lectura) o B (escritura)', async () => {
+describe('las herramientas C/D del registro quedan bajo aprobación', () => {
+  it('send_message es C, cancel_booking es D y el resto son A (lectura) o B (escritura)', async () => {
     const { herramientasDelRegistro } = await import('@/lib/agents/tool-registry')
     const definiciones = herramientasDelRegistro()
     expect(definiciones.length).toBeGreaterThan(0)
 
+    const envio = definiciones.find((d) => d.nombre === 'send_message')
+    expect(envio?.riesgo).toBe('C')
+
     const cancelar = definiciones.find((d) => d.nombre === 'cancel_booking')
     expect(cancelar?.riesgo).toBe('D')
 
+    const conAprobacion = definiciones
+      .filter((d) => d.riesgo === 'C' || d.riesgo === 'D')
+      .map((d) => d.nombre)
+    expect(conAprobacion.sort()).toEqual(['cancel_booking', 'send_message'])
+
     for (const definicion of definiciones) {
-      if (definicion.nombre === 'cancel_booking') continue
+      if (definicion.nombre === 'send_message' || definicion.nombre === 'cancel_booking') continue
       expect(['A', 'B']).toContain(definicion.riesgo)
     }
   })

@@ -45,6 +45,7 @@ const MODELOS = [
   'note',
   'interaction',
   'catalogoItem',
+  'deal',
   'mcpToolCapability',
   'mcpApprovalRequest',
   'auditLog',

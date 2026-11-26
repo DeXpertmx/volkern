@@ -32,6 +32,8 @@ vi.mock('@/lib/db', () => ({
   prisma: {
     auditLog: { create: vi.fn().mockResolvedValue({}) },
     mcpApprovalRequest: { update: vi.fn().mockResolvedValue({}) },
+    // El endpoint limpia el proceso pausado al rechazar (modelo real en Prisma).
+    agentConversationContext: { delete: vi.fn().mockResolvedValue({}) },
     $transaction: vi.fn(),
   },
 }))

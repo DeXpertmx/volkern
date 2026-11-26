@@ -35,6 +35,7 @@ import {
   ejecutarUnaVez,
   SIN_CONVERSACION,
 } from './tool-idempotency';
+import { ArgumentosInvalidosError, validarArgumentos } from './validacion-argumentos';
 import {
   cargarRolDeUsuario,
   evaluarPermisoHerramienta,
@@ -139,10 +140,34 @@ const HERRAMIENTAS_SKILL: Array<DefinicionSinRiesgo & { politica: PoliticaHerram
         habitaciones: { type: 'number', description: 'Mínimo de habitaciones' },
         precio_min: { type: 'number', description: 'Precio mínimo' },
         precio_max: { type: 'number', description: 'Precio máximo' },
+        limit: { type: 'number', description: 'Número máximo de inmuebles' },
       },
       additionalProperties: false,
     },
     // Los inmuebles son CatalogoItem: la misma llave que la cartera.
+    politica: { modulo: 'catalogo', accion: 'ver' },
+  },
+  {
+    nombre: 'recommend_properties',
+    origen: 'skill',
+    descripcion:
+      'Recomienda inmuebles del catálogo según las preferencias de un comprador (operación, tipo, zona, precio y habitaciones), con score y motivo por inmueble. Úsala para «qué casas encajan con este cliente».',
+    parametros: {
+      type: 'object',
+      properties: {
+        tipoOperacion: { type: 'string', description: 'venta o alquiler' },
+        tipoInmueble: { type: 'string', description: 'casa, piso/departamento, oficina, local o terreno' },
+        ciudad: { type: 'string', description: 'Zona o ciudad' },
+        precioMin: { type: 'number', description: 'Precio mínimo' },
+        precioMax: { type: 'number', description: 'Precio máximo' },
+        habitaciones: { type: 'number', description: 'Mínimo de habitaciones' },
+        banos: { type: 'number', description: 'Mínimo de baños' },
+        amenities: { type: 'array', items: { type: 'string' }, description: 'Servicios deseados' },
+        limit: { type: 'number', description: 'Número máximo de recomendaciones' },
+      },
+      additionalProperties: false,
+    },
+    // Recomendar es leer la cartera: misma llave que la búsqueda de inmuebles.
     politica: { modulo: 'catalogo', accion: 'ver' },
   },
   {
@@ -200,6 +225,25 @@ const HERRAMIENTAS_SKILL: Array<DefinicionSinRiesgo & { politica: PoliticaHerram
       additionalProperties: false,
     },
     politica: { modulo: 'leads', accion: 'editar' },
+  },
+  {
+    nombre: 'send_message',
+    origen: 'skill',
+    descripcion:
+      'Envía un mensaje real por email o WhatsApp a una persona del CRM. Es de impacto externo: no se ejecuta directo, queda pendiente de la aprobación de un responsable.',
+    parametros: {
+      type: 'object',
+      properties: {
+        nombre: { type: 'string', description: 'Nombre de la persona' },
+        email: { type: 'string', description: 'Correo de la persona' },
+        mensaje: { type: 'string', description: 'Texto del mensaje' },
+        canal: { type: 'string', description: 'email o whatsapp' },
+        telefono: { type: 'string', description: 'Teléfono, si el canal es WhatsApp' },
+      },
+      additionalProperties: false,
+    },
+    // Enviar comunicaciones es su propia llave; leer el CRM no la concede.
+    politica: { modulo: 'mensajes', accion: 'enviar' },
   },
 ];
 
@@ -396,6 +440,12 @@ export async function ejecutarHerramientaDelAgente(
     if (!definicion) throw new PermisoDenegadoError(`herramienta desconocida: ${nombre}`);
     traza.origen = definicion.origen;
 
+    // El esquema del registro es el contrato: un campo inventado o de tipo
+    // equivocado falla aquí, antes de tocar la skill (y antes de pedir
+    // aprobación por una acción que no se podría ejecutar).
+    const problemas = validarArgumentos(definicion, args);
+    if (problemas.length) throw new ArgumentosInvalidosError(nombre, problemas);
+
     // La autorización se comprueba aquí, en el único punto por el que se puede
     // llegar a una skill: así no existe una llamada que se salte el permiso.
     const permiso = autorizarHerramienta(
@@ -477,6 +527,8 @@ export async function ejecutarHerramientaAprobadaDelChat(params: {
   userId: string;
   toolName: string;
   args: Record<string, any>;
+  /** Hilo del que salió la solicitud: conserva su clave de idempotencia. */
+  conversacionId?: string;
 }): Promise<any> {
   const [usuario, restricciones] = await Promise.all([
     cargarRolDeUsuario({ userId: params.userId, tenantId: params.tenantId }),
@@ -489,6 +541,7 @@ export async function ejecutarHerramientaAprobadaDelChat(params: {
     {
       tenantId: params.tenantId,
       userId: params.userId,
+      conversacionId: params.conversacionId,
       autorizacion: { usuario, restricciones },
     },
     { aprobacionConcedida: true }

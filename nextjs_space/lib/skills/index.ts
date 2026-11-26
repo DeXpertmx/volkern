@@ -3275,6 +3275,7 @@ const searchPropertiesByFiltersWrapper = async (input: {
   precio_min?: string | number;
   precio_max?: string | number;
   presupuesto?: string | number;
+  limit?: number | string;
   query?: string;
 }) => {
   return realEstateSkills.searchPropertiesByNaturalFilters({
@@ -3286,22 +3287,44 @@ const searchPropertiesByFiltersWrapper = async (input: {
     habitaciones: input.habitaciones,
     precio_min: input.precio_min,
     precio_max: input.precio_max ?? input.presupuesto,
+    limit: input.limit !== undefined && input.limit !== '' ? Number(input.limit) : undefined,
   });
 };
 
+/**
+ * Wrapper recommend_properties: habla el contrato publicado en el registro
+ * (tipoOperacion, tipoInmueble, ciudad, precioMax…), que es el que usa el chat
+ * y el orquestador. Conserva los alias antiguos (tipo_operacion, zona,
+ * presupuesto) para las llamadas ya desplegadas.
+ */
 const recommendPropertiesWrapper = async (input: {
   tenantId: string;
+  tipoOperacion?: string;
   tipo_operacion?: string;
+  tipoInmueble?: string;
+  tipo_inmueble?: string;
+  ciudad?: string;
   zona?: string;
+  precioMin?: string | number;
+  precio_min?: string | number;
+  precioMax?: string | number;
   presupuesto?: string | number;
+  habitaciones?: string | number;
+  limit?: number;
 }) => {
-  const precioMax = input.presupuesto !== undefined && input.presupuesto !== '' ? Number(input.presupuesto) : undefined
+  const numero = (valor: string | number | undefined) =>
+    valor === undefined || valor === '' ? undefined : Number(valor);
+  const tipoOperacion = input.tipoOperacion ?? input.tipo_operacion;
   return realEstateSkills.recommend_properties({
     tenantId: input.tenantId,
     tipoOperacion:
-      input.tipo_operacion === 'alquiler' ? ('alquiler' as const) : input.tipo_operacion === 'venta' ? ('venta' as const) : undefined,
-    ciudad: input.zona,
-    precioMax,
+      tipoOperacion === 'alquiler' ? ('alquiler' as const) : tipoOperacion === 'venta' ? ('venta' as const) : undefined,
+    tipoInmueble: input.tipoInmueble ?? input.tipo_inmueble,
+    ciudad: input.ciudad ?? input.zona,
+    precioMin: numero(input.precioMin ?? input.precio_min),
+    precioMax: numero(input.precioMax ?? input.presupuesto),
+    habitaciones: numero(input.habitaciones),
+    limit: input.limit,
   });
 };
 

@@ -116,6 +116,25 @@ describe('aprobación de clase C/D desde el chat', () => {
     expect(h.llamadasSkill[0].payload).toMatchObject({ tenantId: TENANT, userId: 'u-agenda' });
   });
 
+  it('la ejecución aprobada conserva la clave de idempotencia del hilo', async () => {
+    const base = {
+      tenantId: TENANT,
+      userId: 'u-agenda',
+      toolName: 'cancel_booking',
+      args: { nombre: 'Ana', fecha: '2026-12-01' },
+      conversacionId: 'conv-1',
+    };
+
+    const primera = await ejecutarHerramientaAprobadaDelChat(base);
+    const repetida = await ejecutarHerramientaAprobadaDelChat(base);
+    const otroHilo = await ejecutarHerramientaAprobadaDelChat({ ...base, conversacionId: 'conv-2' });
+
+    expect(primera.idempotente).toBeFalsy();
+    expect(repetida).toMatchObject({ idempotente: true });
+    expect(otroHilo.idempotente).toBeFalsy();
+    expect(h.llamadasSkill).toHaveLength(2);
+  });
+
   it('un rol sin permiso de cancelar sigue denegado aunque la solicitud esté aprobada', async () => {
     await expect(
       ejecutarHerramientaAprobadaDelChat({

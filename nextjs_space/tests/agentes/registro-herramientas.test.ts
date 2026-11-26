@@ -142,9 +142,9 @@ describe('registro único', () => {
         'cancel_booking',
       ])
     );
-    // 8 nativas + 4 del catálogo + 5 skills: la exposición es por valor, no
+    // 8 nativas + 4 del catálogo + 7 skills: la exposición es por valor, no
     // las 43 tools completas.
-    expect(nombres).toHaveLength(17);
+    expect(nombres).toHaveLength(19);
   });
 
   it('toda herramienta tiene política con un módulo que existe', () => {
@@ -247,7 +247,7 @@ describe('prompt del turno', () => {
     const herramientas = herramientasParaElModelo(rol(ROL_SUPERADMIN));
     const prompt = construirSistema('America/Mexico_City', herramientas);
 
-    expect(herramientas.length).toBe(17);
+    expect(herramientas.length).toBe(19);
     for (const herramienta of herramientas) {
       const nombre = herramienta.function.name;
       expect(prompt.split(nombre).length - 1, `${nombre} aparece más de una vez`).toBe(1);
