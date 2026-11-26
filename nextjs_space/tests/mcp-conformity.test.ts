@@ -194,7 +194,7 @@ describe.skipIf(!existsSync(DIST))('Conformidad servidor standalone (stdio) ↔ 
       })
       expect(init.result.protocolVersion).toBe('2025-06-18')
       expect(init.result.serverInfo.name).toBe('volkern-mcp-server')
-      expect(init.result.serverInfo.version).toBe('2.0.0')
+      expect(init.result.serverInfo.version).toBe('2.0.1')
       notify(child, 'notifications/initialized')
 
       const list = await rpc(child, 2, 'tools/list', {})

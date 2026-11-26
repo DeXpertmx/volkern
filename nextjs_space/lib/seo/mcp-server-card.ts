@@ -11,7 +11,7 @@
  */
 export const MCP_SERVER_INFO = {
   name: 'io.github.DeXpertmx/mcp-volkern',
-  version: '2.0.0',
+  version: '2.0.1',
   description:
     'MCP Server for Volkern CRM - Lead management, appointments, tasks, and WhatsApp messaging integration',
 }
