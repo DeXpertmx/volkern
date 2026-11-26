@@ -26,7 +26,7 @@ npx volkern-mcp-server
 ### Opción 3: Desde código fuente
 
 ```bash
-git clone https://github.com/volkern/mcp-server.git
+git clone https://github.com/DeXpertmx/mcp-volkern.git
 cd mcp-server
 npm install
 npm run build
