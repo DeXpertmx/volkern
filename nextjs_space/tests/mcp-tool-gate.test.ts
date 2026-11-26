@@ -339,6 +339,44 @@ describe('claimApproval — la acción se ejecuta una sola vez', () => {
     expect(fila.status).toBe('rejected')
   })
 
+  it('una solicitud ask_code NO se aprueba sin el código de WhatsApp', async () => {
+    const { fila, tx } = montarFila({
+      toolName: 'volkern_send_whatsapp',
+      whatsappCodeHash: '$2a$10$hashdelcodigo',
+      whatsappVerificationToken: 'a'.repeat(48),
+    })
+
+    const res = await claimApproval({
+      approvalId: 'ap-1',
+      tenantId: 'tenant-a',
+      resolverId: 'user-aprueba',
+      action: 'approve',
+    })
+
+    expect(res.status).toBe('code_required')
+    // La fila no se toca: sigue pendiente y sin resolver.
+    expect(tx.mcpApprovalRequest.update).not.toHaveBeenCalled()
+    expect(fila.status).toBe('pending')
+  })
+
+  it('rechazar una solicitud ask_code sí se permite: desactivar es seguro', async () => {
+    const { fila } = montarFila({
+      toolName: 'volkern_send_whatsapp',
+      whatsappCodeHash: '$2a$10$hashdelcodigo',
+      whatsappVerificationToken: 'a'.repeat(48),
+    })
+
+    const res = await claimApproval({
+      approvalId: 'ap-1',
+      tenantId: 'tenant-a',
+      resolverId: 'user-aprueba',
+      action: 'reject',
+    })
+
+    expect(res.status).toBe('rejected')
+    expect(fila.status).toBe('rejected')
+  })
+
   it('el hash de argumentos no depende del orden de las claves', () => {
     const a = hashToolArguments({ a: 1, b: { c: 2, d: 3 } })
     const b = hashToolArguments({ b: { d: 3, c: 2 }, a: 1 })

@@ -362,11 +362,17 @@ export interface ApprovalRow {
   via: string
   status: string
   expiresAt: Date
+  /** Hash del código de 6 dígitos: la fila nació del flujo `ask_code`. */
+  whatsappCodeHash: string | null
+  /** Token público de la página que valida ese código. */
+  whatsappVerificationToken: string | null
 }
 
 export type ClaimResult =
   | { status: 'approved'; approval: ApprovalRow }
   | { status: 'rejected'; approval: ApprovalRow }
+  /** La solicitud exige validar el código de WhatsApp: la bandeja no basta. */
+  | { status: 'code_required'; approval: ApprovalRow }
   | { status: 'not_found' }
   | { status: 'conflict'; approval: ApprovalRow }
   | { status: 'expired'; approval: ApprovalRow }
@@ -391,7 +397,8 @@ export async function claimApproval(params: {
   return prisma.$transaction(async (tx) => {
     const filas = await tx.$queryRaw<ApprovalRow[]>`
       SELECT id, "tenantId", "toolName", arguments, "argumentsHash", "requestedById",
-             "roleName", via, status, "expiresAt"
+             "roleName", via, status, "expiresAt",
+             "whatsappCodeHash", "whatsappVerificationToken"
       FROM "mcp_approval_requests"
       WHERE id = ${approvalId} AND "tenantId" = ${tenantId}
       FOR UPDATE
@@ -416,6 +423,15 @@ export async function claimApproval(params: {
     // un clic de más para la misma persona.
     if (fila.requestedById === resolverId) {
       return { status: 'self_approval' } as ClaimResult
+    }
+
+    // Segundo factor pendiente: una solicitud `ask_code` (envío externo, p. ej.
+    // `volkern_send_whatsapp`) solo se ejecuta validando el código enviado al
+    // WhatsApp del negocio. Aprobarla desde la bandeja se saltaría ese paso, así
+    // que se rechaza aquí: el camino válido es `verify-code`, que compara el
+    // código y ejecuta. Rechazar sí se permite: desactivar es seguro.
+    if (action === 'approve' && fila.whatsappCodeHash) {
+      return { status: 'code_required', approval: fila } as ClaimResult
     }
 
     const actualizada = await tx.mcpApprovalRequest.update({

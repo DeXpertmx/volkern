@@ -136,6 +136,22 @@ describe('POST /api/mcp/approvals/[id]', () => {
     expect(callTool).not.toHaveBeenCalled()
   })
 
+  it('no ejecuta una aprobación ask_code sin el código verificado: 409 code_required', async () => {
+    montarFila({
+      toolName: 'volkern_send_whatsapp',
+      whatsappCodeHash: '$2a$10$hashdelcodigo',
+      whatsappVerificationToken: 'a'.repeat(48),
+    })
+
+    const res = await POST(peticion('approve'), { params: { id: 'ap-1' } } as never)
+    const body = await res.json()
+
+    expect(res.status).toBe(409)
+    expect(body.status).toBe('code_required')
+    expect(body.verificationUrl).toContain('/mcp/autorizar/')
+    expect(callTool).not.toHaveBeenCalled()
+  })
+
   it('quien solicitó la acción no puede aprobarla', async () => {
     montarFila()
     auth.user = { id: 'user-solicita', role: { nombre: 'Admin' } }

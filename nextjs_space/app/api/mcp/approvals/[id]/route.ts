@@ -21,6 +21,7 @@ import { NextResponse } from 'next/server';
 import { withTenantAuth } from '@/lib/api-key-auth';
 import { handleCallTool } from '@/lib/mcp/mcp-handler';
 import { roleKind } from '@/lib/mcp/tool-policy';
+import { resolvePublicBaseUrl } from '@/lib/seo/public-base-url';
 import { ejecutarHerramientaAprobadaDelChat } from '@/lib/agents/tool-registry';
 import {
   borrarProcesoPendiente,
@@ -75,6 +76,28 @@ export const POST = withTenantAuth(async (request, auth, { params }) => {
       return NextResponse.json(
         { error: 'Quien solicita la acción no puede aprobarla: hace falta otra persona.' },
         { status: 403 }
+      );
+    }
+
+    if (claim.status === 'code_required') {
+      // `ask_code`: la acción exige el código de 6 dígitos enviado al WhatsApp
+      // del negocio. Aprobar desde la bandeja la ejecutaría sin ese segundo
+      // factor, así que solo se ofrece el enlace de verificación.
+      const token = claim.approval.whatsappVerificationToken;
+      return NextResponse.json(
+        {
+          error:
+            'Esta solicitud exige el código de 6 dígitos enviado al WhatsApp del negocio. Valídalo en el enlace de verificación para ejecutarla.',
+          status: 'code_required',
+          approvalId: claim.approval.id,
+          ...(token
+            ? {
+                verificationToken: token,
+                verificationUrl: `${resolvePublicBaseUrl(request)}/mcp/autorizar/${token}`,
+              }
+            : {}),
+        },
+        { status: 409 }
       );
     }
 
