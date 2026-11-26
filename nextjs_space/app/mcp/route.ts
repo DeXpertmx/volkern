@@ -55,9 +55,12 @@ function checkRateLimit(identifier: string): boolean {
   return true
 }
 
-/** JSON-RPC error con status HTTP */
-function jsonRpcError(id: unknown, code: number, message: string, status: number) {
-  return NextResponse.json({ jsonrpc: '2.0', id, error: { code, message } }, { status })
+/** JSON-RPC error con status HTTP y datos opcionales */
+function jsonRpcError(id: unknown, code: number, message: string, status: number, data?: unknown) {
+  return NextResponse.json(
+    { jsonrpc: '2.0', id, error: data === undefined ? { code, message } : { code, message, data } },
+    { status }
+  )
 }
 
 export async function POST(req: Request) {
@@ -189,29 +192,32 @@ export async function POST(req: Request) {
       via: '/mcp',
     })
 
-    if (gate.kind === 'deny') {
-      return jsonRpcError(id, -32003, gate.reason, 403)
-    }
+    // El gate decide y esta ruta obedece: SOLO `allow` ejecuta. `deny` rechaza
+    // y `ask`/`ask_code` dejan la solicitud pendiente (409). Se escribe como
+    // «no es allow» a propósito: una decisión futura del gate falla cerrada en
+    // vez de caer al camino de ejecución, que es el bypass que tuvo `ask_code`.
+    if (gate.kind !== 'allow') {
+      if (gate.kind === 'deny') {
+        return jsonRpcError(id, -32003, gate.reason, 403)
+      }
 
-    if (gate.kind === 'ask') {
       // 409: la acción es válida pero no se ha ejecutado; hay una solicitud
-      // pendiente. Reintentar sin aprobarla devuelve la misma solicitud.
-      return NextResponse.json(
-        {
-          jsonrpc: '2.0',
-          id,
-          error: {
-            code: -32002,
-            message: gate.reason,
-            data: {
-              status: 'pending',
-              approvalId: gate.approvalId,
-              expiresAt: gate.expiresAt.toISOString(),
-            },
-          },
-        },
-        { status: 409 }
-      )
+      // pendiente. Reintentar sin resolverla devuelve la misma solicitud.
+      // `ask_code` (envíos externos, p. ej. `volkern_send_whatsapp`) exige
+      // además el código enviado al WhatsApp del negocio: el cliente necesita
+      // estas credenciales para confirmar y la herramienta no se ejecuta aquí.
+      const data: Record<string, unknown> = {
+        status: 'pending',
+        approvalId: gate.approvalId,
+        expiresAt: gate.expiresAt.toISOString(),
+      }
+      if (gate.kind === 'ask_code') {
+        data.verificationToken = gate.verificationToken
+        data.verificationUrl = gate.verificationUrl
+        data.codeExpiresAt = gate.codeExpiresAt.toISOString()
+        data.phoneNumberMasked = gate.phoneNumberMasked
+      }
+      return jsonRpcError(id, -32002, gate.reason, 409, data)
     }
 
     // Mapear al skill equivalente y ejecutar de verdad vía Skills.
