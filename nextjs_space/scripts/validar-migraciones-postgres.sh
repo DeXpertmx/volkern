@@ -114,6 +114,8 @@ VALUES
   ('ap-pend-2','tenant-a','volkern_delete_contact','{"id":"c-2"}','h-pend',NULL,'user-ana','/mcp','pending', now()+interval '1 day', now()-interval '1 hour'),
   -- misma huella pero ya ejecutada: no se toca
   ('ap-pend-ok','tenant-a','volkern_delete_contact','{"id":"c-4"}','h-ejecutada',NULL,'user-ana','/mcp','executed', now()+interval '1 day', now()-interval '30 minutes'),
+  -- misma huella de OTRO usuario: no es un duplicado
+  ('ap-pend-otro-usuario','tenant-a','volkern_delete_contact','{"id":"c-2"}','h-pend',NULL,'user-luis','/mcp','pending', now()+interval '1 day', now()-interval '1 hour'),
   -- misma huella en otra empresa: no se toca
   ('ap-otra-empresa','tenant-b','volkern_delete_contact','{"id":"c-2"}','h-pend',NULL,'user-ana','/mcp','pending', now()+interval '1 day', now()-interval '1 hour');
 SQL
@@ -140,8 +142,10 @@ comprobar "los duplicados anteriores quedan sin operationId" "2" \
   "SELECT count(*) FROM \"mcp_approval_requests\" WHERE id IN ('ap-dup-1','ap-dup-2') AND \"operationId\" IS NULL"
 comprobar "el mismo id de otro usuario no se toca" "op-1" \
   "SELECT \"operationId\" FROM \"mcp_approval_requests\" WHERE id = 'ap-otro-usuario'"
-comprobar "solo una pendiente idéntica sigue pendiente" "ap-pend-2" \
-  "SELECT id FROM \"mcp_approval_requests\" WHERE \"tenantId\" = 'tenant-a' AND \"toolName\" = 'volkern_delete_contact' AND \"argumentsHash\" = 'h-pend' AND status = 'pending' AND \"operationId\" IS NULL"
+comprobar "solo una pendiente idéntica por usuario" "ap-pend-2" \
+  "SELECT id FROM \"mcp_approval_requests\" WHERE \"tenantId\" = 'tenant-a' AND \"requestedById\" = 'user-ana' AND \"toolName\" = 'volkern_delete_contact' AND \"argumentsHash\" = 'h-pend' AND status = 'pending' AND \"operationId\" IS NULL"
+comprobar "la misma huella de otro usuario sigue pendiente" "pending" \
+  "SELECT status FROM \"mcp_approval_requests\" WHERE id = 'ap-pend-otro-usuario'"
 comprobar "la pendiente duplicada anterior queda caducada" "expired" \
   "SELECT status FROM \"mcp_approval_requests\" WHERE id = 'ap-pend-1'"
 comprobar "una fila ya ejecutada con la misma huella no se toca" "executed" \
@@ -165,6 +169,8 @@ debe_fallar "el mismo operationId para el mismo usuario" \
   "INSERT INTO \"mcp_approval_requests\" (id,\"tenantId\",\"toolName\",arguments,\"argumentsHash\",\"operationId\",\"requestedById\",via,status,\"expiresAt\") VALUES ('ap-op-repetido','tenant-a','volkern_delete_contact','{\"id\":\"c-3\"}','h-nueva','op-1','user-ana','/mcp','pending', now()+interval '1 day')"
 debe_pasar "el mismo operationId para otro usuario" \
   "INSERT INTO \"mcp_approval_requests\" (id,\"tenantId\",\"toolName\",arguments,\"argumentsHash\",\"operationId\",\"requestedById\",via,status,\"expiresAt\") VALUES ('ap-op-otro','tenant-a','volkern_delete_contact','{\"id\":\"c-3\"}','h-nueva','op-1','user-marta','/mcp','pending', now()+interval '1 day')"
+debe_pasar "la misma huella para otro usuario" \
+  "INSERT INTO \"mcp_approval_requests\" (id,\"tenantId\",\"toolName\",arguments,\"argumentsHash\",\"operationId\",\"requestedById\",via,status,\"expiresAt\") VALUES ('ap-pend-marta','tenant-a','volkern_delete_contact','{\"id\":\"c-2\"}','h-pend',NULL,'user-marta','/mcp','pending', now()+interval '1 day')"
 debe_pasar "reutilizar la huella cuando la anterior ya no está pendiente" \
   "INSERT INTO \"mcp_approval_requests\" (id,\"tenantId\",\"toolName\",arguments,\"argumentsHash\",\"operationId\",\"requestedById\",via,status,\"expiresAt\") VALUES ('ap-nueva-2','tenant-a','volkern_delete_contact','{\"id\":\"c-4\"}','h-ejecutada',NULL,'user-ana','/mcp','pending', now()+interval '1 day')"
 
