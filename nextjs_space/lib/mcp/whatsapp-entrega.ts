@@ -83,6 +83,37 @@ function conEntrega(
 }
 
 /**
+ * Cierra a mano el desenlace de un envío que el proveedor no supo confirmar.
+ * No aplica la regla de avance: es una decisión administrativa explícita, aunque
+ * solo se permite elegir entre entregado y no entregado.
+ */
+export async function resolverEntregaManual(params: {
+  approvalId: string
+  tenantId: string
+  estado: 'entregado' | 'fallido'
+}): Promise<boolean> {
+  const solicitud = await prisma.mcpApprovalRequest.findFirst({
+    where: { id: params.approvalId, tenantId: params.tenantId },
+    select: { id: true, status: true, result: true },
+  })
+  if (!solicitud) return false
+
+  const cuando = new Date()
+  await prisma.mcpApprovalRequest.update({
+    where: { id: solicitud.id },
+    data: {
+      entregaEstado: params.estado,
+      entregaActualizadaEn: cuando,
+      result: conEntrega(solicitud.result, params.estado, cuando) as never,
+      ...(params.estado === 'entregado' && solicitud.status === 'failed'
+        ? { status: 'executed', executedAt: cuando }
+        : {}),
+    },
+  })
+  return true
+}
+
+/**
  * Guarda en la solicitud el ACK del mensaje. Devuelve si cambió algo, para que
  * el webhook no repita trabajo con eventos duplicados.
  */

@@ -18,10 +18,15 @@ const h = vi.hoisted(() => ({
 vi.mock('@/lib/db', () => ({
   prisma: {
     mcpApprovalRequest: {
-      findFirst: async ({ where }: any) =>
-        h.solicitud && h.solicitud.whatsappMessageId === where.whatsappMessageId
-          ? { ...h.solicitud }
-          : null,
+      findFirst: async ({ where }: any) => {
+        if (!h.solicitud) return null
+        if (where.id) {
+          return h.solicitud.id === where.id && h.solicitud.tenantId === where.tenantId
+            ? { ...h.solicitud }
+            : null
+        }
+        return h.solicitud.whatsappMessageId === where.whatsappMessageId ? { ...h.solicitud } : null
+      },
       update: async ({ where, data }: any) => {
         h.actualizaciones.push({ where, data })
         return { ...h.solicitud, ...data }
@@ -34,6 +39,7 @@ import {
   estadoDeEntrega,
   idDeMensajeEnResultado,
   registrarEntregaDeWhatsapp,
+  resolverEntregaManual,
 } from '@/lib/mcp/whatsapp-entrega'
 
 beforeEach(() => {
@@ -44,6 +50,7 @@ beforeEach(() => {
     entregaEstado: null,
     result: { success: true, resultado: { messageId: 'wamid-1' } },
     whatsappMessageId: 'wamid-1',
+    tenantId: 'tenant-a',
   }
 })
 
@@ -132,6 +139,43 @@ describe('registrarEntregaDeWhatsapp', () => {
     const res = await registrarEntregaDeWhatsapp({ messageId: 'wamid-1', estado: 'enviado' })
 
     expect(res.actualizada).toBe(false)
+    expect(h.actualizaciones).toHaveLength(0)
+  })
+})
+
+describe('resolverEntregaManual', () => {
+  it('confirma a mano un envío sin ACK y cierra la solicitud fallida', async () => {
+    const ok = await resolverEntregaManual({
+      approvalId: 'ap-1',
+      tenantId: 'tenant-a',
+      estado: 'entregado',
+    })
+
+    expect(ok).toBe(true)
+    const { data } = h.actualizaciones[0]
+    expect(data.entregaEstado).toBe('entregado')
+    expect(data.status).toBe('executed')
+    expect(data.result.entrega.estado).toBe('entregado')
+  })
+
+  it('marca no entregado sin reabrir una solicitud ya ejecutada', async () => {
+    h.solicitud.status = 'executed'
+
+    await resolverEntregaManual({ approvalId: 'ap-1', tenantId: 'tenant-a', estado: 'fallido' })
+
+    const { data } = h.actualizaciones[0]
+    expect(data.entregaEstado).toBe('fallido')
+    expect(data.status).toBeUndefined()
+  })
+
+  it('no toca una solicitud de otra empresa', async () => {
+    const ok = await resolverEntregaManual({
+      approvalId: 'ap-1',
+      tenantId: 'tenant-b',
+      estado: 'entregado',
+    })
+
+    expect(ok).toBe(false)
     expect(h.actualizaciones).toHaveLength(0)
   })
 })
