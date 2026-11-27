@@ -162,6 +162,19 @@ echo "   ✓ Pendientes identificadas contra la base real: $N_PENDIENTES"
 if [ "$N_PENDIENTES" -gt 0 ]; then
   echo "   · $(echo "$PENDIENTES" | tr '\n' ' ')"
 
+  #   La migración 160000 borra whatsapp_send_receipts. Un recibo `en_curso`
+  #   es un envío que pudo salir y no consta terminado: se exporta y se
+  #   aborta. La comprobación es de solo lectura.
+  if echo "$PENDIENTES" | grep -qx '20261127160000_mcp_aprobacion_operation_id_unico'; then
+    echo ""
+    echo "→ [seguridad previa] Recibos de WhatsApp en curso..."
+    if ! PG_CID="$PG_CID" bash "$DIR_SCRIPT/verificar-recibos-whatsapp.sh"; then
+      echo "✗ La comprobación de recibos falló: la base NO se toca." >&2
+      rm -rf "$PENDIENTES_DIR"
+      exit 1
+    fi
+  fi
+
   #   Extraer el SQL de cada pendiente al host y revisarlo ANTES de
   #   aplicar nada (aquí la base está intacta aún).
   for m in $PENDIENTES; do
