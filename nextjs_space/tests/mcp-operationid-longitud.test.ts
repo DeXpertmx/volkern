@@ -51,6 +51,7 @@ const authenticateMock = vi.mocked(authenticateRequest)
 const approvalCreate = vi.mocked(prisma.mcpApprovalRequest.create)
 
 const OPERATION_ID_LARGO = 'x'.repeat(201)
+const OPERATION_ID_LIMITE = 'x'.repeat(200)
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -85,6 +86,25 @@ describe('POST /api/mcp — formato simplificado', () => {
     expect(body.error).toContain('201')
     expect(approvalCreate).not.toHaveBeenCalled()
   })
+
+  it('acepta exactamente 200 caracteres y los guarda sin recortar', async () => {
+    const { POST } = await import('@/app/api/mcp/route')
+    const res = await POST(
+      new Request('https://volkern.app/api/mcp', {
+        method: 'POST',
+        body: JSON.stringify({
+          tool: 'volkern_delete_contact',
+          arguments: { id: 'c-1', operationId: OPERATION_ID_LIMITE },
+        }),
+        headers: { Authorization: 'Bearer vk_test' },
+      }) as never
+    )
+
+    // El borde se acepta: la llamada sigue a la aprobación, no se deniega.
+    expect(res.status).toBe(409)
+    const creada = approvalCreate.mock.calls[0][0] as { data: { operationId: string } }
+    expect(creada.data.operationId).toBe(OPERATION_ID_LIMITE)
+  })
 })
 
 describe('camino del agente', () => {
@@ -101,5 +121,20 @@ describe('camino del agente', () => {
     ).rejects.toThrow(/200 caracteres.*201/)
 
     expect(approvalCreate).not.toHaveBeenCalled()
+  })
+
+  it('acepta exactamente 200 caracteres y los guarda sin recortar', async () => {
+    const res = await requestAgentToolApproval({
+      tenantId: CRED_TENANT,
+      userId: CRED_USER,
+      roleName: 'Admin',
+      toolName: 'volkern_delete_contact',
+      args: { id: 'c-1', operationId: OPERATION_ID_LIMITE },
+      risk: 'destructive',
+    })
+
+    expect(res.approvalId).toBe('ap-test')
+    const creada = approvalCreate.mock.calls[0][0] as { data: { operationId: string } }
+    expect(creada.data.operationId).toBe(OPERATION_ID_LIMITE)
   })
 })
