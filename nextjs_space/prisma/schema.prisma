@@ -9609,9 +9609,10 @@ model McpApprovalRequest {
 
   @@index([tenantId, status])
   @@index([tenantId, createdAt])
-  // Identidad de la operación: la propia solicitud hace de recibo. Un mismo
-  // operationId no puede generar dos solicitudes, luego no puede enviar dos veces.
-  @@unique([tenantId, operationId])
+  // Identidad de la operación: la propia solicitud hace de recibo. El id es de
+  // quien lo manda: dos usuarios de la misma empresa pueden usar el mismo valor
+  // sin pisarse ni leer el desenlace del otro.
+  @@unique([tenantId, requestedById, operationId])
   // Además, la migración crea un índice parcial único sobre
   // (tenantId, toolName, argumentsHash) WHERE status = 'pending' AND
   // operationId IS NULL: sin operationId la identidad es el contenido, y dos

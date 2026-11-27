@@ -25,7 +25,13 @@ vi.mock('@/lib/db', () => ({
 
 import { prisma } from '@/lib/db'
 import { decideToolCall, TOOL_POLICIES, listToolPolicies } from '@/lib/mcp/tool-policy'
-import { enforceToolGate, claimApproval, hashToolArguments, operationIdDeArgs } from '@/lib/mcp/tool-gate'
+import {
+  enforceToolGate,
+  claimApproval,
+  errorDeOperationId,
+  hashToolArguments,
+  operationIdDeArgs,
+} from '@/lib/mcp/tool-gate'
 import { VOLKERN_TOOLS } from '../mcp-server/src/tools-catalog'
 
 const capFindMany = vi.mocked(prisma.mcpToolCapability.findMany)
@@ -46,6 +52,28 @@ describe('Identificador explícito de operación', () => {
     expect(operationIdDeArgs({ operationId: '   ' })).toBeNull()
     expect(operationIdDeArgs({ operationId: 42 })).toBeNull()
     expect(operationIdDeArgs({})).toBeNull()
+  })
+
+  it('acepta hasta 200 caracteres y rechaza más sin truncar', async () => {
+    expect(operationIdDeArgs({ operationId: 'x'.repeat(200) })).toHaveLength(200)
+    expect(errorDeOperationId({ operationId: 'x'.repeat(200) })).toBeNull()
+    expect(errorDeOperationId({ operationId: 'x'.repeat(201) })).toContain('200')
+    expect(errorDeOperationId({ operationId: 'x'.repeat(5000) })).toContain('5000')
+
+    approvalCreate.mockResolvedValue({ id: 'ap-1' } as never)
+    const out = await enforceToolGate({
+      tenantId: 'tenant-a',
+      userId: 'user-1',
+      roleName: 'Admin',
+      toolName: 'volkern_delete_contact',
+      args: { id: 'c-1', operationId: 'x'.repeat(201) },
+      via: '/mcp',
+    })
+
+    expect(out.kind).toBe('deny')
+    if (out.kind !== 'deny') throw new Error('esperaba deny')
+    expect(out.reason).toContain('200')
+    expect(approvalCreate).not.toHaveBeenCalled()
   })
 
   it('guarda el operationId recortado, o null si no viene', async () => {
@@ -558,6 +586,22 @@ describe('Idempotencia por operationId', () => {
     expect(out.approvalId).toBe('ap-reservada')
   })
 
+  it('dos usuarios pueden usar el mismo operationId sin pisarse', async () => {
+    const llamarComo = (userId: string) =>
+      enforceToolGate({
+        tenantId: 'tenant-a',
+        userId,
+        roleName: 'Admin',
+        toolName: 'volkern_delete_contact',
+        args: { id: 'c-1', operationId: 'op-1' },
+        via: '/mcp',
+      })
+
+    const [ana, luis] = await Promise.all([llamarComo('user-ana'), llamarComo('user-luis')])
+
+    expect(filas).toHaveLength(2)
+    expect((ana as any).approvalId).not.toBe((luis as any).approvalId)
+  })
 
   it('el mismo operationId no crea otra solicitud si la primera ya se ejecutó', async () => {
     filas.push(filaPrevia('executed'))

@@ -72,16 +72,30 @@ export type GateOutcome =
       phoneNumberMasked: string
     }
 
+/** Longitud máxima aceptada para un `operationId`. */
+export const LONGITUD_MAX_OPERATION_ID = 200
+
 /**
  * Identificador explícito de operación que manda el cliente MCP. Se guarda en
  * la solicitud y es la identidad de idempotencia del envío: el mismo valor no
- * reenvía, uno nuevo permite repetir el mismo mensaje.
+ * reenvía, uno nuevo permite repetir el mismo mensaje. No se trunca: un id
+ * recortado en silencio sería otra identidad y reenviaría.
  */
 export function operationIdDeArgs(args: Record<string, unknown>): string | null {
   const valor = args.operationId
   if (typeof valor !== 'string') return null
   const limpio = valor.trim()
-  return limpio ? limpio.slice(0, 200) : null
+  return limpio || null
+}
+
+/** Motivo por el que el `operationId` no es utilizable, o `null` si lo es. */
+export function errorDeOperationId(args: Record<string, unknown>): string | null {
+  const valor = args.operationId
+  if (typeof valor !== 'string') return null
+  const largo = valor.trim().length
+  return largo > LONGITUD_MAX_OPERATION_ID
+    ? `operationId no puede superar ${LONGITUD_MAX_OPERATION_ID} caracteres (recibidos ${largo}).`
+    : null
 }
 
 /** Columnas suficientes para reutilizar o reproducir una solicitud existente. */
@@ -181,10 +195,10 @@ async function auditar(params: {
  *
  * Reutilizar importa: un agente que reintenta la misma operación no debe
  * generar varias solicitudes en la bandeja del responsable. La identidad es el
- * `operationId` y el índice único `(empresa, operationId)` la impone; aquí se
- * traduce en «devuelve la que ya existe». Sin `operationId` la identidad es el
- * contenido: el índice parcial de la migración reserva una sola solicitud
- * pendiente por herramienta y argumentos.
+ * `operationId` de ese usuario y el índice único `(empresa, usuario,
+ * operationId)` la impone; aquí se traduce en «devuelve la que ya existe».
+ * Sin `operationId` la identidad es el contenido: el índice parcial de la
+ * migración reserva una sola solicitud pendiente por herramienta y argumentos.
  */
 export async function enforceToolGate(input: GateInput): Promise<GateOutcome> {
   const { tenantId, userId, roleName, toolName, args, via } = input
@@ -233,14 +247,20 @@ export async function enforceToolGate(input: GateInput): Promise<GateOutcome> {
     return { kind: 'allow', decision: 'allow', reason: resuelta.reason, risk: resuelta.risk }
   }
 
+  // Un id desmedido no se recorta: sería otra identidad y reenviaría.
+  const problemaOperationId = errorDeOperationId(args)
+  if (problemaOperationId) {
+    return { kind: 'deny', decision: 'deny', reason: problemaOperationId, risk: resuelta.risk }
+  }
+
   const operationId = operationIdDeArgs(args)
 
-  // Misma operación, ya resuelta: se reproduce el desenlace sin crear nada ni
-  // mandar un código nuevo. Si sigue pendiente, se cae al flujo normal, que
-  // reutiliza el código vigente en vez de emitir otro.
+  // Misma operación del mismo usuario, ya resuelta: se reproduce el desenlace
+  // sin crear nada ni mandar un código nuevo. Si sigue pendiente, se cae al
+  // flujo normal, que reutiliza el código vigente en vez de emitir otro.
   if (operationId) {
     const previa = (await prisma.mcpApprovalRequest.findFirst({
-      where: { tenantId, operationId },
+      where: { tenantId, requestedById: userId, operationId },
       select: CAMPOS_SOLICITUD,
     })) as SolicitudPrevia | null
     if (previa && previa.status !== 'pending') return replayDeSolicitud(previa, resuelta.risk)
@@ -314,9 +334,10 @@ export async function enforceToolGate(input: GateInput): Promise<GateOutcome> {
  * Crea (o reutiliza) una `McpApprovalRequest` pendiente.
  *
  * Comparte la lógica de auditoría de `enforceToolGate`. Hay dos cerrojos en la
- * base: `(empresa, operationId)` para una operación con identidad y un índice
- * parcial único por herramienta y argumentos para las solicitudes pendientes
- * sin `operationId`, que evita que dos envíos idénticos se reserven a la vez.
+ * base: `(empresa, usuario, operationId)` para una operación con identidad y un
+ * índice parcial único por herramienta y argumentos para las solicitudes
+ * pendientes sin `operationId`, que evita que dos envíos idénticos se reserven
+ * a la vez.
  */
 async function crearOReutilizarSolicitud(params: {
   tenantId: string
@@ -383,7 +404,7 @@ async function crearOReutilizarSolicitud(params: {
     if (error?.code !== 'P2002') throw error
     const existente = (await prisma.mcpApprovalRequest.findFirst({
       where: operationId
-        ? { tenantId, operationId }
+        ? { tenantId, requestedById: userId, operationId }
         : { tenantId, toolName, argumentsHash, status: 'pending', operationId: null },
       select: CAMPOS_SOLICITUD,
     })) as SolicitudPrevia | null
@@ -447,6 +468,9 @@ export async function requestAgentToolApproval(params: {
     risk === 'external'
       ? 'La acción envía algo fuera del sistema y no se puede deshacer.'
       : 'La acción borra o cancela datos de forma irreversible.'
+
+  const problemaOperationId = errorDeOperationId(args)
+  if (problemaOperationId) throw new Error(problemaOperationId)
 
   return crearOReutilizarSolicitud({
     tenantId,
