@@ -24,7 +24,9 @@ const TENANT = 'tenant-pg-gate'
 const USER = 'user-pg-gate'
 
 const { prisma } = await import('@/lib/db')
-const { claimApproval, completeApproval, enforceToolGate } = await import('@/lib/mcp/tool-gate')
+const { claimApproval, completeApproval, enforceToolGate, hashToolArguments } = await import(
+  '@/lib/mcp/tool-gate'
+)
 
 describe.skipIf(!HABILITADO)('Gate MCP contra PostgreSQL real', () => {
   beforeEach(async () => {
@@ -300,6 +302,48 @@ describe.skipIf(!HABILITADO)('Gate MCP contra PostgreSQL real', () => {
       action: 'approve',
     })
 
+    expect(res.status).toBe('approved')
+  })
+
+  it('otro operationId ejecuta la misma acción después de completar la anterior', async () => {
+    const args = { id: 'c-1' }
+
+    // La primera operación ya se ejecutó: su operationId está cerrado.
+    await prisma.mcpApprovalRequest.create({
+      data: {
+        tenantId: TENANT,
+        toolName: 'volkern_delete_contact',
+        arguments: { ...args, operationId: 'op-1' },
+        argumentsHash: hashToolArguments({ ...args, operationId: 'op-1' }),
+        operationId: 'op-1',
+        requestedById: USER,
+        via: '/mcp',
+        status: 'executed',
+        executedAt: new Date(),
+        expiresAt: new Date(Date.now() + 60_000),
+      },
+    })
+
+    const nueva = await enforceToolGate({
+      tenantId: TENANT,
+      userId: USER,
+      roleName: 'Admin',
+      toolName: 'volkern_delete_contact',
+      args: { ...args, operationId: 'op-2' },
+      via: '/mcp',
+    })
+
+    if (nueva.kind !== 'ask') throw new Error(`esperaba ask, recibí ${nueva.kind}`)
+
+    const res = await claimApproval({
+      approvalId: nueva.approvalId,
+      tenantId: TENANT,
+      resolverId: 'user-aprueba',
+      action: 'approve',
+    })
+
+    // La huella incluye el operationId: no es la misma operación y no debe
+    // bloquearse como duplicada.
     expect(res.status).toBe('approved')
   })
 
