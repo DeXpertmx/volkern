@@ -507,6 +507,7 @@ describe('Idempotencia por operationId', () => {
               f.status === 'pending' &&
               f.operationId === null &&
               f.tenantId === data.tenantId &&
+              f.requestedById === data.requestedById &&
               f.toolName === data.toolName &&
               f.argumentsHash === data.argumentsHash
           )
@@ -557,6 +558,23 @@ describe('Idempotencia por operationId', () => {
     expect(primera.kind).toBe('ask')
     expect((primera as any).approvalId).toBe('ap-1')
     expect((segunda as any).approvalId).toBe('ap-1')
+  })
+
+  it('el mismo mensaje de otro usuario no comparte la reserva', async () => {
+    const llamarComo = (userId: string) =>
+      enforceToolGate({
+        tenantId: 'tenant-a',
+        userId,
+        roleName: 'Admin',
+        toolName: 'volkern_delete_contact',
+        args: { id: 'c-1' },
+        via: '/mcp',
+      })
+
+    const [ana, luis] = await Promise.all([llamarComo('user-ana'), llamarComo('user-luis')])
+
+    expect(filas).toHaveLength(2)
+    expect((ana as any).approvalId).not.toBe((luis as any).approvalId)
   })
 
   it('si la reserva por contenido la ganó otra petición, la segunda recibe la misma', async () => {

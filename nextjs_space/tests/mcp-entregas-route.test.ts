@@ -90,7 +90,7 @@ describe('GET /api/mcp/approvals/entregas', () => {
 
     expect(res.status).toBe(200)
     expect(body.total).toBe(1)
-    expect(body.envios[0]).toMatchObject({ id: 'ap-1', resoluble: false, leadId: 'lead-1' })
+    expect(body.envios[0]).toMatchObject({ id: 'ap-1', leadId: 'lead-1', whatsappMessageId: null })
     expect(body.envios[0].mensaje.length).toBeLessThanOrEqual(161)
   })
 

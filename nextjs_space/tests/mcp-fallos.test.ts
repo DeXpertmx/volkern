@@ -3,7 +3,7 @@
  * Seguridad y concurrencia del gate ante fallos.
  *
  * Lo que se protege aquí es lo que un reintento o una caída vuelven peligroso:
- *   - dos usuarios con el mismo mensaje no reservan dos envíos;
+ *   - cada usuario reserva su propio envío: nunca hereda el de otro;
  *   - un fallo de PostgreSQL deja el gate cerrado, sin ejecutar ni crear nada;
  *   - cerrar o confirmar una solicitud no se cae por un error de escritura;
  *   - un ACK que no se puede guardar se rechaza (el webhook lo contiene) en vez
@@ -37,6 +37,7 @@ vi.mock('@/lib/db', () => ({
                 f.status === 'pending' &&
                 f.operationId === null &&
                 f.tenantId === data.tenantId &&
+                f.requestedById === data.requestedById &&
                 f.toolName === data.toolName &&
                 f.argumentsHash === data.argumentsHash
             )
@@ -90,16 +91,15 @@ beforeEach(() => {
 })
 
 describe('dos usuarios simultáneos', () => {
-  it('con el mismo mensaje y sin operationId comparten una sola solicitud', async () => {
+  it('con el mismo mensaje y sin operationId cada uno reserva la suya', async () => {
     const [ana, luis] = await Promise.all([
       llamar('user-ana', { id: 'c-1' }),
       llamar('user-luis', { id: 'c-1' }),
     ])
 
-    expect(h.filas).toHaveLength(1)
+    expect(h.filas).toHaveLength(2)
     expect(ana.kind).toBe('ask')
-    expect((ana as any).approvalId).toBe('ap-1')
-    expect((luis as any).approvalId).toBe('ap-1')
+    expect((ana as any).approvalId).not.toBe((luis as any).approvalId)
   })
 
   it('con operationId distintos son dos operaciones separadas', async () => {
