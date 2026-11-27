@@ -137,7 +137,7 @@ comprobar "lectura permitida a la clave de A → 200" 200 \
   "$(estado POST /mcp "$KEY_A" '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"volkern_list_contacts","arguments":{"limit":1}}}')"
 if [ -n "$KEY_A_SALES" ]; then
   comprobar "comercial no puede borrar un contacto → 403" 403 \
-    "$(estado POST /mcp "$KEY_A_SALES" '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"volkern_delete_contact","arguments":{"id":"no-existe"}}}')"
+    "$(estado POST /mcp "$KEY_A_SALES" '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"volkern_delete_contact","arguments":{"contactId":"no-existe"}}}')"
   comprobar "comercial no ve la bandeja de aprobaciones → 403" 403 \
     "$(estado GET /api/mcp/approvals "$KEY_A_SALES")"
 else
@@ -171,21 +171,21 @@ comprobar "ningún envío aparece en las dos bandejas" 0 "$comunes"
 if [ "$CON_EFFECTOS" = "1" ]; then
   echo "▶ operationId y reserva por contenido (crea solicitudes)"
 
-  a1=$(estado POST /mcp "$KEY_A" '{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"volkern_delete_contact","arguments":{"id":"fase4-inexistente","operationId":"fase4-op-1"}}}')
+  a1=$(estado POST /mcp "$KEY_A" '{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"volkern_delete_contact","arguments":{"contactId":"fase4-inexistente","operationId":"fase4-op-1"}}}')
   ap_a1=$(campo error.data.approvalId)
   comprobar "A crea una solicitud pendiente → 409" 409 "$a1"
   comprobar "A recibe approvalId" si "$([ -n "$ap_a1" ] && echo si || echo no)"
 
-  estado POST /mcp "$KEY_A" '{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"volkern_delete_contact","arguments":{"id":"fase4-inexistente","operationId":"fase4-op-1"}}}' >/dev/null
+  estado POST /mcp "$KEY_A" '{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"volkern_delete_contact","arguments":{"contactId":"fase4-inexistente","operationId":"fase4-op-1"}}}' >/dev/null
   comprobar "el mismo operationId reutiliza la solicitud" "$ap_a1" "$(campo error.data.approvalId)"
 
-  estado POST /mcp "$KEY_B" '{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"volkern_delete_contact","arguments":{"id":"fase4-inexistente","operationId":"fase4-op-1"}}}' >/dev/null
+  estado POST /mcp "$KEY_B" '{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"volkern_delete_contact","arguments":{"contactId":"fase4-inexistente","operationId":"fase4-op-1"}}}' >/dev/null
   ap_b=$(campo error.data.approvalId)
   comprobar "B usa el mismo operationId sin heredar el de A" si \
     "$([ -n "$ap_b" ] && [ "$ap_b" != "$ap_a1" ] && echo si || echo no)"
 
   LARGO=$(printf 'x%.0s' $(seq 1 201))
-  largo_body="{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"tools/call\",\"params\":{\"name\":\"volkern_delete_contact\",\"arguments\":{\"id\":\"fase4-otro\",\"operationId\":\"$LARGO\"}}}"
+  largo_body="{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"tools/call\",\"params\":{\"name\":\"volkern_delete_contact\",\"arguments\":{\"contactId\":\"fase4-otro\",\"operationId\":\"$LARGO\"}}}"
   comprobar "operationId de 201 caracteres → 403" 403 "$(estado POST /mcp "$KEY_B" "$largo_body")"
   comprobar "el motivo menciona el límite" si "$(grep -q '200' "$CUERPO" && echo si || echo no)"
 
