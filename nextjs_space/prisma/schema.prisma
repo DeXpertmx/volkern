@@ -9614,9 +9614,9 @@ model McpApprovalRequest {
   // sin pisarse ni leer el desenlace del otro.
   @@unique([tenantId, requestedById, operationId])
   // Además, la migración crea un índice parcial único sobre
-  // (tenantId, toolName, argumentsHash) WHERE status = 'pending' AND
-  // operationId IS NULL: sin operationId la identidad es el contenido, y dos
-  // solicitudes idénticas comparten una sola reserva. Prisma no sabe expresar
+  // (tenantId, requestedById, toolName, argumentsHash) WHERE status = 'pending'
+  // AND operationId IS NULL: sin operationId la identidad es el contenido de
+  // quien pide, y sus reintentos comparten una sola reserva. Prisma no sabe expresar
   // índices parciales, así que vive solo en el SQL de la migración.
   @@index([argumentsHash])
   @@index([whatsappVerificationToken])

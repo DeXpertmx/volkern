@@ -335,9 +335,9 @@ export async function enforceToolGate(input: GateInput): Promise<GateOutcome> {
  *
  * Comparte la lógica de auditoría de `enforceToolGate`. Hay dos cerrojos en la
  * base: `(empresa, usuario, operationId)` para una operación con identidad y un
- * índice parcial único por herramienta y argumentos para las solicitudes
- * pendientes sin `operationId`, que evita que dos envíos idénticos se reserven
- * a la vez.
+ * índice parcial único por usuario, herramienta y argumentos para las
+ * solicitudes pendientes sin `operationId`, que evita que el mismo envío se
+ * reserve dos veces.
  */
 async function crearOReutilizarSolicitud(params: {
   tenantId: string
@@ -358,13 +358,20 @@ async function crearOReutilizarSolicitud(params: {
   const argumentsHash = hashToolArguments(args)
   const expiresAt = new Date(Date.now() + APROBACION_VALIDEZ_HORAS * 60 * 60 * 1000)
 
-  // Sin `operationId` la identidad es el contenido: una solicitud pendiente
-  // idéntica es la reserva y se devuelve en vez de crear otra. El índice
-  // parcial de la migración convierte la carrera entre dos llamadas en un
-  // conflicto que el `catch` resuelve igual.
+  // Sin `operationId` la identidad es el contenido de ESE usuario: una
+  // solicitud pendiente suya con los mismos argumentos es la reserva y se
+  // devuelve en vez de crear otra. Nunca se reutiliza la de otra persona, que
+  // podría acabar aprobando un envío ajeno.
   if (!operationId) {
     const pendiente = (await prisma.mcpApprovalRequest.findFirst({
-      where: { tenantId, toolName, argumentsHash, status: 'pending', operationId: null },
+      where: {
+        tenantId,
+        requestedById: userId,
+        toolName,
+        argumentsHash,
+        status: 'pending',
+        operationId: null,
+      },
       select: CAMPOS_SOLICITUD,
     })) as SolicitudPrevia | null
     if (pendiente) {
@@ -405,7 +412,14 @@ async function crearOReutilizarSolicitud(params: {
     const existente = (await prisma.mcpApprovalRequest.findFirst({
       where: operationId
         ? { tenantId, requestedById: userId, operationId }
-        : { tenantId, toolName, argumentsHash, status: 'pending', operationId: null },
+        : {
+            tenantId,
+            requestedById: userId,
+            toolName,
+            argumentsHash,
+            status: 'pending',
+            operationId: null,
+          },
       select: CAMPOS_SOLICITUD,
     })) as SolicitudPrevia | null
     if (!existente) throw error
