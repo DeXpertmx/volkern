@@ -102,6 +102,19 @@ export const POST = withTenantAuth(async (request, auth, { params }) => {
       );
     }
 
+    if (claim.status === 'duplicate') {
+      return NextResponse.json(
+        {
+          error:
+            'Ya hay una acción idéntica en curso o ejecutada hace menos de 5 minutos. Espera a que termine o cambia el contenido antes de aprobar esta.',
+          status: 'duplicate',
+          approvalId: claim.approval.id,
+          requestedById: claim.approval.requestedById,
+        },
+        { status: 409 }
+      );
+    }
+
     if (claim.status === 'expired') {
       return NextResponse.json(
         { error: 'La solicitud caducó y no se ha ejecutado.', status: 'expired' },

@@ -293,7 +293,10 @@ describe('enforceToolGate', () => {
 
 describe('claimApproval — la acción se ejecuta una sola vez', () => {
   /** Fila real simulada: el estado vive aquí y el `update` de la tx lo cambia. */
-  function montarFila(overrides: Record<string, unknown> = {}) {
+  function montarFila(
+    overrides: Record<string, unknown> = {},
+    duplicada: { id: string } | null = null
+  ) {
     const fila: Record<string, any> = {
       id: 'ap-1',
       tenantId: 'tenant-a',
@@ -313,6 +316,7 @@ describe('claimApproval — la acción se ejecuta una sola vez', () => {
         fila.id === id && fila.tenantId === tenantId ? [{ ...fila }] : []
       ),
       mcpApprovalRequest: {
+        findFirst: vi.fn(async () => duplicada),
         update: vi.fn(async ({ where, data }: any) => {
           if (where.id !== fila.id) throw new Error('fila inesperada')
           Object.assign(fila, data)
@@ -363,6 +367,34 @@ describe('claimApproval — la acción se ejecuta una sola vez', () => {
     // Sólo un update: el segundo intento no tocó la fila.
     expect(tx.mcpApprovalRequest.update).toHaveBeenCalledTimes(1)
     expect(fila.resolvedById).toBe('user-aprueba')
+  })
+
+  it('no aprueba si otra fila idéntica ya está en curso o recién ejecutada', async () => {
+    const { fila, tx } = montarFila({}, { id: 'ap-de-otro' })
+
+    const res = await claimApproval({
+      approvalId: 'ap-1',
+      tenantId: 'tenant-a',
+      resolverId: 'user-aprueba',
+      action: 'approve',
+    })
+
+    expect(res.status).toBe('duplicate')
+    expect(fila.status).toBe('pending')
+    expect(tx.mcpApprovalRequest.update).not.toHaveBeenCalled()
+  })
+
+  it('la identidad del solicitante manda sobre el duplicado: sigue sin autoprobación', async () => {
+    montarFila({ requestedById: 'user-solicita' }, { id: 'ap-de-otro' })
+
+    const res = await claimApproval({
+      approvalId: 'ap-1',
+      tenantId: 'tenant-a',
+      resolverId: 'user-solicita',
+      action: 'approve',
+    })
+
+    expect(res.status).toBe('self_approval')
   })
 
   it('impide que quien solicita la acción la apruebe', async () => {
@@ -477,6 +509,7 @@ describe('hashToolArguments — la identidad no entra en la huella', () => {
   it('distingue source: MCP y agente no comparten solicitud', () => {
     expect(hashToolArguments(base)).not.toBe(hashToolArguments({ ...base, source: 'chat' }))
   })
+
 })
 
 describe('Idempotencia por operationId', () => {

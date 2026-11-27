@@ -23,7 +23,7 @@ import crypto from 'node:crypto'
 import { sendMessageWithUserInstance } from '@/lib/evolution-instances'
 import { ejecutarToolDelCatalogo } from '@/lib/mcp/approval-execution'
 import { idDeMensajeEnResultado } from '@/lib/mcp/whatsapp-entrega'
-import { completeApproval } from '@/lib/mcp/tool-gate'
+import { completeApproval, solicitudIdenticaEnEjecucion } from '@/lib/mcp/tool-gate'
 
 const CODE_TTL_MINUTES = 15
 const MAX_ATTEMPTS = 3
@@ -270,6 +270,7 @@ export type MotivoVerificacion =
   | 'intentos_agotados'
   | 'codigo_incorrecto'
   | 'envio_fallido'
+  | 'envio_duplicado'
 
 /** Fila reclamada, tal como la lee la transacción con `FOR UPDATE`. */
 interface SolicitudReclamada {
@@ -398,6 +399,25 @@ export async function verifyAndExecuteWhatsappAuthCode(params: {
           ok: false,
           motivo: 'codigo_incorrecto',
           error: `Código incorrecto. Te quedan ${restantes > 0 ? restantes : 0} intento(s).`,
+          approvalId: solicitud.id,
+        }
+      }
+
+      // Otra fila del mismo contenido (otro usuario pidió lo mismo) no puede
+      // ejecutarse a la vez: el código correcto no basta si ya hay un envío
+      // idéntico en curso o recién ejecutado.
+      const duplicada = await solicitudIdenticaEnEjecucion(tx, {
+        tenantId: solicitud.tenantId,
+        toolName: solicitud.toolName,
+        argumentsHash: solicitud.argumentsHash,
+        excluirId: solicitud.id,
+      })
+      if (duplicada) {
+        return {
+          ok: false,
+          motivo: 'envio_duplicado',
+          error:
+            'Ya hay un envío idéntico en curso o ejecutado hace menos de 5 minutos. Espera o cambia el mensaje.',
           approvalId: solicitud.id,
         }
       }

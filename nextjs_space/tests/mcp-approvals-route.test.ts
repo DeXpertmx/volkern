@@ -46,7 +46,10 @@ const callTool = vi.mocked(handleCallTool)
 const auditCreate = vi.mocked(prisma.auditLog.create)
 
 /** Fila viva: el update de la transacción cambia su estado, como en Postgres. */
-function montarFila(overrides: Record<string, unknown> = {}) {
+function montarFila(
+  overrides: Record<string, unknown> = {},
+  duplicada: { id: string } | null = null
+) {
   const fila: Record<string, any> = {
     id: 'ap-1',
     tenantId: 'tenant-a',
@@ -67,6 +70,7 @@ function montarFila(overrides: Record<string, unknown> = {}) {
       fila.id === id && fila.tenantId === tenantId ? [{ ...fila }] : []
     ),
     mcpApprovalRequest: {
+      findFirst: vi.fn(async () => duplicada),
       update: vi.fn(async ({ where, data }: any) => {
         if (where.id !== fila.id) throw new Error('fila inesperada')
         Object.assign(fila, data)
@@ -140,6 +144,17 @@ describe('POST /api/mcp/approvals/[id]', () => {
     // la ejecutó, así que la segunda no puede volver a hacerlo.
     expect(bodySegunda.status).toBe('executed')
     expect(callTool).toHaveBeenCalledTimes(1)
+  })
+
+  it('no ejecuta si otra solicitud idéntica está en curso: 409 duplicate', async () => {
+    montarFila({}, { id: 'ap-de-otro' })
+
+    const res = await POST(peticion('approve'), { params: { id: 'ap-1' } } as never)
+    const body = await res.json()
+
+    expect(res.status).toBe(409)
+    expect(body.status).toBe('duplicate')
+    expect(callTool).not.toHaveBeenCalled()
   })
 
   it('rechazar cierra la solicitud sin ejecutar nada', async () => {

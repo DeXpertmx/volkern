@@ -17,6 +17,7 @@
  */
 
 import { createHash } from 'node:crypto'
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db'
 import {
   decideToolCall,
@@ -207,8 +208,9 @@ async function auditar(params: {
  * generar varias solicitudes en la bandeja del responsable. La identidad es el
  * `operationId` de ese usuario y el índice único `(empresa, usuario,
  * operationId)` la impone; aquí se traduce en «devuelve la que ya existe».
- * Sin `operationId` la identidad es el contenido: el índice parcial de la
- * migración reserva una sola solicitud pendiente por herramienta y argumentos.
+ * Sin `operationId` la identidad es el contenido de ese usuario: el índice
+ * parcial reserva una sola solicitud pendiente por empresa, usuario,
+ * herramienta y argumentos (la huella no incluye la identidad).
  */
 export async function enforceToolGate(input: GateInput): Promise<GateOutcome> {
   const { tenantId, userId, roleName, toolName, args, via } = input
@@ -531,6 +533,8 @@ export interface ApprovalRow {
 export type ClaimResult =
   | { status: 'approved'; approval: ApprovalRow }
   | { status: 'rejected'; approval: ApprovalRow }
+  /** Otra fila del mismo contenido ya está aprobada o se ejecutó hace poco. */
+  | { status: 'duplicate'; approval: ApprovalRow }
   /** La solicitud exige validar el código de WhatsApp: la bandeja no basta. */
   | { status: 'code_required'; approval: ApprovalRow }
   | { status: 'not_found' }
@@ -546,6 +550,57 @@ export type ClaimResult =
  * escribe en el CRM. La garantía se mantiene porque el segundo intento
  * encuentra `status = 'approved'` y devuelve conflicto, nunca ejecuta otra vez.
  */
+/**
+ * Ventanas del cerrojo por contenido (ver `solicitudIdenticaEnEjecucion`).
+ *
+ * 15 min cubren una ejecución en curso con margen sobre el barrido de
+ * huérfanas (cierra a los 10). 5 min dejan pasar un reenvío deliberado del
+ * mismo texto poco después, sin permitir la segunda aprobación de un duplicado.
+ */
+const VENTANA_APROBACION_EN_CURSO_MS = 15 * 60 * 1000
+const VENTANA_EJECUCION_RECIENTE_MS = 5 * 60 * 1000
+
+/**
+ * Busca otra solicitud del mismo contenido que ya esté en ejecución o se haya
+ * ejecutado hace poco, dentro de la transacción que la va a aprobar.
+ *
+ * La reserva por contenido es por usuario y no impide que dos personas pidan lo
+ * mismo: cada una tiene su fila pendiente y, sin este cerrojo, aprobar las dos
+ * ejecutaría el envío dos veces. El `pg_advisory_xact_lock` serializa a quienes
+ * compiten por el mismo contenido; la comprobación y el paso a `approved`
+ * ocurren bajo el mismo cerrojo. No toca la separación de funciones: quien
+ * resuelve sigue sin poder aprobar lo que pidió.
+ *
+ * Las ventanas acotan el bloqueo: `approved` es una ejecución en curso (si el
+ * proceso muere, deja de bloquear a los 15 min) y `executed` solo bloquea los
+ * 5 min siguientes, para que un reenvío deliberado del mismo texto siga siendo
+ * posible.
+ */
+export async function solicitudIdenticaEnEjecucion(
+  tx: Prisma.TransactionClient,
+  params: { tenantId: string; toolName: string; argumentsHash: string; excluirId: string }
+): Promise<boolean> {
+  const clave = `${params.tenantId}:${params.toolName}:${params.argumentsHash}`
+  // `::text` porque Prisma no sabe deserializar la columna `void` del lock.
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${clave}, 0))::text`
+
+  const ahora = Date.now()
+  const enCursoOReciente = await tx.mcpApprovalRequest.findFirst({
+    where: {
+      tenantId: params.tenantId,
+      toolName: params.toolName,
+      argumentsHash: params.argumentsHash,
+      id: { not: params.excluirId },
+      OR: [
+        { status: 'approved', resolvedAt: { gt: new Date(ahora - VENTANA_APROBACION_EN_CURSO_MS) } },
+        { status: 'executed', executedAt: { gt: new Date(ahora - VENTANA_EJECUCION_RECIENTE_MS) } },
+      ],
+    },
+    select: { id: true },
+  })
+  return enCursoOReciente !== null
+}
+
 export async function claimApproval(params: {
   approvalId: string
   tenantId: string
@@ -592,6 +647,16 @@ export async function claimApproval(params: {
     // código y ejecuta. Rechazar sí se permite: desactivar es seguro.
     if (action === 'approve' && fila.whatsappCodeHash) {
       return { status: 'code_required', approval: fila } as ClaimResult
+    }
+
+    if (action === 'approve') {
+      const duplicada = await solicitudIdenticaEnEjecucion(tx, {
+        tenantId,
+        toolName: fila.toolName,
+        argumentsHash: fila.argumentsHash,
+        excluirId: fila.id,
+      })
+      if (duplicada) return { status: 'duplicate', approval: fila } as ClaimResult
     }
 
     const actualizada = await tx.mcpApprovalRequest.update({

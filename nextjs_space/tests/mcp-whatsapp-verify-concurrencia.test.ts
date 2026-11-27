@@ -16,6 +16,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const h = vi.hoisted(() => ({
   fila: null as any,
+  duplicado: null as { id: string } | null,
   handleCallTool: vi.fn(),
   /** Cola que emula el `FOR UPDATE`: una transacción cada vez. */
   colaLock: Promise.resolve() as Promise<unknown>,
@@ -42,7 +43,10 @@ vi.mock('@/lib/db', () => {
   const tx = {
     $queryRaw: async (_strings: TemplateStringsArray, token: string) =>
       h.fila.whatsappVerificationToken === token ? [{ ...h.fila }] : [],
-    mcpApprovalRequest: { update: async ({ data }: any) => aplicar(data) },
+    mcpApprovalRequest: {
+      findFirst: async () => h.duplicado,
+      update: async ({ data }: any) => aplicar(data),
+    },
   }
 
   const $transaction = async (cb: any) => {
@@ -115,6 +119,7 @@ function envioOk() {
 beforeEach(async () => {
   vi.clearAllMocks()
   h.colaLock = Promise.resolve()
+  h.duplicado = null
   h.fila = await filaPendiente(await hashAuthCode(CODIGO))
   h.handleCallTool.mockResolvedValue(envioOk())
 })
@@ -136,6 +141,18 @@ describe('verifyAndExecuteWhatsappAuthCode — reclamo, desenlace y reconciliaci
     expect(perdedora.motivo).toBe('ya_resuelta')
     expect(perdedora.executed).toBe(false)
     expect(h.fila.status).toBe('executed')
+  })
+
+  it('un envío idéntico de otra persona impide ejecutar aunque el código sea correcto', async () => {
+    h.duplicado = { id: 'ap-de-otra-persona' }
+
+    const res = await verifyAndExecuteWhatsappAuthCode({ verificationToken: TOKEN, code: CODIGO })
+
+    expect(res.ok).toBe(false)
+    expect(res.motivo).toBe('envio_duplicado')
+    expect(res.executed).toBe(false)
+    expect(h.handleCallTool).not.toHaveBeenCalled()
+    expect(h.fila.status).toBe('pending')
   })
 
   it('guarda el id del mensaje para poder casar su ACK de entrega', async () => {

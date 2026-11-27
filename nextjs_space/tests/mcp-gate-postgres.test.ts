@@ -24,7 +24,7 @@ const TENANT = 'tenant-pg-gate'
 const USER = 'user-pg-gate'
 
 const { prisma } = await import('@/lib/db')
-const { claimApproval, enforceToolGate } = await import('@/lib/mcp/tool-gate')
+const { claimApproval, completeApproval, enforceToolGate } = await import('@/lib/mcp/tool-gate')
 
 describe.skipIf(!HABILITADO)('Gate MCP contra PostgreSQL real', () => {
   beforeEach(async () => {
@@ -188,6 +188,164 @@ describe.skipIf(!HABILITADO)('Gate MCP contra PostgreSQL real', () => {
     })
     expect(registros.length).toBe(1)
     expect(registros[0].entidadId).toBe('volkern_delete_contact')
+  })
+
+  it('dos solicitudes idénticas de usuarios distintos no ejecutan dos veces', async () => {
+    const crear = (requestedById: string) =>
+      prisma.mcpApprovalRequest.create({
+        data: {
+          tenantId: TENANT,
+          toolName: 'volkern_send_whatsapp',
+          arguments: { leadId: 'lead-1', mensaje: 'Mismo mensaje' },
+          argumentsHash: 'hash-doble-envio',
+          requestedById,
+          via: '/mcp',
+          expiresAt: new Date(Date.now() + 60_000),
+        },
+      })
+
+    // Dos personas piden lo mismo: la reserva por contenido es por usuario, así
+    // que hay dos filas. El aislamiento no puede acabar en dos envíos.
+    const [deAna, deLuis] = await Promise.all([crear('user-ana'), crear('user-luis')])
+
+    const [ana, luis] = await Promise.all([
+      claimApproval({
+        approvalId: deAna.id,
+        tenantId: TENANT,
+        resolverId: 'user-resuelve-1',
+        action: 'approve',
+      }),
+      claimApproval({
+        approvalId: deLuis.id,
+        tenantId: TENANT,
+        resolverId: 'user-resuelve-2',
+        action: 'approve',
+      }),
+    ])
+
+    const aprobadas = [ana.status, luis.status].filter((s) => s === 'approved')
+    expect(aprobadas).toHaveLength(1)
+    expect([ana.status, luis.status]).toContain('duplicate')
+  })
+
+  it('una aprobación posterior a la ejecución idéntica no vuelve a ejecutar', async () => {
+    const crear = (requestedById: string) =>
+      prisma.mcpApprovalRequest.create({
+        data: {
+          tenantId: TENANT,
+          toolName: 'volkern_send_whatsapp',
+          arguments: { leadId: 'lead-1', mensaje: 'Mismo texto' },
+          argumentsHash: 'hash-ya-ejecutada',
+          requestedById,
+          via: '/mcp',
+          expiresAt: new Date(Date.now() + 60_000),
+        },
+      })
+
+    const [primera, segunda] = await Promise.all([crear('user-ana'), crear('user-luis')])
+
+    const resPrimera = await claimApproval({
+      approvalId: primera.id,
+      tenantId: TENANT,
+      resolverId: 'user-resuelve-1',
+      action: 'approve',
+    })
+    expect(resPrimera.status).toBe('approved')
+
+    // La primera ya se ejecutó; la segunda no puede repetir el envío dentro de
+    // la ventana aunque la primera ya no esté en curso.
+    await completeApproval({ approvalId: primera.id, ok: true, result: { ok: true } })
+
+    const resSegunda = await claimApproval({
+      approvalId: segunda.id,
+      tenantId: TENANT,
+      resolverId: 'user-resuelve-2',
+      action: 'approve',
+    })
+
+    expect(resSegunda.status).toBe('duplicate')
+  })
+
+  it('permite reenviar el mismo contenido cuando la ejecución anterior salió de la ventana', async () => {
+    await prisma.mcpApprovalRequest.create({
+      data: {
+        tenantId: TENANT,
+        toolName: 'volkern_send_whatsapp',
+        arguments: { leadId: 'lead-1', mensaje: 'Mismo texto' },
+        argumentsHash: 'hash-ventana-vieja',
+        requestedById: 'user-ana',
+        via: '/mcp',
+        status: 'executed',
+        resolvedAt: new Date(Date.now() - 10 * 60_000),
+        executedAt: new Date(Date.now() - 6 * 60_000),
+        expiresAt: new Date(Date.now() + 60_000),
+      },
+    })
+    const nueva = await prisma.mcpApprovalRequest.create({
+      data: {
+        tenantId: TENANT,
+        toolName: 'volkern_send_whatsapp',
+        arguments: { leadId: 'lead-1', mensaje: 'Mismo texto' },
+        argumentsHash: 'hash-ventana-vieja',
+        requestedById: 'user-luis',
+        via: '/mcp',
+        expiresAt: new Date(Date.now() + 60_000),
+      },
+    })
+
+    const res = await claimApproval({
+      approvalId: nueva.id,
+      tenantId: TENANT,
+      resolverId: 'user-resuelve-1',
+      action: 'approve',
+    })
+
+    expect(res.status).toBe('approved')
+  })
+
+  it('el cerrojo de ejecución no cruza empresas', async () => {
+    const OTRA = 'tenant-pg-gate-b'
+    await prisma.tenant.upsert({
+      where: { id: OTRA },
+      update: {},
+      create: { id: OTRA, nombre: 'PG Gate B', slug: 'pg-gate-b' },
+    })
+
+    const crear = (tenantId: string) =>
+      prisma.mcpApprovalRequest.create({
+        data: {
+          tenantId,
+          toolName: 'volkern_send_whatsapp',
+          arguments: { leadId: 'lead-1', mensaje: 'Mismo texto' },
+          argumentsHash: 'hash-entre-empresas',
+          requestedById: 'user-solicita',
+          via: '/mcp',
+          expiresAt: new Date(Date.now() + 60_000),
+        },
+      })
+
+    try {
+      const [enA, enB] = await Promise.all([crear(TENANT), crear(OTRA)])
+
+      const resA = await claimApproval({
+        approvalId: enA.id,
+        tenantId: TENANT,
+        resolverId: 'user-resuelve-1',
+        action: 'approve',
+      })
+      const resB = await claimApproval({
+        approvalId: enB.id,
+        tenantId: OTRA,
+        resolverId: 'user-resuelve-2',
+        action: 'approve',
+      })
+
+      expect(resA.status).toBe('approved')
+      expect(resB.status).toBe('approved')
+    } finally {
+      await prisma.mcpApprovalRequest.deleteMany({ where: { tenantId: OTRA } })
+      await prisma.tenant.delete({ where: { id: OTRA } }).catch(() => undefined)
+    }
   })
 
   it('sin empresa en la credencial la auditoría se guarda con tenantId null (la FK no la traga)', async () => {
