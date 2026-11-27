@@ -144,8 +144,18 @@ export interface GateInput {
   via: GateSurface
 }
 
-/** Hash estable de los argumentos: mismo contenido, mismo hash, mismo orden. */
+/**
+ * Huella estable de los argumentos que identifican una acción.
+ *
+ * Ignora `tenantId` y `userId`: la identidad vive en columnas
+ * (`tenantId`/`requestedById`) y no debe cambiar la huella. `source` sí cuenta:
+ * distingue la superficie (MCP o agente) y no se deben mezclar solicitudes de
+ * caminos de ejecución distintos. El orden de las claves no altera el hash.
+ */
 export function hashToolArguments(args: Record<string, unknown>): string {
+  const negocio = { ...args }
+  delete negocio.tenantId
+  delete negocio.userId
   const canonico = (valor: unknown): unknown => {
     if (Array.isArray(valor)) return valor.map(canonico)
     if (valor && typeof valor === 'object') {
@@ -158,7 +168,7 @@ export function hashToolArguments(args: Record<string, unknown>): string {
     }
     return valor
   }
-  return createHash('sha256').update(JSON.stringify(canonico(args))).digest('hex')
+  return createHash('sha256').update(JSON.stringify(canonico(negocio))).digest('hex')
 }
 
 /** Auditoría del gate. No lanza: la decisión ya está tomada y debe responder. */

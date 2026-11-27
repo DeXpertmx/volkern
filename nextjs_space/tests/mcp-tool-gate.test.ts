@@ -31,6 +31,7 @@ import {
   errorDeOperationId,
   hashToolArguments,
   operationIdDeArgs,
+  requestAgentToolApproval,
 } from '@/lib/mcp/tool-gate'
 import { VOLKERN_TOOLS } from '../mcp-server/src/tools-catalog'
 
@@ -463,6 +464,21 @@ describe('claimApproval — la acción se ejecuta una sola vez', () => {
   })
 })
 
+describe('hashToolArguments — la identidad no entra en la huella', () => {
+  const base = { contactId: 'c-1', message: 'Hola', source: 'mcp' }
+
+  it('ignora tenantId y userId', () => {
+    const ana = hashToolArguments({ ...base, tenantId: 'tenant-a', userId: 'user-ana' })
+    const luis = hashToolArguments({ ...base, tenantId: 'tenant-b', userId: 'user-luis' })
+
+    expect(ana).toBe(luis)
+  })
+
+  it('distingue source: MCP y agente no comparten solicitud', () => {
+    expect(hashToolArguments(base)).not.toBe(hashToolArguments({ ...base, source: 'chat' }))
+  })
+})
+
 describe('Idempotencia por operationId', () => {
   const filas: any[] = []
 
@@ -575,6 +591,25 @@ describe('Idempotencia por operationId', () => {
 
     expect(filas).toHaveLength(2)
     expect((ana as any).approvalId).not.toBe((luis as any).approvalId)
+  })
+
+  it('el agente no comparte la solicitud entre dos usuarios con argumentos idénticos', async () => {
+    // Camino del agente: los argumentos llegan sin tenantId/userId inyectados,
+    // así que la huella es idéntica. La separación la impone requestedById.
+    const pedir = (userId: string) =>
+      requestAgentToolApproval({
+        tenantId: 'tenant-a',
+        userId,
+        roleName: 'Admin',
+        toolName: 'volkern_delete_contact',
+        args: { id: 'c-1' },
+        risk: 'destructive',
+      })
+
+    const [ana, luis] = await Promise.all([pedir('user-ana'), pedir('user-luis')])
+
+    expect(filas).toHaveLength(2)
+    expect(ana.approvalId).not.toBe(luis.approvalId)
   })
 
   it('si la reserva por contenido la ganó otra petición, la segunda recibe la misma', async () => {
