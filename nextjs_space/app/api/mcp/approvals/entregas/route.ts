@@ -51,8 +51,6 @@ function vistaDeEnvio(solicitud: {
     executedAt: solicitud.executedAt,
     leadId: args.leadId ?? null,
     mensaje: mensaje.length > 160 ? `${mensaje.slice(0, 160)}…` : mensaje,
-    // Sin id de mensaje no hay forma de casar un ACK: el desenlace es desconocido.
-    resoluble: Boolean(solicitud.whatsappMessageId),
   };
 }
 

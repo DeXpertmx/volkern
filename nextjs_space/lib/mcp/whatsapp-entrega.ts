@@ -82,6 +82,27 @@ function conEntrega(
     : { entrega }
 }
 
+/** Escritura común del desenlace: columnas, resultado y cierre de la solicitud. */
+async function guardarEntrega(params: {
+  solicitud: { id: string; status: string; result: unknown }
+  estado: EstadoEntregaWhatsapp
+  cuando: Date
+}): Promise<void> {
+  const { solicitud, estado, cuando } = params
+  await prisma.mcpApprovalRequest.update({
+    where: { id: solicitud.id },
+    data: {
+      entregaEstado: estado,
+      entregaActualizadaEn: cuando,
+      result: conEntrega(solicitud.result, estado, cuando) as never,
+      // Se cerró como fallida por falta de confirmación y el envío sí salió.
+      ...(estado !== 'fallido' && solicitud.status === 'failed'
+        ? { status: 'executed', executedAt: cuando }
+        : {}),
+    },
+  })
+}
+
 /**
  * Cierra a mano el desenlace de un envío que el proveedor no supo confirmar.
  * No aplica la regla de avance: es una decisión administrativa explícita, aunque
@@ -98,18 +119,7 @@ export async function resolverEntregaManual(params: {
   })
   if (!solicitud) return false
 
-  const cuando = new Date()
-  await prisma.mcpApprovalRequest.update({
-    where: { id: solicitud.id },
-    data: {
-      entregaEstado: params.estado,
-      entregaActualizadaEn: cuando,
-      result: conEntrega(solicitud.result, params.estado, cuando) as never,
-      ...(params.estado === 'entregado' && solicitud.status === 'failed'
-        ? { status: 'executed', executedAt: cuando }
-        : {}),
-    },
-  })
+  await guardarEntrega({ solicitud, estado: params.estado, cuando: new Date() })
   return true
 }
 
@@ -134,22 +144,7 @@ export async function registrarEntregaDeWhatsapp(params: {
     return { actualizada: false, approvalId: solicitud.id }
   }
 
-  const cuando = params.cuando ?? new Date()
-  const confirmado = estado !== 'fallido'
-
-  await prisma.mcpApprovalRequest.update({
-    where: { id: solicitud.id },
-    data: {
-      entregaEstado: estado,
-      entregaActualizadaEn: cuando,
-      result: conEntrega(solicitud.result, estado, cuando) as never,
-      // Se cerró como fallida por falta de confirmación y el ACK demuestra que
-      // el mensaje salió: la solicitud pasa a ejecutada.
-      ...(confirmado && solicitud.status === 'failed'
-        ? { status: 'executed', executedAt: cuando }
-        : {}),
-    },
-  })
+  await guardarEntrega({ solicitud, estado, cuando: params.cuando ?? new Date() })
 
   return { actualizada: true, approvalId: solicitud.id }
 }
