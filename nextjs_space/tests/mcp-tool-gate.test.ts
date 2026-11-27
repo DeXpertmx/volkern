@@ -451,6 +451,7 @@ describe('Idempotencia por operationId', () => {
   const filaPrevia = (status: string) => ({
     id: 'ap-previa',
     tenantId: 'tenant-a',
+    requestedById: 'user-1',
     toolName: 'volkern_delete_contact',
     operationId: 'op-1',
     status,
@@ -463,12 +464,32 @@ describe('Idempotencia por operationId', () => {
 
   beforeEach(() => {
     filas.length = 0
+    // Emula los dos índices únicos reales: (empresa, usuario, operationId) y la
+    // reserva parcial por (empresa, herramienta, argumentos) sin operationId.
     approvalCreate.mockImplementation(async ({ data }: any) => {
-      const duplicada =
-        data.operationId &&
-        filas.some((f) => f.tenantId === data.tenantId && f.operationId === data.operationId)
+      const duplicada = data.operationId
+        ? filas.some(
+            (f) =>
+              f.tenantId === data.tenantId &&
+              f.requestedById === data.requestedById &&
+              f.operationId === data.operationId
+          )
+        : filas.some(
+            (f) =>
+              f.status === 'pending' &&
+              f.operationId === null &&
+              f.tenantId === data.tenantId &&
+              f.toolName === data.toolName &&
+              f.argumentsHash === data.argumentsHash
+          )
       if (duplicada) throw Object.assign(new Error('unique'), { code: 'P2002' })
-      const fila = { id: `ap-${filas.length + 1}`, status: 'pending', result: null, ...data }
+      const fila = {
+        id: `ap-${filas.length + 1}`,
+        status: 'pending',
+        result: null,
+        requestedById: 'user-1',
+        ...data,
+      }
       filas.push(fila)
       return { id: fila.id } as never
     })
@@ -490,7 +511,7 @@ describe('Idempotencia por operationId', () => {
     expect(segunda.kind).toBe('ask')
   })
 
-  it('sin operationId, dos llamadas idénticas crean dos solicitudes', async () => {
+  it('sin operationId, dos llamadas idénticas comparten una sola solicitud', async () => {
     const llamarSinId = () =>
       enforceToolGate({
         tenantId: 'tenant-a',
@@ -501,14 +522,42 @@ describe('Idempotencia por operationId', () => {
         via: '/mcp',
       })
 
-    const primera = await llamarSinId()
-    const segunda = await llamarSinId()
+    const [primera, segunda] = await Promise.all([llamarSinId(), llamarSinId()])
 
-    // No hay índice por argumentos: el gate no finge deduplicar.
-    expect(filas).toHaveLength(2)
+    // La reserva por contenido: una solicitud pendiente, no dos.
+    expect(filas).toHaveLength(1)
     expect(primera.kind).toBe('ask')
-    expect((primera as any).approvalId).not.toBe((segunda as any).approvalId)
+    expect((primera as any).approvalId).toBe('ap-1')
+    expect((segunda as any).approvalId).toBe('ap-1')
   })
+
+  it('si la reserva por contenido la ganó otra petición, la segunda recibe la misma', async () => {
+    const pendiente = {
+      id: 'ap-reservada',
+      status: 'pending',
+      result: null,
+      expiresAt: new Date(Date.now() + 60_000),
+      whatsappVerificationToken: null,
+      whatsappCodeExpiresAt: null,
+      whatsappPhoneNumber: null,
+    }
+    approvalCreate.mockRejectedValue({ code: 'P2002' })
+    approvalFindFirst.mockResolvedValueOnce(null as never).mockResolvedValue(pendiente as never)
+
+    const out = await enforceToolGate({
+      tenantId: 'tenant-a',
+      userId: 'user-1',
+      roleName: 'Admin',
+      toolName: 'volkern_delete_contact',
+      args: { id: 'c-1' },
+      via: '/mcp',
+    })
+
+    expect(out.kind).toBe('ask')
+    if (out.kind !== 'ask') throw new Error('esperaba ask')
+    expect(out.approvalId).toBe('ap-reservada')
+  })
+
 
   it('el mismo operationId no crea otra solicitud si la primera ya se ejecutó', async () => {
     filas.push(filaPrevia('executed'))

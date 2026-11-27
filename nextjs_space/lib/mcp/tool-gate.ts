@@ -182,8 +182,9 @@ async function auditar(params: {
  * Reutilizar importa: un agente que reintenta la misma operación no debe
  * generar varias solicitudes en la bandeja del responsable. La identidad es el
  * `operationId` y el índice único `(empresa, operationId)` la impone; aquí se
- * traduce en «devuelve la que ya existe». Sin `operationId` no hay identidad:
- * cada llamada crea su propia solicitud y no se deduplica por argumentos.
+ * traduce en «devuelve la que ya existe». Sin `operationId` la identidad es el
+ * contenido: el índice parcial de la migración reserva una sola solicitud
+ * pendiente por herramienta y argumentos.
  */
 export async function enforceToolGate(input: GateInput): Promise<GateOutcome> {
   const { tenantId, userId, roleName, toolName, args, via } = input
@@ -312,10 +313,10 @@ export async function enforceToolGate(input: GateInput): Promise<GateOutcome> {
 /**
  * Crea (o reutiliza) una `McpApprovalRequest` pendiente.
  *
- * Comparte la lógica de auditoría de `enforceToolGate`. La unicidad de
- * `(empresa, operationId)` es el único cerrojo: un reintento de la misma
- * operación devuelve la fila existente y una llamada sin `operationId` crea su
- * propia solicitud.
+ * Comparte la lógica de auditoría de `enforceToolGate`. Hay dos cerrojos en la
+ * base: `(empresa, operationId)` para una operación con identidad y un índice
+ * parcial único por herramienta y argumentos para las solicitudes pendientes
+ * sin `operationId`, que evita que dos envíos idénticos se reserven a la vez.
  */
 async function crearOReutilizarSolicitud(params: {
   tenantId: string
@@ -336,6 +337,27 @@ async function crearOReutilizarSolicitud(params: {
   const argumentsHash = hashToolArguments(args)
   const expiresAt = new Date(Date.now() + APROBACION_VALIDEZ_HORAS * 60 * 60 * 1000)
 
+  // Sin `operationId` la identidad es el contenido: una solicitud pendiente
+  // idéntica es la reserva y se devuelve en vez de crear otra. El índice
+  // parcial de la migración convierte la carrera entre dos llamadas en un
+  // conflicto que el `catch` resuelve igual.
+  if (!operationId) {
+    const pendiente = (await prisma.mcpApprovalRequest.findFirst({
+      where: { tenantId, toolName, argumentsHash, status: 'pending', operationId: null },
+      select: CAMPOS_SOLICITUD,
+    })) as SolicitudPrevia | null
+    if (pendiente) {
+      if (pendiente.expiresAt.getTime() <= Date.now()) {
+        await prisma.mcpApprovalRequest.update({
+          where: { id: pendiente.id },
+          data: { expiresAt },
+        })
+        pendiente.expiresAt = expiresAt
+      }
+      return { approvalId: pendiente.id, expiresAt: pendiente.expiresAt, existente: pendiente }
+    }
+  }
+
   let approvalId: string
   try {
     const creada = await prisma.mcpApprovalRequest.create({
@@ -355,12 +377,14 @@ async function crearOReutilizarSolicitud(params: {
     })
     approvalId = creada.id
   } catch (error: any) {
-    // P2002 solo puede venir del índice único (empresa, operationId): otra
-    // petición creó la operación entre la comprobación previa y este INSERT.
-    // Sin `operationId` no hay índice que colisione y un error es un error.
-    if (error?.code !== 'P2002' || !operationId) throw error
+    // P2002 viene de uno de los dos únicos: la operación del usuario o la
+    // reserva pendiente por contenido. Otra petición se adelantó entre la
+    // comprobación previa y este INSERT; se devuelve la fila ganadora.
+    if (error?.code !== 'P2002') throw error
     const existente = (await prisma.mcpApprovalRequest.findFirst({
-      where: { tenantId, operationId },
+      where: operationId
+        ? { tenantId, operationId }
+        : { tenantId, toolName, argumentsHash, status: 'pending', operationId: null },
       select: CAMPOS_SOLICITUD,
     })) as SolicitudPrevia | null
     if (!existente) throw error

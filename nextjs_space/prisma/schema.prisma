@@ -9612,6 +9612,11 @@ model McpApprovalRequest {
   // Identidad de la operación: la propia solicitud hace de recibo. Un mismo
   // operationId no puede generar dos solicitudes, luego no puede enviar dos veces.
   @@unique([tenantId, operationId])
+  // Además, la migración crea un índice parcial único sobre
+  // (tenantId, toolName, argumentsHash) WHERE status = 'pending' AND
+  // operationId IS NULL: sin operationId la identidad es el contenido, y dos
+  // solicitudes idénticas comparten una sola reserva. Prisma no sabe expresar
+  // índices parciales, así que vive solo en el SQL de la migración.
   @@index([argumentsHash])
   @@index([whatsappVerificationToken])
   @@index([whatsappMessageId])
