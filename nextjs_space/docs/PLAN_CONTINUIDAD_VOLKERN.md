@@ -76,8 +76,8 @@ Este documento tiene un único objetivo: garantir que Volkern pueda continuar op
 
 ### Dónde está desplegado:
 
-- **Producción:** Vercel (frontend + API)
-- **Base de datos:** Neon (PostgreSQL) o Railway
+- **Producción:** VPS con Docker Swarm (`deploy-vps/deploy-local.sh`)
+- **Base de datos:** PostgreSQL 17 en el VPS (contenedor `volkern-erp_postgres`)
 - **Archivos:** Cloudflare R2
 - **IA:** Servidor propio o cloud (configurable)
 
@@ -91,7 +91,7 @@ Este documento tiene un único objetivo: garantir que Volkern pueda continuar op
 
 | Servicio | Usuario/Email | Contraseña | Notas |
 |----------|---------------|------------|-------|
-| **Vercel** | [TU EMAIL] | [EN PASSWORD MANAGER] | Despliegue del frontend/API |
+| **VPS** | [TU EMAIL] | [EN PASSWORD MANAGER] | Docker Swarm: sirve `volkern.app` (proveedor por confirmar) |
 | **Neon (DB)** | [TU EMAIL] | [EN PASSWORD MANAGER] | Base de datos PostgreSQL |
 | **Cloudflare** | [TU EMAIL] | [EN PASSWORD MANAGER] | DNS y R2 storage |
 | **Domain (Namesilo/GoDaddy)** | [TU EMAIL] | [EN PASSWORD MANAGER] | Dominios volkern.io |
@@ -231,7 +231,7 @@ Ubicación: `/home/dexpert/Volkern/nextjs_space/manuales_operativos/`
 ## 5.1 Tareas del Día
 
 - **Soporte a clientes:** Responder tickets en la plataforma
-- **Monitoreo:** Verificar que Vercel y Neon estén funcionando
+- **Monitoreo:** Verificar que el VPS y su PostgreSQL estén funcionando
 - **Ventas:** Follow-up de prospectos, demos
 
 ## 5.2 Tareas Semanales
@@ -250,9 +250,9 @@ Ubicación: `/home/dexpert/Volkern/nextjs_space/manuales_operativos/`
 
 | Qué monitorear | Cómo |
 |----------------|------|
-| **Disponibilidad web** | UptimeRobot o Vercel Analytics |
-| **Errores en producción** | Vercel Error Monitoring |
-| **Uso de DB** | Dashboard de Neon |
+| **Disponibilidad web** | UptimeRobot |
+| **Errores en producción** | Logs del servicio: `docker service logs --tail 100 volkern-erp_app` |
+| **Uso de DB** | `docker exec` + `psql` en el contenedor de Postgres del VPS |
 | **Pagos fallidos** | Dashboard de Stripe |
 | **Seguridad** | Trust Protocol logs |
 
@@ -272,8 +272,8 @@ Ubicación: `/home/dexpert/Volkern/nextjs_space/manuales_operativos/`
 ## 6.2 Recursos Externos
 
 - **Dominios:** Namesilo o GoDaddy
-- **Hosting:** Vercel (soporte@vercel.com)
-- **Database:** Neon (soporte técnica)
+- **Hosting:** VPS (soporte del proveedor, por confirmar)
+- **Database:** PostgreSQL en el VPS
 - **Pagos:** Stripe (soporte merchants)
 
 ---
@@ -283,14 +283,14 @@ Ubicación: `/home/dexpert/Volkern/nextjs_space/manuales_operativos/`
 ## 7.1 Si la Aplicación No Funciona
 
 ### Error: "Página en blanco" o error 500
-1. Verificar en Vercel Dashboard → deployments
-2. Revisar logs de error en Vercel
-3. Si es error de código, revisar última implementación
+1. Verificar el servicio: `docker service ps volkern-erp_app`
+2. Revisar los logs: `docker service logs --tail 100 volkern-erp_app`
+3. Si es error de código, revisar la imagen desplegada (`docker inspect … org.opencontainers.image.revision`)
 
 ### Error: "Database connection failed"
-1. Verificar que Neon esté activo
-2. Revisar variables de entorno en Vercel
-3. Verificar que la IP de Vercel esté whitelist en Neon
+1. Verificar que el contenedor de Postgres esté activo (`docker ps --filter name=volkern-erp_postgres`)
+2. Revisar las variables del servicio (`docker service inspect volkern-erp_app`)
+3. Verificar que el servicio alcance Postgres por la red overlay (`docker network ls` → `DXnet`)
 
 ### Error: "Facturas no se emitieron"
 1. Verificar estado de Trust Protocol
@@ -324,7 +324,7 @@ Ubicación: `/home/dexpert/Volkern/nextjs_space/manuales_operativos/`
 - Asesoramiento legal obligatorio
 
 ### Paso 2: Transferencia Técnica
-1. Cambiar email de cuenta Vercel
+1. Transferir el acceso al VPS (proveedor y clave SSH)
 2. Transferir propiedad del dominio
 3. Migrar base de datos si aplica
 4. Actualizar cuentas de payment (Stripe)
@@ -346,18 +346,18 @@ Ubicación: `/home/dexpert/Volkern/nextjs_space/manuales_operativos/`
 
 ## 9.1 Si Pierdes Acceso a las Cuentas
 
-### Recuperar cuenta Vercel
-1. Ir a vercel.com/login
-2. "Forgot password"
-3. Verificar email y cambiar contraseña
+### Recuperar acceso al VPS
+1. Contactar al proveedor del VPS (por confirmar)
+2. Recuperar el acceso por consola del proveedor y con la clave SSH de respaldo
+3. Verificar que el servicio siga sirviendo (`docker service ls`)
 
 ### Recuperar dominio
 1. Contactar soporte del registrador
 2. Verificar propiedad (email, terakhir pago)
 
 ### Recuperar base de datos
-1. Neon tiene recuperación desde dashboard
-2. Asegurarse de tener backups recientes
+1. Restaurar el último backup verificado de `/root/backups` (con `gzip -t` y `sha256`)
+2. Si no hay backup utilizable, el volumen del contenedor de Postgres sigue en el VPS
 
 ## 9.2 Si el Servidor de IADeja de Funcionar
 
@@ -384,7 +384,7 @@ Imprime esta lista y tenla visible:
 - [ ] Contactos de emergencia actualizados
 - [ ] Documentación accesible desde cualquier lugar
 - [ ] Backups de base de datos automatizados
-- [ ] Método de pago de servicios (Vercel/Neon) activo
+- [ ] Método de pago de servicios (VPS, dominio) activo
 - [ ] Dominio y SSL vigentes
 - [ ] Emails de soporte configurados
 - [ ] Acceso a Stripe/Venta funcionando

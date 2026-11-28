@@ -1,6 +1,6 @@
 # Guía de Deploy — Volkern ERP
 
-Guía completa para desplegar Volkern en producción, incluyendo VPS (DigitalOcean, Hetzner, etc.) y plataformas cloud (Vercel, Railway).
+Guía para desplegar Volkern en producción: VPS con Docker Swarm.
 
 ---
 
@@ -173,43 +173,6 @@ sudo systemctl enable volkern
 sudo systemctl start volkern
 sudo systemctl status volkern
 ```
-
----
-
-## 🚀 Deploy en Vercel (Alternativa)
-
-### 1. Conectar Repositorio
-
-1. Ir a [vercel.com/new](https://vercel.com/new)
-2. Importar repositorio de GitHub/GitLab/Bitbucket
-3. Configurar Framework Preset: **Next.js**
-
-### 2. Variables de Entorno
-
-Configurar todas las variables de entorno en el dashboard de Vercel.
-
-### 3. Deploy Manual
-
-> 🔴 **DEPRECADO (12-oct-2026): no despliegues a Vercel.** Producción es el
-> VPS: `bash deploy-vps/deploy-local.sh` (ver README §Deploy). El proyecto
-> de Vercel sigue enlazado pero ya no sirve `volkern.app`, y sus variables
-> de producción apuntan a la base antigua (Neon). Lo de abajo es referencia
-> histórica.
->
-> ⚠️ **No hay auto-deploy desde GitHub** (política histórica). Cada release
-> requería ejecutar manualmente `vercel deploy --prod --yes` después del
-> `git push`.
->
-> Ver [`DEPLOY.md`](DEPLOY.md) para el flujo completo paso a paso,
-> troubleshooting detallado (branch mismatch, cache invalidation, anti-SSRF),
-> y los comandos de diagnóstico (`vercel ls`, `vercel inspect`, etc.).
-
-### 4. Limitaciones
-
-- **WebSockets:** No hay soporte nativo para serverless WebSocket (HMR no funciona en producción)
-- **Redis:** No accesible desde serverless functions — requiere [Upstash Redis](https://upstash.com)
-- **Cron Jobs:** Usar [Vercel Cron Jobs](https://vercel.com/docs/cron-jobs) en lugar de node-cron
-- **Tamaño de Build:** Monitorear con `yarn build` localmente — Vercel tiene límite de 250MB
 
 ---
 

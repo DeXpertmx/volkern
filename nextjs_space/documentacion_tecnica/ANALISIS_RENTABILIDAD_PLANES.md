@@ -54,7 +54,7 @@
 | **Nginx + SSL** | Incluido en VPS | — | — |
 | **Total infraestructura** | **€30/mes** | **€0.60** | **€0.15** |
 
-> 📝 Actualmente en Vercel (~€55/mes) + Neon (~€19) + Redis (~€10) = ~€84/mes. La migración a VPS reduce el costo total de infraestructura en ~65%.
+> 📝 Antes: Vercel (~€55/mes) + Neon (~€19) + Redis (~€10) = ~€84/mes. Producción corre en el VPS desde la migración, que redujo el coste total de infraestructura en ~65%.
 
 ### 3.2 Inteligencia Artificial (LLM)
 

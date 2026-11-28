@@ -79,7 +79,7 @@ Metodología: el documento se ha elaborado **directamente del código fuente** (
 | **Visión/OCR** | OCR.space (principal + respaldo), OpenRouter (GPT-4o-mini), Google Gemini, DeepSeek, Tesseract.js (local) |
 | **LLM del asistente** | Cadena DeepSeek → Ling 3.0 tiny free → Nemotron 3 free → Gemini 3.5 flash lite (configurable) |
 | **Banca** | Nordigen/GoCardless (PSD2), Plaid, Stripe Financial Connections |
-| **Infraestructura** | Vercel (producción: volkern.app) |
+| **Infraestructura** | VPS con Docker Swarm (producción: volkern.app) |
 
 ### 3.2. Multi-tenant y aislamiento
 

@@ -195,7 +195,7 @@ A nivel de API Tools para agentes MCP, este módulo expone conectores de consult
 ## 8. Manual de Troubleshooting Técnico
 
 1. **El cierre falla por "MasterKey Not Found" o "Decryption Failed":**
-   - *Causa:* Desincronización del Vault a nivel Core. La bóveda fue bloqueada o las variables de entorno de la instancia de AWS/Vercel cambiaron.
+   - *Causa:* Desincronización del Vault a nivel Core. La bóveda fue bloqueada o las variables de entorno del servicio cambiaron.
    - *Solución:* Validar logs del Core (Fase 0).
 2. **Las comisiones variables marcan Cero en empleados específicos:**
    - *Causa:* El vendedor originó las `SalesOrder` pero Financieramente no hay `Invoice` vinculada marcada como `PAID` dentro del rango temporal del periodo (periodStart - periodEnd).
