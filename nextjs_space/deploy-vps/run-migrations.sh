@@ -10,16 +10,28 @@
 # `migrate deploy` aplica sin leer lo que ejecuta. Este job ahora
 # interroga lo pendiente ANTES de tocar la base:
 #
-#   1. PUERTA DESTRUCTIVA (siempre): copia el SQL de las migraciones
+#   2a. PUERTA DESTRUCTIVA (siempre): copia el SQL de las migraciones
 #      pendientes del migrator al host y pasa `filtrar-destructivas.sh`
 #      por él. DROP / TRUNCATE / DELETE o UPDATE sin WHERE / ALTER con
 #      pérdida → exit 1 y la base NO se toca. Escapar exige flag
 #      consciente que queda en el log:  --permitir-destructivas
-#   2. BACKUP PREVIO (siempre que haya pendientes): pg_dump del
+#   2b. BACKUP PREVIO (siempre que haya pendientes): pg_dump del
 #      contenedor de Postgres a /root/backups/ con verificación
 #      `gzip -t`, ANTES de aplicar nada. Fallar hacia "no migrar" es
 #      barato; migrar sin red de seguridad no lo es. Escaparlo con
 #      --sin-backup queda avisado en el log.
+#   2c. VENTANA DEL DROP (solo si 20261127160000 está pendiente): esa
+#      migración borra whatsapp_send_receipts, y la app vieja puede
+#      insertar un recibo `en_curso` entre la comprobación y el DROP.
+#      Un recibo `en_curso` es un envío que pudo salir y no consta
+#      terminado: perderlo es perder la traza. La tabla solo la escribe
+#      el servicio volkern-erp_app, así que se para (--replicas 0),
+#      se espera a que no queden tareas y se comprueba con la app
+#      detenida: la comprobación deja de ser una foto y pasa a ser el
+#      estado final. Las réplicas se restauran SIEMPRE al salir (trap) y
+#      deploy-app.sh las fuerza si un job murió sin restaurarlas.
+#      Coste: la app no atiende durante la comprobación y el migrate
+#      deploy (segundos), no durante el backup.
 #
 # ── Atadura al commit ──────────────────────────────────────
 # El migrator se hornea con `org.opencontainers.image.revision=<commit>`.
@@ -41,6 +53,7 @@ MIGRATOR_TARBALL=""
 PERMITIR_DESTRUCTIVAS=0
 SIN_BACKUP=0
 COMMIT_ESPERADO=""
+BORRA_RECIBOS=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -118,6 +131,39 @@ if [ -z "$DATABASE_URL" ]; then
   exit 1
 fi
 
+# ══ Cierre de la ventana del DROP ══════════════════════════════
+# El servicio de la app (la imagen vieja aún desplegada; la nueva ya no usa la
+# tabla) es el único escritor de whatsapp_send_receipts. Pararlo elimina al
+# escritor en lugar de estrechar la ventana.
+SERVICIO_APP="volkern-erp_app"
+REPLICAS_APP=""
+APP_PARADA=0
+
+# Restaura las réplicas pase lo que pase: un fallo de migración no puede
+# dejar producción caída. Corre en cualquier salida (error, `set -e` o señal)
+# y conserva el código; si la restauración falla y el script iba a terminar
+# bien, termina en 1. deploy-app.sh también corrige un 0 heredado.
+restaurar_app() {
+  local rc=$?
+  trap - EXIT
+  if [ "$APP_PARADA" = "1" ]; then
+    local n="${REPLICAS_APP:-1}"
+    echo "→ Restaurando $SERVICIO_APP a $n réplica(s)..."
+    APP_PARADA=0
+    # `timeout`: el CLI de Docker ya se ha colgado en este pipeline; no se deja
+    # la restauración de producción al azar de un CLI mudo.
+    if timeout 120 docker service update --replicas "$n" "$SERVICIO_APP" >/dev/null 2>&1; then
+      echo "   ✓ Servicio restaurado."
+    else
+      echo "✗ No se pudo restaurar $SERVICIO_APP. Fix manual:" >&2
+      echo "    docker service update --replicas $n $SERVICIO_APP" >&2
+      if [ "$rc" -eq 0 ]; then rc=1; fi
+    fi
+  fi
+  exit "$rc"
+}
+trap restaurar_app EXIT
+
 # ══ Capa de seguridad ══════════════════════════════════════════
 # 2a. PUERTA DESTRUCTIVA: qué pendiente hay y qué contiene.
 #     `prisma migrate status` desde el migrator dice exactamente qué
@@ -125,7 +171,7 @@ fi
 #     El SQL de esas carpetas es lo que revisa `filtrar-destructivas.sh`
 #     (función `sql_es_destructivo`, misma mecánica que el preflight).
 echo ""
-echo "→ [seguridad 1/2] Analizando migraciones pendientes..."
+echo "→ [seguridad 1/3] Analizando migraciones pendientes..."
 PENDIENTES_DIR=$(mktemp -d /tmp/pendientes-migraciones.XXXXXX)
 
 #     ¿Qué está APLICADO hoy? Metadatos puros de `_prisma_migrations` vía
@@ -162,17 +208,10 @@ echo "   ✓ Pendientes identificadas contra la base real: $N_PENDIENTES"
 if [ "$N_PENDIENTES" -gt 0 ]; then
   echo "   · $(echo "$PENDIENTES" | tr '\n' ' ')"
 
-  #   La migración 160000 borra whatsapp_send_receipts. Un recibo `en_curso`
-  #   es un envío que pudo salir y no consta terminado: se exporta y se
-  #   aborta. La comprobación es de solo lectura.
+  #   ¿Esta serie borra whatsapp_send_receipts? Eso decide si hay que parar
+  #   la app antes de comprobar (ver [seguridad 3/3]).
   if echo "$PENDIENTES" | grep -qx '20261127160000_mcp_aprobacion_operation_id_unico'; then
-    echo ""
-    echo "→ [seguridad previa] Recibos de WhatsApp en curso..."
-    if ! PG_CID="$PG_CID" bash "$DIR_SCRIPT/verificar-recibos-whatsapp.sh"; then
-      echo "✗ La comprobación de recibos falló: la base NO se toca." >&2
-      rm -rf "$PENDIENTES_DIR"
-      exit 1
-    fi
+    BORRA_RECIBOS=1
   fi
 
   #   Extraer el SQL de cada pendiente al host y revisarlo ANTES de
@@ -210,7 +249,7 @@ if [ "$N_PENDIENTES" -gt 0 ]; then HAY_PENDIENTES=1; else HAY_PENDIENTES=0; fi
 #     Solo si hay pendientes y el operador no pidió escaparse.
 if [ "$HAY_PENDIENTES" = "1" ] && [ "$SIN_BACKUP" = "0" ]; then
   echo ""
-  echo "→ [seguridad 2/2] Backup previo (pg_dump + gzip -t) ..."
+  echo "→ [seguridad 2/3] Backup previo (pg_dump + gzip -t) ..."
   BACKUP_DIR=/root/backups
   mkdir -p "$BACKUP_DIR"
   TIMESTAMP=$(date +%Y%m%d-%H%M%S)
@@ -234,7 +273,72 @@ elif [ "$SIN_BACKUP" = "1" ]; then
   echo "   ⚠️  --sin-backup: se omite el pg_dump por petición explícita (queda en el log)."
 elif [ "$HAY_PENDIENTES" = "0" ]; then
   echo ""
-  echo "→ [seguridad 2/2] Backup omitido: sin pendientes no hay nada que proteger."
+  echo "→ [seguridad 2/3] Backup omitido: sin pendientes no hay nada que proteger."
+fi
+
+# 2c. VENTANA DEL DROP: comprobar los recibos con la app parada.
+#    Sin esto, la app vieja puede insertar un `en_curso` después del conteo y
+#    el DROP de 20261127160000 se lo lleva sin dejar rastro.
+#
+#    No se necesita ningún lock: el único proceso que escribe esa tabla es el
+#    servicio de la app (los crons le llaman por HTTP y el migrator solo
+#    ejecuta SQL de migraciones), así que con 0 tareas no hay escritores. La
+#    comprobación pasa de ser una foto a ser el estado final.
+if [ "$HAY_PENDIENTES" = "1" ] && [ "$BORRA_RECIBOS" = "1" ]; then
+  echo ""
+  echo "→ [seguridad 3/3] Ventana del DROP de whatsapp_send_receipts..."
+  TABLA_RECIBOS=$(docker exec "$PG_CID" psql -U volkern_erp -d volkern_erp -t -A \
+    -v ON_ERROR_STOP=1 \
+    -c "SELECT to_regclass('public.whatsapp_send_receipts') IS NOT NULL;" 2>/dev/null) || {
+    echo "✗ No se pudo consultar la tabla de recibos: la base NO se toca." >&2
+    exit 1
+  }
+  if [ "$TABLA_RECIBOS" = "t" ]; then
+    if ! docker service inspect "$SERVICIO_APP" >/dev/null 2>&1; then
+      echo "   · sin servicio $SERVICIO_APP: no hay escritores que parar."
+    else
+      REPLICAS_APP=$(docker service inspect "$SERVICIO_APP" \
+        --format '{{.Spec.Mode.Replicated.Replicas}}' 2>/dev/null || true)
+      case "$REPLICAS_APP" in
+        ''|'<no value>') REPLICAS_APP=1 ;;
+      esac
+      if [ "$REPLICAS_APP" = "0" ]; then
+        # Ya está parado (job anterior interrumpido): no hay escritores y no se
+        # toca el estado; deploy-app.sh lo devuelve a 1 en su service update.
+        echo "   · $SERVICIO_APP ya está a 0 réplicas: no hay escritores que parar."
+      else
+        echo "   · parando $SERVICIO_APP ($REPLICAS_APP réplica(s)) mientras dura el DROP"
+        APP_PARADA=1  # antes del update: si falla a medias, el trap restaura
+        if ! timeout 120 docker service update --replicas 0 "$SERVICIO_APP" >/dev/null; then
+          echo "✗ No se pudo parar $SERVICIO_APP: la base NO se toca." >&2
+          exit 1
+        fi
+        # Solo se da por parada cuando `docker ps` responde y no devuelve
+        # tareas: un error de Docker no es una prueba de que no queden
+        # escritores, así que se sigue esperando (fail closed).
+        PARADA=0
+        for _ in $(seq 1 30); do
+          if vivos=$(docker ps --filter name=volkern-erp_app -q 2>/dev/null); then
+            if [ -z "$vivos" ]; then
+              PARADA=1
+              break
+            fi
+          fi
+          sleep 3
+        done
+        if [ "$PARADA" != "1" ]; then
+          echo "✗ No consta que $SERVICIO_APP esté parada (tareas vivas o Docker sin responder): no se migra." >&2
+          exit 1
+        fi
+        echo "   ✓ App detenida: no queda ningún escritor de recibos."
+      fi
+    fi
+  fi
+
+  if ! PG_CID="$PG_CID" bash "$DIR_SCRIPT/verificar-recibos-whatsapp.sh"; then
+    echo "✗ La comprobación de recibos falló: la base NO se toca." >&2
+    exit 1
+  fi
 fi
 
 # 3. Limpiar job anterior si quedó
