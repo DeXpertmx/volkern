@@ -257,8 +257,8 @@ Este servicio maneja notificaciones vía Telegram, Slack, etc.
 # Systemd journal
 sudo journalctl -u volkern -f
 
-# Docker (si aplica)
-docker logs -f volkern_app
+# Docker Swarm
+docker service logs -f volkern-erp_app
 ```
 
 ### Healthcheck
@@ -266,12 +266,13 @@ docker logs -f volkern_app
 Verifica que el servidor esté respondiendo:
 
 ```bash
-curl https://tudominio.com/
-# Debería devolver 200 OK
+curl -fsS https://volkern.app/api/health   # 200 si el proceso responde
+curl -fsS https://volkern.app/            # 200 si además sirve la página
 ```
 
-> ⚠️ No hay un endpoint `/api/health` dedicado. Se recomienda monitorear
-> el código de estado HTTP 200 de la página principal.
+> ℹ️ Sí existe `/api/health` y es el check que usa el smoke del despliegue. Que
+> `/` devuelva 200 no basta: un contenedor anclado a la imagen vieja también
+> responde 200 (por eso `deploy-app.sh` compara el image ID del contenedor).
 
 ### Métricas Clave a Monitorear
 
@@ -307,12 +308,68 @@ curl https://tudominio.com/
 
 ## 🚨 Troubleshooting
 
+### El servicio queda a 0 réplicas
+
+La tarea no llega a arrancar. Diagnóstico, en orden:
+
+```bash
+docker service ps volkern-erp_app --no-trunc      # motivo del rechazo de la tarea
+docker service logs --tail 200 volkern-erp_app    # qué dice al arrancar
+docker service inspect volkern-erp_app --format '{{.Spec.TaskTemplate.ContainerSpec.Image}}'
+```
+
+Causa habitual: el contenedor quedó anclado a la imagen anterior porque el
+primer `service update --force` no llegó a arrancar la nueva. `deploy-app.sh` lo
+detecta, reintenta y avisa en el paso `[4b/5]`; si persiste, fix manual con la
+imagen que se quería desplegar:
+
+```bash
+docker service update --force --image volkern-erp:sha256-<digest> volkern-erp_app
+docker service ps volkern-erp_app --no-trunc    # repetir hasta ver Running 1/1
+```
+
+Si no vuelve, el mismo comando con el digest de la imagen anterior, que el
+pipeline conserva para rollback.
+
+### El despliegue se para en la comprobación de recibos
+
+Antes de la migración `20261127160000` (la que borra `whatsapp_send_receipts`)
+hay que ejecutar, en el VPS:
+
+```bash
+bash /root/deploy-vps/verificar-recibos-whatsapp.sh
+```
+
+| Salida | Significado | Qué hacer |
+|--------|-------------|-----------|
+| `0` | Sin `en_curso` (o tabla ya borrada) | Se puede migrar |
+| `1` | Hay `en_curso`, o un `incierto` cuya solicitud no guardó desenlace | **No se migra.** Los envíos quedan exportados en `/root/backups/whatsapp_send_receipts-*.csv` (permisos 600) antes de decidir |
+| `2` | No se pudo consultar la tabla | Fail closed: se arregla el entorno, no se fuerza |
+
+Un `en_curso` bloquea siempre: el proceso creó la clave antes de llamar al
+proveedor y no dejó desenlace, así que el recibo es la única prueba de que el
+mensaje pudo salir. Un `incierto` **con** su desenlace guardado en la solicitud
+de aprobación sí se puede migrar: ese desenlace sobrevive al DROP. Resolver un
+`en_curso` es decisión de negocio (confirmar entrega o marcar fallo), no del
+script.
+
+### Aborta el ensayo de rollback
+
+`deploy-vps/ensayo-rollback.sh` falla casi siempre por el entorno, no por el backup:
+
+| Síntoma | Causa | Solución |
+|---------|-------|----------|
+| «Restaurar copia base» falla a media restauración | `--pg-image` de una versión mayor distinta a la de producción | Usar `postgres:17-alpine`, la de producción: el dump lo genera el `pg_dump` 17 del contenedor |
+| «Verificar migración» aborta y el esquema no cambió | La imagen `--migrator` es de un commit sin las migraciones nuevas | Construirla con el `prisma/` del commit que se va a desplegar |
+
+### Fallos genéricos
+
 | Problema | Causa | Solución |
 |----------|-------|----------|
 | Build falla por memoria | Límite de heap | `NODE_OPTIONS='--max-old-space-size=6144' yarn build` |
-| Prisma conexión rechazada | DB no accesible | Verificar `DATABASE_URL` y firewall |
+| Prisma: conexión rechazada | `DATABASE_URL` incorrecta o Postgres caído | Revisar `DATABASE_URL` y `pg_isready` ([plan de continuidad §7.1](PLAN_CONTINUIDAD_VOLKERN.md)) |
 | Emails no se envían | Resend API key | Confirmar API key y dominio verificado |
-| WebSocket no funciona | Proxy mal configurado | Verificar headers `Upgrade/Connection` en Nginx |
+| WebSocket no funciona | Proxy mal configurado | Verificar headers `Upgrade`/`Connection` en el proxy (Traefik en producción) |
 | Build > 5 minutos | Demasiado código | Revisar [plan de modularización](MODULARIZATION_PLAN.md) |
 
 ---
