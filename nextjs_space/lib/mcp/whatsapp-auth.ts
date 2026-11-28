@@ -21,8 +21,9 @@ import { prisma } from '@/lib/db'
 import bcrypt from 'bcryptjs'
 import crypto from 'node:crypto'
 import { sendMessageWithUserInstance } from '@/lib/evolution-instances'
-import { ejecutarAprobacion, ejecutarToolDelCatalogo } from '@/lib/mcp/approval-execution'
-import { completeApproval } from '@/lib/mcp/tool-gate'
+import { ejecutarToolDelCatalogo } from '@/lib/mcp/approval-execution'
+import { idDeMensajeEnResultado } from '@/lib/mcp/whatsapp-entrega'
+import { completeApproval, solicitudIdenticaEnEjecucion } from '@/lib/mcp/tool-gate'
 
 const CODE_TTL_MINUTES = 15
 const MAX_ATTEMPTS = 3
@@ -128,10 +129,10 @@ export async function generateAndSendWhatsappAuthCode(params: {
     ? `****${digits.slice(-4)}`
     : `****${business.phoneNumber}`
 
-  // Reserva atómica del código. El gate reutiliza la solicitud pendiente cuando
-  // dos llamadas traen los mismos argumentos; sin este cerrojo ambas emitían un
-  // código y la segunda sobrescribía el token de la primera, dejando su enlace
-  // muerto. El UPDATE condicionado compite por la fila: en Postgres la segunda
+  // Reserva atómica del código. Dos llamadas pueden caer sobre la misma
+  // solicitud (mismo `operationId`, o un reintento del gate mientras el código
+  // sigue vigente); sin este cerrojo ambas emitían un código y la segunda
+  // sobrescribía el token de la primera, dejando su enlace muerto. El UPDATE condicionado compite por la fila: en Postgres la segunda
   // espera el bloqueo y reevalúa el WHERE, que ya no coincide porque el código
   // vigente no ha caducado. Solo la ganadora emite y envía; la otra devuelve el
   // código vigente, así que un segundo código nunca invalida al primero.
@@ -269,6 +270,7 @@ export type MotivoVerificacion =
   | 'intentos_agotados'
   | 'codigo_incorrecto'
   | 'envio_fallido'
+  | 'envio_duplicado'
 
 /** Fila reclamada, tal como la lee la transacción con `FOR UPDATE`. */
 interface SolicitudReclamada {
@@ -277,7 +279,6 @@ interface SolicitudReclamada {
   toolName: string
   arguments: Record<string, unknown> | null
   argumentsHash: string
-  operationId: string | null
   requestedById: string
   status: string
   whatsappCodeHash: string | null
@@ -330,7 +331,7 @@ export async function verifyAndExecuteWhatsappAuthCode(params: {
   const reclamo = await prisma.$transaction(
     async (tx): Promise<Reclamo> => {
       const filas = await tx.$queryRaw<SolicitudReclamada[]>`
-        SELECT id, "tenantId", "toolName", arguments, "argumentsHash", "operationId",
+        SELECT id, "tenantId", "toolName", arguments, "argumentsHash",
                "requestedById", status, "whatsappCodeHash", "whatsappCodeExpiresAt",
                "whatsappCodeAttempts"
         FROM "mcp_approval_requests"
@@ -402,6 +403,25 @@ export async function verifyAndExecuteWhatsappAuthCode(params: {
         }
       }
 
+      // Otra fila del mismo contenido (otro usuario pidió lo mismo) no puede
+      // ejecutarse a la vez: el código correcto no basta si ya hay un envío
+      // idéntico en curso o recién ejecutado.
+      const duplicada = await solicitudIdenticaEnEjecucion(tx, {
+        tenantId: solicitud.tenantId,
+        toolName: solicitud.toolName,
+        argumentsHash: solicitud.argumentsHash,
+        excluirId: solicitud.id,
+      })
+      if (duplicada) {
+        return {
+          ok: false,
+          motivo: 'envio_duplicado',
+          error:
+            'Ya hay un envío idéntico en curso o ejecutado hace menos de 5 minutos. Espera o cambia el mensaje.',
+          approvalId: solicitud.id,
+        }
+      }
+
       // Reserva del derecho de ejecución: el paso a `approved` dentro de la
       // transacción es lo que hace que el resto de intentos no ejecute.
       await tx.mcpApprovalRequest.update({
@@ -431,15 +451,18 @@ export async function verifyAndExecuteWhatsappAuthCode(params: {
   }
 
   // Ejecución fuera de la transacción (no se retiene el bloqueo durante la
-  // llamada externa). El recibo del envío y el cierre del desenlace viven en
-  // `ejecutarAprobacion`, compartido con la bandeja de aprobaciones.
+  // llamada externa). La solicitud ya reclamada es el recibo: se ejecuta una
+  // sola vez.
   const { solicitud } = reclamo
-  const { ok: executed, result } = await ejecutarAprobacion({
-    aprobacion: solicitud,
-    ejecutar: () => ejecutarToolDelCatalogo(solicitud),
-  })
+  const { ok: executed, result } = await ejecutarToolDelCatalogo(solicitud)
 
-  await completeApproval({ approvalId: solicitud.id, ok: executed, result })
+  const whatsappMessageId = idDeMensajeEnResultado(result)
+  await completeApproval({
+    approvalId: solicitud.id,
+    ok: executed,
+    result,
+    ...(whatsappMessageId ? { whatsappMessageId } : {}),
+  })
 
   return {
     ok: executed,

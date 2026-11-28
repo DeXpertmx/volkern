@@ -271,6 +271,18 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      if (gate.kind === 'replay') {
+        return NextResponse.json({
+          jsonrpc: '2.0',
+          id: body.id || null,
+          result: {
+            status: gate.status,
+            approvalId: gate.approvalId,
+            result: gate.result,
+          },
+        });
+      }
+
       if (gate.kind === 'ask' || gate.kind === 'ask_code') {
         const data: any = {
           status: 'pending',
@@ -355,6 +367,16 @@ export async function POST(request: NextRequest) {
           { success: false, error: gate.reason, tool: body.tool || body.name },
           { status: 403 }
         );
+      }
+
+      if (gate.kind === 'replay') {
+        return NextResponse.json({
+          success: gate.status === 'executed',
+          status: gate.status,
+          approvalId: gate.approvalId,
+          result: gate.result,
+          tool: body.tool || body.name,
+        });
       }
 
       if (gate.kind === 'ask' || gate.kind === 'ask_code') {

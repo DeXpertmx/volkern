@@ -496,7 +496,7 @@ Acción sugerida:
 1. En el VPS: `docker compose ps` (en /root/volkern-erp) para ver el estado del stack.
 2. Ver los logs de la app: `docker compose logs --tail=200`.
 3. Si la regresión es de un despliegue reciente, volver a la imagen anterior
-   con `deploy-vps/deploy-app.sh` y ver `docs/DEPLOY.md` §Troubleshooting.
+   con `deploy-vps/deploy-app.sh` y ver `docs/DEPLOY-GUIDE.md`.
 4. Si persiste >15min, abrir incident.
 ```
 

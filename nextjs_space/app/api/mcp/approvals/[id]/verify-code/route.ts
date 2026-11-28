@@ -30,6 +30,7 @@ const STATUS_POR_MOTIVO: Record<MotivoVerificacion, number> = {
   ya_resuelta: 400,
   codigo_caducado: 410,
   intentos_agotados: 429,
+  envio_duplicado: 409,
 }
 
 export const dynamic = 'force-dynamic'

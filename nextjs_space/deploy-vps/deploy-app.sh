@@ -243,6 +243,16 @@ if [ -n "$IMAGE_COMMIT" ]; then
   fi
 fi
 
+# Si el job de migraciones murió sin restaurar las réplicas (kill -9, corte de
+# red) el servicio quedó a 0 y este `service update` NO lo levanta: el spec
+# sigue en 0 y el deploy terminaría con producción caída. Se restaura aquí.
+SPEC_REPLICAS=$(docker service inspect "$SERVICE" \
+  --format '{{.Spec.Mode.Replicated.Replicas}}' 2>/dev/null || true)
+if [ "$SPEC_REPLICAS" = "0" ]; then
+  echo "   ⚠️  $SERVICE está a 0 réplicas (migración interrumpida): se restaura a 1."
+  UPDATE_ARGS+=(--replicas 1)
+fi
+
 # ── 3b. Roll con reintento ante fallos transitorios de red ──────
 # `docker service update` sale distinto de cero cuando Swarm pausa la
 # actualización por una tarea fallida y, con `set -e`, eso abortaba el deploy

@@ -190,7 +190,7 @@ Cobertura: **98.3% Statements**
 | [Hospitality (Comercial)](docs/COMMERCIAL-HOSPITALITY.md) | Pack comercial del PMS + Booking Engine: ICPs, competencia, argumentarios, FAQ y validación del precio en el piloto |
 | [Hospitality (Resumen para dirección)](docs/hospitality-resumen-ejecutivo.md) | Una página: qué hace hoy, qué está probado y qué falta para arrancar |
 | [Plan de Modularización](docs/MODULARIZATION_PLAN.md) | Optimización de build y monorepo |
-| [Guía de Deploy](docs/DEPLOY-GUIDE.md) | VPS, Docker, Vercel, migraciones |
+| [Guía de Deploy](docs/DEPLOY-GUIDE.md) | VPS, Docker, migraciones |
 | [Infraestructura VPS](docs/volkern-plan-infraestructura-vps.pdf) | Plan detallado de infraestructura |
 
 ---
@@ -218,8 +218,7 @@ bash deploy-vps/deploy-local.sh   # build → migraciones → VPS → smokes
 > base antigua (Neon). Desplegar ahí reabriría esa base sin querer
 > (ver docs/AUDITORIA-NEON-Y-DESPLIEGUES.md, hallazgo H1).
 
-📘 **Flujo detallado y troubleshooting:** [`docs/DEPLOY.md`](docs/DEPLOY.md)
-📘 Deploy self-hosted (VPS/Docker): [`docs/DEPLOY-GUIDE.md`](docs/DEPLOY-GUIDE.md)
+📘 **Flujo de deploy, migraciones y troubleshooting:** [`docs/DEPLOY-GUIDE.md`](docs/DEPLOY-GUIDE.md)
 
 ---
 

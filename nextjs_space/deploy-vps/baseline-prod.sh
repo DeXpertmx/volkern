@@ -34,6 +34,8 @@ PG_CID=$(docker ps --filter name=volkern-erp_postgres --format '{{.ID}}' | head 
 
 # 2. Respaldos ANTES de tocar nada
 STAMP=$(date +%Y%m%d-%H%M%S)
+# Los respaldos contienen datos de clientes: nacen en 600.
+umask 077
 docker exec "$PG_CID" pg_dump -U volkern_erp -d volkern_erp --data-only --table=_prisma_migrations \
   > "$OUTDIR/_prisma_migrations-$STAMP.sql"
 gzip -f "$OUTDIR/_prisma_migrations-$STAMP.sql"
@@ -41,6 +43,7 @@ echo "→ Metadatos de Prisma respaldados: $(du -h "$OUTDIR/_prisma_migrations-$
 
 docker exec "$PG_CID" pg_dump -U volkern_erp -d volkern_erp \
   | gzip > "/root/backups/volkern_erp-pre-baseline-$STAMP.sql.gz"
+chmod 600 "/root/backups/volkern_erp-pre-baseline-$STAMP.sql.gz"
 echo "→ Backup completo: $(du -h "/root/backups/volkern_erp-pre-baseline-$STAMP.sql.gz" | cut -f1)"
 
 # 3. DATABASE_URL del servicio (no se imprime)

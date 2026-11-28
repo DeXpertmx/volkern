@@ -62,6 +62,22 @@ describe('verify-code — status según el motivo', () => {
     expect(body.error).toContain('intento')
   })
 
+  it('envío idéntico en curso responde 409', async () => {
+    h.verify.mockResolvedValueOnce({
+      ok: false,
+      approved: false,
+      executed: false,
+      error: 'Ya hay un envío idéntico en curso o ejecutado hace menos de 5 minutos.',
+      motivo: 'envio_duplicado',
+      approvalId: 'ap-1',
+    })
+
+    const { status, body } = await verificar()
+
+    expect(status).toBe(409)
+    expect(body.motivo).toBe('envio_duplicado')
+  })
+
   it('código caducado responde 410', async () => {
     h.verify.mockResolvedValueOnce({
       ok: false,

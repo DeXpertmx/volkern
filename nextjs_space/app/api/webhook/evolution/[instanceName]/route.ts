@@ -632,6 +632,23 @@ export async function POST(
           break;
         }
 
+        // Si el mensaje nació de una aprobación MCP, su ACK cierra el envío:
+        // se guarda en la solicitud y, si no había confirmación, la ejecuta.
+        try {
+          const { estadoDeEntrega, registrarEntregaDeWhatsapp } = await import(
+            '@/lib/mcp/whatsapp-entrega'
+          );
+          const estado = estadoDeEntrega(rawStatus);
+          if (estado) {
+            const resuelto = await registrarEntregaDeWhatsapp({ messageId: keyId, estado });
+            if (resuelto.actualizada) {
+              console.log('✅ [MCP entrega]', keyId, '→', estado, 'aprobación', resuelto.approvalId);
+            }
+          }
+        } catch (entregaError) {
+          console.error('❌ [MCP entrega] No se pudo guardar el ACK:', entregaError);
+        }
+
         // El mensaje pudo guardarse con externalRef (puente Evolution) o solo
         // con el id del proveedor en metadatos (envíos desde la app).
         let mensajeAck = await prisma.message

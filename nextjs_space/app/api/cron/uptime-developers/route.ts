@@ -179,7 +179,7 @@ function formatAlertText(failures: ProbeResult[]): { title: string; body: string
     "1. Ejecutar `vercel ls --prod` para ver el último deployment.",
     "2. Ejecutar `vercel logs <deployment-url>` para errores runtime.",
     "3. Si la regresión es reciente, `vercel rollback <prev-deployment-url>`.",
-    "4. Si persiste >15min, abrir incident y ver `docs/DEPLOY.md` §Troubleshooting.",
+    "4. Si persiste >15min, abrir incident y ver `docs/DEPLOY-GUIDE.md`.",
   ].join("\n");
 
   const body = [

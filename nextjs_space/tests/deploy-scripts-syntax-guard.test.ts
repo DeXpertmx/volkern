@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 
@@ -148,6 +148,43 @@ export function ejecutarShellcheck(archivo: string, bin = 'shellcheck'): Revisio
   };
 }
 
+// ── Permisos de los ficheros de backup ──────────────────────────────────────
+
+export interface FaltaDePermisos {
+  /** Línea del script (1-based), para el mensaje. */
+  linea: number;
+  motivo: string;
+}
+
+/** Un destino de backup: el directorio de respaldos, una variable que lo apunta
+ *  o un fichero con nombre de dump. */
+const DESTINO_DE_BACKUP = />\s*"[^"]*(?:\/root\/backups|BACKUP_(?:FILE|DIR)|ARCHIVO_RECIBOS|\.sql\.gz|\.csv)/;
+
+/**
+ * Un `pg_dump` completo o una exportación `COPY` contienen la base entera: con
+ * el umask por defecto (022) el fichero nace legible por cualquiera mientras se
+ * escribe, y en el VPS eso es cualquier usuario con shell. La regla es la que ya
+ * seguía `verificar-recibos-whatsapp.sh`: `umask 077` antes de abrirlo y
+ * `chmod 600` después de cerrarlo.
+ */
+export function revisarPermisosDeBackup(contenido: string): FaltaDePermisos[] {
+  const lineas = contenido.split('\n');
+  const umasks = lineas.flatMap((l, i) => (/^\s*umask\s+0?77\b/.test(l) ? [i] : []));
+  const chmods = lineas.flatMap((l, i) => (/\bchmod\s+600\b/.test(l) ? [i] : []));
+  const faltas: FaltaDePermisos[] = [];
+
+  lineas.forEach((linea, i) => {
+    if (linea.trim().startsWith('#') || !DESTINO_DE_BACKUP.test(linea)) return;
+    if (!umasks.some((u) => u < i)) {
+      faltas.push({ linea: i + 1, motivo: 'abre un backup sin un `umask 077` previo' });
+    }
+    if (!chmods.some((c) => c > i)) {
+      faltas.push({ linea: i + 1, motivo: 'no deja el backup en 600 (`chmod 600` posterior)' });
+    }
+  });
+  return faltas;
+}
+
 // ── Auxiliares de test ───────────────────────────────────────────────────────
 
 const HAY_BASH = bashDisponible();
@@ -269,6 +306,47 @@ describe('Guardia de sintaxis de los scripts de despliegue', () => {
       '',
       ...detalle,
     ].join('\n')).toEqual([]);
+  });
+
+  it('los ficheros de backup nacen en 600', () => {
+    const fallos: string[] = [];
+    for (const s of scripts) {
+      for (const f of revisarPermisosDeBackup(readFileSync(s.abs, 'utf8'))) {
+        fallos.push(`- ${s.rel}:${f.linea}\n    ${f.motivo}`);
+      }
+    }
+    expect(
+      fallos,
+      [
+        'Hay scripts de despliegue que escriben un backup con los permisos por defecto.',
+        'Un dump tiene toda la base: mientras se escribe, cualquier usuario del VPS puede leerlo.',
+        'Se abre bajo `umask 077` y se confirma con `chmod 600` (ver verificar-recibos-whatsapp.sh).',
+        '',
+        ...fallos,
+      ].join('\n')
+    ).toEqual([]);
+  });
+
+  it('detecta un backup sin permisos restrictivos (self-test)', () => {
+    const sinPermisos = [
+      '#!/bin/bash',
+      'docker exec "$PG_CID" pg_dump -U volkern_erp -d volkern_erp | gzip > "$BACKUP_FILE"',
+      'gzip > "/root/backups/volkern_erp-$STAMP.sql.gz"',
+    ].join('\n');
+    // Los dos destinos sin permisos; el log no cuenta.
+    const lineas = new Set(revisarPermisosDeBackup(sinPermisos).map((f) => f.linea));
+    expect([...lineas]).toEqual([2, 3]);
+
+    const conPermisos = [
+      '#!/bin/bash',
+      'umask 077',
+      'docker exec "$PG_CID" pg_dump -U volkern_erp -d volkern_erp | gzip > "$BACKUP_FILE"',
+      'chmod 600 "$BACKUP_FILE"',
+    ].join('\n');
+    expect(revisarPermisosDeBackup(conPermisos)).toEqual([]);
+
+    // Un log o un marcador no son backups: no se les exige nada.
+    expect(revisarPermisosDeBackup('#!/bin/bash\necho hola > "$LOG"')).toEqual([]);
   });
 
   it('deja constancia de si el tramo de shellcheck se ejecutó', () => {

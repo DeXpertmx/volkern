@@ -17,6 +17,7 @@
  */
 
 import { createHash } from 'node:crypto'
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db'
 import {
   decideToolCall,
@@ -51,6 +52,15 @@ export type GateOutcome =
       expiresAt: Date
     }
   | {
+      kind: 'replay'
+      decision: 'ask'
+      reason: string
+      risk: ToolRisk | null
+      approvalId: string
+      status: string
+      result: unknown
+    }
+  | {
       kind: 'ask_code'
       decision: 'ask'
       reason: string
@@ -63,16 +73,67 @@ export type GateOutcome =
       phoneNumberMasked: string
     }
 
+/** Longitud máxima aceptada para un `operationId`. */
+export const LONGITUD_MAX_OPERATION_ID = 200
+
 /**
  * Identificador explícito de operación que manda el cliente MCP. Se guarda en
  * la solicitud y es la identidad de idempotencia del envío: el mismo valor no
- * reenvía, uno nuevo permite repetir el mismo mensaje.
+ * reenvía, uno nuevo permite repetir el mismo mensaje. No se trunca: un id
+ * recortado en silencio sería otra identidad y reenviaría.
  */
 export function operationIdDeArgs(args: Record<string, unknown>): string | null {
   const valor = args.operationId
   if (typeof valor !== 'string') return null
   const limpio = valor.trim()
-  return limpio ? limpio.slice(0, 200) : null
+  return limpio || null
+}
+
+/** Motivo por el que el `operationId` no es utilizable, o `null` si lo es. */
+export function errorDeOperationId(args: Record<string, unknown>): string | null {
+  const valor = args.operationId
+  if (typeof valor !== 'string') return null
+  const largo = valor.trim().length
+  return largo > LONGITUD_MAX_OPERATION_ID
+    ? `operationId no puede superar ${LONGITUD_MAX_OPERATION_ID} caracteres (recibidos ${largo}).`
+    : null
+}
+
+/** Columnas suficientes para reutilizar o reproducir una solicitud existente. */
+const CAMPOS_SOLICITUD = {
+  id: true,
+  status: true,
+  expiresAt: true,
+  result: true,
+  whatsappVerificationToken: true,
+  whatsappCodeExpiresAt: true,
+  whatsappPhoneNumber: true,
+} as const
+
+interface SolicitudPrevia {
+  id: string
+  status: string
+  expiresAt: Date
+  result: unknown
+  whatsappVerificationToken: string | null
+  whatsappCodeExpiresAt: Date | null
+  whatsappPhoneNumber: string | null
+}
+
+/**
+ * Una operación ya resuelta no se vuelve a ejecutar: se devuelve su desenlace.
+ * Es lo que impide que el mismo `operationId` reenvíe el WhatsApp.
+ */
+function replayDeSolicitud(solicitud: SolicitudPrevia, risk: ToolRisk | null): GateOutcome {
+  return {
+    kind: 'replay',
+    decision: 'ask',
+    reason: `La operación ya se resolvió (${solicitud.status}); no se volvió a ejecutar.`,
+    risk,
+    approvalId: solicitud.id,
+    status: solicitud.status,
+    result: solicitud.result,
+  }
 }
 
 export interface GateInput {
@@ -84,8 +145,18 @@ export interface GateInput {
   via: GateSurface
 }
 
-/** Hash estable de los argumentos: mismo contenido, mismo hash, mismo orden. */
+/**
+ * Huella estable de los argumentos que identifican una acción.
+ *
+ * Ignora `tenantId` y `userId`: la identidad vive en columnas
+ * (`tenantId`/`requestedById`) y no debe cambiar la huella. `source` sí cuenta:
+ * distingue la superficie (MCP o agente) y no se deben mezclar solicitudes de
+ * caminos de ejecución distintos. El orden de las claves no altera el hash.
+ */
 export function hashToolArguments(args: Record<string, unknown>): string {
+  const negocio = { ...args }
+  delete negocio.tenantId
+  delete negocio.userId
   const canonico = (valor: unknown): unknown => {
     if (Array.isArray(valor)) return valor.map(canonico)
     if (valor && typeof valor === 'object') {
@@ -98,7 +169,7 @@ export function hashToolArguments(args: Record<string, unknown>): string {
     }
     return valor
   }
-  return createHash('sha256').update(JSON.stringify(canonico(args))).digest('hex')
+  return createHash('sha256').update(JSON.stringify(canonico(negocio))).digest('hex')
 }
 
 /** Auditoría del gate. No lanza: la decisión ya está tomada y debe responder. */
@@ -133,10 +204,13 @@ async function auditar(params: {
 /**
  * Resuelve la decisión y, si es `ask`, crea (o reutiliza) la solicitud.
  *
- * Reutilizar importa: un agente que reintenta tres veces la misma acción no
- * debe generar tres solicitudes idénticas en la bandeja del responsable. El
- * índice parcial único de la migración lo garantiza y aquí se traduce en
- * "devuelve la que ya está pendiente".
+ * Reutilizar importa: un agente que reintenta la misma operación no debe
+ * generar varias solicitudes en la bandeja del responsable. La identidad es el
+ * `operationId` de ese usuario y el índice único `(empresa, usuario,
+ * operationId)` la impone; aquí se traduce en «devuelve la que ya existe».
+ * Sin `operationId` la identidad es el contenido de ese usuario: el índice
+ * parcial reserva una sola solicitud pendiente por empresa, usuario,
+ * herramienta y argumentos (la huella no incluye la identidad).
  */
 export async function enforceToolGate(input: GateInput): Promise<GateOutcome> {
   const { tenantId, userId, roleName, toolName, args, via } = input
@@ -185,7 +259,26 @@ export async function enforceToolGate(input: GateInput): Promise<GateOutcome> {
     return { kind: 'allow', decision: 'allow', reason: resuelta.reason, risk: resuelta.risk }
   }
 
-  const { approvalId, expiresAt } = await crearOReutilizarSolicitud({
+  // Un id desmedido no se recorta: sería otra identidad y reenviaría.
+  const problemaOperationId = errorDeOperationId(args)
+  if (problemaOperationId) {
+    return { kind: 'deny', decision: 'deny', reason: problemaOperationId, risk: resuelta.risk }
+  }
+
+  const operationId = operationIdDeArgs(args)
+
+  // Misma operación del mismo usuario, ya resuelta: se reproduce el desenlace
+  // sin crear nada ni mandar un código nuevo. Si sigue pendiente, se cae al
+  // flujo normal, que reutiliza el código vigente en vez de emitir otro.
+  if (operationId) {
+    const previa = (await prisma.mcpApprovalRequest.findFirst({
+      where: { tenantId, requestedById: userId, operationId },
+      select: CAMPOS_SOLICITUD,
+    })) as SolicitudPrevia | null
+    if (previa && previa.status !== 'pending') return replayDeSolicitud(previa, resuelta.risk)
+  }
+
+  const { approvalId, expiresAt, existente } = await crearOReutilizarSolicitud({
     tenantId,
     userId,
     roleName: roleName ?? null,
@@ -194,8 +287,11 @@ export async function enforceToolGate(input: GateInput): Promise<GateOutcome> {
     via,
     reason: resuelta.reason,
     risk: resuelta.risk,
-    operationId: operationIdDeArgs(args),
+    operationId,
   })
+  if (existente && existente.status !== 'pending') {
+    return replayDeSolicitud(existente, resuelta.risk)
+  }
 
   // ── Flujo de código por WhatsApp para envíos externos ─────────────────
   // `volkern_send_whatsapp` es de riesgo `external`: se envía un código de 6
@@ -249,10 +345,11 @@ export async function enforceToolGate(input: GateInput): Promise<GateOutcome> {
 /**
  * Crea (o reutiliza) una `McpApprovalRequest` pendiente.
  *
- * Comparte la lógica de dedupe y auditoría de `enforceToolGate`: un reintento
- * idéntico no genera una segunda solicitud en la bandeja del responsable. El
- * índice parcial único de la migración y el hash canónico de argumentos son el
- * cerrojo; aquí se traducen en «devuelve la que ya está pendiente».
+ * Comparte la lógica de auditoría de `enforceToolGate`. Hay dos cerrojos en la
+ * base: `(empresa, usuario, operationId)` para una operación con identidad y un
+ * índice parcial único por usuario, herramienta y argumentos para las
+ * solicitudes pendientes sin `operationId`, que evita que el mismo envío se
+ * reserve dos veces.
  */
 async function crearOReutilizarSolicitud(params: {
   tenantId: string
@@ -264,10 +361,42 @@ async function crearOReutilizarSolicitud(params: {
   reason: string
   risk?: ToolRisk | null
   operationId?: string | null
-}): Promise<{ approvalId: string; expiresAt: Date }> {
+}): Promise<{
+  approvalId: string
+  expiresAt: Date
+  existente: SolicitudPrevia | null
+}> {
   const { tenantId, userId, roleName, toolName, args, via, reason, risk, operationId } = params
   const argumentsHash = hashToolArguments(args)
   const expiresAt = new Date(Date.now() + APROBACION_VALIDEZ_HORAS * 60 * 60 * 1000)
+
+  // Sin `operationId` la identidad es el contenido de ESE usuario: una
+  // solicitud pendiente suya con los mismos argumentos es la reserva y se
+  // devuelve en vez de crear otra. Nunca se reutiliza la de otra persona, que
+  // podría acabar aprobando un envío ajeno.
+  if (!operationId) {
+    const pendiente = (await prisma.mcpApprovalRequest.findFirst({
+      where: {
+        tenantId,
+        requestedById: userId,
+        toolName,
+        argumentsHash,
+        status: 'pending',
+        operationId: null,
+      },
+      select: CAMPOS_SOLICITUD,
+    })) as SolicitudPrevia | null
+    if (pendiente) {
+      if (pendiente.expiresAt.getTime() <= Date.now()) {
+        await prisma.mcpApprovalRequest.update({
+          where: { id: pendiente.id },
+          data: { expiresAt },
+        })
+        pendiente.expiresAt = expiresAt
+      }
+      return { approvalId: pendiente.id, expiresAt: pendiente.expiresAt, existente: pendiente }
+    }
+  }
 
   let approvalId: string
   try {
@@ -287,14 +416,26 @@ async function crearOReutilizarSolicitud(params: {
       select: { id: true },
     })
     approvalId = creada.id
-  } catch (error) {
-    // P2002: ya hay una pendiente idéntica; se devuelve ésa en vez de duplicar.
-    const existente = await prisma.mcpApprovalRequest.findFirst({
-      where: { tenantId, toolName, argumentsHash, status: 'pending' },
-      select: { id: true },
-    })
+  } catch (error: any) {
+    // P2002 viene de uno de los dos únicos: la operación del usuario o la
+    // reserva pendiente por contenido. Otra petición se adelantó entre la
+    // comprobación previa y este INSERT; se devuelve la fila ganadora.
+    if (error?.code !== 'P2002') throw error
+    const existente = (await prisma.mcpApprovalRequest.findFirst({
+      where: operationId
+        ? { tenantId, requestedById: userId, operationId }
+        : {
+            tenantId,
+            requestedById: userId,
+            toolName,
+            argumentsHash,
+            status: 'pending',
+            operationId: null,
+          },
+      select: CAMPOS_SOLICITUD,
+    })) as SolicitudPrevia | null
     if (!existente) throw error
-    approvalId = existente.id
+    return { approvalId: existente.id, expiresAt: existente.expiresAt, existente }
   }
 
   await auditar({
@@ -315,7 +456,7 @@ async function crearOReutilizarSolicitud(params: {
     },
   })
 
-  return { approvalId, expiresAt }
+  return { approvalId, expiresAt, existente: null }
 }
 
 /**
@@ -354,6 +495,9 @@ export async function requestAgentToolApproval(params: {
       ? 'La acción envía algo fuera del sistema y no se puede deshacer.'
       : 'La acción borra o cancela datos de forma irreversible.'
 
+  const problemaOperationId = errorDeOperationId(args)
+  if (problemaOperationId) throw new Error(problemaOperationId)
+
   return crearOReutilizarSolicitud({
     tenantId,
     userId,
@@ -389,6 +533,8 @@ export interface ApprovalRow {
 export type ClaimResult =
   | { status: 'approved'; approval: ApprovalRow }
   | { status: 'rejected'; approval: ApprovalRow }
+  /** Otra fila del mismo contenido ya está aprobada o se ejecutó hace poco. */
+  | { status: 'duplicate'; approval: ApprovalRow }
   /** La solicitud exige validar el código de WhatsApp: la bandeja no basta. */
   | { status: 'code_required'; approval: ApprovalRow }
   | { status: 'not_found' }
@@ -404,6 +550,57 @@ export type ClaimResult =
  * escribe en el CRM. La garantía se mantiene porque el segundo intento
  * encuentra `status = 'approved'` y devuelve conflicto, nunca ejecuta otra vez.
  */
+/**
+ * Ventanas del cerrojo por contenido (ver `solicitudIdenticaEnEjecucion`).
+ *
+ * 15 min cubren una ejecución en curso con margen sobre el barrido de
+ * huérfanas (cierra a los 10). 5 min dejan pasar un reenvío deliberado del
+ * mismo texto poco después, sin permitir la segunda aprobación de un duplicado.
+ */
+const VENTANA_APROBACION_EN_CURSO_MS = 15 * 60 * 1000
+const VENTANA_EJECUCION_RECIENTE_MS = 5 * 60 * 1000
+
+/**
+ * Busca otra solicitud del mismo contenido que ya esté en ejecución o se haya
+ * ejecutado hace poco, dentro de la transacción que la va a aprobar.
+ *
+ * La reserva por contenido es por usuario y no impide que dos personas pidan lo
+ * mismo: cada una tiene su fila pendiente y, sin este cerrojo, aprobar las dos
+ * ejecutaría el envío dos veces. El `pg_advisory_xact_lock` serializa a quienes
+ * compiten por el mismo contenido; la comprobación y el paso a `approved`
+ * ocurren bajo el mismo cerrojo. No toca la separación de funciones: quien
+ * resuelve sigue sin poder aprobar lo que pidió.
+ *
+ * Las ventanas acotan el bloqueo: `approved` es una ejecución en curso (si el
+ * proceso muere, deja de bloquear a los 15 min) y `executed` solo bloquea los
+ * 5 min siguientes, para que un reenvío deliberado del mismo texto siga siendo
+ * posible.
+ */
+export async function solicitudIdenticaEnEjecucion(
+  tx: Prisma.TransactionClient,
+  params: { tenantId: string; toolName: string; argumentsHash: string; excluirId: string }
+): Promise<boolean> {
+  const clave = `${params.tenantId}:${params.toolName}:${params.argumentsHash}`
+  // `::text` porque Prisma no sabe deserializar la columna `void` del lock.
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${clave}, 0))::text`
+
+  const ahora = Date.now()
+  const enCursoOReciente = await tx.mcpApprovalRequest.findFirst({
+    where: {
+      tenantId: params.tenantId,
+      toolName: params.toolName,
+      argumentsHash: params.argumentsHash,
+      id: { not: params.excluirId },
+      OR: [
+        { status: 'approved', resolvedAt: { gt: new Date(ahora - VENTANA_APROBACION_EN_CURSO_MS) } },
+        { status: 'executed', executedAt: { gt: new Date(ahora - VENTANA_EJECUCION_RECIENTE_MS) } },
+      ],
+    },
+    select: { id: true },
+  })
+  return enCursoOReciente !== null
+}
+
 export async function claimApproval(params: {
   approvalId: string
   tenantId: string
@@ -452,6 +649,16 @@ export async function claimApproval(params: {
       return { status: 'code_required', approval: fila } as ClaimResult
     }
 
+    if (action === 'approve') {
+      const duplicada = await solicitudIdenticaEnEjecucion(tx, {
+        tenantId,
+        toolName: fila.toolName,
+        argumentsHash: fila.argumentsHash,
+        excluirId: fila.id,
+      })
+      if (duplicada) return { status: 'duplicate', approval: fila } as ClaimResult
+    }
+
     const actualizada = await tx.mcpApprovalRequest.update({
       where: { id: fila.id },
       data: {
@@ -473,6 +680,8 @@ export async function completeApproval(params: {
   approvalId: string
   ok: boolean
   result: unknown
+  /** Id del mensaje del proveedor: es la llave para casar su ACK después. */
+  whatsappMessageId?: string | null
 }): Promise<void> {
   try {
     await prisma.mcpApprovalRequest.update({
@@ -481,6 +690,9 @@ export async function completeApproval(params: {
         status: params.ok ? 'executed' : 'failed',
         executedAt: new Date(),
         result: params.result as never,
+        ...(params.whatsappMessageId
+          ? { whatsappMessageId: params.whatsappMessageId }
+          : {}),
       },
     })
   } catch (error) {

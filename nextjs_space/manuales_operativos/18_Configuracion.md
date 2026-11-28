@@ -48,7 +48,7 @@ Actúa como el panel de control maestro para la organización entera. Aquí se c
 - Historial de cambios en políticas de margen.
 
 ## 12. Escalamiento cuando algo falla
-1. Si un cambio en el branding no se refleja en el Portal, pedir a los usuarios forzar refresco (borrar cache), o invalidar la caché CDN de Vercel/NextJS si el tenant está servido estáticamente.
+1. Si un cambio en el branding no se refleja en el Portal, pedir a los usuarios forzar refresco (borrar cache), o invalidar la caché CDN (Cloudflare/Next.js) si el tenant está servido estáticamente.
 
 ---
 

@@ -2,16 +2,13 @@
 /**
  * El desenlace de un envío de WhatsApp viaja como tipo, no dentro del mensaje.
  *
- * Antes, `clasificarFalloDeEnvio` deducía del texto si el proveedor había
- * rechazado o si el resultado era incierto («Error NNN: …»). Ahora
- * `lib/whatsapp.ts` produce `ErrorDeEnvioWhatsapp` con `desenlace`, y el
- * clasificador solo lee ese campo: un texto que antes parecía un rechazo ya no
- * libera la clave.
+ * `lib/whatsapp.ts` distingue un rechazo confirmado del proveedor (`no_enviado`)
+ * de un resultado incierto (timeout, red, 5xx) mediante `ErrorDeEnvioWhatsapp`,
+ * para que quien reintente no tenga que interpretar el texto del error.
  */
 import { describe, expect, it } from 'vitest'
 
 import { ErrorDeEnvioWhatsapp } from '@/lib/whatsapp'
-import { clasificarFalloDeEnvio } from '@/lib/mcp/whatsapp-idempotency'
 
 describe('ErrorDeEnvioWhatsapp', () => {
   it('lleva el desenlace y el status del proveedor', () => {
@@ -29,24 +26,5 @@ describe('ErrorDeEnvioWhatsapp', () => {
 
     expect(error.desenlace).toBe('incierto')
     expect(error.status).toBeUndefined()
-  })
-})
-
-describe('clasificarFalloDeEnvio', () => {
-  it('respeta el desenlace tipado', () => {
-    expect(clasificarFalloDeEnvio({ error: 'lo que sea', desenlace: 'no_enviado' })).toBe(
-      'no_enviado'
-    )
-    expect(clasificarFalloDeEnvio({ error: 'Error 400: x', desenlace: 'incierto' })).toBe(
-      'incierto'
-    )
-  })
-
-  it('ya no deduce nada del texto: sin desenlace todo es incierto', () => {
-    // Este texto, con la heurística anterior, se clasificaba como rechazo.
-    expect(clasificarFalloDeEnvio({ error: 'Error 400: número inválido' })).toBe('incierto')
-    expect(clasificarFalloDeEnvio({ error: 'Lead no encontrado' })).toBe('incierto')
-    expect(clasificarFalloDeEnvio(undefined)).toBe('incierto')
-    expect(clasificarFalloDeEnvio('fetch failed')).toBe('incierto')
   })
 })

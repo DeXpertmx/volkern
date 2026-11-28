@@ -33,7 +33,8 @@ import {
   completeApproval,
   VIA_CHAT,
 } from '@/lib/mcp/tool-gate';
-import { ejecutarAprobacion, ejecutarToolDelCatalogo } from '@/lib/mcp/approval-execution';
+import { ejecutarToolDelCatalogo } from '@/lib/mcp/approval-execution';
+import { idDeMensajeEnResultado } from '@/lib/mcp/whatsapp-entrega';
 
 export const POST = withTenantAuth(async (request, auth, { params }) => {
   try {
@@ -101,6 +102,19 @@ export const POST = withTenantAuth(async (request, auth, { params }) => {
       );
     }
 
+    if (claim.status === 'duplicate') {
+      return NextResponse.json(
+        {
+          error:
+            'Ya hay una acción idéntica en curso o ejecutada hace menos de 5 minutos. Espera a que termine o cambia el contenido antes de aprobar esta.',
+          status: 'duplicate',
+          approvalId: claim.approval.id,
+          requestedById: claim.approval.requestedById,
+        },
+        { status: 409 }
+      );
+    }
+
     if (claim.status === 'expired') {
       return NextResponse.json(
         { error: 'La solicitud caducó y no se ha ejecutado.', status: 'expired' },
@@ -154,36 +168,40 @@ export const POST = withTenantAuth(async (request, auth, { params }) => {
           })
         : null;
 
-    // El recibo del envío WhatsApp y el registro de su desenlace viven en
-    // `ejecutarAprobacion`, compartido con `verify-code`. Sólo cambia cómo se
-    // ejecuta: el catálogo MCP por `handleCallTool`, el chat por su registro.
-    const { ok, result } = await ejecutarAprobacion({
-      aprobacion: approval,
-      ejecutar:
-        approval.via === VIA_CHAT
-          ? async () => {
-              try {
-                return {
-                  ok: true,
-                  result: await ejecutarHerramientaAprobadaDelChat({
-                    tenantId: approval.tenantId,
-                    userId: approval.requestedById,
-                    toolName: approval.toolName,
-                    args: (approval.arguments ?? {}) as Record<string, any>,
-                    conversacionId: pendiente?.conversacionId,
-                  }),
-                }
-              } catch (error) {
-                return {
-                  ok: false,
-                  result: { error: error instanceof Error ? error.message : String(error) },
-                }
-              }
-            }
-          : () => ejecutarToolDelCatalogo(approval),
-    })
+    // La solicitud ya reclamada es el recibo: se ejecuta una sola vez, con la
+    // identidad de quien la pidió. Solo cambia cómo: el catálogo MCP por
+    // `handleCallTool`, el chat por su registro.
+    let ejecucion: { ok: boolean; result: unknown }
+    if (approval.via === VIA_CHAT) {
+      try {
+        ejecucion = {
+          ok: true,
+          result: await ejecutarHerramientaAprobadaDelChat({
+            tenantId: approval.tenantId,
+            userId: approval.requestedById,
+            toolName: approval.toolName,
+            args: (approval.arguments ?? {}) as Record<string, any>,
+            conversacionId: pendiente?.conversacionId,
+          }),
+        }
+      } catch (error) {
+        ejecucion = {
+          ok: false,
+          result: { error: error instanceof Error ? error.message : String(error) },
+        }
+      }
+    } else {
+      ejecucion = await ejecutarToolDelCatalogo(approval)
+    }
+    const { ok, result } = ejecucion
 
-    await completeApproval({ approvalId: approval.id, ok, result: result as never });
+    const whatsappMessageId = idDeMensajeEnResultado(result);
+    await completeApproval({
+      approvalId: approval.id,
+      ok,
+      result: result as never,
+      ...(whatsappMessageId ? { whatsappMessageId } : {}),
+    });
 
     await auditApprovalOutcome({
       tenantId,

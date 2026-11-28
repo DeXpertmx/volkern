@@ -25,11 +25,19 @@ vi.mock('@/lib/db', () => ({
 
 import { prisma } from '@/lib/db'
 import { decideToolCall, TOOL_POLICIES, listToolPolicies } from '@/lib/mcp/tool-policy'
-import { enforceToolGate, claimApproval, hashToolArguments, operationIdDeArgs } from '@/lib/mcp/tool-gate'
+import {
+  enforceToolGate,
+  claimApproval,
+  errorDeOperationId,
+  hashToolArguments,
+  operationIdDeArgs,
+  requestAgentToolApproval,
+} from '@/lib/mcp/tool-gate'
 import { VOLKERN_TOOLS } from '../mcp-server/src/tools-catalog'
 
 const capFindMany = vi.mocked(prisma.mcpToolCapability.findMany)
 const approvalCreate = vi.mocked(prisma.mcpApprovalRequest.create)
+const approvalFindFirst = vi.mocked(prisma.mcpApprovalRequest.findFirst)
 const auditCreate = vi.mocked(prisma.auditLog.create)
 const transaction = vi.mocked(prisma.$transaction)
 
@@ -45,6 +53,28 @@ describe('Identificador explícito de operación', () => {
     expect(operationIdDeArgs({ operationId: '   ' })).toBeNull()
     expect(operationIdDeArgs({ operationId: 42 })).toBeNull()
     expect(operationIdDeArgs({})).toBeNull()
+  })
+
+  it('acepta hasta 200 caracteres y rechaza más sin truncar', async () => {
+    expect(operationIdDeArgs({ operationId: 'x'.repeat(200) })).toHaveLength(200)
+    expect(errorDeOperationId({ operationId: 'x'.repeat(200) })).toBeNull()
+    expect(errorDeOperationId({ operationId: 'x'.repeat(201) })).toContain('200')
+    expect(errorDeOperationId({ operationId: 'x'.repeat(5000) })).toContain('5000')
+
+    approvalCreate.mockResolvedValue({ id: 'ap-1' } as never)
+    const out = await enforceToolGate({
+      tenantId: 'tenant-a',
+      userId: 'user-1',
+      roleName: 'Admin',
+      toolName: 'volkern_delete_contact',
+      args: { id: 'c-1', operationId: 'x'.repeat(201) },
+      via: '/mcp',
+    })
+
+    expect(out.kind).toBe('deny')
+    if (out.kind !== 'deny') throw new Error('esperaba deny')
+    expect(out.reason).toContain('200')
+    expect(approvalCreate).not.toHaveBeenCalled()
   })
 
   it('guarda el operationId recortado, o null si no viene', async () => {
@@ -219,15 +249,23 @@ describe('enforceToolGate', () => {
     )
   })
 
-  it('reutiliza la solicitud pendiente idéntica en vez de duplicarla', async () => {
+  it('si la operación la creó otra petición a la vez, devuelve esa misma solicitud', async () => {
     approvalCreate.mockRejectedValue({ code: 'P2002' })
-    vi.mocked(prisma.mcpApprovalRequest.findFirst).mockResolvedValue({ id: 'ap-ya-existe' } as never)
+    vi.mocked(prisma.mcpApprovalRequest.findFirst).mockResolvedValue({
+      id: 'ap-ya-existe',
+      status: 'pending',
+      expiresAt: new Date(Date.now() + 60_000),
+      result: null,
+      whatsappVerificationToken: null,
+      whatsappCodeExpiresAt: null,
+      whatsappPhoneNumber: null,
+    } as never)
 
     const out = await enforceToolGate({
       ...base,
       roleName: 'Admin',
       toolName: 'volkern_delete_contact',
-      args: { id: 'c-1', tenantId: 'tenant-a', userId: 'user-a' },
+      args: { id: 'c-1', operationId: 'op-1', tenantId: 'tenant-a', userId: 'user-a' },
     })
 
     expect(out.kind).toBe('ask')
@@ -255,7 +293,10 @@ describe('enforceToolGate', () => {
 
 describe('claimApproval — la acción se ejecuta una sola vez', () => {
   /** Fila real simulada: el estado vive aquí y el `update` de la tx lo cambia. */
-  function montarFila(overrides: Record<string, unknown> = {}) {
+  function montarFila(
+    overrides: Record<string, unknown> = {},
+    duplicada: { id: string } | null = null
+  ) {
     const fila: Record<string, any> = {
       id: 'ap-1',
       tenantId: 'tenant-a',
@@ -275,6 +316,7 @@ describe('claimApproval — la acción se ejecuta una sola vez', () => {
         fila.id === id && fila.tenantId === tenantId ? [{ ...fila }] : []
       ),
       mcpApprovalRequest: {
+        findFirst: vi.fn(async () => duplicada),
         update: vi.fn(async ({ where, data }: any) => {
           if (where.id !== fila.id) throw new Error('fila inesperada')
           Object.assign(fila, data)
@@ -325,6 +367,34 @@ describe('claimApproval — la acción se ejecuta una sola vez', () => {
     // Sólo un update: el segundo intento no tocó la fila.
     expect(tx.mcpApprovalRequest.update).toHaveBeenCalledTimes(1)
     expect(fila.resolvedById).toBe('user-aprueba')
+  })
+
+  it('no aprueba si otra fila idéntica ya está en curso o recién ejecutada', async () => {
+    const { fila, tx } = montarFila({}, { id: 'ap-de-otro' })
+
+    const res = await claimApproval({
+      approvalId: 'ap-1',
+      tenantId: 'tenant-a',
+      resolverId: 'user-aprueba',
+      action: 'approve',
+    })
+
+    expect(res.status).toBe('duplicate')
+    expect(fila.status).toBe('pending')
+    expect(tx.mcpApprovalRequest.update).not.toHaveBeenCalled()
+  })
+
+  it('la identidad del solicitante manda sobre el duplicado: sigue sin autoprobación', async () => {
+    montarFila({ requestedById: 'user-solicita' }, { id: 'ap-de-otro' })
+
+    const res = await claimApproval({
+      approvalId: 'ap-1',
+      tenantId: 'tenant-a',
+      resolverId: 'user-solicita',
+      action: 'approve',
+    })
+
+    expect(res.status).toBe('self_approval')
   })
 
   it('impide que quien solicita la acción la apruebe', async () => {
@@ -423,5 +493,218 @@ describe('claimApproval — la acción se ejecuta una sola vez', () => {
     const b = hashToolArguments({ b: { d: 3, c: 2 }, a: 1 })
     expect(a).toBe(b)
     expect(a).not.toBe(hashToolArguments({ a: 1, b: { c: 2, d: 4 } }))
+  })
+})
+
+describe('hashToolArguments — la identidad no entra en la huella', () => {
+  const base = { contactId: 'c-1', message: 'Hola', source: 'mcp' }
+
+  it('ignora tenantId y userId', () => {
+    const ana = hashToolArguments({ ...base, tenantId: 'tenant-a', userId: 'user-ana' })
+    const luis = hashToolArguments({ ...base, tenantId: 'tenant-b', userId: 'user-luis' })
+
+    expect(ana).toBe(luis)
+  })
+
+  it('distingue source: MCP y agente no comparten solicitud', () => {
+    expect(hashToolArguments(base)).not.toBe(hashToolArguments({ ...base, source: 'chat' }))
+  })
+
+})
+
+describe('Idempotencia por operationId', () => {
+  const filas: any[] = []
+
+  const llamar = (operationId: string) =>
+    enforceToolGate({
+      tenantId: 'tenant-a',
+      userId: 'user-1',
+      roleName: 'Admin',
+      toolName: 'volkern_delete_contact',
+      args: { id: 'c-1', operationId },
+      via: '/mcp',
+    })
+
+  const filaPrevia = (status: string) => ({
+    id: 'ap-previa',
+    tenantId: 'tenant-a',
+    requestedById: 'user-1',
+    toolName: 'volkern_delete_contact',
+    operationId: 'op-1',
+    status,
+    result: { ok: true, borrado: 'c-1' },
+    expiresAt: new Date(Date.now() + 60_000),
+    whatsappVerificationToken: null,
+    whatsappCodeExpiresAt: null,
+    whatsappPhoneNumber: null,
+  })
+
+  beforeEach(() => {
+    filas.length = 0
+    // Emula los dos índices únicos reales: (empresa, usuario, operationId) y la
+    // reserva parcial por (empresa, herramienta, argumentos) sin operationId.
+    approvalCreate.mockImplementation(async ({ data }: any) => {
+      const duplicada = data.operationId
+        ? filas.some(
+            (f) =>
+              f.tenantId === data.tenantId &&
+              f.requestedById === data.requestedById &&
+              f.operationId === data.operationId
+          )
+        : filas.some(
+            (f) =>
+              f.status === 'pending' &&
+              f.operationId === null &&
+              f.tenantId === data.tenantId &&
+              f.requestedById === data.requestedById &&
+              f.toolName === data.toolName &&
+              f.argumentsHash === data.argumentsHash
+          )
+      if (duplicada) throw Object.assign(new Error('unique'), { code: 'P2002' })
+      const fila = {
+        id: `ap-${filas.length + 1}`,
+        status: 'pending',
+        result: null,
+        requestedById: 'user-1',
+        ...data,
+      }
+      filas.push(fila)
+      return { id: fila.id } as never
+    })
+    approvalFindFirst.mockImplementation(
+      async ({ where }: any) =>
+        (filas.find((f) =>
+          Object.entries(where).every(([campo, valor]) => f[campo] === valor)
+        ) as never) ?? (null as never)
+    )
+  })
+
+  it('dos peticiones simultáneas con el mismo operationId devuelven una sola solicitud', async () => {
+    const [primera, segunda] = await Promise.all([llamar('op-1'), llamar('op-1')])
+
+    expect(filas).toHaveLength(1)
+    expect((primera as any).approvalId).toBe('ap-1')
+    expect((segunda as any).approvalId).toBe('ap-1')
+    expect(primera.kind).toBe('ask')
+    expect(segunda.kind).toBe('ask')
+  })
+
+  it('sin operationId, dos llamadas idénticas comparten una sola solicitud', async () => {
+    const llamarSinId = () =>
+      enforceToolGate({
+        tenantId: 'tenant-a',
+        userId: 'user-1',
+        roleName: 'Admin',
+        toolName: 'volkern_delete_contact',
+        args: { id: 'c-1' },
+        via: '/mcp',
+      })
+
+    const [primera, segunda] = await Promise.all([llamarSinId(), llamarSinId()])
+
+    // La reserva por contenido: una solicitud pendiente, no dos.
+    expect(filas).toHaveLength(1)
+    expect(primera.kind).toBe('ask')
+    expect((primera as any).approvalId).toBe('ap-1')
+    expect((segunda as any).approvalId).toBe('ap-1')
+  })
+
+  it('el mismo mensaje de otro usuario no comparte la reserva', async () => {
+    const llamarComo = (userId: string) =>
+      enforceToolGate({
+        tenantId: 'tenant-a',
+        userId,
+        roleName: 'Admin',
+        toolName: 'volkern_delete_contact',
+        args: { id: 'c-1' },
+        via: '/mcp',
+      })
+
+    const [ana, luis] = await Promise.all([llamarComo('user-ana'), llamarComo('user-luis')])
+
+    expect(filas).toHaveLength(2)
+    expect((ana as any).approvalId).not.toBe((luis as any).approvalId)
+  })
+
+  it('el agente no comparte la solicitud entre dos usuarios con argumentos idénticos', async () => {
+    // Camino del agente: los argumentos llegan sin tenantId/userId inyectados,
+    // así que la huella es idéntica. La separación la impone requestedById.
+    const pedir = (userId: string) =>
+      requestAgentToolApproval({
+        tenantId: 'tenant-a',
+        userId,
+        roleName: 'Admin',
+        toolName: 'volkern_delete_contact',
+        args: { id: 'c-1' },
+        risk: 'destructive',
+      })
+
+    const [ana, luis] = await Promise.all([pedir('user-ana'), pedir('user-luis')])
+
+    expect(filas).toHaveLength(2)
+    expect(ana.approvalId).not.toBe(luis.approvalId)
+  })
+
+  it('si la reserva por contenido la ganó otra petición, la segunda recibe la misma', async () => {
+    const pendiente = {
+      id: 'ap-reservada',
+      status: 'pending',
+      result: null,
+      expiresAt: new Date(Date.now() + 60_000),
+      whatsappVerificationToken: null,
+      whatsappCodeExpiresAt: null,
+      whatsappPhoneNumber: null,
+    }
+    approvalCreate.mockRejectedValue({ code: 'P2002' })
+    approvalFindFirst.mockResolvedValueOnce(null as never).mockResolvedValue(pendiente as never)
+
+    const out = await enforceToolGate({
+      tenantId: 'tenant-a',
+      userId: 'user-1',
+      roleName: 'Admin',
+      toolName: 'volkern_delete_contact',
+      args: { id: 'c-1' },
+      via: '/mcp',
+    })
+
+    expect(out.kind).toBe('ask')
+    if (out.kind !== 'ask') throw new Error('esperaba ask')
+    expect(out.approvalId).toBe('ap-reservada')
+  })
+
+  it('dos usuarios pueden usar el mismo operationId sin pisarse', async () => {
+    const llamarComo = (userId: string) =>
+      enforceToolGate({
+        tenantId: 'tenant-a',
+        userId,
+        roleName: 'Admin',
+        toolName: 'volkern_delete_contact',
+        args: { id: 'c-1', operationId: 'op-1' },
+        via: '/mcp',
+      })
+
+    const [ana, luis] = await Promise.all([llamarComo('user-ana'), llamarComo('user-luis')])
+
+    expect(filas).toHaveLength(2)
+    expect((ana as any).approvalId).not.toBe((luis as any).approvalId)
+  })
+
+  it('el mismo operationId no crea otra solicitud si la primera ya se ejecutó', async () => {
+    filas.push(filaPrevia('executed'))
+
+    const res = await llamar('op-1')
+
+    expect(res.kind).toBe('replay')
+    expect((res as any).status).toBe('executed')
+    expect((res as any).result).toMatchObject({ borrado: 'c-1' })
+    expect(approvalCreate).not.toHaveBeenCalled()
+  })
+
+  it('un operationId nuevo permite repetir la misma acción', async () => {
+    const primera = await llamar('op-1')
+    const segunda = await llamar('op-2')
+
+    expect(filas).toHaveLength(2)
+    expect((primera as any).approvalId).not.toBe((segunda as any).approvalId)
   })
 })

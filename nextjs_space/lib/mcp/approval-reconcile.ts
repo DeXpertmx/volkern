@@ -13,13 +13,9 @@
  * con un envío que siga en curso.
  */
 import { prisma } from '@/lib/db';
-import { MINUTOS_ENVIO_SIN_CONFIRMAR } from './whatsapp-idempotency';
 
-/**
- * Margen antes de dar una reclamación por huérfana. Es el mismo que usa el
- * recibo del envío: los dos barridos cierran la misma ventana.
- */
-export const MINUTOS_RECLAMACION_HUERFANA = MINUTOS_ENVIO_SIN_CONFIRMAR;
+/** Margen por defecto antes de dar una reclamación por huérfana. */
+export const MINUTOS_RECLAMACION_HUERFANA = 10;
 
 const MOTIVO_HUERFANA =
   'Desenlace no registrado: el proceso se interrumpió después de reclamar la solicitud.';
