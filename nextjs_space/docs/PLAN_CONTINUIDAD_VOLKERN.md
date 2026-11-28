@@ -77,7 +77,8 @@ Este documento tiene un único objetivo: garantir que Volkern pueda continuar op
 ### Dónde está desplegado:
 
 - **Producción:** VPS con Docker Swarm (`deploy-vps/deploy-local.sh`)
-- **Base de datos:** PostgreSQL 17 en el VPS (contenedor `volkern-erp_postgres`)
+- **Base de datos:** PostgreSQL 17 en el VPS (servicio Swarm `volkern-erp_postgres`)
+- **Orquestación:** Docker Swarm; red overlay del stack: `DXnet`
 - **Archivos:** Cloudflare R2
 - **IA:** Servidor propio o cloud (configurable)
 
@@ -92,7 +93,7 @@ Este documento tiene un único objetivo: garantir que Volkern pueda continuar op
 | Servicio | Usuario/Email | Contraseña | Notas |
 |----------|---------------|------------|-------|
 | **VPS** | [TU EMAIL] | [EN PASSWORD MANAGER] | Docker Swarm: sirve `volkern.app` (proveedor por confirmar) |
-| **Neon (DB)** | [TU EMAIL] | [EN PASSWORD MANAGER] | Base de datos PostgreSQL |
+| **Neon (DB antigua)** | [TU EMAIL] | [EN PASSWORD MANAGER] | Sin uso en producción (hoy: Postgres del VPS). Sigue asociada al proyecto de Vercel enlazado — ver §10.1 |
 | **Cloudflare** | [TU EMAIL] | [EN PASSWORD MANAGER] | DNS y R2 storage |
 | **Domain (Namesilo/GoDaddy)** | [TU EMAIL] | [EN PASSWORD MANAGER] | Dominios volkern.io |
 
@@ -238,7 +239,7 @@ Ubicación: `/home/dexpert/Volkern/nextjs_space/manuales_operativos/`
 
 - **Reporte de métricas:** Usuarios nuevos, MRR, churn
 - **Actualización de documentación:** Si hay cambios
-- **Backups:** Verificar que DB esté respaldada
+- **Backups:** hoy son manuales (los generan las migraciones); comprobar que haya uno reciente en `/root/backups` — ver §10.1
 
 ## 5.3 Tareas Mensuales
 
@@ -250,9 +251,9 @@ Ubicación: `/home/dexpert/Volkern/nextjs_space/manuales_operativos/`
 
 | Qué monitorear | Cómo |
 |----------------|------|
-| **Disponibilidad web** | UptimeRobot |
-| **Errores en producción** | Logs del servicio: `docker service logs --tail 100 volkern-erp_app` |
-| **Uso de DB** | `docker exec` + `psql` en el contenedor de Postgres del VPS |
+| **Disponibilidad web** | ⚠️ Sin herramienta confirmada: la cuenta de UptimeRobot que cita este documento no está verificada (§10.1) |
+| **Errores en producción** | `docker service logs --tail 100 volkern-erp_app` |
+| **Uso de DB** | `docker exec $(docker ps -q -f name=volkern-erp_postgres) psql -U volkern_erp -d volkern_erp -c '\dt'` |
 | **Pagos fallidos** | Dashboard de Stripe |
 | **Seguridad** | Trust Protocol logs |
 
@@ -285,12 +286,19 @@ Ubicación: `/home/dexpert/Volkern/nextjs_space/manuales_operativos/`
 ### Error: "Página en blanco" o error 500
 1. Verificar el servicio: `docker service ps volkern-erp_app`
 2. Revisar los logs: `docker service logs --tail 100 volkern-erp_app`
-3. Si es error de código, revisar la imagen desplegada (`docker inspect … org.opencontainers.image.revision`)
+3. Ver qué commit corre en producción (la imagen lo lleva como etiqueta):
+   `IMG=$(docker service ps volkern-erp_app --no-trunc --format '{{.Image}}' | head -1)`
+   `docker image inspect "$IMG" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'`
 
 ### Error: "Database connection failed"
-1. Verificar que el contenedor de Postgres esté activo (`docker ps --filter name=volkern-erp_postgres`)
-2. Revisar las variables del servicio (`docker service inspect volkern-erp_app`)
-3. Verificar que el servicio alcance Postgres por la red overlay (`docker network ls` → `DXnet`)
+1. Comprobar el servicio de base de datos: `docker service ps volkern-erp_postgres` (debe estar `Running`, 1/1)
+2. Comprobar que Postgres acepta conexiones dentro de su propio contenedor:
+   `PG_CID=$(docker ps -q -f name=volkern-erp_postgres | head -1) && docker exec "$PG_CID" pg_isready -U volkern_erp`
+3. Comprobar que la app y Postgres siguen en la misma red overlay del stack (`DXnet`): el ID de red debe coincidir en ambos.
+   `docker service inspect volkern-erp_app --format '{{range .Spec.TaskTemplate.Networks}}{{.Target}}{{end}}'`
+   `docker service inspect volkern-erp_postgres --format '{{range .Spec.TaskTemplate.Networks}}{{.Target}}{{end}}'`
+   (la overlay no es alcanzable desde el host — así lo advierten los scripts de `deploy-vps/` —, así que desde fuera solo se comprueba la pertenencia, no el puerto)
+4. Buscar errores de Prisma en los logs: `docker service logs --tail 200 volkern-erp_app | grep -i prisma`
 
 ### Error: "Facturas no se emitieron"
 1. Verificar estado de Trust Protocol
@@ -347,17 +355,23 @@ Ubicación: `/home/dexpert/Volkern/nextjs_space/manuales_operativos/`
 ## 9.1 Si Pierdes Acceso a las Cuentas
 
 ### Recuperar acceso al VPS
-1. Contactar al proveedor del VPS (por confirmar)
-2. Recuperar el acceso por consola del proveedor y con la clave SSH de respaldo
-3. Verificar que el servicio siga sirviendo (`docker service ls`)
+
+El acceso es `ssh -i ~/.ssh/id_buffy_volkern root@62.171.134.195` (los scripts aceptan `VOLKERN_SSH_KEY`).
+
+1. Si no tienes la clave: entrar por la consola/VNC del panel del proveedor de hosting (⚠️ **proveedor sin confirmar**, §10.1).
+2. Ya dentro, autorizar una clave pública nueva en `/root/.ssh/authorized_keys` y entrar con ella.
+   ⚠️ **No existe copia de respaldo documentada de la clave privada**, y el VPS no guarda ninguna (solo `authorized_keys`): si se pierde la del equipo, la única vía es la consola del proveedor.
+3. Verificar que el servicio siga sirviendo: `docker service ls | grep volkern-erp`
 
 ### Recuperar dominio
 1. Contactar soporte del registrador
 2. Verificar propiedad (email, terakhir pago)
 
 ### Recuperar base de datos
-1. Restaurar el último backup verificado de `/root/backups` (con `gzip -t` y `sha256`)
-2. Si no hay backup utilizable, el volumen del contenedor de Postgres sigue en el VPS
+1. Dumps reales en `/root/backups` (54 ficheros a 28-nov-2026, en `.dump` y `.sql.gz`). Comprobar la integridad del elegido: `sha256sum`, y `gzip -t` si es `.sql.gz`.
+2. Ensayar la restauración antes de tocar producción con `bash deploy-vps/ensayo-rollback.sh` (ver `--help`): levanta un Postgres desechable y comprueba que esquema y datos vuelven.
+3. Restaurar en producción solo tras el ensayo. Sin dump utilizable, la única copia es el volumen `volkern_erp_postgres_data` del VPS.
+   ⚠️ **No hay backups automáticos** (§10.1).
 
 ## 9.2 Si el Servidor de IADeja de Funcionar
 
@@ -383,11 +397,23 @@ Imprime esta lista y tenla visible:
 - [ ] Acceso a password manager verificado
 - [ ] Contactos de emergencia actualizados
 - [ ] Documentación accesible desde cualquier lugar
-- [ ] Backups de base de datos automatizados
+- [ ] Backups de base de datos automatizados — ⚠️ **no existen hoy** (§10.1)
 - [ ] Método de pago de servicios (VPS, dominio) activo
 - [ ] Dominio y SSL vigentes
 - [ ] Emails de soporte configurados
 - [ ] Acceso a Stripe/Venta funcionando
+
+## 10.1 Datos que este documento NO puede afirmar (hay que averiguar)
+
+Verificado el 28-nov-2026 contra el VPS. Estos puntos están **sin confirmar**: en una emergencia no deben darse por hechos.
+
+1. **Proveedor del VPS** (panel, soporte, facturación). No consta ni en el repositorio ni en los scripts: solo conocen `root@62.171.134.195`.
+2. **Copia de respaldo de la clave SSH privada** (`~/.ssh/id_buffy_volkern`). Vive solo en el equipo del fundador; el VPS únicamente tiene `authorized_keys`. Falta decidir dónde se guarda una copia y anotarlo aquí.
+3. **Backups automáticos de la base de datos: no existen.** No hay entrada en el crontab de root ni timer de systemd; los dumps de `/root/backups` los generan a mano las migraciones (`run-migrations.sh`, `baseline-prod.sh`). Falta decidir frecuencia y copia fuera del VPS.
+4. **Monitorización externa**: no hay cuenta ni checks documentados. El crontab de root solo tiene 4 tareas de la app (`uptime-developers`, `cleanup-attendance`, `hospitality-reconcile`, `hospitality-briefing`). Si se contrata UptimeRobot, anotar aquí la cuenta.
+5. **Restaurabilidad de los dumps antiguos**: los 54 ficheros no se han probado uno a uno; solo el del 28-nov-2026 pasó el ensayo.
+6. **Cuenta de Neon**: sigue asociada al proyecto de Vercel enlazado. Confirmar si guarda datos que haya que conservar antes de cerrarla.
+7. **Otros stacks del VPS**: además del ERP corren `volkern_app`, `volkern_db`, `volkern_landing`, `volkern_ws-service`, `volkern_volkern-dispatch`, `n8n_*`, `minio_minio`, `redis_redis`, `traefik_traefik`, `pgvector_pgvector`, `libretranslate`, `libresign_*` y `portainer_*`. Este plan no los cubre: falta averiguar cuáles son de negocio y cuáles heredados.
 
 ---
 
