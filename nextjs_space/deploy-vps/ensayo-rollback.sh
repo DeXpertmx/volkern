@@ -18,6 +18,13 @@
 # cuatro migraciones nuevas (20261127160000, 20261127200000, 20261127210000 y
 # 20261127220000) dentro de prisma/migrations.
 #
+# La imagen de --pg-image tiene que ser la MISMA versión mayor que producción
+# (postgres:17-alpine). El dump sale del contenedor de producción con su propio
+# pg_dump, así que es un dump de 17: restaurarlo en un servidor 16 falla a media
+# restauración y el error aparece en la fase «Restaurar copia base», donde se
+# confunde con un backup corrupto cuando el problema es el servidor. Si algún
+# día producción cambia de versión, se cambia aquí.
+#
 # No usa compose, ni el contenedor, ni la red de producción: solo crea y usa
 # recursos `volkern-ensayo-*`. Guardas y opciones: --help.
 # ═══════════════════════════════════════════════════════════════
@@ -26,7 +33,7 @@ set -euo pipefail
 AQUI="$(cd "$(dirname "$0")" && pwd)"
 BACKUP=""
 MIGRATOR_IMAGE="volkern-erp:migrator"
-PG_IMAGE="postgres:16-alpine"
+PG_IMAGE="postgres:17-alpine"
 CONSERVAR=0
 CONFIRMO=0
 
@@ -42,7 +49,8 @@ Opciones:
   --migrator <imagen>   Imagen con Prisma y prisma/migrations construida con el
                         prisma/ del commit a desplegar (def. volkern-erp:migrator).
                         Una imagen vieja hace abortar "Verificar migración".
-  --pg-image <imagen>   Imagen PostgreSQL (def. postgres:16-alpine)
+  --pg-image <imagen>   Imagen PostgreSQL, misma versión mayor que producción
+                        (def. postgres:17-alpine)
   --conservar           No borrar contenedor/volumen/red al terminar bien
   --confirmo-copia      Obligatorio: declara que el backup es una copia
   --help                Esta ayuda
