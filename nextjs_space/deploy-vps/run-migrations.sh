@@ -255,7 +255,12 @@ if [ "$HAY_PENDIENTES" = "1" ] && [ "$SIN_BACKUP" = "0" ]; then
   TIMESTAMP=$(date +%Y%m%d-%H%M%S)
   BACKUP_FILE="$BACKUP_DIR/volkern_erp-pre-migraciones-$TIMESTAMP.sql.gz"
   if [ -n "$PG_CID" ]; then
+    # El dump tiene toda la base: nace en 600 (mismo criterio que
+    # verificar-recibos-whatsapp.sh) y no queda legible para el resto del VPS
+    # mientras se escribe.
+    umask 077
     docker exec "$PG_CID" pg_dump -U volkern_erp -d volkern_erp | gzip > "$BACKUP_FILE"
+    chmod 600 "$BACKUP_FILE"
     if gzip -t "$BACKUP_FILE"; then
       echo "   ✓ Backup verificado: $BACKUP_FILE ($(du -h "$BACKUP_FILE" | cut -f1))"
     else
