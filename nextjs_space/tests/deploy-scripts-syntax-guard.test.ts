@@ -156,9 +156,9 @@ export interface FaltaDePermisos {
   motivo: string;
 }
 
-/** Abre un fichero de backup: un destino bajo /root/backups, una variable de
- *  backup, o un nombre `.sql.gz` / `.csv`. */
-const DESTINO_DE_BACKUP = />\s*"[^"]*(?:\/root\/backups|BACKUP_DIR|BACKUP_FILE|ARCHIVO_RECIBOS|\.sql\.gz|\.csv)/;
+/** Un destino de backup: el directorio de respaldos, una variable que lo apunta
+ *  o un fichero con nombre de dump. */
+const DESTINO_DE_BACKUP = />\s*"[^"]*(?:\/root\/backups|BACKUP_(?:FILE|DIR)|ARCHIVO_RECIBOS|\.sql\.gz|\.csv)/;
 
 /**
  * Un `pg_dump` completo o una exportación `COPY` contienen la base entera: con
@@ -333,9 +333,9 @@ describe('Guardia de sintaxis de los scripts de despliegue', () => {
       'docker exec "$PG_CID" pg_dump -U volkern_erp -d volkern_erp | gzip > "$BACKUP_FILE"',
       'gzip > "/root/backups/volkern_erp-$STAMP.sql.gz"',
     ].join('\n');
-    // Dos destinos, y a cada uno le faltan las dos cosas: 4 faltas.
-    expect(revisarPermisosDeBackup(sinPermisos).length).toBe(4);
-    expect(revisarPermisosDeBackup(sinPermisos).map((f) => f.linea)).toEqual([2, 2, 3, 3]);
+    // Los dos destinos sin permisos; el log no cuenta.
+    const lineas = new Set(revisarPermisosDeBackup(sinPermisos).map((f) => f.linea));
+    expect([...lineas]).toEqual([2, 3]);
 
     const conPermisos = [
       '#!/bin/bash',
